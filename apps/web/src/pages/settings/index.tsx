@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Trash2, Plug, Settings, Users, Puzzle, GitBranch, Bell, Sparkles, Eye, EyeOff, CheckCircle2, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Plug, Settings, Users, Puzzle, GitBranch, Bell, Sparkles, Eye, EyeOff, CheckCircle2, Loader2, CalendarCheck, Copy } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
 import PageHeader from '../../components/ui/PageHeader';
@@ -10,7 +10,7 @@ import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
-import Input from '../../components/ui/Input';
+import Input, { Textarea } from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Skeleton from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
@@ -44,7 +44,7 @@ const roleBadgeVariant: Record<string, 'info' | 'warning'> = {
   RECRUTEUR: 'info',
 };
 
-type SettingsSection = 'general' | 'equipe' | 'integrations' | 'pipeline' | 'notifications';
+type SettingsSection = 'general' | 'equipe' | 'integrations' | 'pipeline' | 'notifications' | 'booking';
 
 const sidebarItems: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'Général', icon: <Settings size={16} /> },
@@ -52,6 +52,7 @@ const sidebarItems: { id: SettingsSection; label: string; icon: React.ReactNode 
   { id: 'integrations', label: 'Intégrations', icon: <Puzzle size={16} /> },
   { id: 'pipeline', label: 'Pipeline', icon: <GitBranch size={16} /> },
   { id: 'notifications', label: 'Notifications', icon: <Bell size={16} /> },
+  { id: 'booking' as SettingsSection, label: 'Booking', icon: <CalendarCheck size={16} /> },
 ];
 
 export default function SettingsPage() {
@@ -82,6 +83,20 @@ export default function SettingsPage() {
   const [aiApiKey, setAiApiKey] = useState('');
   const [aiModel, setAiModel] = useState('gpt-4o');
   const [showAiKey, setShowAiKey] = useState(false);
+
+  // Booking config state
+  const [bookingActive, setBookingActive] = useState(true);
+  const [bookingSlug, setBookingSlug] = useState('');
+  const [bookingDays, setBookingDays] = useState([1, 2, 3, 4, 5]);
+  const [bookingStartTime, setBookingStartTime] = useState('09:00');
+  const [bookingEndTime, setBookingEndTime] = useState('18:00');
+  const [bookingSlotDuration, setBookingSlotDuration] = useState(30);
+  const [bookingBuffer, setBookingBuffer] = useState(15);
+  const [bookingMinNotice, setBookingMinNotice] = useState(2);
+  const [bookingMaxAdvance, setBookingMaxAdvance] = useState(30);
+  const [bookingWelcome, setBookingWelcome] = useState('Choisissez un créneau pour notre échange.');
+  const [bookingReminderEmail, setBookingReminderEmail] = useState(true);
+  const [bookingReminderBefore, setBookingReminderBefore] = useState(true);
 
   const aiProviderOptions = [
     { value: 'openai', label: 'OpenAI' },
@@ -167,6 +182,54 @@ export default function SettingsPage() {
       apiKey: aiApiKey.trim() || '__KEEP_EXISTING__',
       model: aiModel,
     });
+  };
+
+  // Booking settings queries
+  const { data: bookingSettingsData } = useQuery({
+    queryKey: ['booking-settings'],
+    queryFn: () => api.get<{ data: any }>('/booking/settings'),
+    enabled: activeSection === 'booking',
+  });
+
+  // Sync form state when booking config loads
+  useEffect(() => {
+    if (bookingSettingsData?.data) {
+      const s = bookingSettingsData.data;
+      setBookingActive(s.isActive ?? true);
+      setBookingSlug(s.slug ?? '');
+      setBookingDays(s.workingDays ?? [1, 2, 3, 4, 5]);
+      setBookingStartTime(s.startTime ?? '09:00');
+      setBookingEndTime(s.endTime ?? '18:00');
+      setBookingSlotDuration(s.slotDuration ?? 30);
+      setBookingBuffer(s.bufferMinutes ?? 15);
+      setBookingMinNotice(s.minNoticeHours ?? 2);
+      setBookingMaxAdvance(s.maxAdvanceDays ?? 30);
+      setBookingWelcome(s.welcomeMessage ?? '');
+      setBookingReminderEmail(s.reminderEmail ?? true);
+      setBookingReminderBefore(s.reminderBefore ?? true);
+    }
+  }, [bookingSettingsData]);
+
+  const saveBookingMutation = useMutation({
+    mutationFn: (payload: any) => api.put('/booking/settings', payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['booking-settings'] });
+      toast('success', 'Paramètres de booking enregistrés');
+    },
+    onError: (error: any) => {
+      toast('error', error?.data?.message || 'Erreur lors de la sauvegarde');
+    },
+  });
+
+  const { data: mandatLinksData } = useQuery({
+    queryKey: ['booking-mandat-links'],
+    queryFn: () => api.get<{ data: any[] }>('/booking/mandat-links'),
+    enabled: activeSection === 'booking',
+  });
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast('success', 'Lien copié !');
   };
 
   const { data: users, isLoading } = useQuery({
@@ -561,6 +624,266 @@ export default function SettingsPage() {
                 title="Bientôt disponible"
                 description="Les paramètres de notifications seront disponibles prochainement."
               />
+            </div>
+          )}
+
+          {/* Booking section */}
+          {activeSection === 'booking' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-[18px] font-semibold text-neutral-900">
+                  {'\u{1F4C5}'} Paramètres de booking
+                </h2>
+                <p className="mt-1 text-[13px] text-neutral-500">
+                  Configurez votre disponibilité et vos créneaux de réservation
+                </p>
+              </div>
+
+              {/* Active toggle */}
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="booking-active"
+                  checked={bookingActive}
+                  onChange={(e) => setBookingActive(e.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+                />
+                <label htmlFor="booking-active" className="text-sm font-medium text-neutral-900">
+                  Booking activé
+                </label>
+              </div>
+
+              {/* Link preview card */}
+              {bookingSlug && (
+                <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500 mb-2">
+                    Votre lien de booking
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 truncate rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+                      https://ats.propium.co/book/{bookingSlug}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(`https://ats.propium.co/book/${bookingSlug}`)}
+                      className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-600 transition-colors hover:bg-neutral-50"
+                    >
+                      <Copy size={14} />
+                      Copier
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Slug input */}
+              <Input
+                label="Votre slug"
+                placeholder="mon-entreprise"
+                value={bookingSlug}
+                onChange={(e) => setBookingSlug(e.target.value)}
+              />
+
+              {/* Working days */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Jours de disponibilité
+                </label>
+                <div className="flex gap-2">
+                  {(['L', 'M', 'M', 'J', 'V', 'S', 'D'] as const).map((dayLabel, idx) => {
+                    const dayValues = [1, 2, 3, 4, 5, 6, 0];
+                    const dayValue = dayValues[idx];
+                    const isSelected = bookingDays.includes(dayValue);
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setBookingDays((prev) =>
+                            isSelected ? prev.filter((d) => d !== dayValue) : [...prev, dayValue]
+                          );
+                        }}
+                        className={`flex h-10 w-10 items-center justify-center rounded-lg border-[1.5px] text-sm font-medium transition-colors ${
+                          isSelected
+                            ? 'border-primary-500 bg-primary-50 text-primary-500'
+                            : 'border-neutral-100 bg-white text-neutral-400 hover:bg-neutral-50'
+                        }`}
+                      >
+                        {dayLabel}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Time range */}
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Heure de début"
+                  type="time"
+                  value={bookingStartTime}
+                  onChange={(e) => setBookingStartTime(e.target.value)}
+                />
+                <Input
+                  label="Heure de fin"
+                  type="time"
+                  value={bookingEndTime}
+                  onChange={(e) => setBookingEndTime(e.target.value)}
+                />
+              </div>
+
+              {/* Duration dropdown */}
+              <Select
+                label="Durée du créneau"
+                options={[
+                  { value: '15', label: '15 min' },
+                  { value: '30', label: '30 min' },
+                  { value: '45', label: '45 min' },
+                  { value: '60', label: '60 min' },
+                ]}
+                value={String(bookingSlotDuration)}
+                onChange={(val) => setBookingSlotDuration(Number(val))}
+              />
+
+              {/* Buffer dropdown */}
+              <Select
+                label="Temps tampon entre créneaux"
+                options={[
+                  { value: '0', label: '0 min' },
+                  { value: '5', label: '5 min' },
+                  { value: '10', label: '10 min' },
+                  { value: '15', label: '15 min' },
+                  { value: '30', label: '30 min' },
+                ]}
+                value={String(bookingBuffer)}
+                onChange={(val) => setBookingBuffer(Number(val))}
+              />
+
+              {/* Min notice dropdown */}
+              <Select
+                label="Préavis minimum"
+                options={[
+                  { value: '1', label: '1 heure' },
+                  { value: '2', label: '2 heures' },
+                  { value: '4', label: '4 heures' },
+                  { value: '8', label: '8 heures' },
+                  { value: '24', label: '24 heures' },
+                ]}
+                value={String(bookingMinNotice)}
+                onChange={(val) => setBookingMinNotice(Number(val))}
+              />
+
+              {/* Max advance dropdown */}
+              <Select
+                label="Réservation à l'avance max"
+                options={[
+                  { value: '7', label: '7 jours' },
+                  { value: '14', label: '14 jours' },
+                  { value: '30', label: '30 jours' },
+                  { value: '60', label: '60 jours' },
+                  { value: '90', label: '90 jours' },
+                ]}
+                value={String(bookingMaxAdvance)}
+                onChange={(val) => setBookingMaxAdvance(Number(val))}
+              />
+
+              {/* Welcome message */}
+              <Textarea
+                label="Message d'accueil"
+                placeholder="Choisissez un créneau pour notre échange."
+                value={bookingWelcome}
+                onChange={(e) => setBookingWelcome(e.target.value)}
+              />
+
+              {/* Reminders */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Rappels
+                </label>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="reminder-email"
+                      checked={bookingReminderEmail}
+                      onChange={(e) => setBookingReminderEmail(e.target.checked)}
+                      className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+                    />
+                    <label htmlFor="reminder-email" className="text-sm text-neutral-700">
+                      Email la veille (18h)
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="reminder-before"
+                      checked={bookingReminderBefore}
+                      onChange={(e) => setBookingReminderBefore(e.target.checked)}
+                      className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+                    />
+                    <label htmlFor="reminder-before" className="text-sm text-neutral-700">
+                      Email 1h avant
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Save button */}
+              <div className="flex justify-end pt-2">
+                <Button
+                  onClick={() =>
+                    saveBookingMutation.mutate({
+                      isActive: bookingActive,
+                      slug: bookingSlug,
+                      workingDays: bookingDays,
+                      startTime: bookingStartTime,
+                      endTime: bookingEndTime,
+                      slotDuration: bookingSlotDuration,
+                      bufferMinutes: bookingBuffer,
+                      minNoticeHours: bookingMinNotice,
+                      maxAdvanceDays: bookingMaxAdvance,
+                      welcomeMessage: bookingWelcome,
+                      reminderEmail: bookingReminderEmail,
+                      reminderBefore: bookingReminderBefore,
+                    })
+                  }
+                  loading={saveBookingMutation.isPending}
+                >
+                  Sauvegarder
+                </Button>
+              </div>
+
+              {/* Mandat links section */}
+              {mandatLinksData?.data && mandatLinksData.data.length > 0 && (
+                <div className="space-y-3 border-t border-neutral-100 pt-6">
+                  <h3 className="text-[15px] font-semibold text-neutral-900">Liens par mandat</h3>
+                  <div className="space-y-2">
+                    {mandatLinksData.data.map((mandat: any) => (
+                      <div
+                        key={mandat.id}
+                        className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-4 py-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-neutral-900 truncate">
+                            {mandat.title}{mandat.company ? ` — ${mandat.company}` : ''}
+                          </p>
+                          <p className="text-xs text-neutral-400 truncate">
+                            https://ats.propium.co/book/{bookingSlug}/{mandat.slug}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            copyToClipboard(`https://ats.propium.co/book/${bookingSlug}/${mandat.slug}`)
+                          }
+                          className="ml-3 flex-shrink-0 rounded-lg p-2 text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-neutral-600"
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </motion.div>

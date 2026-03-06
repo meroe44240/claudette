@@ -6,6 +6,7 @@
  *  - Daily Slack report at 19:00 Europe/Paris (Mon-Fri)
  *  - Calendar AI analysis every 30 minutes
  *  - Pipeline AI analysis every hour
+ *  - Booking reminders: every 60 seconds (day-before + 1h-before emails)
  */
 
 // ─── STATE ──────────────────────────────────────────
@@ -129,6 +130,246 @@ async function runPipelineAiAnalysis(): Promise<void> {
   }
 }
 
+// ─── BOOKING REMINDERS ─────────────────────────────
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
+const APP_URL = process.env.APP_URL || 'http://localhost:5173';
+
+async function getValidAccessTokenForCron(userId: string, prismaClient: any): Promise<string | null> {
+  let config = await prismaClient.integrationConfig.findUnique({
+    where: { userId_provider: { userId, provider: 'calendar' } },
+  });
+
+  if (!config || !config.accessToken) {
+    config = await prismaClient.integrationConfig.findUnique({
+      where: { userId_provider: { userId, provider: 'gmail' } },
+    });
+  }
+
+  if (!config || !config.enabled || !config.accessToken) return null;
+
+  // Refresh expired token
+  if (config.tokenExpiry && config.tokenExpiry.getTime() < Date.now() + 5 * 60 * 1000) {
+    if (!config.refreshToken) return null;
+
+    try {
+      const response = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: GOOGLE_CLIENT_ID,
+          client_secret: GOOGLE_CLIENT_SECRET,
+          refresh_token: config.refreshToken,
+          grant_type: 'refresh_token',
+        }),
+      });
+
+      const tokens = await response.json() as any;
+      if (tokens.error) return null;
+
+      const newExpiry = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
+      await prismaClient.integrationConfig.update({
+        where: { id: config.id },
+        data: { accessToken: tokens.access_token, tokenExpiry: newExpiry },
+      });
+
+      return tokens.access_token as string;
+    } catch {
+      return null;
+    }
+  }
+
+  return config.accessToken;
+}
+
+function createReminderMimeMessage(
+  from: string,
+  to: string,
+  subject: string,
+  htmlBody: string,
+): string {
+  const boundary = `boundary_${Date.now()}`;
+  const lines = [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    '',
+    htmlBody.replace(/<[^>]+>/g, ''),
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    '',
+    htmlBody,
+    '',
+    `--${boundary}--`,
+  ];
+
+  const raw = lines.join('\r\n');
+  return Buffer.from(raw).toString('base64url');
+}
+
+async function processBookingReminders(): Promise<void> {
+  try {
+    const { default: prisma } = await import('../lib/db.js');
+
+    // Find all pending reminders whose scheduledAt has passed
+    const pendingReminders = await prisma.bookingReminder.findMany({
+      where: {
+        status: 'pending',
+        scheduledAt: { lte: new Date() },
+      },
+      include: {
+        booking: {
+          include: {
+            user: { select: { id: true, nom: true, prenom: true, email: true } },
+          },
+        },
+      },
+      take: 50, // Process max 50 reminders per cycle
+    });
+
+    if (pendingReminders.length === 0) return;
+
+    let sentCount = 0;
+    let failedCount = 0;
+
+    for (const reminder of pendingReminders) {
+      const { booking } = reminder;
+
+      // Skip if booking is no longer confirmed
+      if (booking.status !== 'confirmed') {
+        await prisma.bookingReminder.update({
+          where: { id: reminder.id },
+          data: { status: 'cancelled' },
+        });
+        continue;
+      }
+
+      // Get access token to send email via Gmail API
+      const accessToken = await getValidAccessTokenForCron(booking.userId, prisma);
+      if (!accessToken) {
+        await prisma.bookingReminder.update({
+          where: { id: reminder.id },
+          data: {
+            status: 'failed',
+            errorMessage: 'Impossible d\'obtenir un token Gmail valide',
+            sentAt: new Date(),
+          },
+        });
+        failedCount++;
+        continue;
+      }
+
+      const recruiterName = `${booking.user.prenom || ''} ${booking.user.nom}`.trim();
+      const bookingDateStr = booking.bookingDate.toISOString().substring(0, 10);
+      const formattedDate = new Date(bookingDateStr).toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+      const cancelUrl = `${APP_URL}/book/cancel/${booking.id}?token=${booking.cancelToken}`;
+
+      let subject: string;
+      let htmlBody: string;
+
+      if (reminder.type === 'email_day_before') {
+        subject = `Rappel : votre RDV demain avec ${recruiterName}`;
+        htmlBody = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">Rappel de votre RDV demain</h2>
+            <p>Bonjour ${booking.firstName},</p>
+            <p>Nous vous rappelons votre rendez-vous prevu <strong>demain</strong> avec <strong>${recruiterName}</strong>.</p>
+            <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
+              <p style="margin: 4px 0;"><strong>Date :</strong> ${formattedDate}</p>
+              <p style="margin: 4px 0;"><strong>Heure :</strong> ${booking.bookingTime}</p>
+              <p style="margin: 4px 0;"><strong>Duree :</strong> ${booking.durationMinutes} minutes</p>
+            </div>
+            <p>Si vous devez annuler ou reporter, <a href="${cancelUrl}" style="color: #2563eb;">cliquez ici</a>.</p>
+            <p style="color: #6b7280; font-size: 12px; margin-top: 32px;">Cet email a ete envoye automatiquement depuis la plateforme HumanUp.</p>
+          </div>
+        `;
+      } else {
+        // email_1h_before
+        subject = `Votre RDV avec ${recruiterName} dans 1 heure`;
+        htmlBody = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">Votre RDV commence bientot</h2>
+            <p>Bonjour ${booking.firstName},</p>
+            <p>Votre rendez-vous avec <strong>${recruiterName}</strong> commence dans <strong>1 heure</strong>.</p>
+            <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
+              <p style="margin: 4px 0;"><strong>Date :</strong> ${formattedDate}</p>
+              <p style="margin: 4px 0;"><strong>Heure :</strong> ${booking.bookingTime}</p>
+              <p style="margin: 4px 0;"><strong>Duree :</strong> ${booking.durationMinutes} minutes</p>
+            </div>
+            <p>A tout de suite !</p>
+            <p style="color: #6b7280; font-size: 12px; margin-top: 32px;">Cet email a ete envoye automatiquement depuis la plateforme HumanUp.</p>
+          </div>
+        `;
+      }
+
+      try {
+        const rawMessage = createReminderMimeMessage(
+          booking.user.email,
+          booking.email,
+          subject,
+          htmlBody,
+        );
+
+        const gmailResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ raw: rawMessage }),
+        });
+
+        if (gmailResponse.ok) {
+          await prisma.bookingReminder.update({
+            where: { id: reminder.id },
+            data: { status: 'sent', sentAt: new Date() },
+          });
+          sentCount++;
+        } else {
+          const gmailError = await gmailResponse.json() as any;
+          await prisma.bookingReminder.update({
+            where: { id: reminder.id },
+            data: {
+              status: 'failed',
+              sentAt: new Date(),
+              errorMessage: gmailError?.error?.message || `Gmail API error: ${gmailResponse.status}`,
+            },
+          });
+          failedCount++;
+        }
+      } catch (err: any) {
+        await prisma.bookingReminder.update({
+          where: { id: reminder.id },
+          data: {
+            status: 'failed',
+            sentAt: new Date(),
+            errorMessage: err.message || 'Unknown error sending reminder',
+          },
+        });
+        failedCount++;
+      }
+    }
+
+    if (sentCount > 0 || failedCount > 0) {
+      console.log(`[Cron] Booking reminders: ${sentCount} sent, ${failedCount} failed`);
+    }
+  } catch (error) {
+    console.error('[Cron] Error processing booking reminders:', error);
+  }
+}
+
 // ─── START / STOP ───────────────────────────────────
 
 export function startCronJobs(): void {
@@ -152,10 +393,15 @@ export function startCronJobs(): void {
   const pipelineInterval = setInterval(runPipelineAiAnalysis, 60 * 60 * 1000);
   intervals.push(pipelineInterval);
 
+  // Booking reminders every 60 seconds
+  const bookingReminderInterval = setInterval(processBookingReminders, 60 * 1000);
+  intervals.push(bookingReminderInterval);
+
   console.log('[Cron] Scheduled jobs started:');
   console.log('  - Slack daily report: checked every 60s (sends Mon-Fri at configured time, Europe/Paris)');
   console.log('  - Calendar AI analysis: every 30 minutes');
   console.log('  - Pipeline AI analysis: every 60 minutes');
+  console.log('  - Booking reminders: checked every 60s (day-before + 1h-before emails)');
 }
 
 export function stopCronJobs(): void {

@@ -34,6 +34,8 @@ import EntrepriseNewPage from './pages/entreprises/new';
 import MandatNewPage from './pages/mandats/new';
 import ReportsPage from './pages/reports/index';
 import StatsPage from './pages/stats/index';
+import PublicBookingPage from './pages/public-booking/index';
+import BookingCancelPage from './pages/public-booking/cancel';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuthStore();
@@ -49,6 +51,9 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/change-password" element={<ChangePasswordPage />} />
+      <Route path="/book/cancel/:bookingId" element={<BookingCancelPage />} />
+      <Route path="/book/:slug/:mandatSlug" element={<PublicBookingPage />} />
+      <Route path="/book/:slug" element={<PublicBookingPage />} />
       <Route
         element={
           <ProtectedRoute>

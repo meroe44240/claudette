@@ -44,6 +44,7 @@ import adminDashboardRouter from './modules/dashboard/admin-dashboard.router.js'
 import reportRouter from './modules/reports/report.router.js';
 import statsRouter from './modules/stats/stats.router.js';
 import slackRouter from './modules/slack/slack.router.js';
+import bookingRouter, { bookingPublicRouter } from './modules/booking/booking.router.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 
@@ -160,6 +161,8 @@ async function buildApp() {
   await app.register(reportRouter, { prefix: '/api/v1/reports' });
   await app.register(statsRouter, { prefix: '/api/v1/stats' });
   await app.register(slackRouter, { prefix: '/api/v1/slack' });
+  await app.register(bookingPublicRouter, { prefix: '/api/public/booking' });
+  await app.register(bookingRouter, { prefix: '/api/v1/booking' });
 
   return app;
 }

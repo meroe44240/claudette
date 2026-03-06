@@ -43,6 +43,8 @@ model User {
   reminders           Reminder[]     @relation("ReminderUser")
   calendarSuggestions AiCalendarSuggestion[] @relation("CalendarSuggestionUser")
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionUser")
+  bookingSetting      BookingSetting? @relation("BookingSettingUser")
+  bookings            Booking[]       @relation("BookingUser")
 
   @@map("users")
 }
@@ -104,7 +106,8 @@ model Client {
   createdAt    DateTime     @default(now()) @db.Timestamptz()
   updatedAt    DateTime     @updatedAt @db.Timestamptz()
 
-  mandats Mandat[]
+  mandats  Mandat[]
+  bookings Booking[] @relation("BookingClient")
 
   @@map("clients")
 }
@@ -166,6 +169,7 @@ model Candidat {
   updatedAt          DateTime  @updatedAt @db.Timestamptz()
 
   candidatures    Candidature[]
+  bookings        Booking[]       @relation("BookingCandidat")
 
   @@map("candidats")
 }
@@ -192,6 +196,10 @@ model Mandat {
   dateOuverture    DateTime     @default(now()) @db.Date
   dateCloture      DateTime?    @db.Date
   notes            String?      @db.Text
+  slug             String?      @unique @db.VarChar(255)
+  salaryRange      String?      @db.VarChar(255)
+  pitchPoints      Json?
+  isBookingPublic  Boolean      @default(true)
   createdById      String?      @db.Uuid
   createdBy        User?        @relation("MandatCreatedBy", fields: [createdById], references: [id])
   assignedToId     String?      @db.Uuid
@@ -201,6 +209,7 @@ model Mandat {
 
   candidatures        Candidature[]
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionMandat")
+  bookings            Booking[]       @relation("BookingMandat")
 
   @@map("mandats")
 }
@@ -750,4 +759,81 @@ model AiPipelineSuggestion {
   @@index([userId, status])
   @@index([candidatureId])
   @@map("ai_pipeline_suggestions")
+}
+
+// ─── BOOKING SYSTEM (Calendly-like) ─────────────────
+
+model BookingSetting {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @unique @db.Uuid
+  user            User     @relation("BookingSettingUser", fields: [userId], references: [id])
+  slug            String   @unique @db.VarChar(100)
+  isActive        Boolean  @default(true)
+  workingDays     Int[]    @default([1, 2, 3, 4, 5])
+  startTime       String   @default("09:00") @db.VarChar(5)
+  endTime         String   @default("18:00") @db.VarChar(5)
+  slotDuration    Int      @default(30)
+  bufferMinutes   Int      @default(15)
+  minNoticeHours  Int      @default(2)
+  maxAdvanceDays  Int      @default(30)
+  welcomeMessage  String?  @db.Text
+  reminderEmail   Boolean  @default(true)
+  reminderBefore  Boolean  @default(true)
+  createdAt       DateTime @default(now()) @db.Timestamptz()
+  updatedAt       DateTime @updatedAt @db.Timestamptz()
+
+  @@map("booking_settings")
+}
+
+model Booking {
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @db.Uuid
+  user                User      @relation("BookingUser", fields: [userId], references: [id])
+  mandatId            String?   @db.Uuid
+  mandat              Mandat?   @relation("BookingMandat", fields: [mandatId], references: [id])
+  entityType          String    @db.VarChar(20)
+  candidatId          String?   @db.Uuid
+  candidat            Candidat? @relation("BookingCandidat", fields: [candidatId], references: [id])
+  clientId            String?   @db.Uuid
+  client              Client?   @relation("BookingClient", fields: [clientId], references: [id])
+  firstName           String    @db.VarChar(100)
+  lastName            String    @db.VarChar(100)
+  email               String    @db.VarChar(255)
+  phone               String    @db.VarChar(50)
+  salary              String?   @db.VarChar(50)
+  currentCompany      String?   @db.VarChar(255)
+  availability        String?   @db.VarChar(50)
+  competingProcesses  String?   @db.VarChar(50)
+  message             String?   @db.Text
+  bookingDate         DateTime  @db.Date
+  bookingTime         String    @db.VarChar(5)
+  durationMinutes     Int       @default(30)
+  calendarEventId     String?   @db.VarChar(255)
+  status              String    @default("confirmed") @db.VarChar(20)
+  cancelToken         String?   @unique @db.VarChar(64)
+  cancelledAt         DateTime? @db.Timestamptz()
+  cancelReason        String?   @db.Text
+  createdAt           DateTime  @default(now()) @db.Timestamptz()
+  reminders           BookingReminder[]
+
+  @@index([userId])
+  @@index([email])
+  @@index([bookingDate])
+  @@index([status])
+  @@map("bookings")
+}
+
+model BookingReminder {
+  id           String    @id @default(uuid()) @db.Uuid
+  bookingId    String    @db.Uuid
+  booking      Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  type         String    @db.VarChar(30)
+  status       String    @default("pending") @db.VarChar(20)
+  scheduledAt  DateTime  @db.Timestamptz()
+  sentAt       DateTime? @db.Timestamptz()
+  errorMessage String?   @db.Text
+  createdAt    DateTime  @default(now()) @db.Timestamptz()
+
+  @@index([status, scheduledAt])
+  @@map("booking_reminders")
 }
