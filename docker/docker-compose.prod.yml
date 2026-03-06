@@ -42,10 +42,10 @@ services:
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       API_PORT: 3001
-      APP_URL: http://${SERVER_IP:-178.104.32.138}
+      APP_URL: https://ats.propium.co
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_REDIRECT_URI: http://${SERVER_IP:-178.104.32.138}/api/v1/integrations/gmail/callback
+      GOOGLE_REDIRECT_URI: https://ats.propium.co/api/v1/integrations/gmail/callback
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       PRIMARY_LLM_PROVIDER: ${PRIMARY_LLM_PROVIDER:-gemini}
@@ -67,11 +67,16 @@ services:
     restart: always
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./caddy/Caddyfile.prod:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - api
       - web
 
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:
