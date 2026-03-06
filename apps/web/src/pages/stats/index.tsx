@@ -1066,8 +1066,10 @@ export default function StatsPage() {
     error,
   } = useQuery({
     queryKey: ['stats', period, selectedUserId],
-    queryFn: () =>
-      api.get<StatsData>(`/stats?period=${period}&userId=${selectedUserId}`),
+    queryFn: async () => {
+      const res = await api.get<{ data: StatsData }>(`/stats?period=${period}&userId=${selectedUserId}`);
+      return res.data;
+    },
     enabled: !!selectedUserId,
   });
 
