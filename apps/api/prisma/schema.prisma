@@ -41,6 +41,7 @@ model User {
   sequences           Sequence[]     @relation("SequenceCreatedBy")
   auditLogs           AuditLog[]     @relation("AuditLogUser")
   reminders           Reminder[]     @relation("ReminderUser")
+  calendarSuggestions AiCalendarSuggestion[] @relation("CalendarSuggestionUser")
 
   @@map("users")
 }
@@ -695,4 +696,28 @@ model AiProspectSearch {
   @@index([candidatId])
   @@index([expiresAt])
   @@map("ai_prospect_searches")
+}
+
+// ─── AI CALENDAR SUGGESTIONS ─────────────────────
+
+model AiCalendarSuggestion {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @db.Uuid
+  calendarEventId String    @db.VarChar(255)
+  eventTitle      String    @db.VarChar(500)
+  eventDate       DateTime  @db.Timestamptz()
+  suggestionType  String    @db.VarChar(20) // 'candidate', 'client', 'company'
+  suggestedData   Json      @db.JsonB
+  confidence      Float
+  reasoning       String?   @db.Text
+  status          String    @default("pending") @db.VarChar(20) // 'pending', 'accepted', 'dismissed'
+  createdEntityId String?   @db.Uuid
+  createdAt       DateTime  @default(now()) @db.Timestamptz()
+  resolvedAt      DateTime? @db.Timestamptz()
+
+  user            User      @relation("CalendarSuggestionUser", fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@index([calendarEventId])
+  @@map("ai_calendar_suggestions")
 }

@@ -28,6 +28,7 @@ import integrationRouter from './modules/integrations/integration.router.js';
 import transcriptRouter from './modules/transcripts/transcript.router.js';
 import importRouter from './modules/import/import.router.js';
 import aiRouter from './modules/ai/ai.router.js';
+import calendarAiRouter from './modules/ai/calendar-ai.router.js';
 import sequenceRouter from './modules/sequences/sequence.router.js';
 import sdrRouter from './modules/sdr/sdr.router.js';
 import adchaseRouter from './modules/adchase/adchase.router.js';
@@ -141,6 +142,7 @@ async function buildApp() {
   await app.register(transcriptRouter, { prefix: '/api/v1/transcripts' });
   await app.register(importRouter, { prefix: '/api/v1/import' });
   await app.register(aiRouter, { prefix: '/api/v1/ai' });
+  await app.register(calendarAiRouter, { prefix: '/api/v1/ai/calendar' });
   await app.register(sequenceRouter, { prefix: '/api/v1/sequences' });
   await app.register(sdrRouter, { prefix: '/api/v1/sdr' });
   await app.register(adchaseRouter, { prefix: '/api/v1/adchase' });
