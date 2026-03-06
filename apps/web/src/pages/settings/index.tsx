@@ -100,9 +100,9 @@ export default function SettingsPage() {
   ];
 
   const geminiModelOptions = [
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
     { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-    { value: 'gemini-2.5-pro-preview-05-06', label: 'Gemini 2.5 Pro' },
-    { value: 'gemini-2.5-flash-preview-04-17', label: 'Gemini 2.5 Flash' },
   ];
 
   const aiModelOptions = aiProvider === 'openai' ? openaiModelOptions : aiProvider === 'gemini' ? geminiModelOptions : anthropicModelOptions;
@@ -488,7 +488,7 @@ export default function SettingsPage() {
                       value={aiProvider}
                       onChange={(val) => {
                         setAiProvider(val as 'openai' | 'anthropic' | 'gemini');
-                        setAiModel(val === 'openai' ? 'gpt-4o' : val === 'gemini' ? 'gemini-2.0-flash' : 'claude-sonnet-4-20250514');
+                        setAiModel(val === 'openai' ? 'gpt-4o' : val === 'gemini' ? 'gemini-2.5-flash' : 'claude-sonnet-4-20250514');
                       }}
                     />
 
