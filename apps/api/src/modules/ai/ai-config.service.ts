@@ -31,14 +31,28 @@ export async function getAiConfig(userId: string): Promise<AiConfigResponse | nu
   if (!config) return null;
 
   const data = config.config as unknown as AiConfigData;
+  const rawModel = data.model || 'gpt-4o';
+  const model = data.aiProvider === 'gemini' ? migrateModelId(rawModel) : rawModel;
 
   return {
     provider: 'ai',
     aiProvider: data.aiProvider || 'openai',
-    model: data.model || 'gpt-4o',
+    model,
     enabled: config.enabled,
     hasApiKey: !!config.accessToken,
   };
+}
+
+// ─── MIGRATE STALE MODEL IDS ─────────────────────────
+
+const MODEL_MIGRATIONS: Record<string, string> = {
+  'gemini-2.5-pro-preview-05-06': 'gemini-2.5-pro',
+  'gemini-2.5-flash-preview-04-17': 'gemini-2.5-flash',
+  'gemini-2.0-flash': 'gemini-2.5-flash', // deprecated for new users
+};
+
+function migrateModelId(model: string): string {
+  return MODEL_MIGRATIONS[model] || model;
 }
 
 // ─── GET AI CONFIG WITH KEY (internal use) ──────────
@@ -55,10 +69,21 @@ export async function getAiConfigWithKey(userId: string): Promise<{
   if (!config || !config.accessToken || !config.enabled) return null;
 
   const data = config.config as unknown as AiConfigData;
+  const rawModel = data.model || 'gpt-4o';
+  const model = data.aiProvider === 'gemini' ? migrateModelId(rawModel) : rawModel;
+
+  // Auto-fix stale model in DB if migrated
+  if (model !== rawModel) {
+    console.log(`[AI Config] Auto-migrating model: ${rawModel} → ${model}`);
+    await prisma.integrationConfig.update({
+      where: { userId_provider: { userId, provider: 'ai' } },
+      data: { config: { ...data, model } as any },
+    });
+  }
 
   return {
     aiProvider: data.aiProvider || 'openai',
-    model: data.model || 'gpt-4o',
+    model,
     apiKey: config.accessToken,
   };
 }
