@@ -31,10 +31,10 @@ const acceptSuggestionSchema = z.object({
 });
 
 export default async function calendarAiRouter(fastify: FastifyInstance) {
-  // POST /analyze — Trigger calendar analysis
+  // POST /analyze — Trigger calendar auto-create (direct creation, no suggestions)
   fastify.post('/analyze', {
     schema: {
-      description: 'Analyser les événements Google Calendar et suggérer des créations de candidats/clients/entreprises',
+      description: 'Analyser les événements Google Calendar et créer automatiquement candidats/clients/entreprises',
       tags: ['AI', 'Calendar'],
     },
     preHandler: [authenticate],
@@ -42,9 +42,11 @@ export default async function calendarAiRouter(fastify: FastifyInstance) {
       try {
         const result = await calendarAiService.analyzeCalendarEvents(request.userId);
         return {
-          data: result.suggestions,
+          status: 'completed',
           analyzed: result.analyzed,
-          count: result.suggestions.length,
+          candidats: result.candidats,
+          clients: result.clients,
+          entreprises: result.entreprises,
           message: result.message,
         };
       } catch (err: any) {

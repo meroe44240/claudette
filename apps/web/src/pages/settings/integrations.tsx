@@ -72,7 +72,7 @@ export default function IntegrationsSettingsPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations', 'status'] });
-      toast('success', 'Allo configur\u00E9 avec succ\u00E8s');
+      toast('success', 'Allo configuré avec succès');
       setAlloModalOpen(false);
       setAlloApiKey('');
     },
@@ -86,17 +86,17 @@ export default function IntegrationsSettingsPage() {
       api.put('/integrations/config/allo', { enabled: false, accessToken: '' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations', 'status'] });
-      toast('success', 'Allo d\u00E9connect\u00E9');
+      toast('success', 'Allo déconnecté');
     },
     onError: () => {
-      toast('error', 'Erreur lors de la d\u00E9connexion');
+      toast('error', 'Erreur lors de la déconnexion');
     },
   });
 
   const syncAlloMutation = useMutation({
     mutationFn: () => api.post<{ status: string; synced?: number; message: string }>('/integrations/allo/sync'),
     onSuccess: (result) => {
-      toast('success', result.message || 'Synchronisation Allo termin\u00E9e');
+      toast('success', result.message || 'Synchronisation Allo terminée');
     },
     onError: () => {
       toast('error', 'Erreur lors de la synchronisation Allo');
@@ -107,10 +107,10 @@ export default function IntegrationsSettingsPage() {
     mutationFn: () => api.post('/integrations/gmail/disconnect'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations', 'status'] });
-      toast('success', 'Gmail d\u00E9connect\u00E9');
+      toast('success', 'Gmail déconnecté');
     },
     onError: () => {
-      toast('error', 'Erreur lors de la d\u00E9connexion');
+      toast('error', 'Erreur lors de la déconnexion');
     },
   });
 
@@ -118,17 +118,17 @@ export default function IntegrationsSettingsPage() {
     mutationFn: () => api.post('/integrations/calendar/disconnect'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations', 'status'] });
-      toast('success', 'Google Calendar d\u00E9connect\u00E9');
+      toast('success', 'Google Calendar déconnecté');
     },
     onError: () => {
-      toast('error', 'Erreur lors de la d\u00E9connexion');
+      toast('error', 'Erreur lors de la déconnexion');
     },
   });
 
   const syncCalendlyMutation = useMutation({
     mutationFn: () => api.post<{ calendlyEvents: number; enrichedCandidates: number; message: string }>('/integrations/calendar/sync-calendly'),
     onSuccess: (result) => {
-      toast('success', result.message || 'Synchronisation Calendly termin\u00E9e');
+      toast('success', result.message || 'Synchronisation Calendly terminée');
     },
     onError: () => {
       toast('error', 'Erreur lors de la synchronisation Calendly');
@@ -141,7 +141,7 @@ export default function IntegrationsSettingsPage() {
       api.post<SlackConfig>('/slack/config', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['slack', 'config'] });
-      toast('success', 'Configuration Slack sauvegard\u00E9e');
+      toast('success', 'Configuration Slack sauvegardée');
       setSlackDirty(false);
     },
     onError: () => {
@@ -169,7 +169,7 @@ export default function IntegrationsSettingsPage() {
       const data = await api.get<AuthUrlResponse>('/integrations/gmail/auth-url');
       window.open(data.url, '_blank');
     } catch {
-      toast('error', "Erreur lors de la r\u00E9cup\u00E9ration de l'URL d'authentification");
+      toast('error', "Erreur lors de la récupération de l'URL d'authentification");
     }
   };
 
@@ -178,7 +178,7 @@ export default function IntegrationsSettingsPage() {
       const data = await api.get<AuthUrlResponse>('/integrations/calendar/auth-url');
       window.open(data.url, '_blank');
     } catch {
-      toast('error', "Erreur lors de la r\u00E9cup\u00E9ration de l'URL d'authentification");
+      toast('error', "Erreur lors de la récupération de l'URL d'authentification");
     }
   };
 
@@ -202,10 +202,10 @@ export default function IntegrationsSettingsPage() {
     return (
       <div>
         <PageHeader
-          title="Int\u00E9grations"
+          title="Intégrations"
           breadcrumbs={[
-            { label: 'Param\u00E8tres', href: '/settings' },
-            { label: 'Int\u00E9grations' },
+            { label: 'Paramètres', href: '/settings' },
+            { label: 'Intégrations' },
           ]}
         />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -218,11 +218,11 @@ export default function IntegrationsSettingsPage() {
   return (
     <div>
       <PageHeader
-        title="Integrations"
-        subtitle="Connectez vos outils pour une exp\u00E9rience unifi\u00E9e"
+        title="Intégrations"
+        subtitle="Connectez vos outils pour une expérience unifiée"
         breadcrumbs={[
-          { label: 'Parametres', href: '/settings' },
-          { label: 'Integrations' },
+          { label: 'Paramètres', href: '/settings' },
+          { label: 'Intégrations' },
         ]}
       />
 
@@ -235,14 +235,14 @@ export default function IntegrationsSettingsPage() {
                 <Phone size={18} className="text-green-600" />
               </div>
               <div>
-                <h3 className="text-[18px] font-semibold text-neutral-900">Allo (T\u00E9l\u00E9phonie)</h3>
+                <h3 className="text-[18px] font-semibold text-neutral-900">Allo (Téléphonie)</h3>
                 <p className="mt-0.5 text-[13px] text-neutral-500">
-                  Int\u00E9gration t\u00E9l\u00E9phonique pour vos appels
+                  Intégration téléphonique pour vos appels
                 </p>
               </div>
             </div>
             <Badge variant={integrations?.allo?.connected ? 'success' : 'default'}>
-              {integrations?.allo?.connected ? 'Connect\u00E9' : 'D\u00E9connect\u00E9'}
+              {integrations?.allo?.connected ? 'Connecté' : 'Déconnecté'}
             </Badge>
           </div>
 
@@ -250,11 +250,11 @@ export default function IntegrationsSettingsPage() {
             <div className="flex items-center gap-2 text-neutral-500">
               <Shield size={14} className="text-neutral-300" />
               <span>
-                Cl\u00E9 API :{' '}
+                Clé API :{' '}
                 {integrations?.allo?.apiKeyConfigured ? (
                   <span className="font-medium text-neutral-900">{'*'.repeat(20)}</span>
                 ) : (
-                  <span className="text-neutral-300">Non configur\u00E9e</span>
+                  <span className="text-neutral-300">Non configurée</span>
                 )}
               </span>
             </div>
@@ -295,7 +295,7 @@ export default function IntegrationsSettingsPage() {
                     disabled={disconnectAlloMutation.isPending}
                   >
                     <Unlink size={14} />
-                    D\u00E9connecter
+                    Déconnecter
                   </Button>
                 </div>
               </>
@@ -322,13 +322,13 @@ export default function IntegrationsSettingsPage() {
                 </button>
               </div>
               <p className="text-[13px] text-neutral-500 mb-4">
-                Entrez votre cl\u00E9 API Allo pour activer l'int\u00E9gration t\u00E9l\u00E9phonique.
+                Entrez votre clé API Allo pour activer l'intégration téléphonique.
               </p>
               <input
                 type="password"
                 value={alloApiKey}
                 onChange={e => setAlloApiKey(e.target.value)}
-                placeholder="Cl\u00E9 API Allo (ex: allo_xxxxxxxxxxxx)"
+                placeholder="Clé API Allo (ex: allo_xxxxxxxxxxxx)"
                 className="w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
                 autoFocus
               />
@@ -370,7 +370,7 @@ export default function IntegrationsSettingsPage() {
               </div>
             </div>
             <Badge variant={integrations?.gmail?.connected ? 'success' : 'default'}>
-              {integrations?.gmail?.connected ? 'Connect\u00E9' : 'D\u00E9connect\u00E9'}
+              {integrations?.gmail?.connected ? 'Connecté' : 'Déconnecté'}
             </Badge>
           </div>
 
@@ -398,7 +398,7 @@ export default function IntegrationsSettingsPage() {
                 disabled={disconnectGmailMutation.isPending}
               >
                 <Unlink size={14} />
-                {disconnectGmailMutation.isPending ? 'D\u00E9connexion...' : 'D\u00E9connecter'}
+                {disconnectGmailMutation.isPending ? 'Déconnexion...' : 'Déconnecter'}
               </Button>
             ) : (
               <Button size="sm" className="w-full" onClick={handleConnectGmail}>
@@ -425,7 +425,7 @@ export default function IntegrationsSettingsPage() {
               </div>
             </div>
             <Badge variant={integrations?.calendar?.connected ? 'success' : 'default'}>
-              {integrations?.calendar?.connected ? 'Connect\u00E9' : 'D\u00E9connect\u00E9'}
+              {integrations?.calendar?.connected ? 'Connecté' : 'Déconnecté'}
             </Badge>
           </div>
 
@@ -470,7 +470,7 @@ export default function IntegrationsSettingsPage() {
                   disabled={disconnectCalendarMutation.isPending}
                 >
                   <Unlink size={14} />
-                  {disconnectCalendarMutation.isPending ? 'D\u00E9connexion...' : 'D\u00E9connecter'}
+                  {disconnectCalendarMutation.isPending ? 'Déconnexion...' : 'Déconnecter'}
                 </Button>
               </>
             ) : (
@@ -493,7 +493,7 @@ export default function IntegrationsSettingsPage() {
               <div>
                 <h3 className="text-[18px] font-semibold text-neutral-900">Slack</h3>
                 <p className="mt-0.5 text-[13px] text-neutral-500">
-                  R\u00E9sum\u00E9 quotidien de l'\u00E9quipe envoy\u00E9 via webhook
+                  Résumé quotidien de l'équipe envoyé via webhook
                 </p>
               </div>
             </div>
@@ -532,7 +532,7 @@ export default function IntegrationsSettingsPage() {
                 className="h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500/30"
               />
               <span className="text-sm text-neutral-700">
-                R\u00E9sum\u00E9 quotidien (lundi-vendredi)
+                Résumé quotidien (lundi-vendredi)
               </span>
             </label>
           </div>

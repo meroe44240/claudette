@@ -117,6 +117,19 @@ async function runCalendarAiAnalysis(): Promise<void> {
   }
 }
 
+// ─── EMAIL AUTO-CREATE ─────────────────────────────
+
+async function runEmailAutoCreate(): Promise<void> {
+  try {
+    const { processAllIncomingEmails } = await import(
+      '../modules/integrations/email-auto-create.service.js'
+    );
+    await processAllIncomingEmails();
+  } catch (error) {
+    console.error('[Cron] Error in Email Auto-Create:', error);
+  }
+}
+
 // ─── PIPELINE AI ANALYSIS ───────────────────────────
 
 async function runPipelineAiAnalysis(): Promise<void> {
@@ -397,11 +410,16 @@ export function startCronJobs(): void {
   const bookingReminderInterval = setInterval(processBookingReminders, 60 * 1000);
   intervals.push(bookingReminderInterval);
 
+  // Email auto-create every 15 minutes
+  const emailAutoCreateInterval = setInterval(runEmailAutoCreate, 15 * 60 * 1000);
+  intervals.push(emailAutoCreateInterval);
+
   console.log('[Cron] Scheduled jobs started:');
   console.log('  - Slack daily report: checked every 60s (sends Mon-Fri at configured time, Europe/Paris)');
   console.log('  - Calendar AI analysis: every 30 minutes');
   console.log('  - Pipeline AI analysis: every 60 minutes');
   console.log('  - Booking reminders: checked every 60s (day-before + 1h-before emails)');
+  console.log('  - Email auto-create: every 15 minutes (perso → candidat, pro → client)');
 }
 
 export function stopCronJobs(): void {

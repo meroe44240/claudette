@@ -7,6 +7,7 @@ import type { Prisma } from '@prisma/client';
 import * as alloService from './allo.service.js';
 import * as gmailService from './gmail.service.js';
 import * as calendarService from './calendar.service.js';
+import * as emailAutoCreateService from './email-auto-create.service.js';
 
 // ─── ZOD SCHEMAS ────────────────────────────────────
 
@@ -484,6 +485,27 @@ export default async function integrationRouter(fastify: FastifyInstance) {
 
       const result = await calendarService.processCalendarWebhook(payload);
       return result;
+    },
+  });
+
+  // ═══════════════════════════════════════════════════
+  // EMAIL AUTO-CREATE ROUTES
+  // ═══════════════════════════════════════════════════
+
+  // POST /email/sync - Manually trigger email auto-create (authenticated)
+  fastify.post('/email/sync', {
+    schema: {
+      description: 'Déclencher la création automatique depuis les emails Gmail',
+      tags: ['Integrations - Email'],
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const result = await emailAutoCreateService.processIncomingEmailsForUser(request.userId);
+      return {
+        status: 'completed',
+        ...result,
+        message: `${result.candidats} candidats, ${result.clients} clients, ${result.entreprises} entreprises créés. ${result.activities} activités loggées.`,
+      };
     },
   });
 }
