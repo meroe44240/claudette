@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-humanup}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-humanup_prod}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U humanup"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../
+      dockerfile: apps/api/Dockerfile
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-humanup}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-humanup_prod}
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      API_PORT: 3001
+      APP_URL: http://${SERVER_IP:-178.104.32.138}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: http://${SERVER_IP:-178.104.32.138}/api/v1/integrations/gmail/callback
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      PRIMARY_LLM_PROVIDER: ${PRIMARY_LLM_PROVIDER:-gemini}
+      ALLO_API_KEY: ${ALLO_API_KEY}
+      ALLO_BASE_URL: ${ALLO_BASE_URL:-https://api.withallo.com}
+    expose:
+      - "3001"
+
+  web:
+    build:
+      context: ../
+      dockerfile: apps/web/Dockerfile
+    restart: always
+    expose:
+      - "80"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./caddy/Caddyfile.prod:/etc/caddy/Caddyfile
+    depends_on:
+      - api
+      - web
+
+volumes:
+  pgdata:

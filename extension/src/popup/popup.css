@@ -1,0 +1,575 @@
+/* HumanUp ATS Extension - Popup Styles
+   Design system: violet/lavande (#7C5CFC primary) */
+
+:root {
+  --primary: #7C5CFC;
+  --primary-dark: #5B3FD4;
+  --primary-gradient: linear-gradient(135deg, #7C5CFC, #5B3FD4);
+  --primary-light: rgba(124, 92, 252, 0.08);
+  --primary-border: rgba(124, 92, 252, 0.2);
+
+  --bg: #F8F8FC;
+  --bg-white: #FFFFFF;
+  --border: #E8E5F0;
+
+  --text: #1A1A2E;
+  --text-secondary: #6B7194;
+  --text-muted: #9B9BB4;
+
+  --success: #10B981;
+  --success-bg: #ECFDF5;
+  --success-border: #A7F3D0;
+
+  --error: #EF4444;
+  --error-bg: #FEF2F2;
+  --error-border: #FECACA;
+
+  --warning: #F59E0B;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
+
+  --shadow-card: 0 2px 12px rgba(124, 92, 252, 0.06);
+  --shadow-btn: 0 2px 8px rgba(124, 92, 252, 0.18);
+  --shadow-input-focus: 0 0 0 3px rgba(124, 92, 252, 0.12);
+
+  --transition: 0.2s ease;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  width: 380px;
+  min-height: 200px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* =============================================
+   Header
+   ============================================= */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: var(--primary-gradient);
+  color: white;
+  position: relative;
+}
+
+.header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.header h1 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-logout {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: white;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.btn-logout:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* =============================================
+   Container & Cards
+   ============================================= */
+.container {
+  padding: 16px 18px;
+}
+
+.card {
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 16px;
+}
+
+/* =============================================
+   Login Form
+   ============================================= */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 28px 20px;
+}
+
+.login-form h2 {
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 2px;
+  color: var(--text);
+}
+
+.login-form p {
+  font-size: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+
+/* =============================================
+   Form Elements
+   ============================================= */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.form-group label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--bg-white);
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-input-focus);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 64px;
+}
+
+.form-group select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236B7194' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+/* =============================================
+   Buttons
+   ============================================= */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.btn-primary {
+  background: var(--primary-gradient);
+  color: white;
+  box-shadow: var(--shadow-btn);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(124, 92, 252, 0.3);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: var(--text);
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #0f1229;
+  transform: translateY(-1px);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--primary);
+  border: 1.5px solid var(--primary-border);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* =============================================
+   Button Row
+   ============================================= */
+.btn-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.btn-row .btn {
+  flex: 1;
+}
+
+/* =============================================
+   Error Message
+   ============================================= */
+.error-msg {
+  background: var(--error-bg);
+  color: var(--error);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--error-border);
+  line-height: 1.4;
+}
+
+/* =============================================
+   Success State
+   ============================================= */
+.success-card {
+  text-align: center;
+  padding: 32px 20px;
+}
+
+.success-icon {
+  width: 52px;
+  height: 52px;
+  background: var(--success-bg);
+  border: 2px solid var(--success-border);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+  font-size: 24px;
+  color: var(--success);
+}
+
+.success-card h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.success-card p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+.success-card a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  transition: color var(--transition);
+}
+
+.success-card a:hover {
+  color: var(--primary-dark);
+  text-decoration: underline;
+}
+
+/* =============================================
+   Section Title
+   ============================================= */
+.section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--primary-light);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title::before {
+  content: '';
+  width: 4px;
+  height: 16px;
+  background: var(--primary-gradient);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* =============================================
+   Profile Form
+   ============================================= */
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Two-column layout */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* =============================================
+   Unknown Page
+   ============================================= */
+.unknown-page {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+}
+
+.unknown-page-icon {
+  width: 56px;
+  height: 56px;
+  background: var(--primary-light);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  font-size: 24px;
+  color: var(--primary);
+}
+
+.unknown-page p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+/* =============================================
+   Loading
+   ============================================= */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  gap: 12px;
+}
+
+.loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--primary-light);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =============================================
+   Inline New Entreprise Form
+   ============================================= */
+.inline-new {
+  background: var(--primary-light);
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--primary-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.inline-new-row {
+  display: flex;
+  gap: 8px;
+}
+
+.inline-new-row input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text);
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.inline-new-row input:focus {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-input-focus);
+}
+
+.inline-new-row .btn {
+  font-size: 12px;
+  padding: 7px 14px;
+}
+
+/* =============================================
+   Profile header with photo
+   ============================================= */
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.profile-photo {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--primary-border);
+  flex-shrink: 0;
+}
+
+/* =============================================
+   LinkedIn badge
+   ============================================= */
+.linkedin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--primary-light);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+/* =============================================
+   Mode selector pills
+   ============================================= */
+.mode-pills {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.mode-pill {
+  flex: 1;
+  padding: 10px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-white);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: all var(--transition);
+}
+
+.mode-pill:hover {
+  border-color: var(--primary-border);
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.mode-pill.active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+/* =============================================
+   Scrollbar
+   ============================================= */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}

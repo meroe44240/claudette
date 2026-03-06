@@ -1,0 +1,584 @@
+import { useState } from 'react';
+import { useParams, useNavigate } from 'react-router';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Mail, Phone, Linkedin, Building2, Briefcase, Calendar, Send, Pencil, Trash2, Save, X, UserPlus, Bot } from 'lucide-react';
+import { api } from '../../lib/api-client';
+import { useAuthStore } from '../../stores/auth-store';
+import PageHeader from '../../components/ui/PageHeader';
+import Card from '../../components/ui/Card';
+import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
+import Avatar from '../../components/ui/Avatar';
+import Input, { Textarea } from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Skeleton, { SkeletonCard } from '../../components/ui/Skeleton';
+import EmailComposer from '../../components/email/EmailComposer';
+import ScheduleMeeting from '../../components/calendar/ScheduleMeeting';
+import ActivityJournal from '../../components/activity/ActivityJournal';
+import DeleteConfirmModal from '../../components/ui/DeleteConfirmModal';
+import CallBriefPanel from '../../components/ai/CallBriefPanel';
+import { toast } from '../../components/ui/Toast';
+
+type RoleContact = 'HIRING_MANAGER' | 'DRH' | 'PROCUREMENT' | 'CEO' | 'AUTRE';
+type StatutClient =
+  | 'LEAD'
+  | 'PREMIER_CONTACT'
+  | 'BESOIN_QUALIFIE'
+  | 'PROPOSITION_ENVOYEE'
+  | 'MANDAT_SIGNE'
+  | 'RECURRENT'
+  | 'INACTIF';
+
+interface Mandat {
+  id: string;
+  titrePoste: string;
+  statut: string;
+  priorite: string;
+  salaireMin: number | null;
+  salaireMax: number | null;
+}
+
+interface ClientDetail {
+  id: string;
+  nom: string;
+  prenom: string | null;
+  email: string | null;
+  telephone: string | null;
+  poste: string | null;
+  roleContact: RoleContact | null;
+  linkedinUrl: string | null;
+  statutClient: StatutClient;
+  notes: string | null;
+  entreprise: {
+    id: string;
+    nom: string;
+    secteur: string | null;
+    localisation: string | null;
+  };
+  assignedTo: {
+    id: string;
+    nom: string;
+    prenom: string | null;
+    avatarUrl?: string | null;
+  } | null;
+  lastActivityAt: string | null;
+  mandats: Mandat[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface EditForm {
+  nom: string;
+  prenom: string;
+  email: string;
+  telephone: string;
+  poste: string;
+  roleContact: string;
+  linkedinUrl: string;
+  notes: string;
+}
+
+const roleLabels: Record<RoleContact, string> = {
+  HIRING_MANAGER: 'Hiring Manager',
+  DRH: 'DRH',
+  PROCUREMENT: 'Procurement',
+  CEO: 'CEO',
+  AUTRE: 'Autre',
+};
+
+const roleContactOptions = [
+  { value: '', label: 'Aucun' },
+  { value: 'HIRING_MANAGER', label: 'Hiring Manager' },
+  { value: 'DRH', label: 'DRH' },
+  { value: 'PROCUREMENT', label: 'Procurement' },
+  { value: 'CEO', label: 'CEO' },
+  { value: 'AUTRE', label: 'Autre' },
+];
+
+const statutLabels: Record<StatutClient, string> = {
+  LEAD: 'Lead',
+  PREMIER_CONTACT: 'Premier contact',
+  BESOIN_QUALIFIE: 'Besoin qualifi\u00e9',
+  PROPOSITION_ENVOYEE: 'Proposition envoy\u00e9e',
+  MANDAT_SIGNE: 'Mandat sign\u00e9',
+  RECURRENT: 'R\u00e9current',
+  INACTIF: 'Inactif',
+};
+
+const statutVariant: Record<StatutClient, 'default' | 'info' | 'warning' | 'success' | 'error'> = {
+  LEAD: 'default',
+  PREMIER_CONTACT: 'info',
+  BESOIN_QUALIFIE: 'info',
+  PROPOSITION_ENVOYEE: 'warning',
+  MANDAT_SIGNE: 'success',
+  RECURRENT: 'success',
+  INACTIF: 'error',
+};
+
+const statutMandatVariant: Record<string, 'default' | 'info' | 'success' | 'error' | 'warning'> = {
+  OUVERT: 'info',
+  EN_COURS: 'warning',
+  GAGNE: 'success',
+  PERDU: 'error',
+  ANNULE: 'error',
+  CLOTURE: 'default',
+};
+
+const detailStagger = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
+};
+const detailItem = {
+  hidden: { opacity: 0, y: 16 },
+  show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 260, damping: 24 } },
+};
+
+function buildEditForm(client: ClientDetail): EditForm {
+  return {
+    nom: client.nom || '',
+    prenom: client.prenom || '',
+    email: client.email || '',
+    telephone: client.telephone || '',
+    poste: client.poste || '',
+    roleContact: client.roleContact || '',
+    linkedinUrl: client.linkedinUrl || '',
+    notes: client.notes || '',
+  };
+}
+
+export default function ClientDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const currentUser = useAuthStore((s) => s.user);
+  const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [showScheduleMeeting, setShowScheduleMeeting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showCallBrief, setShowCallBrief] = useState(false);
+
+  const { data: client, isLoading } = useQuery({
+    queryKey: ['client', id],
+    queryFn: () => api.get<ClientDetail>(`/clients/${id}`),
+    enabled: !!id,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (payload: Record<string, unknown>) =>
+      api.put<ClientDetail>(`/clients/${id}`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['client', id] });
+      toast('success', 'Modifications enregistr\u00e9es');
+      setIsEditing(false);
+      setEditForm(null);
+    },
+    onError: (error: any) => {
+      toast('error', error.message || 'Erreur lors de la mise \u00e0 jour');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/clients/${id}`),
+    onSuccess: () => {
+      toast('success', 'Supprim\u00e9 avec succ\u00e8s');
+      navigate('/clients');
+    },
+    onError: (error: any) => {
+      toast('error', error.message || 'Erreur lors de la suppression');
+    },
+  });
+
+  // ── Ownership mutations ──────────────────────────────────
+  const assignMutation = useMutation({
+    mutationFn: (assignedToId: string | null) =>
+      api.put<ClientDetail>(`/clients/${id}/assign`, { assignedToId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['client', id] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      toast('success', 'Prise en charge mise \u00e0 jour');
+    },
+    onError: (error: any) => {
+      toast('error', error.message || 'Erreur lors de la prise en charge');
+    },
+  });
+
+  const handleClaim = () => {
+    if (currentUser) {
+      assignMutation.mutate(currentUser.id);
+    }
+  };
+
+  const handleRelease = () => {
+    assignMutation.mutate(null);
+  };
+
+  // Compute days until ownership expiry
+  const isOwner = client?.assignedTo?.id === currentUser?.id;
+  const isAdmin = currentUser?.role === 'ADMIN';
+  const daysSinceActivity = client?.lastActivityAt
+    ? Math.floor((Date.now() - new Date(client.lastActivityAt).getTime()) / (1000 * 60 * 60 * 24))
+    : Infinity;
+  const daysUntilExpiry = client?.assignedTo ? Math.max(0, 60 - daysSinceActivity) : null;
+
+  const handleStartEdit = () => {
+    if (client) {
+      setEditForm(buildEditForm(client));
+      setIsEditing(true);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditForm(null);
+  };
+
+  const handleSave = () => {
+    if (!editForm) return;
+    const payload: Record<string, unknown> = {};
+    payload.nom = editForm.nom.trim() || undefined;
+    if (editForm.prenom.trim()) payload.prenom = editForm.prenom.trim();
+    else payload.prenom = null;
+    if (editForm.email.trim()) payload.email = editForm.email.trim();
+    else payload.email = null;
+    if (editForm.telephone.trim()) payload.telephone = editForm.telephone.trim();
+    else payload.telephone = null;
+    if (editForm.poste.trim()) payload.poste = editForm.poste.trim();
+    else payload.poste = null;
+    if (editForm.roleContact) payload.roleContact = editForm.roleContact;
+    else payload.roleContact = null;
+    if (editForm.linkedinUrl.trim()) payload.linkedinUrl = editForm.linkedinUrl.trim();
+    else payload.linkedinUrl = null;
+    if (editForm.notes.trim()) payload.notes = editForm.notes.trim();
+    else payload.notes = null;
+
+    updateMutation.mutate(payload);
+  };
+
+  const setField = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setEditForm((prev) => prev ? { ...prev, [field]: e.target.value } : prev);
+  };
+
+  if (isLoading) {
+    return (
+      <div>
+        <Skeleton className="h-8 w-64 mb-6" />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-6">
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+          <div className="space-y-6">
+            <SkeletonCard />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!client) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-text-secondary">Client introuvable.</p>
+        <Button variant="ghost" onClick={() => navigate('/clients')} className="mt-4">
+          Retour aux clients
+        </Button>
+      </div>
+    );
+  }
+
+  const fullName = `${client.prenom || ''} ${client.nom}`.trim();
+
+  return (
+    <div>
+      <PageHeader
+        title={fullName}
+        breadcrumbs={[
+          { label: 'Clients', href: '/clients' },
+          { label: fullName },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            {isEditing ? (
+              <>
+                <Button variant="primary" size="sm" onClick={handleSave} loading={updateMutation.isPending}>
+                  <Save size={14} /> Enregistrer
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleCancelEdit} disabled={updateMutation.isPending}>
+                  <X size={14} /> Annuler
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="secondary" size="sm" onClick={handleStartEdit}>
+                  <Pencil size={14} /> Modifier
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => setShowDeleteModal(true)}>
+                  <Trash2 size={14} /> Supprimer
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => setShowEmailComposer(true)}>
+                  <Send size={14} /> Envoyer un email
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => setShowScheduleMeeting(true)}>
+                  <Calendar size={14} /> Planifier un RDV
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => setShowCallBrief(true)}>
+                  <Bot size={14} /> Brief pre-appel
+                </Button>
+                <Button variant="ghost" onClick={() => navigate('/clients')}>
+                  <ArrowLeft size={16} /> Retour
+                </Button>
+              </>
+            )}
+          </div>
+        }
+      />
+
+      {/* Ownership section */}
+      <div className="mb-5 flex items-center gap-3 rounded-xl border border-border/50 bg-white p-4 shadow-card">
+        <span className="text-sm font-medium text-text-tertiary">Prise en charge :</span>
+        {client.assignedTo ? (
+          <>
+            <Avatar
+              src={client.assignedTo.avatarUrl}
+              nom={client.assignedTo.nom}
+              prenom={client.assignedTo.prenom}
+              size="sm"
+            />
+            <span className="text-sm font-medium text-text-primary">
+              {client.assignedTo.prenom} {client.assignedTo.nom}
+            </span>
+            {isOwner && <Badge variant="success" size="sm">Mon client</Badge>}
+            {daysUntilExpiry !== null && daysUntilExpiry <= 7 && (
+              <Badge variant="warning" size="sm">
+                Expire dans {daysUntilExpiry}j
+              </Badge>
+            )}
+            {(isOwner || isAdmin) && (
+              <button
+                onClick={handleRelease}
+                disabled={assignMutation.isPending}
+                className="ml-auto text-xs text-red-500 hover:underline disabled:opacity-50"
+              >
+                Lib\u00e9rer
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <Badge variant="success" size="sm">Disponible</Badge>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={handleClaim}
+              loading={assignMutation.isPending}
+            >
+              <UserPlus size={14} /> Prendre en charge
+            </Button>
+          </>
+        )}
+      </div>
+
+      <motion.div className="grid grid-cols-1 gap-6 lg:grid-cols-3" variants={detailStagger} initial="hidden" animate="show">
+        {/* Main info */}
+        <motion.div className="lg:col-span-2 space-y-6" variants={detailItem}>
+          <Card>
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">Informations</h2>
+            {isEditing && editForm ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Input label="Nom" value={editForm.nom} onChange={setField('nom')} placeholder="Nom" />
+                <Input label="Pr\u00e9nom" value={editForm.prenom} onChange={setField('prenom')} placeholder="Pr\u00e9nom" />
+                <Input label="Email" type="email" value={editForm.email} onChange={setField('email')} placeholder="email@exemple.com" />
+                <Input label="T\u00e9l\u00e9phone" value={editForm.telephone} onChange={setField('telephone')} placeholder="+33 1 23 45 67 89" />
+                <Input label="Poste" value={editForm.poste} onChange={setField('poste')} placeholder="Directeur des ressources humaines" />
+                <Select
+                  label="R\u00f4le contact"
+                  options={roleContactOptions}
+                  value={editForm.roleContact}
+                  onChange={(val) => setEditForm((prev) => prev ? { ...prev, roleContact: val } : prev)}
+                />
+                <Input label="LinkedIn" value={editForm.linkedinUrl} onChange={setField('linkedinUrl')} placeholder="https://linkedin.com/in/..." />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {client.email && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Mail size={14} className="text-text-tertiary" />
+                    <a href={`mailto:${client.email}`} className="text-accent hover:underline">
+                      {client.email}
+                    </a>
+                  </div>
+                )}
+                {client.telephone && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Phone size={14} className="text-text-tertiary" />
+                    <span className="text-text-primary">{client.telephone}</span>
+                  </div>
+                )}
+                {client.poste && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Briefcase size={14} className="text-text-tertiary" />
+                    <span className="text-text-primary">{client.poste}</span>
+                  </div>
+                )}
+                {client.linkedinUrl && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Linkedin size={14} className="text-text-tertiary" />
+                    <a href={client.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                      LinkedIn
+                    </a>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-sm">
+                  <Building2 size={14} className="text-text-tertiary" />
+                  <span
+                    className="text-accent hover:underline cursor-pointer"
+                    onClick={() => navigate(`/entreprises/${client.entreprise.id}`)}
+                  >
+                    {client.entreprise.nom}
+                  </span>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">Mandats</h2>
+            {client.mandats.length === 0 ? (
+              <p className="text-sm text-text-secondary">Aucun mandat associ\u00e9.</p>
+            ) : (
+              <div className="space-y-3">
+                {client.mandats.map((m) => (
+                  <div
+                    key={m.id}
+                    className="flex items-center justify-between rounded-md border border-border p-3 hover:bg-primary-50/30 cursor-pointer"
+                    onClick={() => navigate(`/mandats/${m.id}`)}
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-text-primary">{m.titrePoste}</p>
+                      {m.salaireMin && m.salaireMax && (
+                        <p className="text-xs text-text-secondary">
+                          {(m.salaireMin / 1000).toFixed(0)}k\u20ac - {(m.salaireMax / 1000).toFixed(0)}k\u20ac
+                        </p>
+                      )}
+                    </div>
+                    <Badge variant={statutMandatVariant[m.statut] || 'default'}>
+                      {m.statut}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </motion.div>
+
+        {/* Sidebar */}
+        <motion.div className="space-y-6" variants={detailItem}>
+          <Card>
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">D\u00e9tails</h2>
+            <dl className="space-y-3 text-sm">
+              <div>
+                <dt className="text-text-tertiary">Statut</dt>
+                <dd className="mt-1">
+                  <Badge variant={statutVariant[client.statutClient]}>
+                    {statutLabels[client.statutClient]}
+                  </Badge>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-text-tertiary">R\u00f4le</dt>
+                <dd className="mt-1 font-medium text-text-primary">
+                  {client.roleContact ? roleLabels[client.roleContact] : '\u2014'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-text-tertiary">Entreprise</dt>
+                <dd className="mt-1">
+                  <span
+                    className="font-medium text-accent hover:underline cursor-pointer"
+                    onClick={() => navigate(`/entreprises/${client.entreprise.id}`)}
+                  >
+                    {client.entreprise.nom}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-text-tertiary">Mandats associ\u00e9s</dt>
+                <dd className="mt-1">
+                  <Badge variant="info">{client.mandats.length}</Badge>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-text-tertiary">Assign\u00e9 \u00e0</dt>
+                <dd className="mt-1">
+                  {client.assignedTo ? (
+                    <span className="font-medium text-text-primary">
+                      {client.assignedTo.prenom} {client.assignedTo.nom}
+                    </span>
+                  ) : (
+                    <Badge variant="success" size="sm">Disponible</Badge>
+                  )}
+                </dd>
+              </div>
+            </dl>
+          </Card>
+
+          <Card>
+            <h2 className="mb-3 text-lg font-semibold text-text-primary">Notes</h2>
+            {isEditing && editForm ? (
+              <Textarea
+                value={editForm.notes}
+                onChange={setField('notes')}
+                placeholder="Notes sur le contact client..."
+              />
+            ) : client.notes ? (
+              <p className="whitespace-pre-wrap text-sm text-text-secondary">{client.notes}</p>
+            ) : (
+              <p className="text-sm text-text-secondary">Aucune note.</p>
+            )}
+          </Card>
+        </motion.div>
+      </motion.div>
+
+      <div className="mt-8">
+        <ActivityJournal entiteType="CLIENT" entiteId={client.id} />
+      </div>
+
+      <EmailComposer
+        isOpen={showEmailComposer}
+        onClose={() => setShowEmailComposer(false)}
+        defaultTo={client.email || ''}
+        defaultSubject=""
+        entiteType="client"
+        entiteId={client.id}
+        clientId={client.id}
+      />
+
+      <ScheduleMeeting
+        isOpen={showScheduleMeeting}
+        onClose={() => setShowScheduleMeeting(false)}
+        defaultTitle={`R\u00e9union - ${fullName}`}
+        defaultParticipants={client.email ? [client.email] : []}
+        entiteType="client"
+        entiteId={client.id}
+      />
+
+      <DeleteConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={() => deleteMutation.mutate()}
+        entityName={`le client ${fullName}`}
+        isLoading={deleteMutation.isPending}
+      />
+
+      <CallBriefPanel
+        entityType="CLIENT"
+        entityId={client.id}
+        entityName={fullName}
+        isOpen={showCallBrief}
+        onClose={() => setShowCallBrief(false)}
+      />
+    </div>
+  );
+}

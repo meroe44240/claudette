@@ -1,0 +1,698 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USERS ───────────────────────────────────────────
+
+model User {
+  id                 String    @id @default(uuid()) @db.Uuid
+  email              String    @unique @db.VarChar(255)
+  passwordHash       String    @db.VarChar(255)
+  nom                String    @db.VarChar(255)
+  prenom             String?   @db.VarChar(255)
+  avatarUrl          String?   @db.VarChar(500)
+  role               Role      @default(RECRUTEUR)
+  mustChangePassword Boolean   @default(true)
+  apiKey             String?   @unique @db.VarChar(255)
+  lastLoginAt        DateTime? @db.Timestamptz()
+  // Compensation (admin-only)
+  monthlySalary      Float?    // Coût mensuel chargé (salaire brut + charges)
+  variableRate       Float?    // Commission % sur les fees placés
+  startDate          DateTime? @db.Timestamptz() // Date de début pour prorata
+  createdAt          DateTime  @default(now()) @db.Timestamptz()
+  updatedAt          DateTime  @updatedAt @db.Timestamptz()
+
+  candidatsCreated    Candidat[]     @relation("CandidatCreatedBy")
+  clientsCreated      Client[]       @relation("ClientCreatedBy")
+  entreprisesCreated  Entreprise[]   @relation("EntrepriseCreatedBy")
+  mandatsCreated      Mandat[]       @relation("MandatCreatedBy")
+  candidaturesCreated Candidature[]  @relation("CandidatureCreatedBy")
+  activites           Activite[]     @relation("ActiviteUser")
+  notifications       Notification[] @relation("NotificationUser")
+  templates           Template[]     @relation("TemplateCreatedBy")
+  assignedCandidats   Candidat[]     @relation("CandidatAssignedTo")
+  assignedClients     Client[]       @relation("ClientAssignedTo")
+  assignedMandats     Mandat[]       @relation("MandatAssignedTo")
+  sequences           Sequence[]     @relation("SequenceCreatedBy")
+  auditLogs           AuditLog[]     @relation("AuditLogUser")
+  reminders           Reminder[]     @relation("ReminderUser")
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  RECRUTEUR
+}
+
+// ─── ENTREPRISES ─────────────────────────────────────
+
+model Entreprise {
+  id           String            @id @default(uuid()) @db.Uuid
+  nom          String            @db.VarChar(255)
+  secteur      String?           @db.VarChar(100)
+  siteWeb      String?           @db.VarChar(500)
+  taille       TailleEntreprise?
+  localisation String?           @db.VarChar(255)
+  linkedinUrl  String?           @db.VarChar(500)
+  notes        String?           @db.Text
+  createdById  String?           @db.Uuid
+  createdBy    User?             @relation("EntrepriseCreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime          @default(now()) @db.Timestamptz()
+  updatedAt    DateTime          @updatedAt @db.Timestamptz()
+
+  clients Client[]
+  mandats Mandat[]
+
+  @@map("entreprises")
+}
+
+enum TailleEntreprise {
+  STARTUP
+  PME
+  ETI
+  GRAND_GROUPE
+}
+
+// ─── CLIENTS (contacts côté entreprise) ──────────────
+
+model Client {
+  id           String       @id @default(uuid()) @db.Uuid
+  nom          String       @db.VarChar(255)
+  prenom       String?      @db.VarChar(255)
+  email        String?      @db.VarChar(255)
+  telephone    String?      @db.VarChar(50)
+  poste        String?      @db.VarChar(255)
+  roleContact  RoleContact?
+  linkedinUrl  String?      @db.VarChar(500)
+  entrepriseId String       @db.Uuid
+  entreprise   Entreprise   @relation(fields: [entrepriseId], references: [id])
+  statutClient StatutClient @default(LEAD)
+  notes        String?      @db.Text
+  createdById  String?      @db.Uuid
+  createdBy    User?        @relation("ClientCreatedBy", fields: [createdById], references: [id])
+  assignedToId String?      @db.Uuid
+  assignedTo   User?        @relation("ClientAssignedTo", fields: [assignedToId], references: [id])
+  createdAt    DateTime     @default(now()) @db.Timestamptz()
+  updatedAt    DateTime     @updatedAt @db.Timestamptz()
+
+  mandats Mandat[]
+
+  @@map("clients")
+}
+
+enum RoleContact {
+  HIRING_MANAGER
+  DRH
+  PROCUREMENT
+  CEO
+  AUTRE
+}
+
+enum StatutClient {
+  LEAD
+  PREMIER_CONTACT
+  BESOIN_QUALIFIE
+  PROPOSITION_ENVOYEE
+  MANDAT_SIGNE
+  RECURRENT
+  INACTIF
+}
+
+// ─── CANDIDATS ───────────────────────────────────────
+
+model Candidat {
+  id                 String    @id @default(uuid()) @db.Uuid
+  nom                String    @db.VarChar(255)
+  prenom             String?   @db.VarChar(255)
+  email              String?   @db.VarChar(255)
+  telephone          String?   @db.VarChar(50)
+  linkedinUrl        String?   @db.VarChar(500)
+  photoUrl           String?   @db.VarChar(1000)
+  cvUrl              String?   @db.VarChar(500)
+  cvTexte            String?   @db.Text
+  posteActuel        String?   @db.VarChar(255)
+  entrepriseActuelle String?   @db.VarChar(255)
+  localisation       String?   @db.VarChar(255)
+  salaireActuel      Int?
+  salaireSouhaite    Int?
+  disponibilite      String?   @db.VarChar(100)
+  mobilite           String?   @db.VarChar(255)
+  source             String?   @db.VarChar(100)
+  tags               String[]  @default([])
+  notes              String?   @db.Text
+  consentementRgpd   Boolean   @default(false)
+  consentementDate   DateTime? @db.Timestamptz()
+  // AI-generated fields
+  aiPitchShort        String?   @db.VarChar(500)
+  aiPitchLong         String?   @db.Text
+  aiSellingPoints     Json?     // string[] - key selling points
+  aiIdealFor          String?   @db.Text
+  aiAnonymizedProfile Json?     // { titre, summary, bulletPoints }
+  aiParsedAt          DateTime? @db.Timestamptz()
+  createdById        String?   @db.Uuid
+  createdBy          User?     @relation("CandidatCreatedBy", fields: [createdById], references: [id])
+  assignedToId       String?   @db.Uuid
+  assignedTo         User?     @relation("CandidatAssignedTo", fields: [assignedToId], references: [id])
+  createdAt          DateTime  @default(now()) @db.Timestamptz()
+  updatedAt          DateTime  @updatedAt @db.Timestamptz()
+
+  candidatures Candidature[]
+
+  @@map("candidats")
+}
+
+// ─── MANDATS ─────────────────────────────────────────
+
+model Mandat {
+  id               String       @id @default(uuid()) @db.Uuid
+  titrePoste       String       @db.VarChar(255)
+  entrepriseId     String       @db.Uuid
+  entreprise       Entreprise   @relation(fields: [entrepriseId], references: [id])
+  clientId         String       @db.Uuid
+  client           Client       @relation(fields: [clientId], references: [id])
+  description      String?      @db.Text
+  localisation     String?      @db.VarChar(255)
+  salaireMin       Int?
+  salaireMax       Int?
+  feePourcentage   Decimal      @default(20.00) @db.Decimal(5, 2)
+  feeMontantEstime Int?
+  feeMontantFacture Int?
+  feeStatut        FeeStatut    @default(NON_FACTURE)
+  statut           StatutMandat @default(OUVERT)
+  priorite         Priorite     @default(NORMALE)
+  dateOuverture    DateTime     @default(now()) @db.Date
+  dateCloture      DateTime?    @db.Date
+  notes            String?      @db.Text
+  createdById      String?      @db.Uuid
+  createdBy        User?        @relation("MandatCreatedBy", fields: [createdById], references: [id])
+  assignedToId     String?      @db.Uuid
+  assignedTo       User?        @relation("MandatAssignedTo", fields: [assignedToId], references: [id])
+  createdAt        DateTime     @default(now()) @db.Timestamptz()
+  updatedAt        DateTime     @updatedAt @db.Timestamptz()
+
+  candidatures Candidature[]
+
+  @@map("mandats")
+}
+
+enum FeeStatut {
+  NON_FACTURE
+  FACTURE
+  PAYE
+}
+
+enum StatutMandat {
+  OUVERT
+  EN_COURS
+  GAGNE
+  PERDU
+  ANNULE
+  CLOTURE
+}
+
+enum Priorite {
+  BASSE
+  NORMALE
+  HAUTE
+  URGENTE
+}
+
+// ─── CANDIDATURES (pivot mandat <-> candidat) ────────
+
+model Candidature {
+  id                  String           @id @default(uuid()) @db.Uuid
+  mandatId            String           @db.Uuid
+  mandat              Mandat           @relation(fields: [mandatId], references: [id])
+  candidatId          String           @db.Uuid
+  candidat            Candidat         @relation(fields: [candidatId], references: [id])
+  stage               StageCandidature @default(SOURCING)
+  notes               String?          @db.Text
+  datePresentation    DateTime?        @db.Timestamptz()
+  dateEntretienClient DateTime?        @db.Timestamptz()
+  motifRefus          MotifRefus?
+  motifRefusDetail    String?          @db.Text
+  createdById         String?          @db.Uuid
+  createdBy           User?            @relation("CandidatureCreatedBy", fields: [createdById], references: [id])
+  createdAt           DateTime         @default(now()) @db.Timestamptz()
+  updatedAt           DateTime         @updatedAt @db.Timestamptz()
+
+  stageHistory StageHistory[]
+
+  @@unique([mandatId, candidatId])
+  @@map("candidatures")
+}
+
+enum StageCandidature {
+  SOURCING
+  CONTACTE
+  ENTRETIEN_1
+  ENTRETIEN_CLIENT
+  OFFRE
+  PLACE
+  REFUSE
+}
+
+enum MotifRefus {
+  SALAIRE
+  PROFIL_PAS_ALIGNE
+  CANDIDAT_DECLINE
+  CLIENT_REFUSE
+  TIMING
+  POSTE_POURVU
+  AUTRE
+}
+
+// ─── HISTORIQUE DES STAGES ───────────────────────────
+
+model StageHistory {
+  id            String            @id @default(uuid()) @db.Uuid
+  candidatureId String            @db.Uuid
+  candidature   Candidature       @relation(fields: [candidatureId], references: [id], onDelete: Cascade)
+  fromStage     StageCandidature?
+  toStage       StageCandidature
+  changedById   String?           @db.Uuid
+  changedAt     DateTime          @default(now()) @db.Timestamptz()
+
+  @@index([candidatureId])
+  @@map("stage_history")
+}
+
+// ─── ACTIVITÉS (journal polymorphe) ──────────────────
+
+model Activite {
+  id             String         @id @default(uuid()) @db.Uuid
+  type           TypeActivite
+  direction      Direction?
+  entiteType     EntiteType
+  entiteId       String         @db.Uuid
+  userId         String?        @db.Uuid
+  user           User?          @relation("ActiviteUser", fields: [userId], references: [id])
+  titre          String?        @db.VarChar(500)
+  contenu        String?        @db.Text
+  metadata       Json           @default("{}")
+  source         SourceActivite @default(MANUEL)
+  bookmarked     Boolean        @default(false)
+  isTache        Boolean        @default(false)
+  tacheCompleted Boolean        @default(false)
+  tacheDueDate   DateTime?      @db.Timestamptz()
+  createdAt      DateTime       @default(now()) @db.Timestamptz()
+  updatedAt      DateTime       @updatedAt @db.Timestamptz()
+
+  fichiers FichierActivite[]
+
+  @@index([entiteType, entiteId])
+  @@index([bookmarked])
+  @@index([isTache, tacheCompleted, tacheDueDate])
+  @@map("activites")
+}
+
+enum TypeActivite {
+  APPEL
+  EMAIL
+  MEETING
+  NOTE
+  TACHE
+  TRANSCRIPT
+}
+
+enum Direction {
+  ENTRANT
+  SORTANT
+}
+
+enum EntiteType {
+  CANDIDAT
+  CLIENT
+  ENTREPRISE
+  MANDAT
+}
+
+enum SourceActivite {
+  MANUEL
+  ALLO
+  GMAIL
+  CALENDAR
+  GOOGLE_DOCS
+  AGENT_IA
+  SYSTEME
+}
+
+// ─── FICHIERS JOINTS AUX ACTIVITÉS ──────────────────
+
+model FichierActivite {
+  id         String   @id @default(uuid()) @db.Uuid
+  activiteId String   @db.Uuid
+  activite   Activite @relation(fields: [activiteId], references: [id], onDelete: Cascade)
+  nom        String   @db.VarChar(255)
+  url        String   @db.VarChar(500)
+  mimeType   String?  @db.VarChar(100)
+  taille     Int?
+  createdAt  DateTime @default(now()) @db.Timestamptz()
+
+  @@map("fichiers_activites")
+}
+
+// ─── NOTIFICATIONS ───────────────────────────────────
+
+model Notification {
+  id         String           @id @default(uuid()) @db.Uuid
+  userId     String           @db.Uuid
+  user       User             @relation("NotificationUser", fields: [userId], references: [id])
+  type       TypeNotification
+  titre      String           @db.VarChar(500)
+  contenu    String?          @db.Text
+  entiteType EntiteType?
+  entiteId   String?          @db.Uuid
+  lue        Boolean          @default(false)
+  createdAt  DateTime         @default(now()) @db.Timestamptz()
+
+  @@index([userId, lue])
+  @@map("notifications")
+}
+
+enum TypeNotification {
+  EMAIL_RECU
+  APPEL_ENTRANT
+  TRANSCRIPT_PARSE
+  TACHE_ECHEANCE
+  CANDIDATURE_STAGE_CHANGE
+  RELANCE_CLIENT
+  SYSTEME
+  AI_SUMMARY_READY
+  AI_BRIEF_READY
+}
+
+// ─── TEMPLATES ───────────────────────────────────────
+
+model Template {
+  id          String       @id @default(uuid()) @db.Uuid
+  nom         String       @db.VarChar(255)
+  type        TypeTemplate
+  sujet       String?      @db.VarChar(500)
+  contenu     String       @db.Text
+  variables   String[]     @default([])
+  createdById String?      @db.Uuid
+  createdBy   User?        @relation("TemplateCreatedBy", fields: [createdById], references: [id])
+  isGlobal    Boolean      @default(false)
+  createdAt   DateTime     @default(now()) @db.Timestamptz()
+  updatedAt   DateTime     @updatedAt @db.Timestamptz()
+
+  @@map("templates")
+}
+
+enum TypeTemplate {
+  EMAIL_PRISE_CONTACT
+  EMAIL_RELANCE
+  EMAIL_PRESENTATION_CLIENT
+  NOTE_BRIEF_POSTE
+  NOTE_COMPTE_RENDU
+  AUTRE
+}
+
+// ─── INTEGRATION CONFIG ────────────────────────────
+model IntegrationConfig {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  provider     String   @db.VarChar(50)  // 'allo', 'gmail', 'calendar'
+  accessToken  String?  @db.Text
+  refreshToken String?  @db.Text
+  tokenExpiry  DateTime? @db.Timestamptz()
+  config       Json     @default("{}")    // extra config (drive folder id, etc.)
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz()
+  updatedAt    DateTime @updatedAt @db.Timestamptz()
+
+  @@unique([userId, provider])
+  @@map("integration_configs")
+}
+
+// ─── SÉQUENCES (WORKFLOWS AUTOMATIQUES) ────────────
+
+model Sequence {
+  id          String         @id @default(uuid()) @db.Uuid
+  nom         String         @db.VarChar(255)
+  description String?        @db.Text
+  persona     String?        @db.VarChar(255)  // "Candidat passif Tech", "DRH Grand Groupe", etc.
+  targetType  String         @db.VarChar(50)   // "candidate" | "client"
+  steps       Json           @default("[]")    // Array de SequenceStep (channel-based)
+  stopOnReply Boolean        @default(true)    // Pause sequence if contact replies
+  isActive    Boolean        @default(true)
+  createdById String?        @db.Uuid
+  createdBy   User?          @relation("SequenceCreatedBy", fields: [createdById], references: [id])
+  runs        SequenceRun[]
+  createdAt   DateTime       @default(now()) @db.Timestamptz()
+  updatedAt   DateTime       @updatedAt @db.Timestamptz()
+
+  @@map("sequences")
+}
+
+model SequenceRun {
+  id           String              @id @default(uuid()) @db.Uuid
+  sequenceId   String              @db.Uuid
+  sequence     Sequence            @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  targetType   String              @db.VarChar(50)
+  targetId     String              @db.Uuid
+  mandatId     String?             @db.Uuid
+  assignedToId String?             @db.Uuid   // Recruiter running the sequence
+  currentStep  Int                 @default(0)
+  status       String              @default("running") @db.VarChar(20) // running, paused_reply, completed, cancelled
+  startedAt    DateTime            @default(now()) @db.Timestamptz()
+  nextActionAt DateTime?           @db.Timestamptz()
+  metadata     Json                @default("{}")
+  stepLogs     SequenceStepLog[]
+  createdAt    DateTime            @default(now()) @db.Timestamptz()
+  updatedAt    DateTime            @updatedAt @db.Timestamptz()
+
+  @@index([status, nextActionAt])
+  @@map("sequence_runs")
+}
+
+model SequenceStepLog {
+  id                 String      @id @default(uuid()) @db.Uuid
+  sequenceRunId      String      @db.Uuid
+  sequenceRun        SequenceRun @relation(fields: [sequenceRunId], references: [id], onDelete: Cascade)
+  stepOrder          Int
+  actionType         String      @db.VarChar(50)
+  channel            String?     @db.VarChar(20) // email, call, whatsapp
+  status             String      @default("pending") @db.VarChar(20) // pending, task_created, validated, skipped, reply_detected
+  taskId             String?     @db.Uuid // The task created for this step
+  executedAt         DateTime?   @db.Timestamptz()
+  responseDetectedAt DateTime?   @db.Timestamptz()
+  result             Json        @default("{}")
+  createdAt          DateTime    @default(now()) @db.Timestamptz()
+
+  @@map("sequence_step_logs")
+}
+
+// ─── SDR MANAGER (LISTES DE PROSPECTION) ────────────
+
+model SdrList {
+  id                String       @id @default(uuid()) @db.Uuid
+  name              String       @db.VarChar(255)
+  fileName          String       @db.VarChar(255)
+  totalContacts     Int          @default(0)
+  processedContacts Int          @default(0)
+  sequenceId        String?      @db.Uuid  // Optional link to a sequence for non-respondents
+  assignedToId      String?      @db.Uuid  // Default assigned recruiter
+  status            String       @default("imported") @db.VarChar(20) // imported, in_progress, completed
+  metadata          Json         @default("{}")  // Column mappings, import stats, etc.
+  createdById       String?      @db.Uuid
+  createdAt         DateTime     @default(now()) @db.Timestamptz()
+  updatedAt         DateTime     @updatedAt @db.Timestamptz()
+
+  contacts SdrContact[]
+
+  @@map("sdr_lists")
+}
+
+model SdrContact {
+  id             String    @id @default(uuid()) @db.Uuid
+  sdrListId      String    @db.Uuid
+  sdrList        SdrList   @relation(fields: [sdrListId], references: [id], onDelete: Cascade)
+  candidatId     String?   @db.Uuid   // Linked candidate if matched or created
+  companyId      String?   @db.Uuid   // Linked company if matched or created
+  rawData        Json      @default("{}")  // Original CSV row data
+  firstName      String?   @db.VarChar(255)
+  lastName       String?   @db.VarChar(255)
+  email          String?   @db.VarChar(255)
+  phone          String?   @db.VarChar(100)
+  company        String?   @db.VarChar(255)
+  jobTitle       String?   @db.VarChar(255)
+  callResult     String    @default("pending") @db.VarChar(30) // pending, answered, no_answer, voicemail, wrong_number, not_interested, callback
+  sequenceRunId  String?   @db.Uuid   // If contact was enrolled in a sequence
+  notes          String?   @db.Text
+  processedAt    DateTime? @db.Timestamptz()
+  orderInList    Int       @default(0)
+  createdAt      DateTime  @default(now()) @db.Timestamptz()
+
+  @@index([sdrListId, orderInList])
+  @@index([callResult])
+  @@map("sdr_contacts")
+}
+
+// ─── ADCHASE (PUSH CANDIDAT → PROSPECTS) ────────────
+
+model AdchaseCampaign {
+  id                 String    @id @default(uuid()) @db.Uuid
+  candidatId         String    @db.Uuid
+  anonymizedProfile  Json      @default("{}")  // { titre, points, ville, secteur, experience }
+  anonymizedCvUrl    String?   @db.VarChar(500)
+  emailSubject       String    @db.VarChar(500)
+  emailBody          String    @db.Text
+  sequenceId         String?   @db.Uuid   // Follow-up sequence for non-respondents
+  totalProspects     Int       @default(0)
+  status             String    @default("draft") @db.VarChar(20) // draft, scheduled, sending, active, completed
+  scheduledAt        DateTime? @db.Timestamptz()
+  sentAt             DateTime? @db.Timestamptz()
+  createdById        String?   @db.Uuid
+  createdAt          DateTime  @default(now()) @db.Timestamptz()
+  updatedAt          DateTime  @updatedAt @db.Timestamptz()
+
+  prospects AdchaseProspect[]
+
+  @@map("adchase_campaigns")
+}
+
+model AdchaseProspect {
+  id              String    @id @default(uuid()) @db.Uuid
+  campaignId      String    @db.Uuid
+  campaign        AdchaseCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  clientId        String    @db.Uuid
+  emailStatus     String    @default("pending") @db.VarChar(20) // pending, sent, opened, replied, bounced
+  replySentiment  String?   @db.VarChar(20)  // interested, not_now, not_interested
+  sequenceRunId   String?   @db.Uuid
+  sentAt          DateTime? @db.Timestamptz()
+  openedAt        DateTime? @db.Timestamptz()
+  repliedAt       DateTime? @db.Timestamptz()
+  notes           String?   @db.Text
+  createdAt       DateTime  @default(now()) @db.Timestamptz()
+
+  @@index([campaignId])
+  @@map("adchase_prospects")
+}
+
+// ─── AUDIT LOG (Historique des modifications) ────────────
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  user        User     @relation("AuditLogUser", fields: [userId], references: [id])
+  action      String   @db.VarChar(20) // CREATE, UPDATE, DELETE
+  entityType  String   @db.VarChar(50) // CANDIDAT, CLIENT, ENTREPRISE, MANDAT, etc.
+  entityId    String   @db.Uuid
+  entityLabel String?  @db.VarChar(500) // "Jean Dupont" for display
+  changes     Json?    // { field: { old: value, new: value } }
+  metadata    Json?
+  createdAt   DateTime @default(now()) @db.Timestamptz()
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─── REMINDERS (Rappels automatiques) ────────────────────
+
+model Reminder {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @db.Uuid
+  user        User      @relation("ReminderUser", fields: [userId], references: [id])
+  type        String    @db.VarChar(50) // MANDAT_DORMANT, TACHE_RETARD, RELANCE_CLIENT, CUSTOM
+  entityType  String?   @db.VarChar(50)
+  entityId    String?   @db.Uuid
+  titre       String    @db.VarChar(500)
+  description String?   @db.Text
+  triggerAt   DateTime  @db.Timestamptz()
+  fired       Boolean   @default(false)
+  firedAt     DateTime? @db.Timestamptz()
+  createdAt   DateTime  @default(now()) @db.Timestamptz()
+
+  @@index([userId, fired])
+  @@index([triggerAt])
+  @@map("reminders")
+}
+
+// ─── AI USAGE LOGS ─────────────────────────────────
+
+model AiUsageLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  feature      String   @db.VarChar(50)  // cv_parsing, call_summary, call_brief, prospect_detection
+  model        String   @db.VarChar(100) // claude-haiku-4-5-20251001, claude-sonnet-4-5-20250929
+  userId       String   @db.Uuid
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  costUsd      Float    @default(0)
+  durationMs   Int      @default(0)
+  success      Boolean  @default(true)
+  error        String?  @db.Text
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now()) @db.Timestamptz()
+
+  @@index([userId])
+  @@index([feature])
+  @@index([createdAt])
+  @@map("ai_usage_logs")
+}
+
+// ─── AI CALL SUMMARIES (Résumés post-call) ─────────
+
+model AiCallSummary {
+  id              String   @id @default(uuid()) @db.Uuid
+  activiteId      String   @unique @db.Uuid
+  entityType      String   @db.VarChar(20)  // CANDIDAT, CLIENT
+  entityId        String   @db.Uuid
+  userId          String   @db.Uuid
+  summaryJson     Json     @default("{}")  // Full Claude response
+  actionsAccepted Json     @default("[]") // IDs of accepted action items
+  updatesApplied  Json     @default("[]") // IDs of applied info updates
+  createdAt       DateTime @default(now()) @db.Timestamptz()
+  updatedAt       DateTime @updatedAt @db.Timestamptz()
+
+  @@index([activiteId])
+  @@index([userId])
+  @@map("ai_call_summaries")
+}
+
+// ─── AI CALL BRIEFS (Briefs pré-call enrichis) ─────
+
+model AiCallBrief {
+  id              String   @id @default(uuid()) @db.Uuid
+  entityType      String   @db.VarChar(20)  // CANDIDAT, CLIENT
+  entityId        String   @db.Uuid
+  calendarEventId String?  @db.VarChar(255)
+  userId          String   @db.Uuid
+  briefJson       Json     @default("{}")  // Structured brief content
+  webResultsRaw   Json?                    // Raw web search results for audit
+  generatedAt     DateTime @default(now()) @db.Timestamptz()
+  expiresAt       DateTime @db.Timestamptz() // 24h cache
+
+  @@index([entityType, entityId])
+  @@index([expiresAt])
+  @@map("ai_call_briefs")
+}
+
+// ─── AI PROSPECT SEARCHES (Détection signaux faibles) ─
+
+model AiProspectSearch {
+  id               String   @id @default(uuid()) @db.Uuid
+  candidatId       String   @db.Uuid
+  campaignId       String?  @db.Uuid
+  userId           String   @db.Uuid
+  searchParams     Json     @default("{}")  // { sectors, locations, companySize, signalTypes }
+  resultsJson      Json     @default("[]") // Full results array
+  prospectsSelected Json    @default("[]") // Selected prospects
+  resultCount      Int      @default(0)
+  createdAt        DateTime @default(now()) @db.Timestamptz()
+  expiresAt        DateTime @db.Timestamptz() // 48h cache
+
+  @@index([candidatId])
+  @@index([expiresAt])
+  @@map("ai_prospect_searches")
+}

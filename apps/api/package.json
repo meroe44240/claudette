@@ -1,0 +1,53 @@
+{
+  "name": "@humanup/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc && tsc-alias",
+    "start": "node dist/index.js",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run --dir src/ --exclude '**/*.integration.test.ts'",
+    "test:integration": "vitest run --dir src/ --include '**/*.integration.test.ts'",
+    "test:watch": "vitest",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "prisma migrate reset --force"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/formbody": "^8.0.2",
+    "@fastify/multipart": "^9.4.0",
+    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/static": "^9.0.0",
+    "@fastify/swagger": "^9.7.0",
+    "@fastify/swagger-ui": "^5.2.5",
+    "@fastify/websocket": "^11.2.0",
+    "@prisma/client": "^6.19.2",
+    "bcrypt": "^6.0.0",
+    "bullmq": "^5.70.1",
+    "dotenv": "^17.3.1",
+    "fastify": "^5.7.4",
+    "ioredis": "^5.10.0",
+    "jose": "^6.1.3",
+    "nodemailer": "^8.0.1",
+    "pdf-parse": "^2.4.5",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/node": "^25.3.3",
+    "@types/nodemailer": "^7.0.11",
+    "eslint": "^10.0.2",
+    "prettier": "^3.8.1",
+    "prisma": "^6.19.2",
+    "tsc-alias": "^1.8.16",
+    "tsx": "^4.21.0",
+    "vitest": "^4.0.18"
+  }
+}
