@@ -489,7 +489,7 @@ export async function analyzePipelineMoves(userId: string) {
         confidence: suggestion.confidence ?? 0.5,
         reasoning: suggestion.reasoning || null,
         triggerType: suggestion.triggerType || 'call',
-        triggerData: suggestion.triggerData || undefined,
+        triggerData: (suggestion.triggerData as any) || undefined,
         status: 'pending',
       },
     });
