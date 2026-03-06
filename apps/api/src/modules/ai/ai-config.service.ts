@@ -3,20 +3,20 @@ import prisma from '../../lib/db.js';
 // ─── TYPES ──────────────────────────────────────────
 
 export interface AiConfigData {
-  aiProvider: 'openai' | 'anthropic';
+  aiProvider: 'openai' | 'anthropic' | 'gemini';
   model: string;
 }
 
 export interface AiConfigResponse {
   provider: string;
-  aiProvider: 'openai' | 'anthropic';
+  aiProvider: 'openai' | 'anthropic' | 'gemini';
   model: string;
   enabled: boolean;
   hasApiKey: boolean;
 }
 
 export interface SaveAiConfigInput {
-  provider: 'openai' | 'anthropic';
+  provider: 'openai' | 'anthropic' | 'gemini';
   apiKey: string;
   model: string;
 }
@@ -44,7 +44,7 @@ export async function getAiConfig(userId: string): Promise<AiConfigResponse | nu
 // ─── GET AI CONFIG WITH KEY (internal use) ──────────
 
 export async function getAiConfigWithKey(userId: string): Promise<{
-  aiProvider: 'openai' | 'anthropic';
+  aiProvider: 'openai' | 'anthropic' | 'gemini';
   model: string;
   apiKey: string;
 } | null> {
@@ -158,6 +158,27 @@ export async function testAiConnection(userId: string): Promise<{ success: boole
       }
 
       return { success: true, message: 'Connexion Anthropic réussie !' };
+    }
+
+    if (config.aiProvider === 'gemini') {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: 'Reply with "ok"' }] }],
+          generationConfig: { maxOutputTokens: 5 },
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json() as any;
+        return {
+          success: false,
+          message: `Erreur Gemini: ${error.error?.message || response.statusText}`,
+        };
+      }
+
+      return { success: true, message: 'Connexion Gemini réussie !' };
     }
 
     return { success: false, message: 'Fournisseur IA non reconnu.' };

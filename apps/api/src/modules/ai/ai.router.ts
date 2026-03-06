@@ -40,7 +40,7 @@ const acceptSuggestionSchema = z.object({
 });
 
 const saveAiConfigSchema = z.object({
-  provider: z.enum(['openai', 'anthropic']),
+  provider: z.enum(['openai', 'anthropic', 'gemini']),
   apiKey: z.string().min(1, 'La clé API est requise'),
   model: z.string().min(1, 'Le modèle est requis'),
 });
