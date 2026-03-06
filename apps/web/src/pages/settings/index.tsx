@@ -102,7 +102,6 @@ export default function SettingsPage() {
   const geminiModelOptions = [
     { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
     { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
   ];
 
   const aiModelOptions = aiProvider === 'openai' ? openaiModelOptions : aiProvider === 'gemini' ? geminiModelOptions : anthropicModelOptions;
@@ -114,12 +113,20 @@ export default function SettingsPage() {
     enabled: activeSection === 'integrations',
   });
 
-  // Sync AI form state when config loads
+  // Sync AI form state when config loads — validate model exists in options
   useEffect(() => {
     if (aiConfigData?.data) {
       const cfg = aiConfigData.data;
-      setAiProvider(cfg.aiProvider as 'openai' | 'anthropic' | 'gemini');
-      setAiModel(cfg.model);
+      const provider = cfg.aiProvider as 'openai' | 'anthropic' | 'gemini';
+      setAiProvider(provider);
+      // Validate model exists in current options, otherwise use default
+      const opts = provider === 'openai' ? openaiModelOptions : provider === 'gemini' ? geminiModelOptions : anthropicModelOptions;
+      const modelExists = opts.some((o) => o.value === cfg.model);
+      if (modelExists) {
+        setAiModel(cfg.model);
+      } else {
+        setAiModel(opts[0].value);
+      }
     }
   }, [aiConfigData]);
 
