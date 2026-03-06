@@ -42,6 +42,7 @@ model User {
   auditLogs           AuditLog[]     @relation("AuditLogUser")
   reminders           Reminder[]     @relation("ReminderUser")
   calendarSuggestions AiCalendarSuggestion[] @relation("CalendarSuggestionUser")
+  pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionUser")
 
   @@map("users")
 }
@@ -164,7 +165,7 @@ model Candidat {
   createdAt          DateTime  @default(now()) @db.Timestamptz()
   updatedAt          DateTime  @updatedAt @db.Timestamptz()
 
-  candidatures Candidature[]
+  candidatures    Candidature[]
 
   @@map("candidats")
 }
@@ -198,7 +199,8 @@ model Mandat {
   createdAt        DateTime     @default(now()) @db.Timestamptz()
   updatedAt        DateTime     @updatedAt @db.Timestamptz()
 
-  candidatures Candidature[]
+  candidatures        Candidature[]
+  pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionMandat")
 
   @@map("mandats")
 }
@@ -244,7 +246,8 @@ model Candidature {
   createdAt           DateTime         @default(now()) @db.Timestamptz()
   updatedAt           DateTime         @updatedAt @db.Timestamptz()
 
-  stageHistory StageHistory[]
+  stageHistory        StageHistory[]
+  pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionCandidature")
 
   @@unique([mandatId, candidatId])
   @@map("candidatures")
@@ -720,4 +723,31 @@ model AiCalendarSuggestion {
   @@index([userId, status])
   @@index([calendarEventId])
   @@map("ai_calendar_suggestions")
+}
+
+// ─── AI PIPELINE SUGGESTIONS ─────────────────────
+
+model AiPipelineSuggestion {
+  id              String   @id @default(uuid()) @db.Uuid
+  candidatureId   String   @db.Uuid
+  mandatId        String   @db.Uuid
+  userId          String   @db.Uuid
+  currentStage    String   @db.VarChar(50)
+  suggestedStage  String   @db.VarChar(50)
+  confidence      Float
+  reasoning       String?  @db.Text
+  triggerType     String   @db.VarChar(50) // 'calendar_event', 'email', 'call', 'inactivity'
+  triggerData     Json?    @db.JsonB
+  status          String   @default("pending") @db.VarChar(20)
+  appliedStage    String?  @db.VarChar(50)
+  createdAt       DateTime @default(now()) @db.Timestamptz()
+  resolvedAt      DateTime? @db.Timestamptz()
+
+  candidature     Candidature @relation("PipelineSuggestionCandidature", fields: [candidatureId], references: [id])
+  mandat          Mandat      @relation("PipelineSuggestionMandat", fields: [mandatId], references: [id])
+  user            User        @relation("PipelineSuggestionUser", fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@index([candidatureId])
+  @@map("ai_pipeline_suggestions")
 }

@@ -21,6 +21,7 @@ import Skeleton from '../../components/ui/Skeleton';
 import EmailComposer from '../../components/email/EmailComposer';
 import CallBriefPanel from '../../components/ai/CallBriefPanel';
 import CalendarAiSuggestions from '../../components/dashboard/CalendarAiSuggestions';
+import PipelineAiSuggestions from '../../components/dashboard/PipelineAiSuggestions';
 import {
   categorizeEvents, countByType,
   MEETING_COLORS, MEETING_LABELS, type CategorizedEvent, type MeetingType,
@@ -623,6 +624,9 @@ function RecruiterDashboard({
 
       {/* ── AI CALENDAR SUGGESTIONS ── */}
       <CalendarAiSuggestions />
+
+      {/* ── AI PIPELINE SUGGESTIONS ── */}
+      <PipelineAiSuggestions />
 
       {/* ── MAIN ZONE (flex-1) ── */}
       <div className="flex-1 min-h-0 flex gap-3 px-6 mt-2 main-zone">

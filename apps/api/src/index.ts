@@ -29,6 +29,7 @@ import transcriptRouter from './modules/transcripts/transcript.router.js';
 import importRouter from './modules/import/import.router.js';
 import aiRouter from './modules/ai/ai.router.js';
 import calendarAiRouter from './modules/ai/calendar-ai.router.js';
+import pipelineAiRouter from './modules/ai/pipeline-ai.router.js';
 import sequenceRouter from './modules/sequences/sequence.router.js';
 import sdrRouter from './modules/sdr/sdr.router.js';
 import adchaseRouter from './modules/adchase/adchase.router.js';
@@ -42,6 +43,7 @@ import pipelineRouter from './modules/clients/pipeline.router.js';
 import adminDashboardRouter from './modules/dashboard/admin-dashboard.router.js';
 import reportRouter from './modules/reports/report.router.js';
 import statsRouter from './modules/stats/stats.router.js';
+import slackRouter from './modules/slack/slack.router.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 
@@ -143,6 +145,7 @@ async function buildApp() {
   await app.register(importRouter, { prefix: '/api/v1/import' });
   await app.register(aiRouter, { prefix: '/api/v1/ai' });
   await app.register(calendarAiRouter, { prefix: '/api/v1/ai/calendar' });
+  await app.register(pipelineAiRouter, { prefix: '/api/v1/ai/pipeline' });
   await app.register(sequenceRouter, { prefix: '/api/v1/sequences' });
   await app.register(sdrRouter, { prefix: '/api/v1/sdr' });
   await app.register(adchaseRouter, { prefix: '/api/v1/adchase' });
@@ -156,6 +159,7 @@ async function buildApp() {
   await app.register(adminDashboardRouter, { prefix: '/api/v1/dashboard/admin' });
   await app.register(reportRouter, { prefix: '/api/v1/reports' });
   await app.register(statsRouter, { prefix: '/api/v1/stats' });
+  await app.register(slackRouter, { prefix: '/api/v1/slack' });
 
   return app;
 }
@@ -181,5 +185,9 @@ if (isMainModule && process.env.NODE_ENV !== 'test') {
     import('./jobs/feedback-reminder.job.js').then(({ startFeedbackWorker }) => {
       startFeedbackWorker();
     }).catch(err => console.error('Failed to start feedback worker:', err));
+
+    import('./jobs/cron.js').then(({ startCronJobs }) => {
+      startCronJobs();
+    }).catch(err => console.error('Failed to start cron jobs:', err));
   }
 }
