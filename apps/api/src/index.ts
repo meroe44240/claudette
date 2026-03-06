@@ -40,6 +40,7 @@ import documentRouter from './modules/documents/document.router.js';
 import pipelineRouter from './modules/clients/pipeline.router.js';
 import adminDashboardRouter from './modules/dashboard/admin-dashboard.router.js';
 import reportRouter from './modules/reports/report.router.js';
+import statsRouter from './modules/stats/stats.router.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 
@@ -152,6 +153,7 @@ async function buildApp() {
   await app.register(pipelineRouter, { prefix: '/api/v1/clients-pipeline' });
   await app.register(adminDashboardRouter, { prefix: '/api/v1/dashboard/admin' });
   await app.register(reportRouter, { prefix: '/api/v1/reports' });
+  await app.register(statsRouter, { prefix: '/api/v1/stats' });
 
   return app;
 }

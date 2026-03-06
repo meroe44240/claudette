@@ -33,6 +33,7 @@ import ClientNewPage from './pages/clients/new';
 import EntrepriseNewPage from './pages/entreprises/new';
 import MandatNewPage from './pages/mandats/new';
 import ReportsPage from './pages/reports/index';
+import StatsPage from './pages/stats/index';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuthStore();
@@ -83,6 +84,7 @@ export default function App() {
         <Route path="settings" element={<SettingsPage />} />
         <Route path="settings/integrations" element={<IntegrationsSettingsPage />} />
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="stats" element={<StatsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
