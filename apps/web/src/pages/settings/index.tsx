@@ -78,7 +78,7 @@ export default function SettingsPage() {
   const [language, setLanguage] = useState('fr');
 
   // AI config state
-  const [aiProvider, setAiProvider] = useState<'openai' | 'anthropic'>('openai');
+  const [aiProvider, setAiProvider] = useState<'openai' | 'anthropic' | 'gemini'>('openai');
   const [aiApiKey, setAiApiKey] = useState('');
   const [aiModel, setAiModel] = useState('gpt-4o');
   const [showAiKey, setShowAiKey] = useState(false);
@@ -86,6 +86,7 @@ export default function SettingsPage() {
   const aiProviderOptions = [
     { value: 'openai', label: 'OpenAI' },
     { value: 'anthropic', label: 'Anthropic' },
+    { value: 'gemini', label: 'Gemini (Google)' },
   ];
 
   const openaiModelOptions = [
@@ -98,7 +99,13 @@ export default function SettingsPage() {
     { value: 'claude-haiku-4-20250414', label: 'Claude Haiku 4' },
   ];
 
-  const aiModelOptions = aiProvider === 'openai' ? openaiModelOptions : anthropicModelOptions;
+  const geminiModelOptions = [
+    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+    { value: 'gemini-2.5-pro-preview-05-06', label: 'Gemini 2.5 Pro' },
+    { value: 'gemini-2.5-flash-preview-04-17', label: 'Gemini 2.5 Flash' },
+  ];
+
+  const aiModelOptions = aiProvider === 'openai' ? openaiModelOptions : aiProvider === 'gemini' ? geminiModelOptions : anthropicModelOptions;
 
   // Load existing AI config
   const { data: aiConfigData, isLoading: aiConfigLoading } = useQuery({
@@ -111,7 +118,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (aiConfigData?.data) {
       const cfg = aiConfigData.data;
-      setAiProvider(cfg.aiProvider as 'openai' | 'anthropic');
+      setAiProvider(cfg.aiProvider as 'openai' | 'anthropic' | 'gemini');
       setAiModel(cfg.model);
     }
   }, [aiConfigData]);
@@ -480,8 +487,8 @@ export default function SettingsPage() {
                       options={aiProviderOptions}
                       value={aiProvider}
                       onChange={(val) => {
-                        setAiProvider(val as 'openai' | 'anthropic');
-                        setAiModel(val === 'openai' ? 'gpt-4o' : 'claude-sonnet-4-20250514');
+                        setAiProvider(val as 'openai' | 'anthropic' | 'gemini');
+                        setAiModel(val === 'openai' ? 'gpt-4o' : val === 'gemini' ? 'gemini-2.0-flash' : 'claude-sonnet-4-20250514');
                       }}
                     />
 
