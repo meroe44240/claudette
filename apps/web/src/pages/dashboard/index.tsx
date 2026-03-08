@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Fragment, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import {
@@ -10,7 +10,7 @@ import {
   Mail, ChevronRight, ChevronDown,
   Check, TrendingUp, TrendingDown,
   AlertTriangle, Zap, Clock, CheckCircle2, Circle,
-  ArrowRight, Eye, Bot,
+  ArrowRight, Eye, Bot, Link2,
 } from 'lucide-react';
 import { motion, useSpring, useTransform, useMotionValue, AnimatePresence } from 'framer-motion';
 import { format, isToday as isTodayFn, isPast, differenceInDays } from 'date-fns';
@@ -19,6 +19,7 @@ import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
 import Skeleton from '../../components/ui/Skeleton';
 import EmailComposer from '../../components/email/EmailComposer';
+import { toast } from '../../components/ui/Toast';
 import CallBriefPanel from '../../components/ai/CallBriefPanel';
 import CalendarAiSuggestions from '../../components/dashboard/CalendarAiSuggestions';
 import PipelineAiSuggestions from '../../components/dashboard/PipelineAiSuggestions';
@@ -27,7 +28,7 @@ import {
   MEETING_COLORS, MEETING_LABELS, type CategorizedEvent, type MeetingType,
 } from '../../lib/meetingCategorizer';
 
-const AdminDashboard = lazy(() => import('./admin'));
+// const AdminDashboard = lazy(() => import('./admin'));
 
 // ─── TYPES ──────────────────────────────────────────
 
@@ -274,25 +275,7 @@ function MiniCalendar({ calendarDots }: { calendarDots: Record<string, number> }
 // ═════════════════════════════════════════════════════
 
 export default function DashboardPage() {
-  const { user } = useAuthStore();
-  const [view, setView] = useState<'personal' | 'team' | 'admin'>('personal');
-  const isAdmin = user?.role === 'ADMIN';
-
-  if (view === 'admin' && isAdmin) {
-    return (
-      <div style={{ height: 'calc(100vh - 64px)', overflow: 'auto', background: '#F8F8FA' }}>
-        {/* Toggle bar */}
-        <div className="flex items-center justify-between px-6 pt-3 pb-0">
-          <TogglePill view={view} setView={setView} isAdmin={isAdmin} />
-        </div>
-        <Suspense fallback={<div className="flex items-center justify-center h-64"><Skeleton className="h-8 w-32" /></div>}>
-          <AdminDashboard />
-        </Suspense>
-      </div>
-    );
-  }
-
-  return <RecruiterDashboard view={view} setView={setView} isAdmin={isAdmin} />;
+  return <RecruiterDashboard />;
 }
 
 // ─── TOGGLE PILL ────────────────────────────────────
@@ -333,19 +316,14 @@ function TogglePill({
 // RECRUITER DASHBOARD (SPA 360)
 // ═════════════════════════════════════════════════════
 
-function RecruiterDashboard({
-  view, setView, isAdmin,
-}: {
-  view: string;
-  setView: (v: 'personal' | 'team' | 'admin') => void;
-  isAdmin: boolean;
-}) {
+function RecruiterDashboard() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week');
   const [emailComposerOpen, setEmailComposerOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<{ to: string; subject: string } | null>(null);
+  const [bookingCopied, setBookingCopied] = useState(false);
   const [briefPanel, setBriefPanel] = useState<{
     entityType: 'CANDIDAT' | 'CLIENT';
     entityId: string;
@@ -353,17 +331,20 @@ function RecruiterDashboard({
     calendarEventId?: string;
   } | null>(null);
 
-  const isTeam = view === 'team';
-
   // ── API CALLS ─────────────────────────────────────
   const { data: spaData, isLoading } = useQuery({
-    queryKey: ['dashboard', 'spa', period, isTeam],
-    queryFn: () => api.get<SpaData>(`/dashboard/spa?period=${period}&team=${isTeam}`),
+    queryKey: ['dashboard', 'spa', period],
+    queryFn: () => api.get<SpaData>(`/dashboard/spa?period=${period}&team=false`),
   });
 
   const { data: calEvents } = useQuery({
     queryKey: ['calendar', 'events'],
     queryFn: () => api.get<{ data: CalendarEvent[] }>('/integrations/calendar/events'),
+  });
+
+  const { data: bookingSettings } = useQuery({
+    queryKey: ['booking', 'settings'],
+    queryFn: () => api.get<{ slug: string; isActive: boolean }>('/booking/settings'),
   });
 
   const structureKpis = spaData?.structureKpis;
@@ -486,7 +467,22 @@ function RecruiterDashboard({
           </span>
         </div>
         <div className="flex items-center gap-3">
-          {isAdmin && <TogglePill view={view} setView={setView} isAdmin={isAdmin} />}
+          {/* Booking public link */}
+          {bookingSettings?.isActive && bookingSettings?.slug && (
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`https://ats.propium.co/book/${bookingSettings.slug}`);
+                setBookingCopied(true);
+                toast('success', 'Lien booking copie !');
+                setTimeout(() => setBookingCopied(false), 2000);
+              }}
+              className="flex items-center gap-1.5 h-8 rounded-lg border border-neutral-200 bg-white px-3 text-[13px] font-medium text-neutral-700 hover:border-brand-300 hover:text-brand-600 transition-colors"
+              title={`https://ats.propium.co/book/${bookingSettings.slug}`}
+            >
+              {bookingCopied ? <Check size={13} className="text-green-500" /> : <Link2 size={13} />}
+              {bookingCopied ? 'Copie !' : 'Lien booking'}
+            </button>
+          )}
           <div className="relative">
             <select
               value={period}
@@ -591,7 +587,7 @@ function RecruiterDashboard({
       </div>
 
       {/* ── STRUCTURE KPIS (for recruteurs — global numbers) ── */}
-      {structureKpis && !isTeam && (
+      {structureKpis && (
         <div className="px-6 shrink-0 mt-1.5">
           <div className="flex items-center gap-4 rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-1.5">
             <div className="flex items-center gap-1.5">
@@ -872,6 +868,10 @@ function RecruiterDashboard({
                   key={msg.id}
                   className="flex gap-2.5 px-3 py-2 cursor-pointer hover:bg-neutral-25 transition-colors border-b border-neutral-50 last:border-b-0"
                   style={{ background: !msg.isRead ? 'rgba(59,130,246,0.04)' : undefined }}
+                  onClick={() => {
+                    setReplyTo({ to: msg.from.email, subject: `Re: ${msg.subject}` });
+                    setEmailComposerOpen(true);
+                  }}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
