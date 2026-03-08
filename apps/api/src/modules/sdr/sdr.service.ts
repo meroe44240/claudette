@@ -171,16 +171,22 @@ export async function uploadAndParse(
     },
   });
 
+  // Helper: truncate string to max length to avoid DB VarChar overflow
+  const trunc = (val: string | undefined, max: number): string | null => {
+    if (!val) return null;
+    return val.length > max ? val.substring(0, max) : val;
+  };
+
   // Create SDR contacts
   await prisma.sdrContact.createMany({
     data: parsed.map((c, i) => ({
       sdrListId: list.id,
-      firstName: c.firstName || null,
-      lastName: c.lastName || null,
-      email: c.email || null,
-      phone: c.phone || null,
-      company: c.company || null,
-      jobTitle: c.jobTitle || null,
+      firstName: trunc(c.firstName, 255),
+      lastName: trunc(c.lastName, 255),
+      email: trunc(c.email, 255),
+      phone: trunc(c.phone, 100),
+      company: trunc(c.company, 255),
+      jobTitle: trunc(c.jobTitle, 255),
       rawData: c.rawData,
       candidatId: c.email ? emailToCandidat.get(c.email.toLowerCase()) || null : null,
       companyId: c.company ? companyToId.get(c.company.toLowerCase()) || null : null,

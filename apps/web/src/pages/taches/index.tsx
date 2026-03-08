@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { Check, Clock, AlertTriangle, Calendar, Plus } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Check, Clock, AlertTriangle, Calendar, Plus, Send,
+  ChevronDown, ChevronUp, Mail, Loader2,
+} from 'lucide-react';
 import { api } from '../../lib/api-client';
 import Badge from '../../components/ui/Badge';
 import Pagination from '../../components/ui/Pagination';
@@ -18,6 +21,7 @@ interface Tache {
   tacheDueDate: string | null;
   tacheCompleted: boolean;
   createdAt: string;
+  metadata?: Record<string, any>;
   user?: { nom: string; prenom: string | null };
 }
 
@@ -49,6 +53,8 @@ const listItem = {
 export default function TachesPage() {
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState('todo');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
 
   const filters = new URLSearchParams({ page: String(page), perPage: '20' });
   if (activeTab !== 'all') filters.set('status', activeTab);
@@ -58,6 +64,8 @@ export default function TachesPage() {
     queryFn: () => api.get<PaginatedResponse>(`/taches?${filters}`),
   });
 
+  const isAdchaseTask = (t: Tache) => !!(t.metadata?.adchaseCampaignId);
+
   const toggleCompletion = async (id: string, current: boolean) => {
     try {
       await api.put(`/taches/${id}/complete`, {});
@@ -65,6 +73,19 @@ export default function TachesPage() {
       toast('success', current ? 'Tâche réouverte' : 'Tâche terminée');
     } catch {
       toast('error', 'Erreur lors de la mise à jour');
+    }
+  };
+
+  const handleAdchaseSend = async (t: Tache) => {
+    setSendingId(t.id);
+    try {
+      await api.put(`/taches/${t.id}/complete`, {});
+      refetch();
+      toast('success', 'Email envoyé et tâche terminée');
+    } catch {
+      toast('error', 'Erreur lors de l\'envoi de l\'email');
+    } finally {
+      setSendingId(null);
     }
   };
 
@@ -145,82 +166,166 @@ export default function TachesPage() {
           />
         ) : (
           <motion.div variants={listStagger} initial="hidden" animate="show" className="space-y-2">
-          {data.data.map((t) => (
+          {data.data.map((t) => {
+            const isAdchase = isAdchaseTask(t);
+            const isExpanded = expandedId === t.id;
+            const isSending = sendingId === t.id;
+
+            return (
             <motion.div
               key={t.id}
               variants={listItem}
-              className="group flex items-start gap-3 rounded-2xl bg-white p-4 shadow-card transition-colors duration-200 hover:bg-neutral-50"
+              className="group rounded-2xl bg-white shadow-card transition-colors duration-200 hover:bg-neutral-50"
             >
-              {/* Circle checkbox */}
-              <button
-                onClick={() => toggleCompletion(t.id, t.tacheCompleted)}
-                className="mt-0.5 flex-shrink-0"
-              >
-                {t.tacheCompleted ? (
-                  <div className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#10B981]">
-                    <Check size={14} className="text-white" strokeWidth={3} />
-                  </div>
-                ) : (
-                  <div className="h-[22px] w-[22px] rounded-full border-2 border-neutral-300 transition-colors group-hover:border-[#7C5CFC]" />
-                )}
-              </button>
-
-              {/* Content */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <p
-                    className={`text-[15px] font-semibold ${
-                      t.tacheCompleted
-                        ? 'text-neutral-300 line-through'
-                        : 'text-neutral-900'
-                    }`}
+              <div className="flex items-start gap-3 p-4">
+                {/* Circle checkbox — for non-Adchase tasks */}
+                {!isAdchase ? (
+                  <button
+                    onClick={() => toggleCompletion(t.id, t.tacheCompleted)}
+                    className="mt-0.5 flex-shrink-0"
                   >
-                    {t.titre}
-                  </p>
+                    {t.tacheCompleted ? (
+                      <div className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#10B981]">
+                        <Check size={14} className="text-white" strokeWidth={3} />
+                      </div>
+                    ) : (
+                      <div className="h-[22px] w-[22px] rounded-full border-2 border-neutral-300 transition-colors group-hover:border-[#7C5CFC]" />
+                    )}
+                  </button>
+                ) : (
+                  <div className="mt-0.5 flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-full bg-violet-100">
+                    {t.tacheCompleted ? (
+                      <Check size={14} className="text-emerald-600" strokeWidth={3} />
+                    ) : (
+                      <Mail size={12} className="text-violet-600" />
+                    )}
+                  </div>
+                )}
 
-                  {/* Priority */}
-                  {t.type && priorityConfig[t.type] && (
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <div
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: priorityConfig[t.type].dot }}
-                      />
-                      <Badge variant={priorityConfig[t.type].variant} size="sm">
-                        {priorityConfig[t.type].label}
-                      </Badge>
+                {/* Content */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <p
+                        className={`text-[15px] font-semibold ${
+                          t.tacheCompleted
+                            ? 'text-neutral-300 line-through'
+                            : 'text-neutral-900'
+                        }`}
+                      >
+                        {t.titre}
+                      </p>
+                      {isAdchase && !t.tacheCompleted && (
+                        <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-600">
+                          Adchase
+                        </span>
+                      )}
+                      {isAdchase && t.tacheCompleted && t.metadata?.emailSent && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600">
+                          <Check size={10} /> Envoyé
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Priority */}
+                    {t.type && priorityConfig[t.type] && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <div
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: priorityConfig[t.type].dot }}
+                        />
+                        <Badge variant={priorityConfig[t.type].variant} size="sm">
+                          {priorityConfig[t.type].label}
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Description */}
+                  {t.contenu && (
+                    <p className="mt-1 text-[13px] text-neutral-500 line-clamp-2">{t.contenu}</p>
+                  )}
+
+                  {/* Metadata row */}
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-[13px] text-neutral-500">
+                    {/* Due date */}
+                    {t.tacheDueDate && (
+                      <span
+                        className={`flex items-center gap-1 ${
+                          !t.tacheCompleted && isOverdue(t.tacheDueDate)
+                            ? 'font-semibold text-red-500'
+                            : ''
+                        }`}
+                      >
+                        {!t.tacheCompleted && isOverdue(t.tacheDueDate) ? (
+                          <AlertTriangle size={13} />
+                        ) : (
+                          <Calendar size={13} className="text-neutral-400" />
+                        )}
+                        {formatDate(t.tacheDueDate)}
+                      </span>
+                    )}
+
+                    {t.user && (
+                      <span className="ml-auto text-neutral-400">
+                        Assigné à {t.user.prenom} {t.user.nom}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Adchase: expand to see email + send button */}
+                  {isAdchase && !t.tacheCompleted && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        onClick={() => setExpandedId(isExpanded ? null : t.id)}
+                        className="flex items-center gap-1 text-[12px] font-medium text-violet-600 hover:text-violet-700 transition-colors"
+                      >
+                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        {isExpanded ? 'Masquer l\'email' : 'Voir l\'email'}
+                      </button>
+
+                      <button
+                        onClick={() => handleAdchaseSend(t)}
+                        disabled={isSending}
+                        className="ml-auto flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-1.5 text-[13px] font-medium text-white hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 transition-all"
+                      >
+                        {isSending ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Send size={14} />
+                        )}
+                        {isSending ? 'Envoi en cours...' : 'Valider & Envoyer'}
+                      </button>
                     </div>
                   )}
                 </div>
-
-                {/* Metadata row */}
-                <div className="mt-2 flex flex-wrap items-center gap-3 text-[13px] text-neutral-500">
-                  {/* Due date */}
-                  {t.tacheDueDate && (
-                    <span
-                      className={`flex items-center gap-1 ${
-                        !t.tacheCompleted && isOverdue(t.tacheDueDate)
-                          ? 'font-semibold text-red-500'
-                          : ''
-                      }`}
-                    >
-                      {!t.tacheCompleted && isOverdue(t.tacheDueDate) ? (
-                        <AlertTriangle size={13} />
-                      ) : (
-                        <Calendar size={13} className="text-neutral-400" />
-                      )}
-                      {formatDate(t.tacheDueDate)}
-                    </span>
-                  )}
-
-                  {t.user && (
-                    <span className="ml-auto text-neutral-400">
-                      Assigné à {t.user.prenom} {t.user.nom}
-                    </span>
-                  )}
-                </div>
               </div>
+
+              {/* Expanded email preview */}
+              <AnimatePresence>
+                {isAdchase && isExpanded && !t.tacheCompleted && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mx-4 mb-4 rounded-lg border border-neutral-100 bg-neutral-50 p-4">
+                      <div className="mb-2 flex items-center gap-2 text-[12px] text-neutral-400">
+                        <Mail size={12} />
+                        <span>Objet : <strong className="text-neutral-600">{t.metadata?.emailSubject || '—'}</strong></span>
+                      </div>
+                      <div className="whitespace-pre-wrap text-[13px] text-neutral-700 leading-relaxed">
+                        {t.metadata?.emailBody || 'Aucun contenu'}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
-          ))}
+            );
+          })}
           </motion.div>
         )}
 
