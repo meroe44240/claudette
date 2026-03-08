@@ -17,6 +17,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: cd apps/api && npx prisma generate
       - run: pnpm -r exec tsc --noEmit
 
   test-backend:
