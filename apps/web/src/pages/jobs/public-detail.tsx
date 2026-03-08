@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router';
-import { ArrowLeft, MapPin, Clock, Upload, Loader2, CheckCircle2, Flame, Sparkles, ArrowRight } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Upload, Loader2, CheckCircle2, Flame, Sparkles, ArrowRight, Linkedin } from 'lucide-react';
 import { publicGet, publicPost } from '../../lib/public-api';
 import { renderMarkdown } from '../../lib/markdown';
 
@@ -70,6 +70,7 @@ export default function PublicJobDetailPage() {
     lastName: '',
     email: '',
     phone: '',
+    linkedinUrl: '',
     salaryCurrent: '',
     currentCompany: '',
     availability: '',
@@ -111,6 +112,7 @@ export default function PublicJobDetailPage() {
       formData.append('lastName', form.lastName);
       formData.append('email', form.email);
       if (form.phone) formData.append('phone', form.phone);
+      if (form.linkedinUrl) formData.append('linkedinUrl', form.linkedinUrl);
       if (form.salaryCurrent) formData.append('salaryCurrent', form.salaryCurrent);
       if (form.currentCompany) formData.append('currentCompany', form.currentCompany);
       if (form.availability) formData.append('availability', form.availability);
@@ -285,6 +287,22 @@ export default function PublicJobDetailPage() {
                 />
               </div>
             </div>
+            {/* LinkedIn */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                <span className="inline-flex items-center gap-1.5">
+                  <Linkedin size={14} className="text-[#0A66C2]" /> Profil LinkedIn
+                </span>
+              </label>
+              <input
+                name="linkedinUrl"
+                value={form.linkedinUrl}
+                onChange={handleChange}
+                placeholder="https://linkedin.com/in/votre-profil"
+                className="w-full rounded-xl border border-white/50 bg-white/60 px-3 py-2.5 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+              />
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Salaire actuel</label>

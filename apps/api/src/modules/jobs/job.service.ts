@@ -49,6 +49,78 @@ async function saveCvFile(buffer: Buffer, filename: string): Promise<string> {
   return `/uploads/cv-applications/${filePath}`;
 }
 
+/**
+ * Find or create a default "Candidatures Job Board" mandat.
+ * This ensures all job board applications land in a pipeline even if
+ * the job posting isn't linked to a specific mandat.
+ */
+async function getOrCreateDefaultJobBoardMandat(userId?: string | null): Promise<string | null> {
+  const DEFAULT_MANDAT_TITLE = 'Candidatures Job Board';
+  const DEFAULT_ENTREPRISE_NAME = 'HumanUp (Interne)';
+
+  try {
+    // Check if default mandat already exists
+    const existing = await prisma.mandat.findFirst({
+      where: { titrePoste: DEFAULT_MANDAT_TITLE, statut: 'OUVERT' },
+      select: { id: true },
+    });
+
+    if (existing) return existing.id;
+
+    // Find or create default enterprise
+    let entreprise = await prisma.entreprise.findFirst({
+      where: { nom: DEFAULT_ENTREPRISE_NAME },
+      select: { id: true },
+    });
+
+    if (!entreprise) {
+      entreprise = await prisma.entreprise.create({
+        data: {
+          nom: DEFAULT_ENTREPRISE_NAME,
+          secteur: 'Recrutement',
+          createdById: userId || undefined,
+        },
+      });
+    }
+
+    // Find or create default client
+    let client = await prisma.client.findFirst({
+      where: { entrepriseId: entreprise.id },
+      select: { id: true },
+    });
+
+    if (!client) {
+      client = await prisma.client.create({
+        data: {
+          nom: 'Job Board',
+          prenom: 'HumanUp',
+          entrepriseId: entreprise.id,
+          poste: 'Recrutement interne',
+          createdById: userId || undefined,
+        },
+      });
+    }
+
+    // Create the default mandat
+    const mandat = await prisma.mandat.create({
+      data: {
+        titrePoste: DEFAULT_MANDAT_TITLE,
+        entrepriseId: entreprise.id,
+        clientId: client.id,
+        description: 'Mandat par defaut pour regrouper toutes les candidatures du Job Board sans mandat specifique.',
+        slug: 'candidatures-job-board',
+        createdById: userId || undefined,
+        assignedToId: userId || undefined,
+      },
+    });
+
+    return mandat.id;
+  } catch (err: any) {
+    console.error('[JobBoard] Failed to create default mandat:', err.message);
+    return null;
+  }
+}
+
 // ─── CREATE / UPDATE ────────────────────────────────
 
 export async function create(
@@ -364,6 +436,7 @@ export async function processApplication(
     lastName: string;
     email: string;
     phone?: string;
+    linkedinUrl?: string;
     salaryCurrent?: string;
     currentCompany?: string;
     availability?: string;
@@ -404,6 +477,7 @@ export async function processApplication(
       data: {
         telephone: existingCandidat.telephone || fields.phone || undefined,
         entrepriseActuelle: existingCandidat.entrepriseActuelle || fields.currentCompany || undefined,
+        linkedinUrl: fields.linkedinUrl || existingCandidat.linkedinUrl || undefined,
         cvUrl: cvFileUrl || existingCandidat.cvUrl || undefined,
       },
     });
@@ -414,6 +488,7 @@ export async function processApplication(
         prenom: fields.firstName,
         email,
         telephone: fields.phone || undefined,
+        linkedinUrl: fields.linkedinUrl || undefined,
         entrepriseActuelle: fields.currentCompany || undefined,
         salaireActuel: fields.salaryCurrent ? parseInt(fields.salaryCurrent.replace(/\D/g, ''), 10) || undefined : undefined,
         disponibilite: fields.availability || undefined,
@@ -425,16 +500,23 @@ export async function processApplication(
     candidatId = newCandidat.id;
   }
 
-  // 3. If linked to mandat → create candidature in SOURCING
-  if (jobPosting.mandatId) {
+  // 3. Create candidature — use linked mandat or find/create default "Candidatures Job Board"
+  let targetMandatId = jobPosting.mandatId;
+
+  if (!targetMandatId) {
+    // Find or create default mandat for job board applications
+    targetMandatId = await getOrCreateDefaultJobBoardMandat(assignedToId);
+  }
+
+  if (targetMandatId) {
     const existingCandidature = await prisma.candidature.findUnique({
-      where: { mandatId_candidatId: { mandatId: jobPosting.mandatId, candidatId } },
+      where: { mandatId_candidatId: { mandatId: targetMandatId, candidatId } },
     });
 
     if (!existingCandidature) {
       const candidature = await prisma.candidature.create({
         data: {
-          mandatId: jobPosting.mandatId,
+          mandatId: targetMandatId,
           candidatId,
           stage: 'SOURCING',
           createdById: assignedToId || undefined,
@@ -526,6 +608,7 @@ export async function processSpontaneous(
     lastName: string;
     email: string;
     phone?: string;
+    linkedinUrl?: string;
     salaryCurrent?: string;
     currentCompany?: string;
     availability?: string;
@@ -559,6 +642,7 @@ export async function processSpontaneous(
       data: {
         telephone: existingCandidat.telephone || fields.phone || undefined,
         entrepriseActuelle: existingCandidat.entrepriseActuelle || fields.currentCompany || undefined,
+        linkedinUrl: fields.linkedinUrl || existingCandidat.linkedinUrl || undefined,
         cvUrl: cvFileUrl || existingCandidat.cvUrl || undefined,
       },
     });
@@ -569,6 +653,7 @@ export async function processSpontaneous(
         prenom: fields.firstName,
         email,
         telephone: fields.phone || undefined,
+        linkedinUrl: fields.linkedinUrl || undefined,
         entrepriseActuelle: fields.currentCompany || undefined,
         salaireActuel: fields.salaryCurrent ? parseInt(fields.salaryCurrent.replace(/\D/g, ''), 10) || undefined : undefined,
         disponibilite: fields.availability || undefined,
@@ -578,6 +663,32 @@ export async function processSpontaneous(
       },
     });
     candidatId = newCandidat.id;
+  }
+
+  // Create candidature in default job board mandat
+  const defaultMandatId = await getOrCreateDefaultJobBoardMandat(assignedToId);
+  if (defaultMandatId) {
+    const existingCandidature = await prisma.candidature.findUnique({
+      where: { mandatId_candidatId: { mandatId: defaultMandatId, candidatId } },
+    });
+    if (!existingCandidature) {
+      const candidature = await prisma.candidature.create({
+        data: {
+          mandatId: defaultMandatId,
+          candidatId,
+          stage: 'SOURCING',
+          createdById: assignedToId || undefined,
+        },
+      });
+      await prisma.stageHistory.create({
+        data: {
+          candidatureId: candidature.id,
+          fromStage: null,
+          toStage: 'SOURCING',
+          changedById: assignedToId || undefined,
+        },
+      });
+    }
   }
 
   // CV parsing async
