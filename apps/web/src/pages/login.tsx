@@ -47,10 +47,8 @@ export default function LoginPage() {
           />
         </div>
         <div className="relative z-10 text-center text-white">
-          <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-500 shadow-glow">
-            <span className="text-2xl font-bold">H</span>
-          </div>
-          <h1 className="text-4xl font-bold tracking-tight">HumanUp</h1>
+          <img src="/logo-icon-lg.png" alt="humanup.io" className="mx-auto mb-6 h-20 w-auto drop-shadow-lg" />
+          <h1 className="text-4xl font-bold tracking-tight">humanup.io</h1>
           <p className="mt-3 text-lg text-white/80">Votre plateforme de recrutement</p>
           <p className="mt-1 text-sm text-white/60">ATS & CRM tout-en-un</p>
         </div>
@@ -60,10 +58,8 @@ export default function LoginPage() {
       <div className="flex w-full items-center justify-center bg-bg p-8 lg:w-1/2">
         <div className="w-full max-w-md animate-fadeInUp">
           <div className="mb-8 lg:hidden text-center">
-            <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-500 text-white font-bold text-lg">
-              H
-            </div>
-            <h1 className="text-2xl font-bold gradient-text">HumanUp</h1>
+            <img src="/logo-icon-lg.png" alt="humanup.io" className="mx-auto mb-4 h-14 w-auto" />
+            <h1 className="text-2xl font-bold gradient-text">humanup.io</h1>
           </div>
           <h2 className="text-2xl font-bold text-neutral-900">Connexion</h2>
           <p className="mt-2 text-sm text-neutral-500">Connectez-vous à votre espace de recrutement</p>
