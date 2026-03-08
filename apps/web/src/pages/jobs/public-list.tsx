@@ -131,9 +131,7 @@ export default function PublicJobListPage() {
       <header className="glass sticky top-0 z-10 border-b border-white/30">
         <div className="mx-auto max-w-5xl px-6 py-8">
           <div className="flex items-center gap-3 mb-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#3B82F6] to-[#7C5CFC] shadow-md">
-              <span className="text-xl font-bold text-white">H</span>
-            </div>
+            <img src="/logo-icon.png" alt="HumanUp" className="h-10 w-auto" />
             <div>
               <h1 className="text-2xl font-bold text-[#1a1a2e]" style={{ fontFamily: 'var(--font-heading)' }}>HumanUp</h1>
               <p className="text-sm text-neutral-500">Cabinet de recrutement specialise Commercial & Sales</p>

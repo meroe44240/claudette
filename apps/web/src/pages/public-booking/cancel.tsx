@@ -155,9 +155,7 @@ export default function BookingCancelPage() {
       >
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#7C5CFC] shadow-sm flex items-center justify-center">
-            <span className="text-white font-bold text-[15px]">H</span>
-          </div>
+          <img src="/logo-icon.png" alt="HumanUp" className="h-9 w-auto" />
           <span className="text-[17px] font-semibold text-[#1a1a2e]" style={{ fontFamily: 'var(--font-heading)' }}>HumanUp</span>
         </div>
 

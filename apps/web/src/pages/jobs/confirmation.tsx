@@ -17,10 +17,8 @@ export default function JobConfirmationPage() {
       <header className="glass border-b border-white/30">
         <div className="mx-auto max-w-3xl px-6 py-4 flex items-center justify-center">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#3B82F6] to-[#7C5CFC] shadow-sm">
-              <span className="text-sm font-bold text-white">H</span>
-            </div>
-            <span className="text-sm font-semibold text-[#1a1a2e]">HumanUp</span>
+            <img src="/logo-icon.png" alt="HumanUp" className="h-8 w-auto" />
+            <span className="text-sm font-semibold text-[#1a1a2e]" style={{ fontFamily: 'var(--font-heading)' }}>HumanUp</span>
           </div>
         </div>
       </header>
