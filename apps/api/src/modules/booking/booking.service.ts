@@ -15,6 +15,7 @@ interface BookingInput {
   date: string;       // "YYYY-MM-DD"
   time: string;       // "HH:MM"
   entityType: 'candidat' | 'client';
+  durationMinutes?: number;
   salary?: string;
   currentCompany?: string;
   availability?: string;
@@ -335,7 +336,7 @@ export async function getRecruiterPublicInfo(slug: string, mandatSlug?: string) 
 /**
  * Get available time slots for a specific date.
  */
-export async function getAvailableSlots(slug: string, dateStr: string): Promise<TimeSlot[]> {
+export async function getAvailableSlots(slug: string, dateStr: string, overrideDuration?: number): Promise<TimeSlot[]> {
   const setting = await prisma.bookingSetting.findUnique({
     where: { slug },
     include: { user: { select: { id: true } } },
@@ -370,8 +371,14 @@ export async function getAvailableSlots(slug: string, dateStr: string): Promise<
     return []; // Not a working day, no slots
   }
 
-  // Generate all possible slots
-  const allSlots = generateSlots(setting.startTime, setting.endTime, setting.slotDuration);
+  // Use override duration if provided (e.g. candidat=15/30, client=45/60), otherwise default
+  const effectiveDuration = overrideDuration && overrideDuration >= 10 && overrideDuration <= 120
+    ? overrideDuration
+    : setting.slotDuration;
+
+  // Generate all possible slots based on the smallest booking increment (15min) for flexibility
+  const slotIncrement = Math.min(15, effectiveDuration);
+  const allSlots = generateSlots(setting.startTime, setting.endTime, slotIncrement);
 
   // Fetch calendar events for this day
   let calendarEvents: CalendarEvent[] = [];
@@ -408,7 +415,7 @@ export async function getAvailableSlots(slug: string, dateStr: string): Promise<
     return isSlotAvailable(
       slot.time,
       dateStr,
-      setting.slotDuration,
+      effectiveDuration,
       calendarEvents,
       existingBookings,
       setting.bufferMinutes,
@@ -440,8 +447,13 @@ export async function createBooking(slug: string, data: BookingInput) {
     throw new NotFoundError('Page de reservation');
   }
 
+  // Determine effective duration
+  const effectiveDuration = data.durationMinutes && data.durationMinutes >= 10 && data.durationMinutes <= 120
+    ? data.durationMinutes
+    : setting.slotDuration;
+
   // Re-verify slot availability (anti race condition)
-  const availableSlots = await getAvailableSlots(slug, data.date);
+  const availableSlots = await getAvailableSlots(slug, data.date, effectiveDuration);
   const isStillAvailable = availableSlots.some((s) => s.time === data.time);
   if (!isStillAvailable) {
     throw new ConflictError('Ce creneau n\'est plus disponible. Veuillez en choisir un autre.');
@@ -577,7 +589,7 @@ export async function createBooking(slug: string, data: BookingInput) {
 
   // Create Google Calendar event
   const bookingDate = new Date(`${data.date}T${data.time}:00`);
-  const bookingEndDate = new Date(bookingDate.getTime() + setting.slotDuration * 60 * 1000);
+  const bookingEndDate = new Date(bookingDate.getTime() + effectiveDuration * 60 * 1000);
   let calendarEventId: string | null = null;
 
   try {
@@ -649,7 +661,7 @@ export async function createBooking(slug: string, data: BookingInput) {
       message: data.message,
       bookingDate: new Date(`${data.date}T00:00:00`),
       bookingTime: data.time,
-      durationMinutes: setting.slotDuration,
+      durationMinutes: effectiveDuration,
       calendarEventId,
       status: 'confirmed',
       cancelToken,

@@ -6,7 +6,7 @@ import {
   ArrowLeft, Mail, Phone, MapPin, Linkedin, Briefcase, Building2,
   Calendar, Send, Pencil, Trash2, Save, X, FileText, Loader2,
   Upload, Copy, Check, Sparkles, ChevronDown, ChevronUp, Bot,
-  Link2, CalendarPlus, Search, Plus,
+  Link2, CalendarPlus, Search, Plus, User,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
@@ -177,8 +177,6 @@ export default function CandidatDetailPage() {
   const [bookingCopiedField, setBookingCopiedField] = useState<string | null>(null);
 
   // Calendly link state
-  const [calendlyUrl, setCalendlyUrl] = useState('');
-  const [calendlyEditing, setCalendlyEditing] = useState(false);
   const [calendlyCopied, setCalendlyCopied] = useState(false);
 
   // Pitch IA section state
@@ -537,32 +535,65 @@ export default function CandidatDetailPage() {
                       size="sm"
                       onClick={() => setShowBookingDropdown(!showBookingDropdown)}
                     >
-                      <CalendarPlus size={14} /> Lien booking
+                      <CalendarPlus size={14} /> Liens booking
                       <ChevronDown size={12} />
                     </Button>
                     {showBookingDropdown && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setShowBookingDropdown(false)} />
-                        <div className="absolute right-0 top-full mt-1 z-20 w-96 rounded-xl border border-border bg-white shadow-lg overflow-hidden">
-                          {/* Generic link */}
+                        <div className="absolute right-0 top-full mt-1 z-20 w-[420px] rounded-xl border border-border bg-white shadow-lg overflow-hidden">
+                          {/* Candidat link */}
                           <div className="p-3 border-b border-border/50">
-                            <p className="mb-2 text-xs font-semibold text-text-tertiary uppercase tracking-wider">Lien générique</p>
+                            <p className="mb-2 text-xs font-semibold text-primary-500 uppercase tracking-wider flex items-center gap-1.5">
+                              <User size={12} /> Lien Candidat
+                              <span className="text-[10px] font-normal text-text-tertiary ml-1">(15 ou 30 min)</span>
+                            </p>
                             <div className="flex items-center gap-2">
                               <span className="flex-1 truncate rounded-lg bg-neutral-50 px-3 py-1.5 text-xs text-text-secondary font-mono">
-                                ats.propium.co/book/{bookingSlug}
+                                .../book/{bookingSlug}?type=candidat
                               </span>
                               <button
                                 type="button"
-                                onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}`, 'generic')}
+                                onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}?type=candidat`, 'candidat')}
                                 className="shrink-0 rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
-                                title="Copier le lien"
+                                title="Copier"
                               >
-                                {bookingCopiedField === 'generic' ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-text-tertiary" />}
+                                {bookingCopiedField === 'candidat' ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-text-tertiary" />}
                               </button>
                               {candidat.email && (
                                 <button
                                   type="button"
-                                  onClick={() => handleSendBookingEmail(`https://ats.propium.co/book/${bookingSlug}`)}
+                                  onClick={() => handleSendBookingEmail(`https://ats.propium.co/book/${bookingSlug}?type=candidat`)}
+                                  className="shrink-0 rounded-lg p-1.5 hover:bg-primary-50 transition-colors"
+                                  title="Envoyer par email"
+                                >
+                                  <Send size={14} className="text-primary-500" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {/* Client link */}
+                          <div className="p-3 border-b border-border/50">
+                            <p className="mb-2 text-xs font-semibold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
+                              <Building2 size={12} /> Lien Client
+                              <span className="text-[10px] font-normal text-text-tertiary ml-1">(45 min ou 1h)</span>
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <span className="flex-1 truncate rounded-lg bg-neutral-50 px-3 py-1.5 text-xs text-text-secondary font-mono">
+                                .../book/{bookingSlug}?type=client
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}?type=client`, 'client')}
+                                className="shrink-0 rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
+                                title="Copier"
+                              >
+                                {bookingCopiedField === 'client' ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-text-tertiary" />}
+                              </button>
+                              {candidat.email && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendBookingEmail(`https://ats.propium.co/book/${bookingSlug}?type=client`)}
                                   className="shrink-0 rounded-lg p-1.5 hover:bg-primary-50 transition-colors"
                                   title="Envoyer par email"
                                 >
@@ -590,7 +621,7 @@ export default function CandidatDetailPage() {
                                         type="button"
                                         onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}/${c.mandat.slug}`, c.id)}
                                         className="shrink-0 rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
-                                        title="Copier le lien"
+                                        title="Copier"
                                       >
                                         {bookingCopiedField === c.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-text-tertiary" />}
                                       </button>
@@ -1055,92 +1086,143 @@ export default function CandidatDetailPage() {
             )}
           </Card>
 
-          {/* Quick Calendly Link */}
-          <Card>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
-                <Calendar size={18} className="text-primary-500" />
-                Lien Calendly
+          {/* Booking Links */}
+          {bookingSlug && (
+            <Card>
+              <h2 className="mb-4 text-lg font-semibold text-text-primary flex items-center gap-2">
+                <CalendarPlus size={18} className="text-primary-500" />
+                Liens Booking
               </h2>
-              {currentUser?.calendlyUrl && !calendlyEditing && (
-                <button
-                  onClick={() => { setCalendlyUrl(currentUser.calendlyUrl || ''); setCalendlyEditing(true); }}
-                  className="text-xs text-text-tertiary hover:text-primary-500"
-                >
-                  <Pencil size={12} />
-                </button>
-              )}
-            </div>
-            {calendlyEditing || !currentUser?.calendlyUrl ? (
-              <div className="space-y-2">
-                <input
-                  value={calendlyUrl || currentUser?.calendlyUrl || ''}
-                  onChange={(e) => setCalendlyUrl(e.target.value)}
-                  placeholder="https://calendly.com/votre-lien"
-                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-primary-400"
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={async () => {
-                      try {
-                        await api.put('/auth/me', { calendlyUrl: calendlyUrl.trim() });
-                        queryClient.invalidateQueries({ queryKey: ['me'] });
-                        setCalendlyEditing(false);
-                        toast('success', 'Lien Calendly sauvegardé');
-                      } catch { toast('error', 'Erreur de sauvegarde'); }
-                    }}
-                    className="rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600"
-                  >
-                    Sauvegarder
-                  </button>
-                  {currentUser?.calendlyUrl && (
+              <div className="space-y-4">
+                {/* Candidat link */}
+                <div className="rounded-xl border border-primary-100 bg-primary-50/30 p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center">
+                      <User size={12} className="text-primary-600" />
+                    </div>
+                    <span className="text-[13px] font-semibold text-primary-700">RDV Candidat</span>
+                    <span className="ml-auto text-[10px] text-primary-400 font-medium">15 ou 30 min</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="flex-1 truncate rounded-lg bg-white/80 border border-primary-100 px-2.5 py-1.5 text-[11px] text-text-secondary font-mono">
+                      .../book/{bookingSlug}?type=candidat
+                    </span>
                     <button
-                      onClick={() => setCalendlyEditing(false)}
-                      className="rounded-lg border border-neutral-200 px-3 py-1.5 text-xs text-neutral-500 hover:bg-neutral-50"
+                      type="button"
+                      onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}?type=candidat`, 'sidebar-candidat')}
+                      className="shrink-0 rounded-lg p-1.5 hover:bg-primary-100 transition-colors"
+                      title="Copier le lien"
                     >
-                      Annuler
+                      {bookingCopiedField === 'sidebar-candidat' ? <Check size={13} className="text-green-500" /> : <Copy size={13} className="text-text-tertiary" />}
                     </button>
-                  )}
+                    {candidat.email && (
+                      <button
+                        type="button"
+                        onClick={() => handleSendBookingEmail(`https://ats.propium.co/book/${bookingSlug}?type=candidat`)}
+                        className="shrink-0 rounded-lg p-1.5 hover:bg-primary-100 transition-colors"
+                        title="Envoyer par email"
+                      >
+                        <Send size={13} className="text-primary-500" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="flex-1 truncate rounded-lg bg-neutral-50 px-3 py-2 text-xs text-text-secondary font-mono">
-                    {currentUser.calendlyUrl}
-                  </span>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(currentUser.calendlyUrl || '');
-                      setCalendlyCopied(true);
-                      setTimeout(() => setCalendlyCopied(false), 2000);
-                      toast('success', 'Lien copié !');
-                    }}
-                    className="shrink-0 rounded-lg p-2 hover:bg-neutral-100 transition-colors"
-                    title="Copier"
-                  >
-                    {calendlyCopied ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-text-tertiary" />}
-                  </button>
+
+                {/* Client link */}
+                <div className="rounded-xl border border-amber-100 bg-amber-50/30 p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+                      <Building2 size={12} className="text-amber-600" />
+                    </div>
+                    <span className="text-[13px] font-semibold text-amber-700">RDV Client</span>
+                    <span className="ml-auto text-[10px] text-amber-400 font-medium">45 min ou 1h</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="flex-1 truncate rounded-lg bg-white/80 border border-amber-100 px-2.5 py-1.5 text-[11px] text-text-secondary font-mono">
+                      .../book/{bookingSlug}?type=client
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}?type=client`, 'sidebar-client')}
+                      className="shrink-0 rounded-lg p-1.5 hover:bg-amber-100 transition-colors"
+                      title="Copier le lien"
+                    >
+                      {bookingCopiedField === 'sidebar-client' ? <Check size={13} className="text-green-500" /> : <Copy size={13} className="text-text-tertiary" />}
+                    </button>
+                    {candidat.email && (
+                      <button
+                        type="button"
+                        onClick={() => handleSendBookingEmail(`https://ats.propium.co/book/${bookingSlug}?type=client`)}
+                        className="shrink-0 rounded-lg p-1.5 hover:bg-amber-100 transition-colors"
+                        title="Envoyer par email"
+                      >
+                        <Send size={13} className="text-amber-500" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                {candidat.email && (
-                  <button
-                    onClick={() => {
-                      const firstName = candidat.prenom || candidat.nom || '';
-                      setEmailDefaults({
-                        subject: 'Réservez un créneau pour notre échange',
-                        body: `Bonjour ${firstName},\n\nJe vous propose de choisir un créneau qui vous convient pour notre prochain échange :\n\n👉 ${currentUser.calendlyUrl}\n\nN'hésitez pas à sélectionner le créneau qui vous arrange le mieux.\n\nCordialement`,
-                      });
-                      setShowEmailComposer(true);
-                    }}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-50 px-3 py-2 text-xs font-medium text-primary-600 hover:bg-primary-100 transition-colors"
-                  >
-                    <Send size={13} />
-                    Envoyer le lien par email
-                  </button>
+
+                {/* Mandate-specific links */}
+                {candidat.candidatures.filter(c => c.mandat.slug && c.mandat.statut !== 'CLOTURE' && c.mandat.statut !== 'ANNULE').length > 0 && (
+                  <div className="pt-2 border-t border-border/50">
+                    <p className="mb-2 text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Par mandat</p>
+                    <div className="space-y-2">
+                      {candidat.candidatures.filter(c => c.mandat.slug && c.mandat.statut !== 'CLOTURE' && c.mandat.statut !== 'ANNULE').map((c) => (
+                        <div key={`sidebar-${c.id}`} className="rounded-lg bg-neutral-50 p-2">
+                          <p className="mb-1 text-[11px] font-medium text-text-primary flex items-center gap-1">
+                            <Briefcase size={10} className="text-text-tertiary" />
+                            {c.mandat.titrePoste}
+                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <span className="flex-1 truncate text-[10px] text-text-tertiary font-mono">
+                              .../book/{bookingSlug}/{c.mandat.slug}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}/${c.mandat.slug}`, `sidebar-${c.id}`)}
+                              className="shrink-0 rounded p-1 hover:bg-neutral-200 transition-colors"
+                              title="Copier"
+                            >
+                              {bookingCopiedField === `sidebar-${c.id}` ? <Check size={11} className="text-green-500" /> : <Copy size={11} className="text-text-tertiary" />}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
-            )}
-          </Card>
+            </Card>
+          )}
+
+          {/* Calendly Link (legacy) */}
+          {currentUser?.calendlyUrl && (
+            <Card>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                  <Link2 size={14} className="text-text-tertiary" />
+                  Lien Calendly
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="flex-1 truncate rounded-lg bg-neutral-50 px-3 py-1.5 text-[11px] text-text-secondary font-mono">
+                  {currentUser.calendlyUrl}
+                </span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(currentUser.calendlyUrl || '');
+                    setCalendlyCopied(true);
+                    setTimeout(() => setCalendlyCopied(false), 2000);
+                    toast('success', 'Lien copié !');
+                  }}
+                  className="shrink-0 rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
+                  title="Copier"
+                >
+                  {calendlyCopied ? <Check size={13} className="text-green-500" /> : <Copy size={13} className="text-text-tertiary" />}
+                </button>
+              </div>
+            </Card>
+          )}
         </motion.div>
       </motion.div>
 

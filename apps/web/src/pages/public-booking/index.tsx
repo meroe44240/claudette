@@ -61,6 +61,16 @@ interface RecruiterInfo {
   };
 }
 
+// Duration options per booking type
+const CANDIDAT_DURATIONS = [
+  { value: 15, label: '15 min' },
+  { value: 30, label: '30 min' },
+];
+const CLIENT_DURATIONS = [
+  { value: 45, label: '45 min' },
+  { value: 60, label: '1 heure' },
+];
+
 interface Slot {
   time: string;
 }
@@ -527,6 +537,7 @@ function BookingForm({
   selectedDate,
   selectedSlot,
   hasMandatSlug,
+  bookingType,
   onSubmit,
   onBack,
   submitting,
@@ -535,6 +546,7 @@ function BookingForm({
   selectedDate: Date;
   selectedSlot: string;
   hasMandatSlug: boolean;
+  bookingType?: 'candidat' | 'client' | '';
   onSubmit: (data: BookingFormData) => void;
   onBack: () => void;
   submitting: boolean;
@@ -689,61 +701,66 @@ function BookingForm({
         placeholder="06 12 34 56 78"
       />
 
-      {/* Entreprise actuelle */}
+      {/* Entreprise */}
       <FormInput
-        label="Entreprise actuelle"
+        label={bookingType === 'client' ? 'Entreprise' : 'Entreprise actuelle'}
         icon={<Building2 size={16} />}
         value={form.entrepriseActuelle}
         onChange={(v) => updateField('entrepriseActuelle', v)}
         placeholder="Facultatif"
       />
 
-      {/* Salaire actuel */}
-      <FormInput
-        label="Salaire actuel"
-        icon={<Banknote size={16} />}
-        value={form.salaireActuel}
-        onChange={(v) => updateField('salaireActuel', v)}
-        placeholder="Facultatif"
-        suffix="/an"
-      />
+      {/* Candidat-specific fields (hidden for client bookings) */}
+      {bookingType !== 'client' && (
+        <>
+          {/* Salaire actuel */}
+          <FormInput
+            label="Salaire actuel"
+            icon={<Banknote size={16} />}
+            value={form.salaireActuel}
+            onChange={(v) => updateField('salaireActuel', v)}
+            placeholder="Facultatif"
+            suffix="/an"
+          />
 
-      {/* Disponibilite */}
-      <div>
-        <label className="block text-[13px] font-medium text-neutral-600 mb-2">
-          Disponibilite
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {DISPONIBILITE_OPTIONS.map((opt) => (
-            <RadioPill
-              key={opt}
-              label={opt}
-              selected={form.disponibilite === opt}
-              onClick={() => updateField('disponibilite', opt)}
-            />
-          ))}
-        </div>
-      </div>
+          {/* Disponibilite */}
+          <div>
+            <label className="block text-[13px] font-medium text-neutral-600 mb-2">
+              Disponibilite
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {DISPONIBILITE_OPTIONS.map((opt) => (
+                <RadioPill
+                  key={opt}
+                  label={opt}
+                  selected={form.disponibilite === opt}
+                  onClick={() => updateField('disponibilite', opt)}
+                />
+              ))}
+            </div>
+          </div>
 
-      {/* Process concurrents */}
-      <div>
-        <label className="block text-[13px] font-medium text-neutral-600 mb-2">
-          Process concurrents
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {PROCESS_OPTIONS.map((opt) => (
-            <RadioPill
-              key={opt.value}
-              label={opt.label}
-              selected={form.processConcurrents === opt.value}
-              onClick={() => updateField('processConcurrents', opt.value)}
-            />
-          ))}
-        </div>
-      </div>
+          {/* Process concurrents */}
+          <div>
+            <label className="block text-[13px] font-medium text-neutral-600 mb-2">
+              Process concurrents
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {PROCESS_OPTIONS.map((opt) => (
+                <RadioPill
+                  key={opt.value}
+                  label={opt.label}
+                  selected={form.processConcurrents === opt.value}
+                  onClick={() => updateField('processConcurrents', opt.value)}
+                />
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
-      {/* Type de RDV - only if no mandatSlug */}
-      {!hasMandatSlug && (
+      {/* Type de RDV - only if no mandatSlug and no bookingType from URL */}
+      {!hasMandatSlug && !bookingType && (
         <div>
           <label className="block text-[13px] font-medium text-neutral-600 mb-2">
             Type de rendez-vous
@@ -1047,12 +1064,19 @@ export default function PublicBookingPage() {
   const { slug, mandatSlug } = useParams<{ slug: string; mandatSlug?: string }>();
   const [searchParams] = useSearchParams();
 
+  // Determine booking type from URL: ?type=candidat or ?type=client
+  const bookingType = (searchParams.get('type') || '') as 'candidat' | 'client' | '';
+  const durationOptions = bookingType === 'client' ? CLIENT_DURATIONS : bookingType === 'candidat' ? CANDIDAT_DURATIONS : null;
+
   const [recruiter, setRecruiter] = useState<RecruiterInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [step, setStep] = useState<BookingStep>('calendar');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDuration, setSelectedDuration] = useState<number>(
+    bookingType === 'client' ? 45 : bookingType === 'candidat' ? 15 : 30,
+  );
   const [slots, setSlots] = useState<Slot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
@@ -1081,7 +1105,7 @@ export default function PublicBookingPage() {
       });
   }, [slug, mandatSlug]);
 
-  // ── Fetch slots when date is selected ──
+  // ── Fetch slots when date or duration is selected ──
   useEffect(() => {
     if (!selectedDate || !slug) return;
 
@@ -1089,10 +1113,13 @@ export default function PublicBookingPage() {
     setSelectedSlot(null);
 
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const durationParam = durationOptions ? `&duration=${selectedDuration}` : '';
     publicApi
-      .get<Slot[]>(`/${slug}/slots?date=${dateStr}`)
+      .get<Slot[]>(`/${slug}/slots?date=${dateStr}${durationParam}`)
       .then((data) => {
-        setSlots(data);
+        // API may return { data: [...] } or [...] directly
+        const slotsArr = Array.isArray(data) ? data : (data as any).data || [];
+        setSlots(slotsArr);
       })
       .catch((err) => {
         toast('error', err.message || 'Impossible de charger les creneaux.');
@@ -1101,7 +1128,7 @@ export default function PublicBookingPage() {
       .finally(() => {
         setSlotsLoading(false);
       });
-  }, [selectedDate, slug]);
+  }, [selectedDate, slug, selectedDuration, durationOptions]);
 
   // ── Handle date selection ──
   const handleSelectDate = useCallback((date: Date) => {
@@ -1131,18 +1158,23 @@ export default function PublicBookingPage() {
 
       try {
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        // Determine entityType from URL or form
+        const entityType = bookingType || formData.typeRdv || 'candidat';
+        const effectiveDuration = durationOptions ? selectedDuration : recruiter.settings.slotDuration;
+
         const body = {
           date: dateStr,
           time: selectedSlot,
-          prenom: formData.prenom,
-          nom: formData.nom,
+          firstName: formData.prenom,
+          lastName: formData.nom,
           email: formData.email,
-          telephone: formData.telephone,
-          entrepriseActuelle: formData.entrepriseActuelle || undefined,
-          salaireActuel: formData.salaireActuel || undefined,
-          disponibilite: formData.disponibilite || undefined,
-          processConcurrents: formData.processConcurrents || undefined,
-          typeRdv: formData.typeRdv || undefined,
+          phone: formData.telephone,
+          entityType,
+          durationMinutes: effectiveDuration,
+          currentCompany: formData.entrepriseActuelle || undefined,
+          salary: formData.salaireActuel || undefined,
+          availability: formData.disponibilite || undefined,
+          competingProcesses: formData.processConcurrents || undefined,
           message: formData.message || undefined,
           mandatSlug: mandatSlug || undefined,
           source: searchParams.get('source') || undefined,
@@ -1153,7 +1185,7 @@ export default function PublicBookingPage() {
         setConfirmation({
           date: dateStr,
           time: selectedSlot,
-          duration: recruiter.settings.slotDuration,
+          duration: effectiveDuration,
           recruiterName: `${recruiter.user.prenom} ${recruiter.user.nom}`,
           candidateEmail: formData.email,
           bookingId: result.bookingId,
@@ -1172,10 +1204,14 @@ export default function PublicBookingPage() {
           // Refresh slots
           if (selectedDate) {
             setSlotsLoading(true);
-            const dateStr = format(selectedDate, 'yyyy-MM-dd');
+            const refreshDateStr = format(selectedDate, 'yyyy-MM-dd');
+            const refreshDurationParam = durationOptions ? `&duration=${selectedDuration}` : '';
             publicApi
-              .get<Slot[]>(`/${slug}/slots?date=${dateStr}`)
-              .then((data) => setSlots(data))
+              .get<Slot[]>(`/${slug}/slots?date=${refreshDateStr}${refreshDurationParam}`)
+              .then((d) => {
+                const arr = Array.isArray(d) ? d : (d as any).data || [];
+                setSlots(arr);
+              })
               .catch(() => setSlots([]))
               .finally(() => setSlotsLoading(false));
           }
@@ -1186,7 +1222,7 @@ export default function PublicBookingPage() {
         setSubmitting(false);
       }
     },
-    [slug, mandatSlug, selectedDate, selectedSlot, recruiter, searchParams],
+    [slug, mandatSlug, selectedDate, selectedSlot, recruiter, searchParams, bookingType, selectedDuration, durationOptions],
   );
 
   // ── Back to calendar ──
@@ -1224,15 +1260,40 @@ export default function PublicBookingPage() {
               exit={{ opacity: 0, x: -30 }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             >
-              {/* Duration badge */}
-              <div className="flex items-center justify-center gap-2 mb-5">
-                <div className="flex items-center gap-1.5 bg-neutral-50 px-3 py-1.5 rounded-full">
-                  <Clock size={14} className="text-neutral-400" />
-                  <span className="text-[13px] font-medium text-neutral-600">
-                    {recruiter.settings.slotDuration} min
-                  </span>
+              {/* Duration selector or badge */}
+              {durationOptions ? (
+                <div className="mb-5">
+                  <p className="text-center text-[13px] font-medium text-neutral-500 mb-3">
+                    {bookingType === 'client' ? 'RDV Client' : 'RDV Candidat'} — Choisissez la durée
+                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    {durationOptions.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setSelectedDuration(opt.value)}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-medium border transition-all ${
+                          selectedDuration === opt.value
+                            ? 'bg-primary-500 text-white border-primary-500 shadow-md'
+                            : 'bg-white text-neutral-600 border-neutral-200 hover:border-primary-300 hover:bg-primary-50'
+                        }`}
+                      >
+                        <Clock size={14} />
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2 mb-5">
+                  <div className="flex items-center gap-1.5 bg-neutral-50 px-3 py-1.5 rounded-full">
+                    <Clock size={14} className="text-neutral-400" />
+                    <span className="text-[13px] font-medium text-neutral-600">
+                      {recruiter.settings.slotDuration} min
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <BookingCalendar
                 selectedDate={selectedDate}
@@ -1255,10 +1316,17 @@ export default function PublicBookingPage() {
           {step === 'form' && selectedDate && selectedSlot && (
             <BookingForm
               key="form"
-              recruiter={recruiter}
+              recruiter={{
+                ...recruiter,
+                settings: {
+                  ...recruiter.settings,
+                  slotDuration: durationOptions ? selectedDuration : recruiter.settings.slotDuration,
+                },
+              }}
               selectedDate={selectedDate}
               selectedSlot={selectedSlot}
               hasMandatSlug={!!mandatSlug}
+              bookingType={bookingType}
               onSubmit={handleFormSubmit}
               onBack={handleBack}
               submitting={submitting}

@@ -14,6 +14,7 @@ const createBookingSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format de date invalide (YYYY-MM-DD)'),
   time: z.string().regex(/^\d{2}:\d{2}$/, 'Format d\'heure invalide (HH:MM)'),
   entityType: z.enum(['candidat', 'client']),
+  durationMinutes: z.number().min(10).max(120).optional(),
   salary: z.string().optional(),
   currentCompany: z.string().optional(),
   availability: z.string().optional(),
@@ -61,13 +62,14 @@ export async function bookingPublicRouter(fastify: FastifyInstance) {
   fastify.get('/:slug/slots', {
     handler: async (request) => {
       const { slug } = request.params as { slug: string };
-      const { date } = request.query as { date: string };
+      const { date, duration } = request.query as { date: string; duration?: string };
 
       if (!date) {
         return { error: 'Le parametre "date" est requis (format: YYYY-MM-DD)' };
       }
 
-      const slots = await bookingService.getAvailableSlots(slug, date);
+      const durationMinutes = duration ? parseInt(duration, 10) : undefined;
+      const slots = await bookingService.getAvailableSlots(slug, date, durationMinutes);
       return { data: slots };
     },
   });
