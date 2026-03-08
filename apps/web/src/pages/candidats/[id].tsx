@@ -6,6 +6,7 @@ import {
   ArrowLeft, Mail, Phone, MapPin, Linkedin, Briefcase, Building2,
   Calendar, Send, Pencil, Trash2, Save, X, FileText, Loader2,
   Upload, Copy, Check, Sparkles, ChevronDown, ChevronUp, Bot,
+  Link2, CalendarPlus,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
@@ -29,6 +30,7 @@ interface Candidature {
   mandat: {
     id: string;
     titrePoste: string;
+    slug: string | null;
     entreprise: { id: string; nom: string };
     statut: string;
   };
@@ -146,6 +148,7 @@ export default function CandidatDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [emailDefaults, setEmailDefaults] = useState({ subject: '', body: '' });
   const [showScheduleMeeting, setShowScheduleMeeting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
@@ -156,6 +159,10 @@ export default function CandidatDetailPage() {
   const [showCvUploadModal, setShowCvUploadModal] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const cvFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Booking link state
+  const [showBookingDropdown, setShowBookingDropdown] = useState(false);
+  const [bookingCopiedField, setBookingCopiedField] = useState<string | null>(null);
 
   // Pitch IA section state
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -170,6 +177,34 @@ export default function CandidatDetailPage() {
       return failureCount < 2;
     },
   });
+
+  const { data: bookingSettings } = useQuery({
+    queryKey: ['booking', 'settings'],
+    queryFn: () => api.get<{ slug: string; isActive: boolean }>('/booking/settings'),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const bookingSlug = bookingSettings?.isActive ? bookingSettings.slug : null;
+
+  const handleCopyBookingLink = useCallback((link: string, fieldId: string) => {
+    navigator.clipboard.writeText(link).then(() => {
+      toast('success', 'Lien booking copié !');
+      setBookingCopiedField(fieldId);
+      setTimeout(() => setBookingCopiedField(null), 2000);
+    });
+  }, []);
+
+  const handleSendBookingEmail = useCallback((link: string, mandatTitle?: string) => {
+    const firstName = candidat?.prenom || candidat?.nom || '';
+    const subject = mandatTitle
+      ? `Réservez un créneau — ${mandatTitle}`
+      : 'Réservez un créneau pour notre échange';
+    const body = `Bonjour ${firstName},\n\nJe vous propose de choisir un créneau qui vous convient pour notre prochain échange :\n\n👉 ${link}\n\nN'hésitez pas à sélectionner le créneau qui vous arrange le mieux.\n\nCordialement`;
+    setEmailDefaults({ subject, body });
+    setShowBookingDropdown(false);
+    setShowEmailComposer(true);
+  }, [candidat?.prenom, candidat?.nom]);
 
   const updateMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
@@ -391,7 +426,7 @@ export default function CandidatDetailPage() {
                 <Button variant="danger" size="sm" onClick={() => setShowDeleteModal(true)}>
                   <Trash2 size={14} /> Supprimer
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => setShowEmailComposer(true)}>
+                <Button variant="secondary" size="sm" onClick={() => { setEmailDefaults({ subject: '', body: '' }); setShowEmailComposer(true); }}>
                   <Send size={14} /> Envoyer un email
                 </Button>
                 <Button variant="secondary" size="sm" onClick={() => setShowScheduleMeeting(true)}>
@@ -400,6 +435,91 @@ export default function CandidatDetailPage() {
                 <Button variant="secondary" size="sm" onClick={() => setShowCallBrief(true)}>
                   <Bot size={14} /> Brief pre-appel
                 </Button>
+                {bookingSlug && (
+                  <div className="relative">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowBookingDropdown(!showBookingDropdown)}
+                    >
+                      <CalendarPlus size={14} /> Lien booking
+                      <ChevronDown size={12} />
+                    </Button>
+                    {showBookingDropdown && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setShowBookingDropdown(false)} />
+                        <div className="absolute right-0 top-full mt-1 z-20 w-96 rounded-xl border border-border bg-white shadow-lg overflow-hidden">
+                          {/* Generic link */}
+                          <div className="p-3 border-b border-border/50">
+                            <p className="mb-2 text-xs font-semibold text-text-tertiary uppercase tracking-wider">Lien générique</p>
+                            <div className="flex items-center gap-2">
+                              <span className="flex-1 truncate rounded-lg bg-neutral-50 px-3 py-1.5 text-xs text-text-secondary font-mono">
+                                ats.propium.co/book/{bookingSlug}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}`, 'generic')}
+                                className="shrink-0 rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
+                                title="Copier le lien"
+                              >
+                                {bookingCopiedField === 'generic' ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-text-tertiary" />}
+                              </button>
+                              {candidat.email && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendBookingEmail(`https://ats.propium.co/book/${bookingSlug}`)}
+                                  className="shrink-0 rounded-lg p-1.5 hover:bg-primary-50 transition-colors"
+                                  title="Envoyer par email"
+                                >
+                                  <Send size={14} className="text-primary-500" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {/* Mandate-specific links */}
+                          {candidat.candidatures.filter(c => c.mandat.slug && c.mandat.statut !== 'CLOTURE' && c.mandat.statut !== 'ANNULE').length > 0 && (
+                            <div className="p-3">
+                              <p className="mb-2 text-xs font-semibold text-text-tertiary uppercase tracking-wider">Liens par mandat</p>
+                              <div className="space-y-2">
+                                {candidat.candidatures.filter(c => c.mandat.slug && c.mandat.statut !== 'CLOTURE' && c.mandat.statut !== 'ANNULE').map((c) => (
+                                  <div key={c.id}>
+                                    <p className="mb-1 text-xs font-medium text-text-primary flex items-center gap-1.5">
+                                      <Briefcase size={12} className="text-text-tertiary" />
+                                      {c.mandat.titrePoste}
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      <span className="flex-1 truncate rounded-lg bg-neutral-50 px-3 py-1.5 text-xs text-text-secondary font-mono">
+                                        .../book/{bookingSlug}/{c.mandat.slug}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}/${c.mandat.slug}`, c.id)}
+                                        className="shrink-0 rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
+                                        title="Copier le lien"
+                                      >
+                                        {bookingCopiedField === c.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-text-tertiary" />}
+                                      </button>
+                                      {candidat.email && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSendBookingEmail(`https://ats.propium.co/book/${bookingSlug}/${c.mandat.slug}`, c.mandat.titrePoste)}
+                                          className="shrink-0 rounded-lg p-1.5 hover:bg-primary-50 transition-colors"
+                                          title="Envoyer par email"
+                                        >
+                                          <Send size={14} className="text-primary-500" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 <Button variant="ghost" onClick={() => navigate('/candidats')}>
                   <ArrowLeft size={16} /> Retour
                 </Button>
@@ -772,7 +892,8 @@ export default function CandidatDetailPage() {
         isOpen={showEmailComposer}
         onClose={() => setShowEmailComposer(false)}
         defaultTo={candidat.email || ''}
-        defaultSubject=""
+        defaultSubject={emailDefaults.subject}
+        defaultBody={emailDefaults.body}
         entiteType="candidat"
         entiteId={candidat.id}
         candidatId={candidat.id}

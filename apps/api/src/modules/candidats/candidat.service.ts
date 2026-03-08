@@ -136,6 +136,7 @@ export async function getById(id: string) {
             select: {
               id: true,
               titrePoste: true,
+              slug: true,
               entreprise: { select: { id: true, nom: true } },
               statut: true,
             },

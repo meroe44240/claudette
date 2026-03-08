@@ -45,6 +45,9 @@ model User {
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionUser")
   bookingSetting      BookingSetting? @relation("BookingSettingUser")
   bookings            Booking[]       @relation("BookingUser")
+  assignedJobPostings  JobPosting[]    @relation("JobPostingAssignedTo")
+  createdJobPostings   JobPosting[]    @relation("JobPostingCreatedBy")
+  reviewedApplications JobApplication[] @relation("JobApplicationReviewedBy")
 
   @@map("users")
 }
@@ -170,6 +173,7 @@ model Candidat {
 
   candidatures    Candidature[]
   bookings        Booking[]       @relation("BookingCandidat")
+  jobApplications JobApplication[] @relation("JobApplicationCandidat")
 
   @@map("candidats")
 }
@@ -210,6 +214,7 @@ model Mandat {
   candidatures        Candidature[]
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionMandat")
   bookings            Booking[]       @relation("BookingMandat")
+  jobPostings         JobPosting[]    @relation("JobPostingMandat")
 
   @@map("mandats")
 }
@@ -400,6 +405,7 @@ enum TypeNotification {
   SYSTEME
   AI_SUMMARY_READY
   AI_BRIEF_READY
+  JOB_APPLICATION_NEW
 }
 
 // ─── TEMPLATES ───────────────────────────────────────
@@ -836,4 +842,86 @@ model BookingReminder {
 
   @@index([status, scheduledAt])
   @@map("booking_reminders")
+}
+
+// ─── JOB BOARD ──────────────────────────────────────
+
+enum JobPostingStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum JobPostingVisibility {
+  PUBLIC
+  PRIVATE_LINK
+}
+
+enum JobApplicationStatus {
+  NEW
+  REVIEWED
+  SHORTLISTED
+  REJECTED
+}
+
+model JobPosting {
+  id                 String               @id @default(uuid()) @db.Uuid
+  mandatId           String?              @db.Uuid
+  mandat             Mandat?              @relation("JobPostingMandat", fields: [mandatId], references: [id])
+  slug               String               @unique @db.VarChar(255)
+  title              String               @db.VarChar(255)
+  companyDescription String?              @db.Text
+  location           String?              @db.VarChar(255)
+  salaryRange        String?              @db.VarChar(100)
+  description        String?              @db.Text
+  tags               String[]             @default([])
+  jobType            String?              @db.VarChar(50)
+  sector             String?              @db.VarChar(50)
+  status             JobPostingStatus     @default(DRAFT)
+  visibility         JobPostingVisibility @default(PUBLIC)
+  isUrgent           Boolean              @default(false)
+  assignedToId       String?              @db.Uuid
+  assignedTo         User?                @relation("JobPostingAssignedTo", fields: [assignedToId], references: [id])
+  createdById        String?              @db.Uuid
+  createdBy          User?                @relation("JobPostingCreatedBy", fields: [createdById], references: [id])
+  viewCount          Int                  @default(0)
+  applicationCount   Int                  @default(0)
+  publishedAt        DateTime?            @db.Timestamptz()
+  archivedAt         DateTime?            @db.Timestamptz()
+  createdAt          DateTime             @default(now()) @db.Timestamptz()
+  updatedAt          DateTime             @updatedAt @db.Timestamptz()
+
+  applications JobApplication[]
+
+  @@index([status, publishedAt])
+  @@map("job_postings")
+}
+
+model JobApplication {
+  id             String               @id @default(uuid()) @db.Uuid
+  jobPostingId   String?              @db.Uuid
+  jobPosting     JobPosting?          @relation(fields: [jobPostingId], references: [id])
+  candidatId     String?              @db.Uuid
+  candidat       Candidat?            @relation("JobApplicationCandidat", fields: [candidatId], references: [id])
+  firstName      String               @db.VarChar(255)
+  lastName       String               @db.VarChar(255)
+  email          String               @db.VarChar(255)
+  phone          String?              @db.VarChar(50)
+  salaryCurrent  String?              @db.VarChar(100)
+  currentCompany String?              @db.VarChar(255)
+  availability   String?              @db.VarChar(100)
+  cvFileUrl      String?              @db.VarChar(500)
+  source         String               @default("job_board") @db.VarChar(100)
+  isSpontaneous  Boolean              @default(false)
+  jobTypeSought  String?              @db.VarChar(100)
+  status         JobApplicationStatus @default(NEW)
+  reviewedAt     DateTime?            @db.Timestamptz()
+  reviewedById   String?              @db.Uuid
+  reviewedBy     User?                @relation("JobApplicationReviewedBy", fields: [reviewedById], references: [id])
+  createdAt      DateTime             @default(now()) @db.Timestamptz()
+  updatedAt      DateTime             @updatedAt @db.Timestamptz()
+
+  @@index([jobPostingId, status])
+  @@index([email])
+  @@map("job_applications")
 }

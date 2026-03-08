@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Mail, Phone, Linkedin, Building2, Briefcase, Calendar, Send, Pencil, Trash2, Save, X, UserPlus, Bot } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Linkedin, Building2, Briefcase, Calendar, Send, Pencil, Trash2, Save, X, UserPlus, Bot, Link2, Check, CalendarPlus, Copy, ChevronDown } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
 import PageHeader from '../../components/ui/PageHeader';
@@ -153,17 +153,51 @@ export default function ClientDetailPage() {
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((s) => s.user);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [emailDefaults, setEmailDefaults] = useState({ subject: '', body: '' });
   const [showScheduleMeeting, setShowScheduleMeeting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showCallBrief, setShowCallBrief] = useState(false);
+  const [bookingCopied, setBookingCopied] = useState(false);
+  const [showBookingDropdown, setShowBookingDropdown] = useState(false);
+
+  const { data: bookingSettings } = useQuery({
+    queryKey: ['booking', 'settings'],
+    queryFn: () => api.get<{ slug: string; isActive: boolean }>('/booking/settings'),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const bookingSlug = bookingSettings?.isActive ? bookingSettings.slug : null;
+
+  const handleCopyBookingLink = useCallback(() => {
+    if (!bookingSlug) return;
+    const link = `https://ats.propium.co/book/${bookingSlug}`;
+    navigator.clipboard.writeText(link).then(() => {
+      toast('success', 'Lien booking copié !');
+      setBookingCopied(true);
+      setTimeout(() => setBookingCopied(false), 2000);
+    });
+  }, [bookingSlug]);
 
   const { data: client, isLoading } = useQuery({
     queryKey: ['client', id],
     queryFn: () => api.get<ClientDetail>(`/clients/${id}`),
     enabled: !!id,
   });
+
+  const handleSendBookingEmail = useCallback(() => {
+    if (!bookingSlug || !client) return;
+    const firstName = client.prenom || client.nom || '';
+    const link = `https://ats.propium.co/book/${bookingSlug}`;
+    setEmailDefaults({
+      subject: 'Réservez un créneau pour notre échange',
+      body: `Bonjour ${firstName},\n\nJe vous propose de choisir un créneau qui vous convient pour notre prochain échange :\n\n👉 ${link}\n\nN'hésitez pas à sélectionner le créneau qui vous arrange le mieux.\n\nCordialement`,
+    });
+    setShowBookingDropdown(false);
+    setShowEmailComposer(true);
+  }, [bookingSlug, client]);
 
   const updateMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
@@ -317,7 +351,7 @@ export default function ClientDetailPage() {
                 <Button variant="danger" size="sm" onClick={() => setShowDeleteModal(true)}>
                   <Trash2 size={14} /> Supprimer
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => setShowEmailComposer(true)}>
+                <Button variant="secondary" size="sm" onClick={() => { setEmailDefaults({ subject: '', body: '' }); setShowEmailComposer(true); }}>
                   <Send size={14} /> Envoyer un email
                 </Button>
                 <Button variant="secondary" size="sm" onClick={() => setShowScheduleMeeting(true)}>
@@ -326,6 +360,49 @@ export default function ClientDetailPage() {
                 <Button variant="secondary" size="sm" onClick={() => setShowCallBrief(true)}>
                   <Bot size={14} /> Brief pre-appel
                 </Button>
+                {bookingSlug && (
+                  <div className="relative">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowBookingDropdown(!showBookingDropdown)}
+                    >
+                      <CalendarPlus size={14} /> Lien booking
+                      <ChevronDown size={12} />
+                    </Button>
+                    {showBookingDropdown && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setShowBookingDropdown(false)} />
+                        <div className="absolute right-0 top-full mt-1 z-20 w-96 rounded-xl border border-border bg-white shadow-lg overflow-hidden p-3">
+                          <p className="mb-2 text-xs font-semibold text-text-tertiary uppercase tracking-wider">Lien de booking</p>
+                          <div className="flex items-center gap-2">
+                            <span className="flex-1 truncate rounded-lg bg-neutral-50 px-3 py-1.5 text-xs text-text-secondary font-mono">
+                              ats.propium.co/book/{bookingSlug}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handleCopyBookingLink}
+                              className="shrink-0 rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
+                              title="Copier le lien"
+                            >
+                              {bookingCopied ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-text-tertiary" />}
+                            </button>
+                            {client.email && (
+                              <button
+                                type="button"
+                                onClick={handleSendBookingEmail}
+                                className="shrink-0 rounded-lg p-1.5 hover:bg-primary-50 transition-colors"
+                                title="Envoyer par email"
+                              >
+                                <Send size={14} className="text-primary-500" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 <Button variant="ghost" onClick={() => navigate('/clients')}>
                   <ArrowLeft size={16} /> Retour
                 </Button>
@@ -549,7 +626,8 @@ export default function ClientDetailPage() {
         isOpen={showEmailComposer}
         onClose={() => setShowEmailComposer(false)}
         defaultTo={client.email || ''}
-        defaultSubject=""
+        defaultSubject={emailDefaults.subject}
+        defaultBody={emailDefaults.body}
         entiteType="client"
         entiteId={client.id}
         clientId={client.id}

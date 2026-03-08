@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X } from 'lucide-react';
+import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Megaphone } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
@@ -42,6 +42,7 @@ interface Candidature {
 interface MandatDetail {
   id: string;
   titrePoste: string;
+  slug: string | null;
   description: string | null;
   localisation: string | null;
   salaireMin: number | null;
@@ -208,6 +209,15 @@ export default function MandatDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [bookingCopied, setBookingCopied] = useState(false);
+
+  // Fetch booking settings to get current user's slug
+  const { data: bookingSettings } = useQuery({
+    queryKey: ['booking', 'settings'],
+    queryFn: () => api.get<{ slug: string; isActive: boolean }>('/booking/settings'),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const { data: mandat, isLoading } = useQuery({
     queryKey: ['mandat', id],
@@ -251,6 +261,16 @@ export default function MandatDetailPage() {
     setIsEditing(false);
     setEditForm(null);
   };
+
+  const handleCopyBookingLink = useCallback(() => {
+    if (!bookingSettings?.slug || !mandat?.slug) return;
+    const link = `https://ats.propium.co/book/${bookingSettings.slug}/${mandat.slug}`;
+    navigator.clipboard.writeText(link).then(() => {
+      toast('success', 'Lien booking copie !');
+      setBookingCopied(true);
+      setTimeout(() => setBookingCopied(false), 2000);
+    });
+  }, [bookingSettings?.slug, mandat?.slug]);
 
   const handleSave = () => {
     if (!editForm) return;
@@ -330,6 +350,15 @@ export default function MandatDetailPage() {
                 <Badge variant={statutVariant[mandat.statut]} className="text-sm">
                   {statutLabels[mandat.statut]}
                 </Badge>
+                {bookingSettings?.isActive && bookingSettings?.slug && mandat.slug && (
+                  <Button variant="secondary" size="sm" onClick={handleCopyBookingLink}>
+                    {bookingCopied ? <Check size={14} className="text-green-500" /> : <Link2 size={14} />}
+                    {bookingCopied ? 'Copie !' : 'Lien booking'}
+                  </Button>
+                )}
+                <Button variant="secondary" size="sm" onClick={() => navigate(`/job-board/new?mandatId=${id}`)}>
+                  <Megaphone size={14} /> Job Board
+                </Button>
                 <Button variant="secondary" size="sm" onClick={handleStartEdit}>
                   <Pencil size={14} /> Modifier
                 </Button>
@@ -487,6 +516,20 @@ export default function MandatDetailPage() {
                 <div>
                   <dt className="text-text-tertiary">Date de cl\u00f4ture</dt>
                   <dd className="font-medium text-text-primary">{formatDate(mandat.dateCloture)}</dd>
+                </div>
+              )}
+              {bookingSettings?.isActive && bookingSettings?.slug && mandat.slug && (
+                <div>
+                  <dt className="text-text-tertiary">Lien booking</dt>
+                  <dd className="mt-1">
+                    <button
+                      onClick={handleCopyBookingLink}
+                      className="inline-flex items-center gap-1.5 text-[13px] text-violet-600 hover:text-violet-700 font-medium transition-colors"
+                    >
+                      <Link2 size={13} />
+                      ats.propium.co/book/{bookingSettings.slug}/{mandat.slug}
+                    </button>
+                  </dd>
                 </div>
               )}
             </dl>

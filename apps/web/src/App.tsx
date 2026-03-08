@@ -36,6 +36,13 @@ import ReportsPage from './pages/reports/index';
 import StatsPage from './pages/stats/index';
 import PublicBookingPage from './pages/public-booking/index';
 import BookingCancelPage from './pages/public-booking/cancel';
+import PublicJobListPage from './pages/jobs/public-list';
+import PublicJobDetailPage from './pages/jobs/public-detail';
+import SpontaneousPage from './pages/jobs/spontaneous';
+import JobConfirmationPage from './pages/jobs/confirmation';
+import JobBoardPage from './pages/jobs/index';
+import JobBoardNewPage from './pages/jobs/new';
+import JobBoardEditPage from './pages/jobs/edit';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuthStore();
@@ -54,6 +61,10 @@ export default function App() {
       <Route path="/book/cancel/:bookingId" element={<BookingCancelPage />} />
       <Route path="/book/:slug/:mandatSlug" element={<PublicBookingPage />} />
       <Route path="/book/:slug" element={<PublicBookingPage />} />
+      <Route path="/jobs" element={<PublicJobListPage />} />
+      <Route path="/jobs/candidature-spontanee" element={<SpontaneousPage />} />
+      <Route path="/jobs/confirmation" element={<JobConfirmationPage />} />
+      <Route path="/jobs/:slug" element={<PublicJobDetailPage />} />
       <Route
         element={
           <ProtectedRoute>
@@ -90,6 +101,9 @@ export default function App() {
         <Route path="settings/integrations" element={<IntegrationsSettingsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="stats" element={<StatsPage />} />
+        <Route path="job-board" element={<JobBoardPage />} />
+        <Route path="job-board/new" element={<JobBoardNewPage />} />
+        <Route path="job-board/:id" element={<JobBoardEditPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

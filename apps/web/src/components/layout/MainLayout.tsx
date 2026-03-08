@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, LogOut } from 'lucide-react';
+import { Bell, LogOut, Link2, Check } from 'lucide-react';
 import Sidebar from '../ui/Sidebar';
 import SearchBar from '../ui/SearchBar';
 import Avatar from '../ui/Avatar';
 import Dropdown from '../ui/Dropdown';
-import { ToastContainer } from '../ui/Toast';
+import { toast, ToastContainer } from '../ui/Toast';
 import { useAuthStore } from '../../stores/auth-store';
 import { api } from '../../lib/api-client';
 
@@ -15,6 +16,28 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [bookingCopied, setBookingCopied] = useState(false);
+
+  // Fetch booking settings to get the slug
+  const { data: bookingSettings } = useQuery({
+    queryKey: ['booking', 'settings'],
+    queryFn: () => api.get<{ slug: string; isActive: boolean }>('/booking/settings'),
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const bookingSlug = bookingSettings?.slug;
+  const bookingActive = bookingSettings?.isActive;
+
+  const handleCopyBookingLink = useCallback(() => {
+    if (!bookingSlug) return;
+    const link = `https://ats.propium.co/book/${bookingSlug}`;
+    navigator.clipboard.writeText(link).then(() => {
+      toast('success', 'Lien de booking copie !');
+      setBookingCopied(true);
+      setTimeout(() => setBookingCopied(false), 2000);
+    });
+  }, [bookingSlug]);
 
   const handleSearch = async (query: string) => {
     try {
@@ -55,6 +78,21 @@ export default function MainLayout() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Booking link quick copy */}
+            {bookingActive && bookingSlug && (
+              <button
+                onClick={handleCopyBookingLink}
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-neutral-500 hover:bg-violet-50 hover:text-violet-600 transition-all duration-200"
+                title="Copier mon lien de booking"
+              >
+                {bookingCopied ? (
+                  <Check size={18} className="text-green-500" />
+                ) : (
+                  <Link2 size={18} />
+                )}
+              </button>
+            )}
+
             <button
               onClick={() => navigate('/notifications')}
               className="relative flex h-10 w-10 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-50 transition-all duration-200"

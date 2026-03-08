@@ -123,6 +123,7 @@ export async function startRun(data: {
   targetId: string;
   mandatId?: string;
   assignedToId?: string;
+  metadata?: Record<string, string>;
 }) {
   const sequence = await prisma.sequence.findUnique({ where: { id: data.sequenceId } });
   if (!sequence) throw new NotFoundError('Sequence', data.sequenceId);
@@ -137,6 +138,27 @@ export async function startRun(data: {
     nextActionAt.setHours(nextActionAt.getHours() + (firstStep.delay_hours || 0));
   }
 
+  // Enrich metadata with booking links
+  const meta = { ...(data.metadata ?? {}) };
+  if (data.assignedToId) {
+    const bookingSettings = await prisma.bookingSetting.findUnique({
+      where: { userId: data.assignedToId },
+      select: { slug: true, isActive: true },
+    });
+    if (bookingSettings?.isActive && bookingSettings.slug) {
+      meta.bookingLink = `https://ats.propium.co/book/${bookingSettings.slug}`;
+      if (data.mandatId) {
+        const mandat = await prisma.mandat.findUnique({
+          where: { id: data.mandatId },
+          select: { slug: true },
+        });
+        if (mandat?.slug) {
+          meta.bookingLinkMandate = `https://ats.propium.co/book/${bookingSettings.slug}/${mandat.slug}`;
+        }
+      }
+    }
+  }
+
   const run = await prisma.sequenceRun.create({
     data: {
       sequenceId: data.sequenceId,
@@ -147,6 +169,7 @@ export async function startRun(data: {
       currentStep: 0,
       status: 'running',
       nextActionAt,
+      metadata: Object.keys(meta).length > 0 ? meta : undefined,
     },
     include: {
       sequence: { select: { nom: true } },
@@ -411,7 +434,9 @@ function resolveVariables(template: string, run: any): string {
     .replace(/\{\{current_company\}\}/g, meta.currentCompany ?? '')
     .replace(/\{\{mandate_title\}\}/g, meta.mandateTitle ?? '')
     .replace(/\{\{mandate_fee\}\}/g, meta.mandateFee ?? '')
-    .replace(/\{\{user_name\}\}/g, meta.userName ?? '');
+    .replace(/\{\{user_name\}\}/g, meta.userName ?? '')
+    .replace(/\{\{booking_link\}\}/g, meta.bookingLink ?? '')
+    .replace(/\{\{booking_link_mandate\}\}/g, meta.bookingLinkMandate ?? '');
 }
 
 // ─── PROCESS DUE RUNS (cron) ────────────────────────

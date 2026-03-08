@@ -40,13 +40,15 @@ interface EmailComposerProps {
 
 const VARIABLES = [
   { label: 'Nom candidat', value: '{{candidat_nom}}' },
-  { label: 'Pr\u00e9nom candidat', value: '{{candidat_prenom}}' },
+  { label: 'Prénom candidat', value: '{{candidat_prenom}}' },
   { label: 'Email candidat', value: '{{candidat_email}}' },
   { label: 'Poste candidat', value: '{{candidat_poste}}' },
   { label: 'Nom client', value: '{{client_nom}}' },
-  { label: 'Pr\u00e9nom client', value: '{{client_prenom}}' },
+  { label: 'Prénom client', value: '{{client_prenom}}' },
   { label: 'Entreprise', value: '{{entreprise_nom}}' },
   { label: 'Titre du mandat', value: '{{mandat_titre}}' },
+  { label: 'Lien booking', value: '{{booking_link}}' },
+  { label: 'Lien booking mandat', value: '{{booking_link_mandate}}' },
 ];
 
 export default function EmailComposer({
