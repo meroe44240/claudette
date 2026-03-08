@@ -6,7 +6,7 @@ import {
   ArrowLeft, Mail, Phone, MapPin, Linkedin, Briefcase, Building2,
   Calendar, Send, Pencil, Trash2, Save, X, FileText, Loader2,
   Upload, Copy, Check, Sparkles, ChevronDown, ChevronUp, Bot,
-  Link2, CalendarPlus,
+  Link2, CalendarPlus, Search, Plus,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
@@ -59,6 +59,15 @@ interface CandidatDetail {
   notes: string | null;
   consentementRgpd: boolean;
   candidatures: Candidature[];
+  experiences: {
+    id: string;
+    titre: string;
+    entreprise: string;
+    anneeDebut: number;
+    anneeFin: number | null;
+    highlights: string[];
+    source: string;
+  }[];
   // AI fields
   aiPitchShort: string | null;
   aiPitchLong: string | null;
@@ -171,6 +180,11 @@ export default function CandidatDetailPage() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showAnonymized, setShowAnonymized] = useState(false);
 
+  // Experience section state
+  const [showExpModal, setShowExpModal] = useState(false);
+  const [editingExp, setEditingExp] = useState<CandidatDetail['experiences'][0] | null>(null);
+  const [expForm, setExpForm] = useState({ titre: '', entreprise: '', anneeDebut: '', anneeFin: '', highlights: '' });
+
   const { data: candidat, isLoading, isError } = useQuery({
     queryKey: ['candidat', id],
     queryFn: () => api.get<CandidatDetail>(`/candidats/${id}`),
@@ -264,6 +278,70 @@ export default function CandidatDetailPage() {
       toast('error', error.message || 'Erreur lors de l\'analyse du CV');
     },
   });
+
+  // Experience mutations
+  const addExpMutation = useMutation({
+    mutationFn: (data: any) => api.post(`/candidats/${id}/experiences`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidat', id] });
+      setShowExpModal(false);
+      setEditingExp(null);
+      setExpForm({ titre: '', entreprise: '', anneeDebut: '', anneeFin: '', highlights: '' });
+      toast('success', 'Experience ajoutee');
+    },
+  });
+
+  const updateExpMutation = useMutation({
+    mutationFn: ({ expId, data }: { expId: string; data: any }) => api.put(`/candidats/experiences/${expId}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidat', id] });
+      setShowExpModal(false);
+      setEditingExp(null);
+      setExpForm({ titre: '', entreprise: '', anneeDebut: '', anneeFin: '', highlights: '' });
+      toast('success', 'Experience mise a jour');
+    },
+  });
+
+  const deleteExpMutation = useMutation({
+    mutationFn: (expId: string) => api.delete(`/candidats/experiences/${expId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidat', id] });
+      toast('success', 'Experience supprimee');
+    },
+  });
+
+  const openExpModal = (exp?: CandidatDetail['experiences'][0]) => {
+    if (exp) {
+      setEditingExp(exp);
+      setExpForm({
+        titre: exp.titre,
+        entreprise: exp.entreprise,
+        anneeDebut: String(exp.anneeDebut),
+        anneeFin: exp.anneeFin ? String(exp.anneeFin) : '',
+        highlights: exp.highlights.join('\n'),
+      });
+    } else {
+      setEditingExp(null);
+      setExpForm({ titre: '', entreprise: '', anneeDebut: '', anneeFin: '', highlights: '' });
+    }
+    setShowExpModal(true);
+  };
+
+  const handleExpSubmit = () => {
+    const data = {
+      titre: expForm.titre,
+      entreprise: expForm.entreprise,
+      anneeDebut: parseInt(expForm.anneeDebut, 10),
+      anneeFin: expForm.anneeFin ? parseInt(expForm.anneeFin, 10) : null,
+      highlights: expForm.highlights.split('\n').map((h) => h.trim()).filter(Boolean),
+      source: editingExp ? editingExp.source : 'manual',
+    };
+    if (editingExp) {
+      updateExpMutation.mutate({ expId: editingExp.id, data });
+    } else {
+      addExpMutation.mutate(data);
+    }
+  };
 
   const handleCvFileUpload = useCallback((file: File) => {
     if (!file) return;
@@ -781,6 +859,79 @@ export default function CandidatDetailPage() {
             )}
           </AnimatePresence>
 
+          {/* Parcours professionnel */}
+          <Card>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
+                <Briefcase size={18} className="text-primary-500" />
+                Parcours professionnel
+              </h2>
+              <Button variant="secondary" size="sm" onClick={() => openExpModal()}>
+                <Plus size={14} /> Ajouter
+              </Button>
+            </div>
+            {(!candidat.experiences || candidat.experiences.length === 0) ? (
+              <p className="text-sm text-text-secondary">Aucune experience renseignee.</p>
+            ) : (
+              <div className="space-y-3">
+                {candidat.experiences.map((exp) => (
+                  <div key={exp.id} className="group relative rounded-lg border border-border p-3 hover:bg-primary-50/30 transition-colors">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-text-primary truncate">{exp.titre}</p>
+                          {exp.source === 'cv' && (
+                            <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">CV</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-text-secondary">{exp.entreprise}</p>
+                        <p className="text-xs text-text-tertiary">
+                          {exp.anneeDebut} — {exp.anneeFin || "Aujourd'hui"}
+                        </p>
+                        {exp.highlights.length > 0 && (
+                          <ul className="mt-1.5 space-y-0.5">
+                            {exp.highlights.map((h, i) => (
+                              <li key={i} className="flex items-start gap-1.5 text-xs text-text-secondary">
+                                <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-primary-300" />
+                                {h}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
+                        <button
+                          type="button"
+                          title="Chercher ce poste"
+                          onClick={() => navigate(`/candidats?search=${encodeURIComponent(exp.titre)}`)}
+                          className="rounded-lg p-1.5 hover:bg-primary-100 transition-colors"
+                        >
+                          <Search size={14} className="text-primary-500" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Modifier"
+                          onClick={() => openExpModal(exp)}
+                          className="rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
+                        >
+                          <Pencil size={14} className="text-text-tertiary" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Supprimer"
+                          onClick={() => deleteExpMutation.mutate(exp.id)}
+                          className="rounded-lg p-1.5 hover:bg-red-50 transition-colors"
+                        >
+                          <Trash2 size={14} className="text-red-400" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">Candidatures</h2>
             {candidat.candidatures.length === 0 ? (
@@ -998,6 +1149,66 @@ export default function CandidatDetailPage() {
           >
             Fermer
           </Button>
+        </div>
+      </Modal>
+
+      {/* Experience Add/Edit Modal */}
+      <Modal
+        isOpen={showExpModal}
+        onClose={() => { setShowExpModal(false); setEditingExp(null); }}
+        title={editingExp ? 'Modifier une expérience' : 'Ajouter une expérience'}
+        size="md"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Titre du poste *"
+            value={expForm.titre}
+            onChange={(e) => setExpForm((prev) => ({ ...prev, titre: e.target.value }))}
+            placeholder="Ex: Directeur Commercial"
+          />
+          <Input
+            label="Entreprise *"
+            value={expForm.entreprise}
+            onChange={(e) => setExpForm((prev) => ({ ...prev, entreprise: e.target.value }))}
+            placeholder="Ex: Salesforce"
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Année de début *"
+              type="number"
+              value={expForm.anneeDebut}
+              onChange={(e) => setExpForm((prev) => ({ ...prev, anneeDebut: e.target.value }))}
+              placeholder="2020"
+            />
+            <Input
+              label="Année de fin"
+              type="number"
+              value={expForm.anneeFin}
+              onChange={(e) => setExpForm((prev) => ({ ...prev, anneeFin: e.target.value }))}
+              placeholder="Laisser vide si en poste"
+            />
+          </div>
+          <Textarea
+            label="Réalisations clés (une par ligne)"
+            value={expForm.highlights}
+            onChange={(e) => setExpForm((prev) => ({ ...prev, highlights: e.target.value }))}
+            placeholder="Augmentation du CA de 30%&#10;Management de 5 commerciaux&#10;Ouverture du marché UK"
+          />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="ghost"
+              onClick={() => { setShowExpModal(false); setEditingExp(null); }}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleExpSubmit}
+              disabled={!expForm.titre || !expForm.entreprise || !expForm.anneeDebut || addExpMutation.isPending || updateExpMutation.isPending}
+              loading={addExpMutation.isPending || updateExpMutation.isPending}
+            >
+              {editingExp ? 'Enregistrer' : 'Ajouter'}
+            </Button>
+          </div>
         </div>
       </Modal>
 

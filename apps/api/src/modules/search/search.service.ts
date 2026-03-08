@@ -19,6 +19,8 @@ export async function globalSearch(query: string): Promise<{ data: SearchResult[
           { email: { contains: query, mode: 'insensitive' } },
           { posteActuel: { contains: query, mode: 'insensitive' } },
           { entrepriseActuelle: { contains: query, mode: 'insensitive' } },
+          { experiences: { some: { titre: { contains: query, mode: 'insensitive' } } } },
+          { experiences: { some: { entreprise: { contains: query, mode: 'insensitive' } } } },
         ],
       },
       take: 5,

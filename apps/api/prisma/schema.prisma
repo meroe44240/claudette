@@ -175,8 +175,30 @@ model Candidat {
   candidatures    Candidature[]
   bookings        Booking[]       @relation("BookingCandidat")
   jobApplications JobApplication[] @relation("JobApplicationCandidat")
+  experiences     CandidatExperience[]
 
   @@map("candidats")
+}
+
+// ─── EXPERIENCES CANDIDAT ────────────────────────────
+
+model CandidatExperience {
+  id           String   @id @default(uuid()) @db.Uuid
+  candidatId   String   @db.Uuid
+  candidat     Candidat @relation(fields: [candidatId], references: [id], onDelete: Cascade)
+  titre        String   @db.VarChar(255)
+  entreprise   String   @db.VarChar(255)
+  anneeDebut   Int
+  anneeFin     Int?
+  highlights   String[] @default([])
+  source       String   @default("cv") @db.VarChar(20)
+  createdAt    DateTime @default(now()) @db.Timestamptz()
+  updatedAt    DateTime @updatedAt @db.Timestamptz()
+
+  @@index([candidatId])
+  @@index([titre])
+  @@index([entreprise])
+  @@map("candidat_experiences")
 }
 
 // ─── MANDATS ─────────────────────────────────────────

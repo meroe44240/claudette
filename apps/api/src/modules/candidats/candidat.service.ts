@@ -2,7 +2,7 @@ import prisma from '../../lib/db.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { paginatedResult, paginationToSkipTake } from '../../lib/pagination.js';
 import type { PaginationParams } from '../../lib/pagination.js';
-import type { CreateCandidatInput, UpdateCandidatInput } from './candidat.schema.js';
+import type { CreateCandidatInput, UpdateCandidatInput, CreateExperienceInput, UpdateExperienceInput } from './candidat.schema.js';
 
 export async function list(
   params: PaginationParams,
@@ -28,6 +28,8 @@ export async function list(
       { email: { contains: search, mode: 'insensitive' } },
       { posteActuel: { contains: search, mode: 'insensitive' } },
       { entrepriseActuelle: { contains: search, mode: 'insensitive' } },
+      { experiences: { some: { titre: { contains: search, mode: 'insensitive' } } } },
+      { experiences: { some: { entreprise: { contains: search, mode: 'insensitive' } } } },
     ];
   }
 
@@ -130,6 +132,7 @@ export async function getById(id: string) {
     where: { id },
     include: {
       assignedTo: { select: { id: true, nom: true, prenom: true } },
+      experiences: { orderBy: { anneeDebut: 'desc' } },
       candidatures: {
         include: {
           mandat: {
@@ -281,6 +284,7 @@ export async function exportData(id: string) {
   const candidat = await prisma.candidat.findUnique({
     where: { id },
     include: {
+      experiences: { orderBy: { anneeDebut: 'desc' } },
       candidatures: {
         include: {
           mandat: {
@@ -307,4 +311,52 @@ export async function exportData(id: string) {
     ...candidat,
     activites,
   };
+}
+
+// ─── EXPERIENCE CRUD ────────────────────────────────
+
+export async function listExperiences(candidatId: string) {
+  const candidat = await prisma.candidat.findUnique({ where: { id: candidatId } });
+  if (!candidat) throw new NotFoundError('Candidat', candidatId);
+  return prisma.candidatExperience.findMany({
+    where: { candidatId },
+    orderBy: { anneeDebut: 'desc' },
+  });
+}
+
+export async function createExperience(candidatId: string, data: CreateExperienceInput) {
+  const candidat = await prisma.candidat.findUnique({ where: { id: candidatId } });
+  if (!candidat) throw new NotFoundError('Candidat', candidatId);
+  return prisma.candidatExperience.create({
+    data: { ...data, candidatId },
+  });
+}
+
+export async function updateExperience(experienceId: string, data: UpdateExperienceInput) {
+  const existing = await prisma.candidatExperience.findUnique({ where: { id: experienceId } });
+  if (!existing) throw new NotFoundError('Experience', experienceId);
+  return prisma.candidatExperience.update({
+    where: { id: experienceId },
+    data,
+  });
+}
+
+export async function deleteExperience(experienceId: string) {
+  const existing = await prisma.candidatExperience.findUnique({ where: { id: experienceId } });
+  if (!existing) throw new NotFoundError('Experience', experienceId);
+  return prisma.candidatExperience.delete({ where: { id: experienceId } });
+}
+
+export async function bulkCreateExperiences(
+  candidatId: string,
+  experiences: CreateExperienceInput[],
+) {
+  // Delete old CV-sourced experiences, then insert new ones
+  await prisma.candidatExperience.deleteMany({
+    where: { candidatId, source: 'cv' },
+  });
+  if (experiences.length === 0) return [];
+  return prisma.candidatExperience.createMany({
+    data: experiences.map((exp) => ({ ...exp, candidatId, source: 'cv' })),
+  });
 }

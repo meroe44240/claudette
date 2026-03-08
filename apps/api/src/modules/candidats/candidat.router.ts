@@ -1,7 +1,7 @@
 import path from 'path';
 import { mkdir, writeFile } from 'fs/promises';
 import { FastifyInstance } from 'fastify';
-import { createCandidatSchema, updateCandidatSchema } from './candidat.schema.js';
+import { createCandidatSchema, updateCandidatSchema, createExperienceSchema, updateExperienceSchema } from './candidat.schema.js';
 import * as candidatService from './candidat.service.js';
 import * as activiteService from '../activites/activite.service.js';
 import prisma from '../../lib/db.js';
@@ -206,6 +206,69 @@ export default async function candidatRouter(fastify: FastifyInstance) {
       const query = request.query as any;
       const params = parsePagination(query);
       return activiteService.listByEntite('CANDIDAT', id, params);
+    },
+  });
+
+  // ─── EXPERIENCE ROUTES ──────────────────────────────
+
+  // GET /:id/experiences
+  fastify.get('/:id/experiences', {
+    schema: {
+      description: 'Lister les experiences professionnelles',
+      tags: ['Candidats'],
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      return { data: await candidatService.listExperiences(id) };
+    },
+  });
+
+  // POST /:id/experiences
+  fastify.post('/:id/experiences', {
+    schema: {
+      description: 'Ajouter une experience professionnelle',
+      tags: ['Candidats'],
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const input = createExperienceSchema.parse(request.body);
+      const exp = await candidatService.createExperience(id, input);
+      reply.status(201);
+      return exp;
+    },
+  });
+
+  // PUT /experiences/:expId
+  fastify.put('/experiences/:expId', {
+    schema: {
+      description: 'Modifier une experience professionnelle',
+      tags: ['Candidats'],
+      params: { type: 'object', required: ['expId'], properties: { expId: { type: 'string', format: 'uuid' } } },
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { expId } = request.params as { expId: string };
+      const input = updateExperienceSchema.parse(request.body);
+      return candidatService.updateExperience(expId, input);
+    },
+  });
+
+  // DELETE /experiences/:expId
+  fastify.delete('/experiences/:expId', {
+    schema: {
+      description: 'Supprimer une experience professionnelle',
+      tags: ['Candidats'],
+      params: { type: 'object', required: ['expId'], properties: { expId: { type: 'string', format: 'uuid' } } },
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { expId } = request.params as { expId: string };
+      await candidatService.deleteExperience(expId);
+      return { message: 'Experience supprimee' };
     },
   });
 

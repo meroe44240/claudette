@@ -192,6 +192,26 @@ export async function updateCandidatFromCv(
     data: updateData,
   });
 
+  // Save structured experiences to the dedicated table
+  if (parsed.candidate.experience && parsed.candidate.experience.length > 0) {
+    try {
+      const { bulkCreateExperiences } = await import('../candidats/candidat.service.js');
+      await bulkCreateExperiences(
+        candidatId,
+        parsed.candidate.experience.map((exp) => ({
+          titre: exp.title,
+          entreprise: exp.company,
+          anneeDebut: exp.start_year,
+          anneeFin: exp.end_year ?? null,
+          highlights: exp.highlights || [],
+          source: 'cv' as const,
+        })),
+      );
+    } catch (err: any) {
+      console.error('[cv-parsing] Failed to save experiences:', err.message);
+    }
+  }
+
   return { parsed, candidat };
 }
 

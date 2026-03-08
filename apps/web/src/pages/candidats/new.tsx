@@ -340,13 +340,30 @@ export default function CandidatNewPage() {
             candidatId: created.id,
             mandatId: selectedMandatId,
           });
-          toast('success', 'Candidat créé et affilié au mandat');
         } catch {
-          toast('success', 'Candidat créé (erreur lors de l\'affiliation au mandat)');
+          // continue even if candidature linking fails
         }
-      } else {
-        toast('success', 'Candidat créé');
       }
+
+      // Save parsed experiences from CV
+      if (cvParsed?.candidate.experience && cvParsed.candidate.experience.length > 0) {
+        try {
+          for (const exp of cvParsed.candidate.experience) {
+            await api.post(`/candidats/${created.id}/experiences`, {
+              titre: exp.title,
+              entreprise: exp.company,
+              anneeDebut: exp.start_year,
+              anneeFin: exp.end_year ?? null,
+              highlights: exp.highlights || [],
+              source: 'cv',
+            });
+          }
+        } catch {
+          // experiences are non-critical, continue navigation
+        }
+      }
+
+      toast('success', selectedMandatId ? 'Candidat créé et affilié au mandat' : 'Candidat créé');
       navigate(`/candidats/${created.id}`);
     },
     onError: (error: any) => {
