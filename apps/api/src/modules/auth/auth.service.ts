@@ -80,15 +80,20 @@ export async function forgotPassword(input: ForgotPasswordInput) {
   });
 
   const resetUrl = `${process.env.APP_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
-  await sendEmail(
-    user.email,
-    'HumanUp — Réinitialisation de votre mot de passe',
-    `<p>Bonjour ${user.prenom || user.nom},</p>
-     <p>Cliquez sur le lien suivant pour réinitialiser votre mot de passe :</p>
-     <p><a href="${resetUrl}">${resetUrl}</a></p>
-     <p>Ce lien est valable 1 heure.</p>
-     <p>Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.</p>`,
-  );
+  try {
+    await sendEmail(
+      user.email,
+      'HumanUp — Réinitialisation de votre mot de passe',
+      `<p>Bonjour ${user.prenom || user.nom},</p>
+       <p>Cliquez sur le lien suivant pour réinitialiser votre mot de passe :</p>
+       <p><a href="${resetUrl}">${resetUrl}</a></p>
+       <p>Ce lien est valable 1 heure.</p>
+       <p>Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.</p>`,
+    );
+  } catch {
+    // Log but don't fail — we never reveal if the email exists
+    console.error('Failed to send reset email');
+  }
 }
 
 export async function resetPassword(input: ResetPasswordInput) {
