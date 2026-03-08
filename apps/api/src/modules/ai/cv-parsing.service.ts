@@ -96,9 +96,11 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
   try {
     const parser = new PDFParse({ verbosity: 0, data: buffer });
     await parser.load();
-    const text = await parser.getText();
+    const result = await parser.getText();
     await parser.destroy();
-    return text?.trim() || '';
+    // getText() returns { pages: [...], text: "...", total: N }
+    const text = typeof result === 'string' ? result : result?.text || '';
+    return text.trim();
   } catch (err: any) {
     console.error('[cv-parsing] PDF parse error:', err.message);
     return '';
