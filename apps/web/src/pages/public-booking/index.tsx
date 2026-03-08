@@ -195,21 +195,21 @@ function BookingHeader({
     <div className="text-center mb-8">
       {/* Logo */}
       <div className="flex items-center justify-center gap-2 mb-6">
-        <div className="w-9 h-9 rounded-full bg-[#7C5CFC] flex items-center justify-center">
+        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#7C5CFC] shadow-sm flex items-center justify-center">
           <span className="text-white font-bold text-[15px]">H</span>
         </div>
-        <span className="text-[17px] font-semibold text-[#1B2A4A]">HumanUp</span>
+        <span className="text-[17px] font-semibold text-[#1a1a2e]" style={{ fontFamily: 'var(--font-heading)' }}>HumanUp</span>
       </div>
 
       {/* Recruiter avatar */}
-      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#7C5CFC] to-[#A78BFA] flex items-center justify-center mx-auto mb-4">
+      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#7C5CFC] flex items-center justify-center mx-auto mb-4">
         <span className="text-white font-bold text-xl">
           {recruiter.user.prenom[0]}
           {recruiter.user.nom[0]}
         </span>
       </div>
 
-      <h1 className="text-[24px] font-semibold text-[#1B2A4A] mb-1">
+      <h1 className="text-[24px] font-semibold text-[#1a1a2e] mb-1">
         {recruiter.user.prenom} {recruiter.user.nom}
       </h1>
       <p className="text-[15px] text-neutral-500">
@@ -233,12 +233,12 @@ function MandatPitchCard({ mandat }: { mandat: NonNullable<RecruiterInfo['mandat
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 }}
-      className="mb-8 bg-[#F5F3FF] border-l-4 border-[#7C5CFC] rounded-xl p-5"
+      className="mb-8 bg-primary-50 border-l-4 border-primary-500 rounded-xl p-5"
     >
       <div className="flex items-start gap-3 mb-3">
-        <Briefcase size={18} className="text-[#7C5CFC] mt-0.5 shrink-0" />
+        <Briefcase size={18} className="text-primary-500 mt-0.5 shrink-0" />
         <div>
-          <h3 className="font-semibold text-[#1B2A4A] text-[15px]">
+          <h3 className="font-semibold text-[#1a1a2e] text-[15px]">
             {mandat.titrePoste}
           </h3>
           <p className="text-[13px] text-neutral-500 mt-0.5">
@@ -251,13 +251,13 @@ function MandatPitchCard({ mandat }: { mandat: NonNullable<RecruiterInfo['mandat
       <div className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-neutral-600 mb-3">
         {mandat.localisation && (
           <span className="flex items-center gap-1.5">
-            <MapPin size={14} className="text-[#7C5CFC]" />
+            <MapPin size={14} className="text-primary-500" />
             {mandat.localisation}
           </span>
         )}
         {mandat.salaryRange && (
           <span className="flex items-center gap-1.5">
-            <Banknote size={14} className="text-[#7C5CFC]" />
+            <Banknote size={14} className="text-primary-500" />
             {mandat.salaryRange}
           </span>
         )}
@@ -272,7 +272,7 @@ function MandatPitchCard({ mandat }: { mandat: NonNullable<RecruiterInfo['mandat
             >
               <CheckCircle2
                 size={14}
-                className="text-[#7C5CFC] mt-0.5 shrink-0"
+                className="text-primary-500 mt-0.5 shrink-0"
               />
               <span>{point}</span>
             </li>
@@ -357,7 +357,7 @@ function BookingCalendar({
         >
           <ChevronLeft size={18} />
         </button>
-        <h3 className="text-[15px] font-semibold text-[#1B2A4A] capitalize">
+        <h3 className="text-[15px] font-semibold text-[#1a1a2e] capitalize">
           {format(currentMonth, 'MMMM yyyy', { locale: fr })}
         </h3>
         <button
@@ -402,16 +402,16 @@ function BookingCalendar({
                 h-10 rounded-lg text-[14px] font-semibold transition-all relative
                 ${
                   isSelected
-                    ? 'bg-blue-500 text-white shadow-md'
+                    ? 'bg-primary-500 text-white shadow-md'
                     : available
-                      ? 'text-[#1B2A4A] hover:bg-blue-50 hover:text-blue-600 cursor-pointer'
+                      ? 'text-[#1a1a2e] hover:bg-primary-50 hover:text-primary-600 cursor-pointer'
                       : 'text-neutral-300 cursor-not-allowed'
                 }
               `}
             >
               {format(date, 'd')}
               {isToday && !isSelected && (
-                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-blue-500" />
+                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary-500" />
               )}
             </button>
           );
@@ -489,8 +489,8 @@ function SlotPicker({
                   h-9 rounded-lg text-[13px] font-medium border transition-all
                   ${
                     isSelected
-                      ? 'bg-blue-500 text-white border-blue-500 shadow-md'
-                      : 'bg-white text-[#1B2A4A] border-neutral-200 hover:bg-blue-50 hover:border-blue-300'
+                      ? 'bg-primary-500 text-white border-blue-500 shadow-md'
+                      : 'bg-white text-[#1a1a2e] border-neutral-200 hover:bg-primary-50 hover:border-primary-300'
                   }
                 `}
               >
@@ -629,7 +629,7 @@ function BookingForm({
         </div>
       </div>
 
-      <h3 className="text-[17px] font-semibold text-[#1B2A4A]">
+      <h3 className="text-[17px] font-semibold text-[#1a1a2e]">
         Vos informations
       </h3>
 
@@ -773,7 +773,7 @@ function BookingForm({
           onChange={(e) => updateField('message', e.target.value)}
           rows={3}
           placeholder="Un message pour le recruteur..."
-          className="w-full px-3 py-2.5 text-[14px] border border-neutral-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 outline-none resize-none transition-all placeholder:text-neutral-300"
+          className="w-full px-3 py-2.5 text-[14px] border border-neutral-200 rounded-lg focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none resize-none transition-all placeholder:text-neutral-300"
         />
       </div>
 
@@ -781,7 +781,7 @@ function BookingForm({
       <button
         type="submit"
         disabled={submitting}
-        className="w-full h-11 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold text-[15px] transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="w-full h-11 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-semibold text-[15px] transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {submitting ? (
           <>
@@ -846,7 +846,7 @@ function FormInput({
             ${
               error
                 ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/10'
-                : 'border-neutral-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10'
+                : 'border-neutral-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-100'
             }
           `}
         />
@@ -885,8 +885,8 @@ function RadioPill({
         h-9 px-4 rounded-lg text-[13px] font-medium border transition-all
         ${
           selected
-            ? 'bg-blue-500 text-white border-blue-500'
-            : 'bg-white text-neutral-600 border-neutral-200 hover:bg-blue-50 hover:border-blue-300'
+            ? 'bg-primary-500 text-white border-blue-500'
+            : 'bg-white text-neutral-600 border-neutral-200 hover:bg-primary-50 hover:border-primary-300'
         }
       `}
     >
@@ -939,14 +939,14 @@ function BookingConfirmationView({
         <CheckCircle2 size={40} className="text-green-500" />
       </motion.div>
 
-      <h2 className="text-[22px] font-bold text-[#1B2A4A] mb-2">
+      <h2 className="text-[22px] font-bold text-[#1a1a2e] mb-2">
         Rendez-vous confirme !
       </h2>
 
       <div className="bg-neutral-50 rounded-xl p-5 mt-6 mb-6 text-left space-y-3">
         <div className="flex items-center gap-3 text-[14px]">
           <Calendar size={16} className="text-neutral-400 shrink-0" />
-          <span className="text-[#1B2A4A] capitalize">{displayDate}</span>
+          <span className="text-[#1a1a2e] capitalize">{displayDate}</span>
         </div>
         <div className="flex items-center gap-3 text-[14px]">
           <Clock size={16} className="text-neutral-400 shrink-0" />
@@ -964,7 +964,7 @@ function BookingConfirmationView({
         <Mail size={14} />
         <span>
           Un email de confirmation a ete envoye a{' '}
-          <strong className="text-[#1B2A4A]">{confirmation.candidateEmail}</strong>
+          <strong className="text-[#1a1a2e]">{confirmation.candidateEmail}</strong>
         </span>
       </div>
 
@@ -997,8 +997,8 @@ function BookingConfirmationView({
 
 function LoadingSkeleton() {
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex items-center justify-center p-4">
-      <div className="w-full max-w-[600px] bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] p-10">
+    <div className="min-h-screen app-bg flex items-center justify-center p-4">
+      <div className="w-full max-w-[600px] glass-card rounded-2xl p-10">
         {/* Logo skeleton */}
         <div className="flex items-center justify-center gap-2 mb-6">
           <div className="w-9 h-9 rounded-full bg-neutral-100 animate-pulse" />
@@ -1029,12 +1029,12 @@ function LoadingSkeleton() {
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex items-center justify-center p-4">
-      <div className="w-full max-w-[600px] bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] p-10 text-center">
+    <div className="min-h-screen app-bg flex items-center justify-center p-4">
+      <div className="w-full max-w-[600px] glass-card rounded-2xl p-10 text-center">
         <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
           <AlertCircle size={32} className="text-red-400" />
         </div>
-        <h2 className="text-[18px] font-semibold text-[#1B2A4A] mb-2">
+        <h2 className="text-[18px] font-semibold text-[#1a1a2e] mb-2">
           Page introuvable
         </h2>
         <p className="text-[14px] text-neutral-500">{message}</p>
@@ -1202,14 +1202,14 @@ export default function PublicBookingPage() {
   if (error || !recruiter) return <ErrorState message={error || 'Page introuvable'} />;
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex items-center justify-center p-4 py-8">
+    <div className="min-h-screen app-bg flex items-center justify-center p-4 py-8">
       <ToastContainer />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="w-full max-w-[600px] bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] p-10"
+        className="w-full max-w-[600px] glass-card rounded-2xl p-10"
       >
         <BookingHeader recruiter={recruiter} />
 
@@ -1276,7 +1276,7 @@ export default function PublicBookingPage() {
         <div className="mt-8 pt-5 border-t border-neutral-100 text-center">
           <p className="text-[12px] text-neutral-400">
             Propulse par{' '}
-            <span className="font-semibold text-[#7C5CFC]">HumanUp</span>
+            <span className="font-semibold gradient-text">HumanUp</span>
           </p>
         </div>
       </motion.div>

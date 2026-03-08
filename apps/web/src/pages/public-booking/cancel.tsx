@@ -36,7 +36,7 @@ const publicApi = {
   get: async <T,>(path: string): Promise<T> => {
     const res = await fetch(`/api/public/booking${path}`);
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: 'Erreur réseau' }));
+      const err = await res.json().catch(() => ({ message: 'Erreur reseau' }));
       throw err;
     }
     return res.json();
@@ -48,7 +48,7 @@ const publicApi = {
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: 'Erreur réseau' }));
+      const err = await res.json().catch(() => ({ message: 'Erreur reseau' }));
       throw err;
     }
     return res.json();
@@ -108,8 +108,8 @@ export default function BookingCancelPage() {
   // ── Loading state ──
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#FAFAF9] flex items-center justify-center p-4">
-        <div className="w-full max-w-[500px] bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] p-10 text-center">
+      <div className="min-h-screen app-bg flex items-center justify-center p-4">
+        <div className="w-full max-w-[500px] glass-card rounded-2xl p-10 text-center">
           <Loader2 size={32} className="text-neutral-300 animate-spin mx-auto mb-4" />
           <p className="text-[14px] text-neutral-500">Chargement...</p>
         </div>
@@ -120,13 +120,13 @@ export default function BookingCancelPage() {
   // ── Error state ──
   if (error || !booking) {
     return (
-      <div className="min-h-screen bg-[#FAFAF9] flex items-center justify-center p-4">
+      <div className="min-h-screen app-bg flex items-center justify-center p-4">
         <ToastContainer />
-        <div className="w-full max-w-[500px] bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] p-10 text-center">
+        <div className="w-full max-w-[500px] glass-card rounded-2xl p-10 text-center">
           <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
             <AlertCircle size={32} className="text-red-400" />
           </div>
-          <h2 className="text-[18px] font-semibold text-[#1B2A4A] mb-2">
+          <h2 className="text-[18px] font-semibold text-[#1a1a2e] mb-2">
             Lien invalide
           </h2>
           <p className="text-[14px] text-neutral-500">
@@ -144,21 +144,21 @@ export default function BookingCancelPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex items-center justify-center p-4">
+    <div className="min-h-screen app-bg flex items-center justify-center p-4">
       <ToastContainer />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="w-full max-w-[500px] bg-white rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] p-10"
+        className="w-full max-w-[500px] glass-card rounded-2xl p-10"
       >
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-9 h-9 rounded-full bg-[#7C5CFC] flex items-center justify-center">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#7C5CFC] shadow-sm flex items-center justify-center">
             <span className="text-white font-bold text-[15px]">H</span>
           </div>
-          <span className="text-[17px] font-semibold text-[#1B2A4A]">HumanUp</span>
+          <span className="text-[17px] font-semibold text-[#1a1a2e]" style={{ fontFamily: 'var(--font-heading)' }}>HumanUp</span>
         </div>
 
         {cancelled ? (
@@ -178,14 +178,14 @@ export default function BookingCancelPage() {
               <XCircle size={40} className="text-amber-500" />
             </motion.div>
 
-            <h2 className="text-[22px] font-bold text-[#1B2A4A] mb-2">
+            <h2 className="text-[22px] font-bold text-[#1a1a2e] mb-2" style={{ fontFamily: 'var(--font-heading)' }}>
               Rendez-vous annule
             </h2>
             <p className="text-[14px] text-neutral-500 mb-4">
               Votre rendez-vous a bien ete annule. Un email de confirmation vous a ete envoye.
             </p>
 
-            <div className="bg-neutral-50 rounded-xl p-4 text-left space-y-2 mt-4">
+            <div className="bg-white/40 backdrop-blur-sm rounded-xl p-4 text-left space-y-2 mt-4 border border-white/50">
               <div className="flex items-center gap-3 text-[14px]">
                 <Calendar size={16} className="text-neutral-400 shrink-0" />
                 <span className="text-neutral-600 capitalize line-through">
@@ -207,7 +207,7 @@ export default function BookingCancelPage() {
               <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
                 <AlertCircle size={28} className="text-amber-500" />
               </div>
-              <h2 className="text-[20px] font-semibold text-[#1B2A4A] mb-1">
+              <h2 className="text-[20px] font-semibold text-[#1a1a2e] mb-1" style={{ fontFamily: 'var(--font-heading)' }}>
                 Annuler le rendez-vous ?
               </h2>
               <p className="text-[14px] text-neutral-500">
@@ -216,10 +216,10 @@ export default function BookingCancelPage() {
             </div>
 
             {/* Booking details */}
-            <div className="bg-neutral-50 rounded-xl p-5 mb-6 space-y-3">
+            <div className="bg-white/40 backdrop-blur-sm rounded-xl p-5 mb-6 space-y-3 border border-white/50">
               <div className="flex items-center gap-3 text-[14px]">
                 <Calendar size={16} className="text-neutral-400 shrink-0" />
-                <span className="text-[#1B2A4A] font-medium capitalize">
+                <span className="text-[#1a1a2e] font-medium capitalize">
                   {displayDate}
                 </span>
               </div>
@@ -242,7 +242,7 @@ export default function BookingCancelPage() {
               <button
                 onClick={handleCancel}
                 disabled={cancelling}
-                className="w-full h-11 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold text-[15px] transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full h-11 bg-red-500 hover:bg-red-600 text-white rounded-full font-semibold text-[15px] transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
               >
                 {cancelling ? (
                   <>
@@ -256,7 +256,7 @@ export default function BookingCancelPage() {
 
               <a
                 href="/"
-                className="w-full h-10 bg-white border border-neutral-200 rounded-lg font-medium text-[14px] text-neutral-600 hover:bg-neutral-50 transition-all flex items-center justify-center"
+                className="w-full h-10 bg-white/60 backdrop-blur-sm border border-white/50 rounded-full font-medium text-[14px] text-neutral-600 hover:bg-white/80 transition-all flex items-center justify-center"
               >
                 Retour
               </a>
@@ -265,10 +265,10 @@ export default function BookingCancelPage() {
         )}
 
         {/* Footer */}
-        <div className="mt-8 pt-5 border-t border-neutral-100 text-center">
+        <div className="mt-8 pt-5 border-t border-white/30 text-center">
           <p className="text-[12px] text-neutral-400">
             Propulse par{' '}
-            <span className="font-semibold text-[#7C5CFC]">HumanUp</span>
+            <span className="font-semibold gradient-text">HumanUp</span>
           </p>
         </div>
       </motion.div>

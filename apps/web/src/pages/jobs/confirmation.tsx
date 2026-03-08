@@ -12,15 +12,15 @@ export default function JobConfirmationPage() {
   const title = searchParams.get('title') || '';
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex flex-col">
+    <div className="min-h-screen app-bg flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-neutral-200">
+      <header className="glass border-b border-white/30">
         <div className="mx-auto max-w-3xl px-6 py-4 flex items-center justify-center">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#3B82F6] to-[#7C5CFC] shadow-sm">
               <span className="text-sm font-bold text-white">H</span>
             </div>
-            <span className="text-sm font-semibold text-neutral-900">HumanUp</span>
+            <span className="text-sm font-semibold text-[#1a1a2e]">HumanUp</span>
           </div>
         </div>
       </header>
@@ -30,31 +30,31 @@ export default function JobConfirmationPage() {
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
             <CheckCircle2 size={32} className="text-green-600" />
           </div>
-          <h1 className="text-2xl font-bold text-neutral-900 mb-3">
-            Candidature envoyée !
+          <h1 className="text-2xl font-bold text-[#1a1a2e] mb-3" style={{ fontFamily: 'var(--font-heading)' }}>
+            Candidature envoyee !
           </h1>
           <p className="text-neutral-600 mb-2">
-            Merci{name ? ` ${name}` : ''}, nous avons bien reçu votre candidature
+            Merci{name ? ` ${name}` : ''}, nous avons bien recu votre candidature
             {title ? ` pour le poste de ${title}` : ''}.
           </p>
           <p className="text-sm text-neutral-500 mb-8">
-            Notre équipe analyse votre profil et reviendra vers vous dans les 48h
+            Notre equipe analyse votre profil et reviendra vers vous dans les 48h
             si votre candidature est retenue.
           </p>
 
           <Link
             to="/jobs"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-500 px-6 py-3 text-sm font-medium text-white hover:bg-primary-600 transition-colors"
+            className="inline-flex items-center gap-2 gradient-btn rounded-full px-6 py-3 text-sm font-medium text-white shadow-md hover:shadow-lg transition-all"
           >
             Voir d'autres offres <ArrowRight size={14} />
           </Link>
         </div>
       </main>
 
-      <footer className="border-t border-neutral-200 bg-white">
+      <footer className="glass border-t border-white/30">
         <div className="mx-auto max-w-3xl px-6 py-4 text-center">
           <p className="text-xs text-neutral-400">
-            HumanUp · Cabinet de recrutement international · contact@humanup.io
+            <span className="gradient-text font-semibold">HumanUp</span> · Cabinet de recrutement international · contact@humanup.io
           </p>
         </div>
       </footer>

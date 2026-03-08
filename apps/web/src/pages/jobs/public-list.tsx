@@ -126,24 +126,24 @@ export default function PublicJobListPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9]">
+    <div className="min-h-screen app-bg">
       {/* Header */}
-      <header className="bg-white border-b border-neutral-200">
+      <header className="glass sticky top-0 z-10 border-b border-white/30">
         <div className="mx-auto max-w-5xl px-6 py-8">
           <div className="flex items-center gap-3 mb-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-500">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#3B82F6] to-[#7C5CFC] shadow-md">
               <span className="text-xl font-bold text-white">H</span>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-neutral-900">HumanUp</h1>
-              <p className="text-sm text-neutral-500">Cabinet de recrutement spécialisé Commercial & Sales</p>
+              <h1 className="text-2xl font-bold text-[#1a1a2e]" style={{ fontFamily: 'var(--font-heading)' }}>HumanUp</h1>
+              <p className="text-sm text-neutral-500">Cabinet de recrutement specialise Commercial & Sales</p>
             </div>
           </div>
         </div>
       </header>
 
       {/* Filters */}
-      <div className="bg-white border-b border-neutral-200 shadow-sm">
+      <div className="glass border-b border-white/30">
         <div className="mx-auto max-w-5xl px-6 py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1">
@@ -154,13 +154,13 @@ export default function PublicJobListPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                className="w-full rounded-lg border border-neutral-300 bg-white py-2.5 pl-10 pr-4 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                className="w-full rounded-xl border border-white/50 bg-white/60 backdrop-blur-sm py-2.5 pl-10 pr-4 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
               />
             </div>
             <select
               value={sector}
               onChange={(e) => { setSector(e.target.value); }}
-              className="rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary-400"
+              className="rounded-xl border border-white/50 bg-white/60 backdrop-blur-sm px-3 py-2.5 text-sm outline-none focus:border-primary-400"
             >
               {SECTORS.map((s) => (
                 <option key={s.value} value={s.value}>{s.label}</option>
@@ -172,12 +172,12 @@ export default function PublicJobListPage() {
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              className="rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary-400 w-32"
+              className="rounded-xl border border-white/50 bg-white/60 backdrop-blur-sm px-3 py-2.5 text-sm outline-none focus:border-primary-400 w-32"
             />
             <select
               value={jobType}
               onChange={(e) => { setJobType(e.target.value); }}
-              className="rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-primary-400"
+              className="rounded-xl border border-white/50 bg-white/60 backdrop-blur-sm px-3 py-2.5 text-sm outline-none focus:border-primary-400"
             >
               {JOB_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>{t.label}</option>
@@ -185,7 +185,7 @@ export default function PublicJobListPage() {
             </select>
             <button
               onClick={handleSearch}
-              className="rounded-lg bg-primary-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-600 transition-colors"
+              className="gradient-btn rounded-full px-5 py-2.5 text-sm font-medium text-white shadow-md hover:shadow-lg"
             >
               Rechercher
             </button>
@@ -205,10 +205,10 @@ export default function PublicJobListPage() {
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
           </div>
         ) : jobs.length === 0 ? (
-          <div className="rounded-2xl bg-white p-12 text-center shadow-sm border border-neutral-100">
+          <div className="glass-card rounded-2xl p-12 text-center">
             <Briefcase size={48} className="mx-auto mb-4 text-neutral-300" />
-            <p className="text-lg font-medium text-neutral-700">Aucune offre pour le moment</p>
-            <p className="mt-2 text-sm text-neutral-500">Revenez bientôt ou envoyez-nous une candidature spontanée !</p>
+            <p className="text-lg font-medium text-[#1a1a2e]">Aucune offre pour le moment</p>
+            <p className="mt-2 text-sm text-neutral-500">Revenez bientot ou envoyez-nous une candidature spontanee !</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -216,16 +216,16 @@ export default function PublicJobListPage() {
               <Link
                 key={job.id}
                 to={`/jobs/${job.slug}`}
-                className="group block rounded-xl bg-white p-6 shadow-sm border border-neutral-100 transition-all hover:shadow-md hover:border-l-4 hover:border-l-primary-500"
+                className="group block glass-card rounded-2xl p-6 card-hover hover:border-l-4 hover:border-l-primary-500"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h2 className="text-lg font-semibold text-neutral-900 group-hover:text-primary-600 transition-colors">
+                      <h2 className="text-lg font-semibold text-[#1a1a2e] group-hover:text-primary-600 transition-colors">
                         {job.title}
                       </h2>
                       {isNew(job.publishedAt) && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-primary-500 px-2.5 py-0.5 text-[11px] font-semibold text-white">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#3B82F6] to-[#7C5CFC] px-2.5 py-0.5 text-[11px] font-semibold text-white">
                           <Sparkles size={10} /> NOUVEAU
                         </span>
                       )}
@@ -237,7 +237,7 @@ export default function PublicJobListPage() {
                     </div>
                     {job.companyDescription && (
                       <p className="text-sm text-neutral-600 mb-2">
-                        🏢 {job.companyDescription}
+                        {job.companyDescription}
                       </p>
                     )}
                     <div className="flex flex-wrap items-center gap-4 text-sm text-neutral-500">
@@ -248,7 +248,7 @@ export default function PublicJobListPage() {
                       )}
                       {job.salaryRange && (
                         <span className="flex items-center gap-1">
-                          💰 {job.salaryRange}
+                          {job.salaryRange}
                         </span>
                       )}
                       {job.publishedAt && (
@@ -259,7 +259,7 @@ export default function PublicJobListPage() {
                     </div>
                   </div>
                   <div className="shrink-0">
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-primary-50 px-4 py-2 text-sm font-medium text-primary-600 group-hover:bg-primary-500 group-hover:text-white transition-colors">
+                    <span className="inline-flex items-center gap-1 gradient-btn rounded-full px-4 py-2 text-sm font-medium text-white shadow-sm group-hover:shadow-md transition-shadow">
                       Postuler <ArrowRight size={14} />
                     </span>
                   </div>
@@ -276,10 +276,10 @@ export default function PublicJobListPage() {
               <button
                 key={p}
                 onClick={() => goToPage(p)}
-                className={`h-9 w-9 rounded-lg text-sm font-medium transition-colors ${
+                className={`h-9 w-9 rounded-full text-sm font-medium transition-colors ${
                   p === meta.page
-                    ? 'bg-primary-500 text-white'
-                    : 'bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50'
+                    ? 'gradient-btn text-white shadow-md'
+                    : 'glass-card text-neutral-600 hover:bg-white/80'
                 }`}
               >
                 {p}
@@ -289,30 +289,30 @@ export default function PublicJobListPage() {
         )}
 
         {/* Spontaneous CTA */}
-        <div className="mt-12 rounded-2xl bg-white p-8 text-center shadow-sm border border-neutral-100">
-          <p className="text-lg font-medium text-neutral-700 mb-2">
+        <div className="mt-12 gradient-card-violet rounded-2xl p-8 text-center">
+          <p className="text-lg font-semibold text-white mb-2" style={{ fontFamily: 'var(--font-heading)' }}>
             Vous ne trouvez pas votre bonheur ?
           </p>
-          <p className="text-sm text-neutral-500 mb-4">
-            Envoyez-nous votre CV, nous vous contacterons si une opportunité correspond à votre profil.
+          <p className="text-sm text-white/80 mb-6">
+            Envoyez-nous votre CV, nous vous contacterons si une opportunite correspond a votre profil.
           </p>
           <Link
             to="/jobs/candidature-spontanee"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-500 px-6 py-3 text-sm font-medium text-white hover:bg-primary-600 transition-colors"
+            className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-primary-700 hover:bg-white/90 transition-colors shadow-md"
           >
-            Candidature spontanée <ArrowRight size={14} />
+            Candidature spontanee <ArrowRight size={14} />
           </Link>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-neutral-200 bg-white">
+      <footer className="glass border-t border-white/30">
         <div className="mx-auto max-w-5xl px-6 py-6 text-center">
-          <p className="text-sm text-neutral-400">
-            HumanUp · Cabinet de recrutement international
+          <p className="text-sm text-neutral-500">
+            <span className="gradient-text font-semibold">HumanUp</span> · Cabinet de recrutement international
           </p>
           <p className="text-xs text-neutral-400 mt-1">
-            Spécialisé Commercial, Sales & Business Development · contact@humanup.io
+            Specialise Commercial, Sales & Business Development · contact@humanup.io
           </p>
         </div>
       </footer>
