@@ -50,7 +50,7 @@ export interface ClaudeWebSearchOptions extends ClaudeCallOptions {
 
 export interface ClaudeVisionOptions extends ClaudeCallOptions {
   imageBase64: string;
-  mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+  mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' | 'application/pdf';
 }
 
 export interface ClaudeResponse {
@@ -395,6 +395,26 @@ export async function callClaudeWithVision(options: ClaudeVisionOptions): Promis
   const startTime = Date.now();
 
   try {
+    // Determine content block type: 'document' for PDFs, 'image' for images
+    const isDocument = options.mediaType === 'application/pdf';
+    const contentBlock = isDocument
+      ? {
+          type: 'document' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: options.mediaType,
+            data: options.imageBase64,
+          },
+        }
+      : {
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: options.mediaType,
+            data: options.imageBase64,
+          },
+        };
+
     const result = await rawCallClaude({
       model,
       systemPrompt: options.systemPrompt,
@@ -402,14 +422,7 @@ export async function callClaudeWithVision(options: ClaudeVisionOptions): Promis
         {
           role: 'user',
           content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: options.mediaType,
-                data: options.imageBase64,
-              },
-            },
+            contentBlock,
             {
               type: 'text',
               text: options.userPrompt,

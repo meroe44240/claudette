@@ -1,6 +1,6 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 import { callClaude, callClaudeWithVision } from '../../services/claudeAI.js';
 import prisma from '../../lib/db.js';
 
@@ -94,8 +94,11 @@ export interface CvParsingResult {
 
 async function extractTextFromPdf(buffer: Buffer): Promise<string> {
   try {
-    const result = await pdfParse(buffer);
-    return result.text?.trim() || '';
+    const parser = new PDFParse({ verbosity: 0, data: buffer });
+    await parser.load();
+    const text = await parser.getText();
+    await parser.destroy();
+    return text?.trim() || '';
   } catch (err: any) {
     console.error('[cv-parsing] PDF parse error:', err.message);
     return '';
@@ -124,7 +127,7 @@ export async function parseCv(
       systemPrompt: CV_PARSING_SYSTEM_PROMPT,
       userPrompt: `Analyse ce CV (fichier: ${filename}) et extrais toutes les informations selon le format JSON demandé.`,
       imageBase64: base64,
-      mediaType: 'image/png',
+      mediaType: 'application/pdf',
       userId,
       maxTokens: 4000,
     });
