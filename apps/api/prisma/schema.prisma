@@ -150,6 +150,7 @@ model Candidat {
   localisation       String?   @db.VarChar(255)
   salaireActuel      Int?
   salaireSouhaite    Int?
+  anneesExperience   Int?
   disponibilite      String?   @db.VarChar(100)
   mobilite           String?   @db.VarChar(255)
   source             String?   @db.VarChar(100)

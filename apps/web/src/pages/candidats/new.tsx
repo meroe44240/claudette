@@ -45,6 +45,7 @@ interface FormData {
   localisation: string;
   salaireActuel: string;
   salaireSouhaite: string;
+  anneesExperience: string;
   disponibilite: string;
   mobilite: string;
   source: string;
@@ -62,6 +63,7 @@ const initialForm: FormData = {
   localisation: '',
   salaireActuel: '',
   salaireSouhaite: '',
+  anneesExperience: '',
   disponibilite: '',
   mobilite: '',
   source: '',
@@ -233,6 +235,7 @@ export default function CandidatNewPage() {
         entrepriseActuelle: parsed.candidate.current_company || prev.entrepriseActuelle,
         localisation: parsed.candidate.city || prev.localisation,
         linkedinUrl: parsed.candidate.linkedin_url || prev.linkedinUrl,
+        anneesExperience: parsed.candidate.years_experience ? String(parsed.candidate.years_experience) : prev.anneesExperience,
       }));
 
       // Set pitch fields
@@ -377,6 +380,7 @@ export default function CandidatNewPage() {
     if (form.localisation.trim()) payload.localisation = form.localisation.trim();
     if (form.salaireActuel) payload.salaireActuel = parseInt(form.salaireActuel, 10);
     if (form.salaireSouhaite) payload.salaireSouhaite = parseInt(form.salaireSouhaite, 10);
+    if (form.anneesExperience) payload.anneesExperience = parseInt(form.anneesExperience, 10);
     if (form.disponibilite.trim()) payload.disponibilite = form.disponibilite.trim();
     if (form.mobilite.trim()) payload.mobilite = form.mobilite.trim();
     if (form.source) payload.source = form.source;
@@ -567,6 +571,14 @@ export default function CandidatNewPage() {
                   value={form.salaireSouhaite}
                   onChange={set('salaireSouhaite')}
                   placeholder="65000"
+                />
+
+                <Input
+                  label="Années d'expérience"
+                  type="number"
+                  value={form.anneesExperience}
+                  onChange={set('anneesExperience')}
+                  placeholder="5"
                 />
 
                 <Input

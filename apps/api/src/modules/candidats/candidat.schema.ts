@@ -12,6 +12,7 @@ export const createCandidatSchema = z.object({
   localisation: z.string().optional(),
   salaireActuel: z.number().int().positive().optional(),
   salaireSouhaite: z.number().int().positive().optional(),
+  anneesExperience: z.number().int().min(0).optional(),
   disponibilite: z.string().optional(),
   mobilite: z.string().optional(),
   source: z.string().optional(),

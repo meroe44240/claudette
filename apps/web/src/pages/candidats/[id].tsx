@@ -51,6 +51,7 @@ interface CandidatDetail {
   localisation: string | null;
   salaireActuel: number | null;
   salaireSouhaite: number | null;
+  anneesExperience: number | null;
   disponibilite: string | null;
   mobilite: string | null;
   source: string | null;
@@ -84,6 +85,7 @@ interface EditForm {
   linkedinUrl: string;
   salaireActuel: string;
   salaireSouhaite: string;
+  anneesExperience: string;
   disponibilite: string;
   mobilite: string;
   tags: string;
@@ -136,6 +138,7 @@ function buildEditForm(candidat: CandidatDetail): EditForm {
     linkedinUrl: candidat.linkedinUrl || '',
     salaireActuel: candidat.salaireActuel ? String(candidat.salaireActuel) : '',
     salaireSouhaite: candidat.salaireSouhaite ? String(candidat.salaireSouhaite) : '',
+    anneesExperience: candidat.anneesExperience != null ? String(candidat.anneesExperience) : '',
     disponibilite: candidat.disponibilite || '',
     mobilite: candidat.mobilite || '',
     tags: candidat.tags.join(', '),
@@ -343,6 +346,8 @@ export default function CandidatDetailPage() {
     else payload.salaireActuel = null;
     if (editForm.salaireSouhaite) payload.salaireSouhaite = parseInt(editForm.salaireSouhaite, 10);
     else payload.salaireSouhaite = null;
+    if (editForm.anneesExperience) payload.anneesExperience = parseInt(editForm.anneesExperience, 10);
+    else payload.anneesExperience = null;
     if (editForm.disponibilite.trim()) payload.disponibilite = editForm.disponibilite.trim();
     else payload.disponibilite = null;
     if (editForm.mobilite.trim()) payload.mobilite = editForm.mobilite.trim();
@@ -810,6 +815,7 @@ export default function CandidatDetailPage() {
               <div className="space-y-4">
                 <Input label="Salaire actuel (EUR)" type="number" value={editForm.salaireActuel} onChange={setField('salaireActuel')} placeholder="55000" />
                 <Input label="Salaire souhaité (EUR)" type="number" value={editForm.salaireSouhaite} onChange={setField('salaireSouhaite')} placeholder="65000" />
+                <Input label="Années d'expérience" type="number" value={editForm.anneesExperience} onChange={setField('anneesExperience')} placeholder="5" />
                 <Input label="Disponibilité" value={editForm.disponibilite} onChange={setField('disponibilite')} placeholder="Immédiate, 1 mois..." />
                 <Input label="Mobilité" value={editForm.mobilite} onChange={setField('mobilite')} placeholder="Île-de-France, Remote..." />
               </div>
@@ -822,6 +828,10 @@ export default function CandidatDetailPage() {
                 <div>
                   <dt className="text-text-tertiary">Salaire souhaité</dt>
                   <dd className="font-medium text-text-primary">{formatSalary(candidat.salaireSouhaite)}</dd>
+                </div>
+                <div>
+                  <dt className="text-text-tertiary">Années d'expérience</dt>
+                  <dd className="font-medium text-text-primary">{candidat.anneesExperience != null ? `${candidat.anneesExperience} an${candidat.anneesExperience > 1 ? 's' : ''}` : '\u2014'}</dd>
                 </div>
                 <div>
                   <dt className="text-text-tertiary">Disponibilité</dt>

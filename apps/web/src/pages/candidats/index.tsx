@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Search, LayoutGrid, List, MapPin, Building2, Linkedin, Mail, Zap, ArrowRightLeft, Download, Users } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, MapPin, Building2, Linkedin, Mail, Zap, ArrowRightLeft, Download, Users, Banknote, Clock } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
@@ -28,7 +28,9 @@ interface Candidat {
   posteActuel: string | null;
   entrepriseActuelle: string | null;
   localisation: string | null;
+  salaireActuel: number | null;
   salaireSouhaite: number | null;
+  anneesExperience: number | null;
   source: string | null;
   tags: string[];
   linkedinUrl?: string | null;
@@ -349,6 +351,7 @@ export default function CandidatsPage() {
   function CandidatCard({ candidat, index }: { candidat: Candidat; index: number }) {
     const fullName = `${candidat.prenom || ''} ${candidat.nom}`.trim();
     const isSelected = selectedIds.has(candidat.id);
+    const salaire = candidat.salaireActuel || candidat.salaireSouhaite;
     return (
       <div
         onClick={() => navigate(`/candidats/${candidat.id}`)}
@@ -356,7 +359,7 @@ export default function CandidatsPage() {
           isSelected ? 'border-[#7C5CFC] ring-1 ring-[#7C5CFC]/20' : 'border-border/50'
         }`}
       >
-        {/* Avatar */}
+        {/* Checkbox + Avatar + Name */}
         <div className="flex flex-col items-center text-center">
           <div className="flex items-center gap-2 self-start mb-2">
             <input
@@ -372,28 +375,47 @@ export default function CandidatsPage() {
             {fullName}
           </p>
           {candidat.posteActuel && (
-            <p className="mt-0.5 truncate text-[14px] font-normal text-neutral-500 w-full">
+            <p className="mt-0.5 truncate text-[13px] font-medium text-[#7C5CFC] w-full">
               {candidat.posteActuel}
             </p>
           )}
+          {candidat.entrepriseActuelle && (
+            <div className="mt-0.5 flex items-center justify-center gap-1 text-xs text-neutral-500">
+              <Building2 size={11} className="flex-shrink-0 text-neutral-400" />
+              <span className="truncate">{candidat.entrepriseActuelle}</span>
+            </div>
+          )}
         </div>
 
-        {/* Entreprise */}
-        {candidat.entrepriseActuelle && (
-          <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-neutral-500">
-            <Building2 size={12} className="flex-shrink-0 text-neutral-400" />
-            <span className="truncate">{candidat.entrepriseActuelle}</span>
-          </div>
-        )}
+        {/* Key info grid */}
+        <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[12px]">
+          {candidat.localisation && (
+            <div className="flex items-center gap-1.5 text-neutral-600 min-w-0">
+              <MapPin size={12} className="flex-shrink-0 text-neutral-400" />
+              <span className="truncate">{candidat.localisation}</span>
+            </div>
+          )}
+          {candidat.anneesExperience != null && (
+            <div className="flex items-center gap-1.5 text-neutral-600 min-w-0">
+              <Clock size={12} className="flex-shrink-0 text-neutral-400" />
+              <span className="truncate">{candidat.anneesExperience} an{candidat.anneesExperience > 1 ? 's' : ''} exp.</span>
+            </div>
+          )}
+          {salaire && (
+            <div className="flex items-center gap-1.5 text-neutral-600 min-w-0">
+              <Banknote size={12} className="flex-shrink-0 text-neutral-400" />
+              <span className="truncate">{(salaire / 1000).toFixed(0)}k&euro;{candidat.salaireActuel ? '' : ' souh.'}</span>
+            </div>
+          )}
+          {!candidat.localisation && !candidat.anneesExperience && !salaire && (
+            <div className="col-span-2 text-center text-neutral-400 italic text-[11px] py-0.5">
+              Infos manquantes
+            </div>
+          )}
+        </div>
 
         {/* Tags row */}
         <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
-          {candidat.localisation && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-neutral-50 px-2.5 py-0.5 text-[11px] font-medium text-neutral-500 border border-neutral-100">
-              <MapPin size={10} />
-              {candidat.localisation}
-            </span>
-          )}
           {candidat.source && (
             <Badge size="sm">{candidat.source}</Badge>
           )}
