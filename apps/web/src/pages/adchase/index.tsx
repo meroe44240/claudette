@@ -5,7 +5,7 @@ import {
   Send, Search, User, Building2, MapPin, Briefcase, ChevronRight,
   Plus, Minus, Eye, EyeOff, Sparkles, Mail, Clock, CheckCircle2,
   AlertCircle, MailOpen, MessageSquare, Loader2, Calendar,
-  ArrowLeft, ArrowRight, Zap, X, Filter,
+  ArrowLeft, ArrowRight, Zap, X, Filter, FileText, ClipboardList,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -15,6 +15,14 @@ import ProspectDetectionTab from '../../components/ai/ProspectDetectionTab';
 import type { SelectedProspect } from '../../components/ai/ProspectDetectionTab';
 
 // ─── TYPES ──────────────────────────────────────────
+
+interface Template {
+  id: string;
+  nom: string;
+  type: string;
+  sujet: string | null;
+  contenu: string;
+}
 
 interface Candidat {
   id: string;
@@ -280,6 +288,17 @@ function StepPreparePitch({
   const [maskName, setMaskName] = useState(true);
   const [maskCompany, setMaskCompany] = useState(true);
   const [maskCity, setMaskCity] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+
+  // Load email templates
+  const { data: templates = [] } = useQuery<Template[]>({
+    queryKey: ['templates-email'],
+    queryFn: async () => {
+      const res = await api.get<{ data: Template[] }>('/templates?type=EMAIL_PRESENTATION_CLIENT&limit=50');
+      return res.data || [];
+    },
+    enabled: showTemplates,
+  });
 
   // Load candidat profile
   const { data: candidat } = useQuery({
@@ -488,32 +507,81 @@ function StepPreparePitch({
             </div>
           </div>
 
-          {/* AI generate email */}
-          <button
-            onClick={async () => {
-              try {
-                const res = await api.post<{ data: { subject: string; body: string } }>('/ai/adchase/generate-pitch-email', {
-                  candidatId,
-                  profile,
-                });
-                if (res.data) {
-                  onSubjectChange(res.data.subject);
-                  onBodyChange(res.data.body);
-                  toast('success', 'Email genere par IA');
+          {/* AI generate email + template picker */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                try {
+                  const res = await api.post<{ data: { subject: string; body: string } }>('/ai/adchase/generate-pitch-email', {
+                    candidatId,
+                    profile,
+                  });
+                  if (res.data) {
+                    onSubjectChange(res.data.subject);
+                    onBodyChange(res.data.body);
+                    toast('success', 'Email genere par IA');
+                  }
+                } catch (err: any) {
+                  const msg = err?.data?.message || err?.message || '';
+                  if (msg.includes('non configur') || msg.includes('ANTHROPIC')) {
+                    toast('error', 'Cle API Anthropic non configuree');
+                  } else {
+                    toast('error', msg || 'Erreur lors de la generation IA');
+                  }
                 }
-              } catch (err: any) {
-                const msg = err?.data?.message || err?.message || '';
-                if (msg.includes('non configur') || msg.includes('ANTHROPIC')) {
-                  toast('error', 'Cle API Anthropic non configuree');
-                } else {
-                  toast('error', msg || 'Erreur lors de la generation IA');
-                }
-              }
-            }}
-            className="flex items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700 transition-all hover:bg-purple-100"
-          >
-            <Sparkles size={16} /> Générer avec IA
-          </button>
+              }}
+              className="flex items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700 transition-all hover:bg-purple-100"
+            >
+              <Sparkles size={16} /> Générer avec IA
+            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowTemplates(!showTemplates)}
+                className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-600 transition-all hover:bg-neutral-50"
+              >
+                <FileText size={16} /> Utiliser un template
+              </button>
+              {showTemplates && (
+                <div className="absolute top-full left-0 z-20 mt-1 w-72 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg">
+                  <p className="px-2 py-1 text-xs font-medium text-neutral-500 mb-1">Templates email</p>
+                  {templates.length === 0 ? (
+                    <p className="px-2 py-3 text-xs text-neutral-400 text-center">
+                      Aucun template trouvé. Créez-en un dans la section Templates.
+                    </p>
+                  ) : (
+                    templates.map((tpl) => (
+                      <button
+                        key={tpl.id}
+                        onClick={async () => {
+                          try {
+                            const rendered = await api.post<{ sujet: string; contenu: string }>(
+                              `/templates/${tpl.id}/render`,
+                              { candidatId },
+                            );
+                            if (rendered.sujet) onSubjectChange(rendered.sujet);
+                            if (rendered.contenu) onBodyChange(rendered.contenu);
+                            toast('success', `Template "${tpl.nom}" chargé`);
+                            setShowTemplates(false);
+                          } catch (err: any) {
+                            toast('error', err?.data?.message || 'Erreur lors du chargement du template');
+                          }
+                        }}
+                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-neutral-700 transition-colors hover:bg-neutral-50"
+                      >
+                        <FileText size={14} className="text-neutral-400 shrink-0" />
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{tpl.nom}</div>
+                          {tpl.sujet && (
+                            <div className="text-xs text-neutral-400 truncate">{tpl.sujet}</div>
+                          )}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -985,8 +1053,6 @@ function StepConfirmSend({
   onSend: (scheduled: boolean, scheduledAt?: string) => void;
   isSending: boolean;
 }) {
-  const [sendMode, setSendMode] = useState<'now' | 'scheduled'>('now');
-  const [scheduledDate, setScheduledDate] = useState('');
   const [personalizedMessages, setPersonalizedMessages] = useState<PersonalizedMessage[] | null>(null);
   const [expandedMessageId, setExpandedMessageId] = useState<string | null>(null);
 
@@ -1130,46 +1196,16 @@ function StepConfirmSend({
         )}
       </div>
 
-      {/* Send options */}
-      <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-neutral-700">Options d'envoi</h3>
-
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="radio"
-            name="sendMode"
-            checked={sendMode === 'now'}
-            onChange={() => setSendMode('now')}
-            className="accent-primary-500"
-          />
-          <span className="text-sm font-medium text-neutral-700">Envoyer maintenant</span>
-        </label>
-
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="radio"
-            name="sendMode"
-            checked={sendMode === 'scheduled'}
-            onChange={() => setSendMode('scheduled')}
-            className="accent-primary-500"
-          />
-          <span className="text-sm font-medium text-neutral-700">Planifier</span>
-        </label>
-
-        {sendMode === 'scheduled' && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
-            <input
-              type="datetime-local"
-              value={scheduledDate}
-              onChange={(e) => setScheduledDate(e.target.value)}
-              className="rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-            />
-          </motion.div>
-        )}
+      {/* Semi-auto notice */}
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <ClipboardList size={16} className="text-blue-600" />
+          <h3 className="text-sm font-semibold text-blue-700">Mode semi-automatique</h3>
+        </div>
+        <p className="text-xs text-blue-600 leading-relaxed">
+          Chaque envoi sera créé comme une <strong>tâche à valider</strong> dans votre liste de tâches.
+          Aucun email ne sera envoyé automatiquement — vous gardez le contrôle total sur chaque envoi.
+        </p>
       </div>
 
       {/* Action buttons */}
@@ -1189,16 +1225,16 @@ function StepConfirmSend({
             <Mail size={16} /> Envoyer un test
           </button>
           <button
-            onClick={() => onSend(sendMode === 'scheduled', scheduledDate || undefined)}
-            disabled={isSending || (sendMode === 'scheduled' && !scheduledDate)}
+            onClick={() => onSend(false)}
+            disabled={isSending}
             className="flex items-center gap-2 rounded-lg bg-primary-500 px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isSending ? (
               <Loader2 size={16} className="animate-spin" />
             ) : (
-              <Send size={16} />
+              <ClipboardList size={16} />
             )}
-            Lancer la campagne
+            Créer les tâches d'envoi
           </button>
         </div>
       </div>
@@ -1343,7 +1379,7 @@ export default function AdchasePage() {
       return campaign;
     },
     onSuccess: () => {
-      toast('success', 'Campagne Adchase lancée avec succès !');
+      toast('success', 'Tâches d\'envoi créées — retrouvez-les dans vos tâches');
       queryClient.invalidateQueries({ queryKey: ['adchase-campaigns'] });
       resetWizard();
       setTab('active');

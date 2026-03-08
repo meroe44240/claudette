@@ -285,28 +285,110 @@ export default async function aiRouter(fastify: FastifyInstance) {
 
       try {
         const { callClaude } = await import('../../services/claudeAI.js');
+        const prisma = (await import('../../lib/db.js')).default;
+
+        // Enrich with full candidat data for sharper emails
+        const candidat = await prisma.candidat.findUnique({
+          where: { id: body.candidatId },
+          select: {
+            aiSellingPoints: true,
+            aiPitchShort: true,
+            tags: true,
+            anneesExperience: true,
+            experiences: {
+              select: { titre: true, entreprise: true },
+              orderBy: { anneeDebut: 'desc' as const },
+              take: 5,
+            },
+          },
+        });
+
+        const sellingPoints = Array.isArray(candidat?.aiSellingPoints) ? (candidat.aiSellingPoints as string[]) : [];
+        const expHistory = candidat?.experiences?.map((e: { titre: string; entreprise: string }) => `${e.titre} @ ${e.entreprise}`).join(', ') || '';
 
         const response = await callClaude({
           feature: 'cv_parsing',
-          systemPrompt: `Tu es un expert en recrutement commercial. Tu rédiges des emails de présentation de candidats pour des clients (DRH, hiring managers).
-L'email doit être professionnel, concis (6-8 lignes max), donner envie de rencontrer le candidat.
-Utilise les variables {{client_first_name}} et {{client_company}} dans le texte.
-Réponds UNIQUEMENT en JSON: { "subject": "string", "body": "string" }`,
+          systemPrompt: `Tu es un headhunter senior chez Humanup.io, cabinet de recrutement international spécialisé. Tu as 15+ ans d'expérience dans le placement de profils commerciaux, sales et business development.
+
+Tu contactes des DRH et hiring managers pour leur présenter un talent que tu as sourcé, qualifié et validé personnellement.
+
+RÈGLES DE RÉDACTION :
+- Ton : direct, factuel, confiant. Pas de formules bateau.
+- NE COMMENCE JAMAIS par "Bonjour {{client_first_name}}" — commence par le hook directement, un fait, un chiffre, une accroche business.
+- 5-6 lignes max pour le body. Chaque phrase doit apporter de la valeur.
+- Objet court et percutant (max 8 mots). Pas de "Présentation d'un profil" ou "Opportunité" — sois spécifique.
+- Montre que tu connais le marché et les enjeux du recrutement dans ce secteur.
+- L'email doit donner envie d'en savoir plus, pas de tout révéler.
+- Utilise les variables {{client_first_name}} et {{client_company}} de manière naturelle.
+- JAMAIS de : "je me permets", "n'hésitez pas", "cordialement", "excellente opportunité", "profil exceptionnel"
+- Signe avec "— L'équipe Humanup.io"
+
+Réponds UNIQUEMENT en JSON valide : { "subject": "string", "body": "string" }`,
           userPrompt: `Profil candidat anonymisé :
 - Titre : ${body.profile.titre}
 - Ville : ${body.profile.ville}
 - Secteur : ${body.profile.secteur || 'Non précisé'}
 - Expérience : ${body.profile.experience || 'Non précisée'}
 - Points clés : ${body.profile.points.join(' | ')}
+${sellingPoints.length > 0 ? `- Selling points validés : ${sellingPoints.join(' | ')}` : ''}
+${candidat?.aiPitchShort ? `- Pitch interne : ${candidat.aiPitchShort}` : ''}
+${candidat?.tags?.length ? `- Compétences : ${(candidat.tags as string[]).join(', ')}` : ''}
+${expHistory ? `- Parcours : ${expHistory}` : ''}
 
-Génère un objet et un corps d'email professionnel pour présenter ce profil à un prospect client.`,
+Rédige un email de prospection sharp pour présenter ce profil à un client.`,
           userId: request.userId,
           maxTokens: 800,
-          temperature: 0.3,
+          temperature: 0.4,
         });
 
         return { data: response.content };
       } catch (err: any) {
+        return handleAiError(err, reply);
+      }
+    },
+  });
+
+  // ─── MANDAT SCORECARD ROUTE ────────────────────────────
+
+  // POST /mandat/:id/generate-scorecard — Generate AI scorecard from transcript/fiche de poste
+  fastify.post('/mandat/:id/generate-scorecard', {
+    schema: {
+      description: 'Générer une scorecard IA pour un mandat depuis le transcript/fiche de poste',
+      tags: ['AI'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', format: 'uuid' } },
+      },
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      try {
+        const { id } = request.params as { id: string };
+        const body = request.body as { transcript?: string; ficheDePoste?: string } | undefined;
+
+        // If transcript or ficheDePoste provided in body, update the mandat first
+        if (body?.transcript || body?.ficheDePoste) {
+          const prisma = (await import('../../lib/db.js')).default;
+          await prisma.mandat.update({
+            where: { id },
+            data: {
+              ...(body.transcript && { transcript: body.transcript }),
+              ...(body.ficheDePoste && { ficheDePoste: body.ficheDePoste }),
+            },
+          });
+        }
+
+        const scorecard = await aiHelperService.aiGenerateScorecard(
+          request.userId,
+          id,
+        );
+        return { data: scorecard };
+      } catch (err: any) {
+        if (err.message?.includes('non trouvé') || err.message?.includes('Ajoutez')) {
+          reply.status(400);
+          return { error: 'VALIDATION_ERROR', message: err.message };
+        }
         return handleAiError(err, reply);
       }
     },

@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Megaphone } from 'lucide-react';
+import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Megaphone, Sparkles, Loader2, ChevronDown, ChevronUp, Plus, AlertTriangle, ClipboardList, MessageSquare, Target, Copy } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
@@ -70,8 +70,38 @@ interface MandatDetail {
     telephone: string | null;
   };
   candidatures: Candidature[];
+  transcript: string | null;
+  ficheDePoste: string | null;
+  scorecard: Scorecard | null;
+  scorecardGeneratedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface ScorecardCompetence {
+  nom: string;
+  poids: number;
+  description: string;
+}
+
+interface ScorecardCritere {
+  nom: string;
+  obligatoire?: boolean;
+  description?: string;
+}
+
+interface ScorecardQuestion {
+  question: string;
+  competenceVisee: string;
+}
+
+interface Scorecard {
+  competencesCles: ScorecardCompetence[];
+  criteresTechniques: ScorecardCritere[];
+  criteresComportementaux: ScorecardCritere[];
+  questionsEntretien: ScorecardQuestion[];
+  profilIdeal: string;
+  redFlags: string[];
 }
 
 interface EditForm {
@@ -200,6 +230,276 @@ function buildEditForm(mandat: MandatDetail): EditForm {
     statut: mandat.statut || 'OUVERT',
     notes: mandat.notes || '',
   };
+}
+
+// ─── BRIEF CLIENT + SCORECARD SECTION ────────────────
+
+function BriefClientSection({
+  mandatId,
+  transcript: initialTranscript,
+  ficheDePoste: initialFicheDePoste,
+  scorecard: initialScorecard,
+  scorecardGeneratedAt,
+}: {
+  mandatId: string;
+  transcript: string | null;
+  ficheDePoste: string | null;
+  scorecard: Scorecard | null;
+  scorecardGeneratedAt: string | null;
+}) {
+  const queryClient = useQueryClient();
+  const [briefOpen, setBriefOpen] = useState(true);
+  const [scorecardOpen, setScorecardOpen] = useState(true);
+  const [transcript, setTranscript] = useState(initialTranscript || '');
+  const [ficheDePoste, setFicheDePoste] = useState(initialFicheDePoste || '');
+  const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  // Save transcript/fiche de poste
+  const handleSaveBrief = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/mandats/${mandatId}`, { transcript, ficheDePoste });
+      queryClient.invalidateQueries({ queryKey: ['mandat', mandatId] });
+      toast('success', 'Brief sauvegardé');
+    } catch (err: any) {
+      toast('error', err?.message || 'Erreur lors de la sauvegarde');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Generate scorecard
+  const handleGenerateScorecard = async () => {
+    if (!transcript.trim() && !ficheDePoste.trim()) {
+      toast('error', 'Ajoutez un transcript ou une fiche de poste avant de générer');
+      return;
+    }
+    setGenerating(true);
+    try {
+      await api.post(`/ai/mandat/${mandatId}/generate-scorecard`, {
+        transcript: transcript || undefined,
+        ficheDePoste: ficheDePoste || undefined,
+      });
+      queryClient.invalidateQueries({ queryKey: ['mandat', mandatId] });
+      toast('success', 'Scorecard générée avec succès');
+    } catch (err: any) {
+      toast('error', err?.data?.message || err?.message || 'Erreur lors de la génération');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast('success', 'Copié dans le presse-papier');
+  };
+
+  return (
+    <>
+      {/* Brief Client */}
+      <Card>
+        <button
+          onClick={() => setBriefOpen(!briefOpen)}
+          className="flex w-full items-center justify-between"
+        >
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
+            <MessageSquare size={18} /> Brief Client
+          </h2>
+          {briefOpen ? <ChevronUp size={18} className="text-text-tertiary" /> : <ChevronDown size={18} className="text-text-tertiary" />}
+        </button>
+
+        {briefOpen && (
+          <div className="mt-4 space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-text-primary">Transcript du call</label>
+              <textarea
+                value={transcript}
+                onChange={(e) => setTranscript(e.target.value)}
+                rows={6}
+                className="w-full resize-y rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                placeholder="Collez le transcript de votre call avec le client ici..."
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-text-primary">Fiche de poste</label>
+              <textarea
+                value={ficheDePoste}
+                onChange={(e) => setFicheDePoste(e.target.value)}
+                rows={6}
+                className="w-full resize-y rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                placeholder="Collez la fiche de poste / job description ici..."
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSaveBrief}
+                disabled={saving}
+                className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-primary transition-all hover:bg-primary-50 disabled:opacity-50"
+              >
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                Sauvegarder
+              </button>
+              <button
+                onClick={handleGenerateScorecard}
+                disabled={generating || (!transcript.trim() && !ficheDePoste.trim())}
+                className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 px-4 py-2 text-sm font-medium text-white transition-all hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                Générer la scorecard IA
+              </button>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Scorecard */}
+      {initialScorecard && (
+        <Card>
+          <button
+            onClick={() => setScorecardOpen(!scorecardOpen)}
+            className="flex w-full items-center justify-between"
+          >
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
+              <Target size={18} /> Scorecard
+              {scorecardGeneratedAt && (
+                <span className="text-xs font-normal text-text-tertiary">
+                  — générée le {new Date(scorecardGeneratedAt).toLocaleDateString('fr-FR')}
+                </span>
+              )}
+            </h2>
+            {scorecardOpen ? <ChevronUp size={18} className="text-text-tertiary" /> : <ChevronDown size={18} className="text-text-tertiary" />}
+          </button>
+
+          {scorecardOpen && (
+            <div className="mt-4 space-y-6">
+              {/* Profil Idéal */}
+              <div className="rounded-lg border border-primary-200 bg-primary-50 p-4">
+                <h3 className="mb-2 text-sm font-semibold text-primary-700 flex items-center gap-1.5">
+                  <User size={14} /> Profil idéal
+                </h3>
+                <p className="text-sm text-primary-800">{initialScorecard.profilIdeal}</p>
+              </div>
+
+              {/* Compétences clés */}
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-text-primary">Compétences clés</h3>
+                <div className="space-y-2">
+                  {initialScorecard.competencesCles.map((comp, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-text-primary">{comp.nom}</span>
+                          <span className="text-xs text-text-tertiary">{comp.poids}/5</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-neutral-100">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-blue-400 to-indigo-500 transition-all"
+                            style={{ width: `${(comp.poids / 5) * 100}%` }}
+                          />
+                        </div>
+                        <p className="mt-0.5 text-xs text-text-tertiary">{comp.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Critères techniques */}
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-text-primary">Critères techniques</h3>
+                <div className="flex flex-wrap gap-2">
+                  {initialScorecard.criteresTechniques.map((crit, i) => (
+                    <span
+                      key={i}
+                      className={`rounded-full px-3 py-1 text-xs font-medium ${
+                        crit.obligatoire
+                          ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                          : 'bg-neutral-100 text-neutral-600'
+                      }`}
+                    >
+                      {crit.nom}
+                      {crit.obligatoire && ' *'}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-text-tertiary">* = obligatoire</p>
+              </div>
+
+              {/* Critères comportementaux */}
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-text-primary">Critères comportementaux</h3>
+                <div className="space-y-2">
+                  {initialScorecard.criteresComportementaux.map((crit, i) => (
+                    <div key={i} className="rounded-md border border-border p-3">
+                      <span className="text-sm font-medium text-text-primary">{crit.nom}</span>
+                      {crit.description && (
+                        <p className="mt-0.5 text-xs text-text-tertiary">{crit.description}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Questions d'entretien */}
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-text-primary flex items-center gap-1.5">
+                  <ClipboardList size={14} /> Questions d'entretien suggérées
+                </h3>
+                <div className="space-y-2">
+                  {initialScorecard.questionsEntretien.map((q, i) => (
+                    <div key={i} className="group flex items-start gap-2 rounded-md border border-border p-3 hover:bg-primary-50/30 transition-colors">
+                      <span className="text-xs font-bold text-text-tertiary mt-0.5">{i + 1}.</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-text-primary">{q.question}</p>
+                        <p className="text-xs text-text-tertiary mt-0.5">Compétence visée : {q.competenceVisee}</p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(q.question)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-text-tertiary hover:text-primary-500"
+                        title="Copier"
+                      >
+                        <Copy size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Red Flags */}
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-text-primary flex items-center gap-1.5">
+                  <AlertTriangle size={14} className="text-red-500" /> Red Flags
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {initialScorecard.redFlags.map((flag, i) => (
+                    <span
+                      key={i}
+                      className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700 ring-1 ring-red-200"
+                    >
+                      {flag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Regenerate button */}
+              <div className="border-t border-border pt-4">
+                <button
+                  onClick={handleGenerateScorecard}
+                  disabled={generating}
+                  className="flex items-center gap-2 text-sm font-medium text-primary-500 hover:text-primary-600 transition-colors disabled:opacity-50"
+                >
+                  {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  Regénérer la scorecard
+                </button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+    </>
+  );
 }
 
 export default function MandatDetailPage() {
@@ -456,6 +756,15 @@ export default function MandatDetailPage() {
               </>
             )}
           </Card>
+
+          {/* Brief Client Section */}
+          <BriefClientSection
+            mandatId={mandat.id}
+            transcript={mandat.transcript}
+            ficheDePoste={mandat.ficheDePoste}
+            scorecard={mandat.scorecard}
+            scorecardGeneratedAt={mandat.scorecardGeneratedAt}
+          />
 
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">

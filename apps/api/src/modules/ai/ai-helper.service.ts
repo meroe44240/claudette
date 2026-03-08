@@ -151,7 +151,7 @@ export async function aiPersonalizeMessages(
   emailBody: string,
   prospectClientIds: string[],
 ): Promise<PersonalizedMessage[]> {
-  // 1. Load candidat profile
+  // 1. Load candidat profile (enriched with selling points)
   const candidat = await prisma.candidat.findUnique({
     where: { id: candidatId },
     select: {
@@ -162,6 +162,9 @@ export async function aiPersonalizeMessages(
       entrepriseActuelle: true,
       localisation: true,
       tags: true,
+      aiSellingPoints: true,
+      aiPitchShort: true,
+      anneesExperience: true,
     },
   });
 
@@ -179,13 +182,21 @@ export async function aiPersonalizeMessages(
 
   if (clients.length === 0) return [];
 
-  // 3. Build AI prompt for batch personalization
-  const systemPrompt = `Tu es un expert en rédaction d'emails de recrutement. Tu dois personnaliser un template d'email pour chaque client/prospect afin que le message soit pertinent et personnel.
+  // 3. Build AI prompt — sharp headhunter tone
+  const sellingPoints = Array.isArray(candidat.aiSellingPoints) ? (candidat.aiSellingPoints as string[]) : [];
 
-Garde le même ton et la même structure que l'email original, mais adapte le contenu pour chaque destinataire en tenant compte de leur entreprise, secteur et poste.
+  const systemPrompt = `Tu es un headhunter senior chez Humanup.io. Tu personnalises des emails de prospection pour chaque client/prospect.
 
-Réponds UNIQUEMENT en JSON valide: un tableau d'objets avec les champs: clientId (string), subject (string), body (string).
-Les variables {{client_first_name}} et {{client_company}} doivent être conservées dans les messages personnalisés.`;
+RÈGLES :
+- Garde le ton direct, factuel et confiant de l'email original.
+- Adapte chaque message au contexte spécifique du destinataire : son secteur, son poste, les enjeux de son marché.
+- Ajoute un angle business pertinent pour chaque client (ex: si le client est dans la fintech, mentionne l'expertise fintech du candidat).
+- NE CHANGE PAS la structure fondamentale du message — personnalise les accroches et les arguments.
+- Les variables {{client_first_name}} et {{client_company}} DOIVENT être conservées telles quelles.
+- JAMAIS de formules bateau : "je me permets", "n'hésitez pas", "excellente opportunité".
+- Chaque message doit sembler écrit spécifiquement pour ce client, pas un copier-coller.
+
+Réponds UNIQUEMENT en JSON valide : un tableau d'objets avec les champs: clientId (string), subject (string), body (string).`;
 
   const clientsInfo = clients.map((c) => ({
     id: c.id,
@@ -198,20 +209,23 @@ Les variables {{client_first_name}} et {{client_company}} doivent être conserv�
     localisation: c.entreprise?.localisation || '',
   }));
 
-  const userPrompt = `Profil candidat proposé:
-- Poste: ${candidat.posteActuel || 'Non renseigné'}
-- Localisation: ${candidat.localisation || 'Non renseignée'}
-- Tags: ${candidat.tags?.join(', ') || 'Aucun'}
+  const userPrompt = `Profil candidat :
+- Poste : ${candidat.posteActuel || 'Non renseigné'}
+- Localisation : ${candidat.localisation || 'Non renseignée'}
+- Expérience : ${candidat.anneesExperience ? `${candidat.anneesExperience} ans` : 'Non renseignée'}
+- Compétences : ${(candidat.tags as string[] || []).join(', ') || 'Aucune'}
+${sellingPoints.length > 0 ? `- Selling points : ${sellingPoints.join(' | ')}` : ''}
+${candidat.aiPitchShort ? `- Pitch : ${candidat.aiPitchShort}` : ''}
 
-Template email original:
-Objet: ${emailSubject}
-Corps:
+Template email original :
+Objet : ${emailSubject}
+Corps :
 ${emailBody}
 
-Clients à personnaliser (${clients.length}):
+Clients à personnaliser (${clients.length}) :
 ${JSON.stringify(clientsInfo, null, 2)}
 
-Personnalise l'email pour chaque client.`;
+Personnalise l'email pour chaque client en adaptant l'angle business.`;
 
   // 4. Call Claude via centralized service
   const response = await callClaude({
@@ -220,7 +234,7 @@ Personnalise l'email pour chaque client.`;
     userPrompt,
     userId,
     maxTokens: 4000,
-    temperature: 0.3,
+    temperature: 0.4,
   });
 
   // 5. Parse response
@@ -250,4 +264,118 @@ Personnalise l'email pour chaque client.`;
       body: p.body || emailBody,
     };
   });
+}
+
+// ─── MANDAT AI SCORECARD GENERATION ─────────────────
+
+export interface Scorecard {
+  competencesCles: Array<{ nom: string; poids: number; description: string }>;
+  criteresTechniques: Array<{ nom: string; obligatoire: boolean }>;
+  criteresComportementaux: Array<{ nom: string; description: string }>;
+  questionsEntretien: Array<{ question: string; competenceVisee: string }>;
+  profilIdeal: string;
+  redFlags: string[];
+}
+
+export async function aiGenerateScorecard(
+  userId: string,
+  mandatId: string,
+): Promise<Scorecard> {
+  // 1. Load mandat with all context
+  const mandat = await prisma.mandat.findUnique({
+    where: { id: mandatId },
+    select: {
+      id: true,
+      titrePoste: true,
+      description: true,
+      localisation: true,
+      salaireMin: true,
+      salaireMax: true,
+      salaryRange: true,
+      transcript: true,
+      ficheDePoste: true,
+      entreprise: { select: { nom: true, secteur: true, taille: true } },
+    },
+  });
+
+  if (!mandat) throw new Error('Mandat non trouvé');
+
+  // 2. Build rich context
+  const context: string[] = [];
+  if (mandat.transcript) context.push(`TRANSCRIPT DU CALL CLIENT :\n${mandat.transcript}`);
+  if (mandat.ficheDePoste) context.push(`FICHE DE POSTE :\n${mandat.ficheDePoste}`);
+  if (mandat.description) context.push(`DESCRIPTION DU MANDAT :\n${mandat.description}`);
+
+  if (context.length === 0) {
+    throw new Error('Ajoutez un transcript ou une fiche de poste avant de générer la scorecard');
+  }
+
+  const systemPrompt = `Tu es un expert en recrutement chez Humanup.io. Tu analyses un brief client (transcript d'appel et/ou fiche de poste) pour générer une scorecard structurée et actionnable.
+
+La scorecard doit permettre à un recruteur d'évaluer objectivement chaque candidat sur ce poste.
+
+Réponds UNIQUEMENT en JSON valide avec cette structure exacte :
+{
+  "competencesCles": [{ "nom": "string", "poids": number (1-5), "description": "string court" }],
+  "criteresTechniques": [{ "nom": "string", "obligatoire": boolean }],
+  "criteresComportementaux": [{ "nom": "string", "description": "string court" }],
+  "questionsEntretien": [{ "question": "string", "competenceVisee": "string" }],
+  "profilIdeal": "description en 2-3 phrases du candidat idéal",
+  "redFlags": ["signal d'alerte 1", "signal d'alerte 2", ...]
+}
+
+RÈGLES :
+- 5-8 compétences clés avec un poids de 1 (nice-to-have) à 5 (critique)
+- 4-6 critères techniques (hard skills, outils, certifications)
+- 3-5 critères comportementaux (soft skills, culture fit)
+- 5-8 questions d'entretien précises et pertinentes
+- 3-5 red flags spécifiques au poste
+- Si le transcript mentionne des informations sur le salaire, la localisation ou le contexte, extrais-les aussi
+- Sois spécifique au secteur et au poste — pas de compétences génériques`;
+
+  const userPrompt = `Poste : ${mandat.titrePoste}
+Entreprise : ${mandat.entreprise?.nom || 'Non renseignée'} (${mandat.entreprise?.secteur || 'secteur inconnu'})
+Localisation : ${mandat.localisation || 'Non renseignée'}
+Salaire : ${mandat.salaryRange || (mandat.salaireMin && mandat.salaireMax ? `${mandat.salaireMin}-${mandat.salaireMax}€` : 'Non renseigné')}
+
+${context.join('\n\n---\n\n')}
+
+Génère la scorecard pour ce poste.`;
+
+  // 3. Call Claude
+  const response = await callClaude({
+    feature: 'task_extraction',
+    systemPrompt,
+    userPrompt,
+    userId,
+    maxTokens: 3000,
+    temperature: 0.3,
+  });
+
+  // 4. Parse response
+  let scorecard: Scorecard;
+  try {
+    const rawText = typeof response.content === 'string'
+      ? response.content
+      : response.rawText;
+    const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    scorecard = JSON.parse(cleaned);
+  } catch (e) {
+    console.warn('[AI] Failed to parse scorecard:', response.rawText);
+    throw new Error('Erreur lors du parsing de la scorecard IA');
+  }
+
+  // 5. Save scorecard to mandat
+  const updateData: any = {
+    scorecard: scorecard as any,
+    scorecardGeneratedAt: new Date(),
+  };
+
+  // Try to auto-populate missing mandat fields from transcript
+  await prisma.mandat.update({
+    where: { id: mandatId },
+    data: updateData,
+  });
+
+  return scorecard;
 }

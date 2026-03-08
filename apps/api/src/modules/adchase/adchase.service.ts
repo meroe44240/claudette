@@ -208,29 +208,21 @@ export async function launchCampaign(id: string, userId: string) {
     throw new ValidationError('Cette campagne ne peut pas être lancée');
   }
 
-  // Update campaign status
+  // Update campaign status to active (tasks created, not sent yet)
   const updated = await prisma.adchaseCampaign.update({
     where: { id },
     data: {
       status: 'active',
-      sentAt: new Date(),
     },
   });
 
-  // Mark all prospects as sent
-  await prisma.adchaseProspect.updateMany({
-    where: { campaignId: id },
-    data: {
-      emailStatus: 'sent',
-      sentAt: new Date(),
-    },
-  });
+  // DO NOT mark prospects as sent — they stay "pending" until the user validates each task
 
-  // Create activity logs for each prospect
+  // Create activity logs + TASKS for each prospect
   const clientIds = campaign.prospects.map((p) => p.clientId);
   const clients = await prisma.client.findMany({
     where: { id: { in: clientIds } },
-    select: { id: true, nom: true, prenom: true },
+    select: { id: true, nom: true, prenom: true, email: true },
   });
   const clientMap = new Map(clients.map((c) => [c.id, c]));
 
@@ -241,24 +233,35 @@ export async function launchCampaign(id: string, userId: string) {
   });
   const candidatName = candidat ? `${candidat.prenom || ''} ${candidat.nom}`.trim() : 'Candidat';
 
+  // Tomorrow at 9am as default due date
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(9, 0, 0, 0);
+
   for (const prospect of campaign.prospects) {
     const client = clientMap.get(prospect.clientId);
     const clientName = client ? `${client.prenom || ''} ${client.nom}`.trim() : 'Client';
 
+    // Create a TASK (isTache=true) for each prospect — user must validate before sending
     await prisma.activite.create({
       data: {
-        type: 'EMAIL',
+        type: 'TACHE',
         direction: 'SORTANT',
         entiteType: 'CLIENT',
         entiteId: prospect.clientId,
         userId,
-        titre: `Adchase — Profil anonymisé envoyé à ${clientName}`,
-        contenu: `Campagne Adchase : profil anonymisé de ${candidatName} envoyé.\nObjet: ${campaign.emailSubject}`,
+        titre: `Adchase — Envoyer le profil de ${candidatName} à ${clientName}`,
+        contenu: `Validez et envoyez l'email de présentation du profil anonymisé.\n\nObjet : ${campaign.emailSubject}\n\nDestinataire : ${clientName}${client?.email ? ` (${client.email})` : ''}`,
         source: 'SYSTEME',
+        isTache: true,
+        tacheCompleted: false,
+        tacheDueDate: tomorrow,
         metadata: {
           adchaseCampaignId: campaign.id,
           adchaseProspectId: prospect.id,
           candidatId: campaign.candidatId,
+          emailSubject: campaign.emailSubject,
+          emailBody: campaign.emailBody,
         },
       },
     });

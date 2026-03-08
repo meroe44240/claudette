@@ -15,7 +15,13 @@ export const createMandatSchema = z.object({
   assignedToId: z.string().uuid().optional(),
 });
 
-export const updateMandatSchema = createMandatSchema.partial();
+export const updateMandatSchema = createMandatSchema.partial().extend({
+  transcript: z.string().optional(),
+  ficheDePoste: z.string().optional(),
+  scorecard: z.any().optional(),
+  salaryRange: z.string().optional(),
+  pitchPoints: z.any().optional(),
+});
 
 export const updateFeeSchema = z.object({
   feeMontantFacture: z.number().int().positive().optional(),

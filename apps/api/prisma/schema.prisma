@@ -231,6 +231,10 @@ model Mandat {
   createdBy        User?        @relation("MandatCreatedBy", fields: [createdById], references: [id])
   assignedToId     String?      @db.Uuid
   assignedTo       User?        @relation("MandatAssignedTo", fields: [assignedToId], references: [id])
+  transcript           String?      @db.Text
+  ficheDePoste         String?      @db.Text
+  scorecard            Json?
+  scorecardGeneratedAt DateTime?    @db.Timestamptz()
   createdAt        DateTime     @default(now()) @db.Timestamptz()
   updatedAt        DateTime     @updatedAt @db.Timestamptz()
 

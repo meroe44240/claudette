@@ -18,7 +18,7 @@ export default async function templateRouter(fastify: FastifyInstance) {
     preHandler: [authenticate],
     handler: async (request, reply) => {
       const query = request.query as any;
-      const params = parsePagination(query);
+      const params = { ...parsePagination(query), type: query.type as string | undefined };
       return templateService.list(request.userId, params);
     },
   });

@@ -4,13 +4,17 @@ import { paginatedResult, paginationToSkipTake } from '../../lib/pagination.js';
 import type { PaginationParams } from '../../lib/pagination.js';
 import type { CreateTemplateInput, UpdateTemplateInput } from './template.schema.js';
 
-export async function list(userId: string, params: PaginationParams) {
-  const where = {
+export async function list(userId: string, params: PaginationParams & { type?: string }) {
+  const where: any = {
     OR: [
       { createdById: userId },
       { isGlobal: true },
     ],
   };
+  // Filter by type if provided (e.g. EMAIL_PRESENTATION_CLIENT)
+  if (params.type) {
+    where.type = params.type;
+  }
   const { skip, take } = paginationToSkipTake(params);
   const [data, total] = await Promise.all([
     prisma.template.findMany({ where, skip, take, orderBy: { createdAt: 'desc' } }),
