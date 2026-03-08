@@ -49,6 +49,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: cd apps/api && npx prisma generate
       - run: cd apps/api && npx prisma migrate deploy
       - run: cd apps/api && npx vitest run
 
