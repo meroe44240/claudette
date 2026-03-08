@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { loginSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordSchema } from './auth.schema.js';
 import * as authService from './auth.service.js';
 import { authenticate } from '../../middleware/auth.js';
+import prisma from '../../lib/db.js';
 
 export default async function authRouter(fastify: FastifyInstance) {
   fastify.post('/login', {
@@ -69,6 +70,47 @@ export default async function authRouter(fastify: FastifyInstance) {
     handler: async (request, reply) => {
       reply.clearCookie('refreshToken', { path: '/api/v1/auth/refresh' });
       return { message: 'Déconnecté' };
+    },
+  });
+
+  // GET /me — current user profile
+  fastify.get('/me', {
+    schema: { description: 'Profil utilisateur courant', tags: ['Auth'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const user = await prisma.user.findUnique({
+        where: { id: request.userId },
+        select: {
+          id: true,
+          email: true,
+          nom: true,
+          prenom: true,
+          role: true,
+          avatarUrl: true,
+          calendlyUrl: true,
+        },
+      });
+      return user;
+    },
+  });
+
+  // PUT /me — update user profile
+  fastify.put('/me', {
+    schema: { description: 'Mettre à jour le profil utilisateur', tags: ['Auth'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const body = request.body as { calendlyUrl?: string; nom?: string; prenom?: string; avatarUrl?: string };
+      const data: Record<string, any> = {};
+      if (body.calendlyUrl !== undefined) data.calendlyUrl = body.calendlyUrl || null;
+      if (body.nom) data.nom = body.nom;
+      if (body.prenom !== undefined) data.prenom = body.prenom;
+      if (body.avatarUrl !== undefined) data.avatarUrl = body.avatarUrl;
+      const user = await prisma.user.update({
+        where: { id: request.userId },
+        data,
+        select: { id: true, email: true, nom: true, prenom: true, role: true, avatarUrl: true, calendlyUrl: true },
+      });
+      return user;
     },
   });
 

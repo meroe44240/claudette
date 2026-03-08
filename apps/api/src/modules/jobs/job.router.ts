@@ -5,7 +5,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import * as jobService from './job.service.js';
-import { generateJobDescription } from './job-ai.service.js';
+import { generateJobDescription, anonymizeFicheDePoste } from './job-ai.service.js';
 import { authenticate } from '../../middleware/auth.js';
 import { parsePagination } from '../../lib/pagination.js';
 
@@ -131,6 +131,20 @@ export default async function jobRouter(fastify: FastifyInstance) {
       return reply.status(500).send({ error: 'La génération IA a échoué' });
     }
 
+    return result;
+  });
+
+  // Anonymize a fiche de poste via AI
+  fastify.post('/anonymize-fiche', async (request, reply) => {
+    const { text } = request.body as { text: string };
+    if (!text || text.trim().length < 20) {
+      return reply.status(400).send({ error: 'Texte trop court' });
+    }
+    const userId = (request as any).userId as string;
+    const result = await anonymizeFicheDePoste(text, userId);
+    if (!result) {
+      return reply.status(500).send({ error: 'L\'anonymisation a échoué' });
+    }
     return result;
   });
 }

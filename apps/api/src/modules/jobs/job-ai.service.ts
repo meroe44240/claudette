@@ -86,3 +86,71 @@ RAPPEL : Ne JAMAIS mentionner le nom "${mandat.entreprise.nom}" dans la descript
     return null;
   }
 }
+
+// ─── FICHE DE POSTE ANONYMIZATION ──────────────────
+
+const ANONYMIZE_SYSTEM_PROMPT = `Tu es un expert RH. On te donne une fiche de poste brute (avec potentiellement le nom de l'entreprise, des détails confidentiels).
+Tu dois :
+1. Extraire les informations structurées
+2. Anonymiser complètement le nom de l'entreprise (le remplacer par une description type "Scale-up SaaS B2B · 200 personnes")
+3. Réécrire la description en version anonymisée et attractive
+4. Détecter le secteur et le type de poste
+
+Réponds UNIQUEMENT en JSON valide :
+{
+  "title": "string - titre du poste extrait",
+  "description": "string - description complète anonymisée en markdown (Missions, Profil, Avantages)",
+  "companyDescription": "string - description anonymisée de l'entreprise en une ligne",
+  "location": "string - localisation extraite ou vide",
+  "salaryRange": "string - fourchette salariale extraite ou vide",
+  "sector": "string - secteur détecté (tech_saas, finance, hospitality, industrie, commerce, sante, immobilier, conseil, autre)",
+  "jobType": "string - type de poste (management, ic, direction, freelance, stage_alternance)",
+  "tags": ["string - 5-8 tags pertinents"]
+}`;
+
+export async function anonymizeFicheDePoste(
+  text: string,
+  userId: string,
+): Promise<{
+  title: string;
+  description: string;
+  companyDescription: string;
+  location: string;
+  salaryRange: string;
+  sector: string;
+  jobType: string;
+  tags: string[];
+} | null> {
+  try {
+    const response = await callClaude({
+      feature: 'anonymize_fiche',
+      systemPrompt: ANONYMIZE_SYSTEM_PROMPT,
+      userPrompt: `Anonymise et structure cette fiche de poste :\n\n${text.substring(0, 8000)}`,
+      userId,
+      maxTokens: 4000,
+      temperature: 0.3,
+    });
+
+    const responseText = typeof response === 'string'
+      ? response
+      : (response as any)?.content?.[0]?.text || (response as any)?.text || JSON.stringify(response);
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+      title: parsed.title || '',
+      description: parsed.description || '',
+      companyDescription: parsed.companyDescription || '',
+      location: parsed.location || '',
+      salaryRange: parsed.salaryRange || '',
+      sector: parsed.sector || '',
+      jobType: parsed.jobType || '',
+      tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+    };
+  } catch (err) {
+    console.error('[JobBoard AI] Fiche anonymization failed:', err);
+    return null;
+  }
+}

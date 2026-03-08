@@ -176,6 +176,11 @@ export default function CandidatDetailPage() {
   const [showBookingDropdown, setShowBookingDropdown] = useState(false);
   const [bookingCopiedField, setBookingCopiedField] = useState<string | null>(null);
 
+  // Calendly link state
+  const [calendlyUrl, setCalendlyUrl] = useState('');
+  const [calendlyEditing, setCalendlyEditing] = useState(false);
+  const [calendlyCopied, setCalendlyCopied] = useState(false);
+
   // Pitch IA section state
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showAnonymized, setShowAnonymized] = useState(false);
@@ -203,6 +208,13 @@ export default function CandidatDetailPage() {
   });
 
   const bookingSlug = bookingSettings?.isActive ? bookingSettings.slug : null;
+
+  // Fetch current user profile for calendly URL
+  const { data: currentUser } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => api.get<{ id: string; calendlyUrl?: string }>('/auth/me'),
+    staleTime: 10 * 60 * 1000,
+  });
 
   const handleCopyBookingLink = useCallback((link: string, fieldId: string) => {
     navigator.clipboard.writeText(link).then(() => {
@@ -1040,6 +1052,93 @@ export default function CandidatDetailPage() {
               <p className="whitespace-pre-wrap text-sm text-text-secondary">{candidat.notes}</p>
             ) : (
               <p className="text-sm text-text-secondary">Aucune note.</p>
+            )}
+          </Card>
+
+          {/* Quick Calendly Link */}
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
+                <Calendar size={18} className="text-primary-500" />
+                Lien Calendly
+              </h2>
+              {currentUser?.calendlyUrl && !calendlyEditing && (
+                <button
+                  onClick={() => { setCalendlyUrl(currentUser.calendlyUrl || ''); setCalendlyEditing(true); }}
+                  className="text-xs text-text-tertiary hover:text-primary-500"
+                >
+                  <Pencil size={12} />
+                </button>
+              )}
+            </div>
+            {calendlyEditing || !currentUser?.calendlyUrl ? (
+              <div className="space-y-2">
+                <input
+                  value={calendlyUrl || currentUser?.calendlyUrl || ''}
+                  onChange={(e) => setCalendlyUrl(e.target.value)}
+                  placeholder="https://calendly.com/votre-lien"
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-primary-400"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await api.put('/auth/me', { calendlyUrl: calendlyUrl.trim() });
+                        queryClient.invalidateQueries({ queryKey: ['me'] });
+                        setCalendlyEditing(false);
+                        toast('success', 'Lien Calendly sauvegardé');
+                      } catch { toast('error', 'Erreur de sauvegarde'); }
+                    }}
+                    className="rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600"
+                  >
+                    Sauvegarder
+                  </button>
+                  {currentUser?.calendlyUrl && (
+                    <button
+                      onClick={() => setCalendlyEditing(false)}
+                      className="rounded-lg border border-neutral-200 px-3 py-1.5 text-xs text-neutral-500 hover:bg-neutral-50"
+                    >
+                      Annuler
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 truncate rounded-lg bg-neutral-50 px-3 py-2 text-xs text-text-secondary font-mono">
+                    {currentUser.calendlyUrl}
+                  </span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(currentUser.calendlyUrl || '');
+                      setCalendlyCopied(true);
+                      setTimeout(() => setCalendlyCopied(false), 2000);
+                      toast('success', 'Lien copié !');
+                    }}
+                    className="shrink-0 rounded-lg p-2 hover:bg-neutral-100 transition-colors"
+                    title="Copier"
+                  >
+                    {calendlyCopied ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-text-tertiary" />}
+                  </button>
+                </div>
+                {candidat.email && (
+                  <button
+                    onClick={() => {
+                      const firstName = candidat.prenom || candidat.nom || '';
+                      setEmailDefaults({
+                        subject: 'Réservez un créneau pour notre échange',
+                        body: `Bonjour ${firstName},\n\nJe vous propose de choisir un créneau qui vous convient pour notre prochain échange :\n\n👉 ${currentUser.calendlyUrl}\n\nN'hésitez pas à sélectionner le créneau qui vous arrange le mieux.\n\nCordialement`,
+                      });
+                      setShowEmailComposer(true);
+                    }}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-50 px-3 py-2 text-xs font-medium text-primary-600 hover:bg-primary-100 transition-colors"
+                  >
+                    <Send size={13} />
+                    Envoyer le lien par email
+                  </button>
+                )}
+              </div>
             )}
           </Card>
         </motion.div>

@@ -548,7 +548,7 @@ export async function processCalendarWebhook(payload: CalendarWebhookPayload) {
  * Create a Google Calendar event via the API.
  * Also creates an Activite of type MEETING.
  */
-export async function createEvent(userId: string, data: CalendarEventData) {
+export async function createEvent(userId: string, data: CalendarEventData, sendNotifications = true) {
   const accessToken = await getValidAccessToken(userId);
 
   // Match attendees to find related entity
@@ -571,10 +571,14 @@ export async function createEvent(userId: string, data: CalendarEventData) {
     start: { dateTime: data.startTime, timeZone: 'Europe/Paris' },
     end: { dateTime: data.endTime, timeZone: 'Europe/Paris' },
     attendees: data.attendees?.map(email => ({ email })),
+    // Send Google Calendar invitations to attendees
+    reminders: { useDefault: true },
   };
 
+  // sendNotifications=all tells Google to send email invitations to all attendees
+  const sendUpdates = sendNotifications ? 'all' : 'none';
   const calResponse = await fetch(
-    'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=${sendUpdates}`,
     {
       method: 'POST',
       headers: {

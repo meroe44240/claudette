@@ -339,20 +339,32 @@ export default function PublicJobListPage() {
                         </span>
                       )}
                     </div>
-                    {job.companyDescription && (
-                      <p className="text-sm text-[rgba(26,26,46,.5)] mb-2 line-clamp-1">
-                        {job.companyDescription}
-                      </p>
-                    )}
+                    {/* Company type + key info */}
+                    <div className="flex flex-wrap items-center gap-3 mb-2">
+                      {job.companyDescription && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+                          style={{ background: 'rgba(59,130,246,.08)', color: '#3B82F6' }}
+                        >
+                          <Briefcase size={11} /> {job.companyDescription}
+                        </span>
+                      )}
+                      {job.salaryRange && (
+                        <span className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
+                          style={{ background: 'rgba(34,197,94,.08)', color: '#16a34a' }}
+                        >
+                          {job.salaryRange}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap items-center gap-4 text-xs text-[#7878A0]">
                       {job.location && (
                         <span className="flex items-center gap-1">
                           <MapPin size={12} /> {job.location}
                         </span>
                       )}
-                      {job.salaryRange && (
+                      {job.jobType && (
                         <span className="flex items-center gap-1">
-                          {job.salaryRange}
+                          <Briefcase size={12} /> {job.jobType === 'management' ? 'Management' : job.jobType === 'ic' ? 'IC' : job.jobType === 'direction' ? 'Direction' : job.jobType}
                         </span>
                       )}
                       {job.publishedAt && (

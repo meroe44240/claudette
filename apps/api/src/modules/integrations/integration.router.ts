@@ -42,10 +42,12 @@ const createCalendarEventSchema = z.object({
   description: z.string().optional(),
   notes: z.string().optional(),
   location: z.string().optional(),
-  startTime: z.string(),
+  startTime: z.string().optional(),
   endTime: z.string().optional(),
   date: z.string().optional(),
   duration: z.number().optional(),
+  meetingType: z.string().optional(),
+  sendEmail: z.boolean().optional(),
   attendees: z.array(z.string().email()).optional(),
   participants: z.array(z.string()).optional(),
   entiteType: z.string().optional(),
@@ -372,6 +374,17 @@ export default async function integrationRouter(fastify: FastifyInstance) {
       const input = createCalendarEventSchema.parse(request.body);
 
       // Normalize: transform frontend format to service format
+      const meetingTypeLabels: Record<string, string> = {
+        entretien_candidat: '👤 Entretien candidat',
+        entretien_client: '🏢 Entretien client',
+        call_interne: '📞 Call interne',
+        suivi: '🔄 Suivi',
+        debrief: '📋 Debrief',
+      };
+      const typePrefix = input.meetingType && meetingTypeLabels[input.meetingType]
+        ? `[${meetingTypeLabels[input.meetingType]}] `
+        : '';
+
       const eventSummary = input.summary || input.title || 'Événement';
       const eventDescription = input.description || input.notes || undefined;
       const eventAttendees = input.attendees || (input.participants || []).filter(p => p.includes('@'));
@@ -382,20 +395,21 @@ export default async function integrationRouter(fastify: FastifyInstance) {
       // Build ISO start/end times
       let startTimeISO: string;
       let endTimeISO: string;
+      const startTimeStr = input.startTime || '09:00';
 
-      if (input.date && input.startTime.length <= 5) {
+      if (input.date && startTimeStr.length <= 5) {
         // Frontend format: date="2026-03-03", startTime="09:00", duration=60
-        startTimeISO = `${input.date}T${input.startTime}:00`;
+        startTimeISO = `${input.date}T${startTimeStr}:00`;
         const durationMs = (input.duration || 60) * 60 * 1000;
         endTimeISO = new Date(new Date(startTimeISO).getTime() + durationMs).toISOString();
         startTimeISO = new Date(startTimeISO).toISOString();
       } else if (input.endTime) {
         // API format: ISO datetimes
-        startTimeISO = input.startTime;
+        startTimeISO = startTimeStr;
         endTimeISO = input.endTime;
       } else {
         // Fallback: 1 hour duration
-        startTimeISO = input.startTime.includes('T') ? input.startTime : new Date(input.startTime).toISOString();
+        startTimeISO = startTimeStr.includes('T') ? startTimeStr : new Date(startTimeStr).toISOString();
         endTimeISO = new Date(new Date(startTimeISO).getTime() + 60 * 60 * 1000).toISOString();
       }
 
@@ -408,7 +422,8 @@ export default async function integrationRouter(fastify: FastifyInstance) {
         attendees: eventAttendees.length > 0 ? eventAttendees : undefined,
         entiteType,
         entiteId: input.entiteId,
-      });
+      }, input.sendEmail !== false);
+
       reply.status(201);
       return result;
     },
