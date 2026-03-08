@@ -159,9 +159,7 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
     >
       {/* Logo */}
       <div className="flex h-16 items-center gap-3 px-6">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-primary-500">
-          <span className="text-lg font-bold text-white">H</span>
-        </div>
+        <img src="/logo-icon.png" alt="HumanUp" className="h-9 w-auto shrink-0" />
         <AnimatePresence>
           {!collapsed && (
             <motion.span
