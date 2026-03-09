@@ -816,7 +816,24 @@ model BookingSetting {
   createdAt       DateTime @default(now()) @db.Timestamptz()
   updatedAt       DateTime @updatedAt @db.Timestamptz()
 
+  bookingTypes    BookingType[]
+
   @@map("booking_settings")
+}
+
+model BookingType {
+  id              String   @id @default(uuid()) @db.Uuid
+  settingId       String   @db.Uuid
+  setting         BookingSetting @relation(fields: [settingId], references: [id], onDelete: Cascade)
+  slug            String   @db.VarChar(100)
+  label           String   @db.VarChar(100)
+  durationMinutes Int
+  targetType      String   @db.VarChar(20) // 'candidate' or 'client'
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+
+  @@unique([settingId, slug])
+  @@map("booking_types")
 }
 
 model Booking {

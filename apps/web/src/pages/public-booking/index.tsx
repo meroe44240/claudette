@@ -59,6 +59,12 @@ interface RecruiterInfo {
     pitchPoints?: string[];
     localisation?: string;
   };
+  bookingType?: {
+    slug: string;
+    label: string;
+    durationMinutes: number;
+    targetType: string; // 'candidate' or 'client'
+  };
 }
 
 // Duration options per booking type
@@ -1065,8 +1071,12 @@ export default function PublicBookingPage() {
   const [searchParams] = useSearchParams();
 
   // Determine booking type from URL: ?type=candidat or ?type=client
-  const bookingType = (searchParams.get('type') || '') as 'candidat' | 'client' | '';
-  const durationOptions = bookingType === 'client' ? CLIENT_DURATIONS : bookingType === 'candidat' ? CANDIDAT_DURATIONS : null;
+  const urlBookingType = (searchParams.get('type') || '') as 'candidat' | 'client' | '';
+  // Will be overridden if API returns a bookingType from the slug
+  const [resolvedBookingType, setResolvedBookingType] = useState<'candidat' | 'client' | ''>(urlBookingType);
+  const [fixedDuration, setFixedDuration] = useState<number | null>(null);
+  const bookingType = resolvedBookingType;
+  const durationOptions = fixedDuration ? null : bookingType === 'client' ? CLIENT_DURATIONS : bookingType === 'candidat' ? CANDIDAT_DURATIONS : null;
 
   const [recruiter, setRecruiter] = useState<RecruiterInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1096,6 +1106,13 @@ export default function PublicBookingPage() {
       .get<RecruiterInfo>(path)
       .then((data) => {
         setRecruiter(data);
+        // If the API resolved a booking type from the slug, use it
+        if (data.bookingType) {
+          const t = data.bookingType.targetType === 'client' ? 'client' : 'candidat';
+          setResolvedBookingType(t);
+          setFixedDuration(data.bookingType.durationMinutes);
+          setSelectedDuration(data.bookingType.durationMinutes);
+        }
       })
       .catch((err) => {
         setError(err.message || 'Ce lien de reservation est invalide ou expire.');
@@ -1113,7 +1130,7 @@ export default function PublicBookingPage() {
     setSelectedSlot(null);
 
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    const durationParam = durationOptions ? `&duration=${selectedDuration}` : '';
+    const durationParam = (fixedDuration || durationOptions) ? `&duration=${selectedDuration}` : '';
     publicApi
       .get<Slot[]>(`/${slug}/slots?date=${dateStr}${durationParam}`)
       .then((data) => {
@@ -1160,7 +1177,7 @@ export default function PublicBookingPage() {
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         // Determine entityType from URL or form
         const entityType = bookingType || formData.typeRdv || 'candidat';
-        const effectiveDuration = durationOptions ? selectedDuration : recruiter.settings.slotDuration;
+        const effectiveDuration = fixedDuration || (durationOptions ? selectedDuration : recruiter.settings.slotDuration);
 
         const body = {
           date: dateStr,
@@ -1205,7 +1222,7 @@ export default function PublicBookingPage() {
           if (selectedDate) {
             setSlotsLoading(true);
             const refreshDateStr = format(selectedDate, 'yyyy-MM-dd');
-            const refreshDurationParam = durationOptions ? `&duration=${selectedDuration}` : '';
+            const refreshDurationParam = (fixedDuration || durationOptions) ? `&duration=${selectedDuration}` : '';
             publicApi
               .get<Slot[]>(`/${slug}/slots?date=${refreshDateStr}${refreshDurationParam}`)
               .then((d) => {
@@ -1222,7 +1239,7 @@ export default function PublicBookingPage() {
         setSubmitting(false);
       }
     },
-    [slug, mandatSlug, selectedDate, selectedSlot, recruiter, searchParams, bookingType, selectedDuration, durationOptions],
+    [slug, mandatSlug, selectedDate, selectedSlot, recruiter, searchParams, bookingType, selectedDuration, durationOptions, fixedDuration],
   );
 
   // ── Back to calendar ──
@@ -1289,9 +1306,16 @@ export default function PublicBookingPage() {
                   <div className="flex items-center gap-1.5 bg-neutral-50 px-3 py-1.5 rounded-full">
                     <Clock size={14} className="text-neutral-400" />
                     <span className="text-[13px] font-medium text-neutral-600">
-                      {recruiter.settings.slotDuration} min
+                      {fixedDuration || recruiter.settings.slotDuration} min
                     </span>
                   </div>
+                  {recruiter.bookingType && (
+                    <div className="flex items-center gap-1.5 bg-primary-50 px-3 py-1.5 rounded-full">
+                      <span className="text-[13px] font-medium text-primary-600">
+                        {recruiter.bookingType.label}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1320,7 +1344,7 @@ export default function PublicBookingPage() {
                 ...recruiter,
                 settings: {
                   ...recruiter.settings,
-                  slotDuration: durationOptions ? selectedDuration : recruiter.settings.slotDuration,
+                  slotDuration: fixedDuration || (durationOptions ? selectedDuration : recruiter.settings.slotDuration),
                 },
               }}
               selectedDate={selectedDate}

@@ -23,6 +23,24 @@ export default async function templateRouter(fastify: FastifyInstance) {
     },
   });
 
+  // GET /:id - Get single template
+  fastify.get('/:id', {
+    schema: {
+      description: 'Récupérer un template par ID',
+      tags: ['Templates'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', format: 'uuid' } },
+      },
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { id } = request.params as { id: string };
+      return templateService.getById(id);
+    },
+  });
+
   // POST / - Create template
   fastify.post('/', {
     schema: {

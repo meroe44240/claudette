@@ -287,32 +287,53 @@ export async function getRecruiterPublicInfo(slug: string, mandatSlug?: string) 
   }
 
   let mandatInfo = null;
+  let bookingTypeInfo = null;
+
   if (mandatSlug) {
-    const mandat = await prisma.mandat.findFirst({
+    // First check if it's a booking type slug (e.g. candidat-15, societe-30)
+    const bookingType = await prisma.bookingType.findFirst({
       where: {
+        settingId: setting.id,
         slug: mandatSlug,
-        isBookingPublic: true,
-        OR: [
-          { assignedToId: setting.userId },
-          { createdById: setting.userId },
-        ],
-      },
-      select: {
-        id: true,
-        titrePoste: true,
-        localisation: true,
-        salaryRange: true,
-        description: true,
-        slug: true,
-        entreprise: { select: { nom: true } },
+        isActive: true,
       },
     });
 
-    if (!mandat) {
-      throw new NotFoundError('Mandat');
-    }
+    if (bookingType) {
+      bookingTypeInfo = {
+        slug: bookingType.slug,
+        label: bookingType.label,
+        durationMinutes: bookingType.durationMinutes,
+        targetType: bookingType.targetType,
+      };
+    } else {
+      // Otherwise try to find a mandat
+      const mandat = await prisma.mandat.findFirst({
+        where: {
+          slug: mandatSlug,
+          isBookingPublic: true,
+          OR: [
+            { assignedToId: setting.userId },
+            { createdById: setting.userId },
+          ],
+        },
+        select: {
+          id: true,
+          titrePoste: true,
+          localisation: true,
+          salaryRange: true,
+          description: true,
+          slug: true,
+          entreprise: { select: { nom: true } },
+        },
+      });
 
-    mandatInfo = mandat;
+      if (!mandat) {
+        throw new NotFoundError('Mandat');
+      }
+
+      mandatInfo = mandat;
+    }
   }
 
   return {
@@ -330,6 +351,7 @@ export async function getRecruiterPublicInfo(slug: string, mandatSlug?: string) 
       workingDays: setting.workingDays,
     },
     mandat: mandatInfo,
+    bookingType: bookingTypeInfo,
   };
 }
 
@@ -1163,4 +1185,34 @@ export async function getMandatBookingLinks(userId: string) {
     directBookingUrl: `${APP_URL}/booking/${setting.slug}`,
     links,
   };
+}
+
+// ─── BOOKING TYPES ─────────────────────────────────
+
+export async function getBookingTypes(slug: string) {
+  const setting = await prisma.bookingSetting.findUnique({
+    where: { slug },
+    include: {
+      bookingTypes: {
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+      },
+    },
+  });
+  if (!setting) throw new NotFoundError('BookingSetting', slug);
+  return { types: setting.bookingTypes };
+}
+
+export async function getMyBookingTypes(userId: string) {
+  const setting = await prisma.bookingSetting.findUnique({
+    where: { userId },
+    include: {
+      bookingTypes: {
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+      },
+    },
+  });
+  if (!setting) return { slug: null, types: [] };
+  return { slug: setting.slug, types: setting.bookingTypes };
 }

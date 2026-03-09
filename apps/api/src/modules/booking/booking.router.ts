@@ -93,6 +93,14 @@ export async function bookingPublicRouter(fastify: FastifyInstance) {
     },
   });
 
+  // GET /:slug/types — Get booking types for a recruiter (public)
+  fastify.get('/:slug/types', {
+    handler: async (request) => {
+      const { slug } = request.params as { slug: string };
+      return bookingService.getBookingTypes(slug);
+    },
+  });
+
   // GET /cancel/:id — Get cancel info (display cancel page)
   fastify.get('/cancel/:id', {
     handler: async (request) => {
@@ -159,6 +167,14 @@ export default async function bookingRouter(fastify: FastifyInstance) {
     preHandler: [authenticate],
     handler: async (request) => {
       return bookingService.getMandatBookingLinks(request.userId);
+    },
+  });
+
+  // GET /types — Get booking types for current user
+  fastify.get('/types', {
+    preHandler: [authenticate],
+    handler: async (request) => {
+      return bookingService.getMyBookingTypes(request.userId);
     },
   });
 }
