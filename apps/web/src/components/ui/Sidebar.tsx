@@ -55,13 +55,13 @@ const navSections: NavSection[] = [
       { to: '/emails', icon: Mail, label: 'Emails' },
       { to: '/stats', icon: BarChart3, label: 'Stats' },
       { to: '/templates', icon: BookOpen, label: 'Templates' },
+      { to: '/import', icon: Upload, label: 'Import' },
       { to: '/notifications', icon: Bell, label: 'Notifications' },
     ],
   },
 ];
 
 const adminItems: NavItem[] = [
-  { to: '/import', icon: Upload, label: 'Import' },
   { to: '/settings', icon: Settings, label: 'Paramètres' },
 ];
 

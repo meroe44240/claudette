@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { authenticate, requireRole } from '../../middleware/auth.js';
+import { authenticate } from '../../middleware/auth.js';
 import { ValidationError } from '../../lib/errors.js';
 import * as importService from './import.service.js';
 
@@ -40,7 +40,7 @@ export default async function importRouter(fastify: FastifyInstance) {
         },
       },
     },
-    preHandler: [authenticate, requireRole('ADMIN')],
+    preHandler: [authenticate],
     handler: async (request, reply) => {
       const query = request.query as { entityType?: string };
       const entityType = entityTypeSchema.parse(query.entityType);
@@ -84,7 +84,7 @@ export default async function importRouter(fastify: FastifyInstance) {
       description: 'Previsualiser un import avec le mapping de colonnes',
       tags: ['Import'],
     },
-    preHandler: [authenticate, requireRole('ADMIN')],
+    preHandler: [authenticate],
     handler: async (request, reply) => {
       const input = previewSchema.parse(request.body);
       const result = await importService.preview(input.rows, input.mapping, input.entityType);
@@ -98,7 +98,7 @@ export default async function importRouter(fastify: FastifyInstance) {
       description: 'Executer un import de donnees',
       tags: ['Import'],
     },
-    preHandler: [authenticate, requireRole('ADMIN')],
+    preHandler: [authenticate],
     handler: async (request, reply) => {
       const input = executeSchema.parse(request.body);
       const result = await importService.executeImport(
@@ -118,7 +118,7 @@ export default async function importRouter(fastify: FastifyInstance) {
       description: 'Uploader des CVs en masse (PDF)',
       tags: ['Import'],
     },
-    preHandler: [authenticate, requireRole('ADMIN')],
+    preHandler: [authenticate],
     handler: async (request, reply) => {
       const parts = request.files();
       const files: { filename: string; buffer: Buffer }[] = [];

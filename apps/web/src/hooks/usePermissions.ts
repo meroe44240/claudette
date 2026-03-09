@@ -8,11 +8,10 @@ type Role = 'ADMIN' | 'MANAGER' | 'RECRUTEUR';
  * Role hierarchy (highest → lowest): ADMIN > MANAGER > RECRUTEUR
  *
  * Permission matrix:
- *   RECRUTEUR — CRUD candidats, view clients/entreprises (not create/edit),
- *               view own mandats, manage own activities/tasks
- *   MANAGER   — Everything RECRUTEUR + CRUD clients/entreprises, create mandats,
- *               view team stats, assign tasks
- *   ADMIN     — Everything + manage users, settings, import, delete anything
+ *   RECRUTEUR — CRUD candidats/clients/entreprises/mandats, view team stats,
+ *               import data, manage own activities/tasks, assign tasks
+ *   MANAGER   — Everything RECRUTEUR (same permissions)
+ *   ADMIN     — Everything + manage users, settings, delete anything
  */
 export function usePermissions() {
   const { user } = useAuthStore();
@@ -23,16 +22,16 @@ export function usePermissions() {
     isAdmin: role === 'ADMIN',
     isManager: role === 'ADMIN' || role === 'MANAGER',
     isRecruteur: true, // everyone is at least a recruteur
-    canCreateClient: role !== 'RECRUTEUR',
-    canEditClient: role !== 'RECRUTEUR',
-    canCreateEntreprise: role !== 'RECRUTEUR',
-    canEditEntreprise: role !== 'RECRUTEUR',
-    canCreateMandat: role !== 'RECRUTEUR',
+    canCreateClient: true,
+    canEditClient: true,
+    canCreateEntreprise: true,
+    canEditEntreprise: true,
+    canCreateMandat: true,
     canDeleteEntity: role === 'ADMIN',
     canManageUsers: role === 'ADMIN',
-    canViewTeamStats: role !== 'RECRUTEUR',
-    canAssignTasks: role !== 'RECRUTEUR',
-    canImport: role === 'ADMIN',
+    canViewTeamStats: true,
+    canAssignTasks: true,
+    canImport: true,
     canManageSettings: role === 'ADMIN',
   };
 }

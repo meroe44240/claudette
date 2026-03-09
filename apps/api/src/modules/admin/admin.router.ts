@@ -38,7 +38,7 @@ export default async function adminRouter(fastify: FastifyInstance) {
         },
       },
     },
-    preHandler: [authenticate, requireAdmin],
+    preHandler: [authenticate],
     handler: async (request, reply) => {
       const query = request.query as { period?: string; date?: string };
       const result = await adminService.getTeamStats(
