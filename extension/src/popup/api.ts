@@ -226,6 +226,32 @@ export interface CreateCandidaturePayload {
   notes?: string;
 }
 
+// --- Experiences ---
+
+export interface CreateExperiencePayload {
+  titre: string;
+  entreprise: string;
+  anneeDebut: number;
+  anneeFin?: number | null;
+  source?: string;
+}
+
+export async function createExperiences(
+  candidatId: string,
+  experiences: CreateExperiencePayload[]
+): Promise<void> {
+  for (const exp of experiences) {
+    try {
+      await apiFetch(`/candidats/${candidatId}/experiences`, {
+        method: 'POST',
+        body: JSON.stringify({ ...exp, source: 'linkedin' }),
+      });
+    } catch {
+      // Skip duplicates or errors silently
+    }
+  }
+}
+
 export async function createCandidature(
   payload: CreateCandidaturePayload
 ): Promise<{ id: string }> {

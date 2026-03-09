@@ -2,6 +2,13 @@
 // Runs on linkedin.com pages to extract profile/company data
 // Robust selectors with multiple fallback strategies for LinkedIn DOM (2025-2026)
 
+interface ExperienceData {
+  titre: string;
+  entreprise: string;
+  anneeDebut: number | null;
+  anneeFin: number | null;
+}
+
 interface PersonData {
   type: 'person';
   prenom: string;
@@ -11,6 +18,7 @@ interface PersonData {
   localisation: string;
   linkedinUrl: string;
   photoUrl: string;
+  experiences: ExperienceData[];
 }
 
 interface CompanyData {
@@ -85,6 +93,7 @@ function extractPersonData(): PersonData {
   const localisation = extractLocation();
   const photoUrl = extractProfilePhoto();
   const { prenom, nom } = splitName(fullName);
+  const experiences = extractAllExperiences();
 
   return {
     type: 'person',
@@ -95,6 +104,7 @@ function extractPersonData(): PersonData {
     localisation,
     linkedinUrl: cleanLinkedInUrl(),
     photoUrl,
+    experiences,
   };
 }
 
@@ -502,6 +512,109 @@ function nameFromUrlSlug(): string {
     .split('-')
     .map(part => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+// ---------------------------------------------------------------------------
+// Full experience list extraction
+// ---------------------------------------------------------------------------
+
+function extractAllExperiences(): ExperienceData[] {
+  const experiences: ExperienceData[] = [];
+  const experienceAnchor = document.querySelector('#experience');
+  if (!experienceAnchor) return experiences;
+
+  const section = experienceAnchor.closest('section') || experienceAnchor.parentElement?.parentElement;
+  if (!section) return experiences;
+
+  const listItems = section.querySelectorAll('li.pvs-list__paged-list-item');
+
+  for (const item of listItems) {
+    const nestedList = item.querySelector('ul, .pvs-list__container');
+
+    if (nestedList) {
+      // Grouped layout: company name at top, roles in nested list
+      let companyName = '';
+      const topBold = item.querySelector(':scope > div .t-bold span[aria-hidden="true"]');
+      if (topBold?.textContent?.trim()) {
+        companyName = topBold.textContent.trim();
+      }
+      if (!companyName) {
+        const companyLink = item.querySelector(':scope > div a[href*="/company/"] span[aria-hidden="true"]');
+        if (companyLink?.textContent?.trim()) companyName = companyLink.textContent.trim();
+      }
+
+      const nestedItems = nestedList.querySelectorAll('li');
+      for (const nestedItem of nestedItems) {
+        const roleTitle = nestedItem.querySelector('.t-bold span[aria-hidden="true"]');
+        const titre = roleTitle?.textContent?.trim() || '';
+        if (!titre) continue;
+
+        const dates = extractDatesFromItem(nestedItem);
+        experiences.push({
+          titre,
+          entreprise: companyName,
+          anneeDebut: dates.anneeDebut,
+          anneeFin: dates.anneeFin,
+        });
+      }
+    } else {
+      // Single role layout
+      const boldSpans = item.querySelectorAll('.t-bold span[aria-hidden="true"]');
+      let titre = '';
+      for (const span of boldSpans) {
+        const text = clean(span.textContent || '');
+        if (text && text.length >= 2) { titre = text; break; }
+      }
+      if (!titre) continue;
+
+      let companyName = '';
+      const normalSpans = item.querySelectorAll('.t-14.t-normal span[aria-hidden="true"]');
+      for (const span of normalSpans) {
+        const text = clean(span.textContent || '');
+        if (text && text.length >= 2) {
+          companyName = text.split(/\s*[·•]\s*/)[0].trim();
+          break;
+        }
+      }
+      if (!companyName) {
+        const companyLink = item.querySelector('a[href*="/company/"] span[aria-hidden="true"]');
+        if (companyLink?.textContent?.trim()) companyName = companyLink.textContent.trim();
+      }
+
+      const dates = extractDatesFromItem(item);
+      experiences.push({
+        titre,
+        entreprise: companyName,
+        anneeDebut: dates.anneeDebut,
+        anneeFin: dates.anneeFin,
+      });
+    }
+  }
+
+  return experiences;
+}
+
+function extractDatesFromItem(item: Element): { anneeDebut: number | null; anneeFin: number | null } {
+  // Look for date-like text: "janv. 2020 - présent", "2018 - 2021", etc.
+  const dateTexts = item.querySelectorAll('.t-14.t-normal.t-black--light span[aria-hidden="true"], .pvs-entity__caption-wrapper span[aria-hidden="true"]');
+  for (const el of dateTexts) {
+    const text = clean(el.textContent || '');
+    // Match patterns like "janv. 2020 - mai 2023" or "2020 - Present"
+    const yearMatches = text.match(/\b(20\d{2}|19\d{2})\b/g);
+    if (yearMatches && yearMatches.length >= 1) {
+      const anneeDebut = parseInt(yearMatches[0], 10);
+      let anneeFin: number | null = null;
+      if (yearMatches.length >= 2) {
+        anneeFin = parseInt(yearMatches[yearMatches.length - 1], 10);
+      }
+      // If "présent" or "present" or "aujourd'hui" is mentioned, anneeFin = null (current)
+      if (/pr[eé]sent|present|aujourd|current|actuel/i.test(text)) {
+        anneeFin = null;
+      }
+      return { anneeDebut, anneeFin };
+    }
+  }
+  return { anneeDebut: null, anneeFin: null };
 }
 
 // ---------------------------------------------------------------------------

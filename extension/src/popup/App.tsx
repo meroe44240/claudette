@@ -7,6 +7,7 @@ import {
   createClient,
   createEntreprise,
   createCandidature,
+  createExperiences,
   fetchEntreprises,
   fetchMandats,
   type Entreprise,
@@ -14,9 +15,17 @@ import {
   type CreateCandidatPayload,
   type CreateClientPayload,
   type CreateEntreprisePayload,
+  type CreateExperiencePayload,
 } from './api';
 
 // ---------- Types ----------
+
+interface ExperienceData {
+  titre: string;
+  entreprise: string;
+  anneeDebut: number | null;
+  anneeFin: number | null;
+}
 
 interface PersonData {
   type: 'person';
@@ -27,6 +36,7 @@ interface PersonData {
   localisation: string;
   linkedinUrl: string;
   photoUrl: string;
+  experiences: ExperienceData[];
 }
 
 interface CompanyData {
@@ -360,6 +370,21 @@ function ProfileView({ data }: { data: PersonData }) {
         }
       }
 
+      // Create experiences from LinkedIn profile
+      if (data.experiences && data.experiences.length > 0) {
+        const validExps: CreateExperiencePayload[] = data.experiences
+          .filter((exp) => exp.titre && exp.entreprise && exp.anneeDebut)
+          .map((exp) => ({
+            titre: exp.titre,
+            entreprise: exp.entreprise,
+            anneeDebut: exp.anneeDebut!,
+            anneeFin: exp.anneeFin,
+          }));
+        if (validExps.length > 0) {
+          await createExperiences(result.id, validExps);
+        }
+      }
+
       setSuccess({ type: 'candidat', id: result.id, updated: result._updated, mandatId: selectedMandatId || undefined });
     } catch (err) {
       if (err instanceof Error) {
@@ -531,6 +556,24 @@ function ProfileView({ data }: { data: PersonData }) {
             placeholder="ex : frontend, senior, react"
           />
         </div>
+
+        {/* Experiences preview */}
+        {data.experiences && data.experiences.length > 0 && mode !== 'client' && (
+          <div className="form-group">
+            <label>Parcours ({data.experiences.length} exp\u00e9riences d\u00e9tect\u00e9es)</label>
+            <div style={{ fontSize: '11px', color: '#6B7194', maxHeight: '100px', overflowY: 'auto', background: '#F8F8FC', borderRadius: '6px', padding: '6px 8px' }}>
+              {data.experiences.slice(0, 5).map((exp, i) => (
+                <div key={i} style={{ marginBottom: '3px' }}>
+                  <strong>{exp.titre}</strong> {exp.entreprise ? `\u2014 ${exp.entreprise}` : ''}
+                  {exp.anneeDebut ? ` (${exp.anneeDebut}${exp.anneeFin ? `-${exp.anneeFin}` : '-...'})` : ''}
+                </div>
+              ))}
+              {data.experiences.length > 5 && (
+                <div style={{ fontStyle: 'italic' }}>+ {data.experiences.length - 5} autres...</div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Mandat selector (visible in default/candidat mode) */}
         {mode !== 'client' && (
