@@ -6,8 +6,11 @@ import {
   createCandidat,
   createClient,
   createEntreprise,
+  createCandidature,
   fetchEntreprises,
+  fetchMandats,
   type Entreprise,
+  type Mandat,
   type CreateCandidatPayload,
   type CreateClientPayload,
   type CreateEntreprisePayload,
@@ -259,6 +262,11 @@ function ProfileView({ data }: { data: PersonData }) {
   const [tags, setTags] = useState('');
   const [notes, setNotes] = useState('');
 
+  // Mandat selector (for candidat mode)
+  const [mandats, setMandats] = useState<Mandat[]>([]);
+  const [mandatsLoading, setMandatsLoading] = useState(false);
+  const [selectedMandatId, setSelectedMandatId] = useState('');
+
   // Client-specific
   const [mode, setMode] = useState<'candidat' | 'client' | null>(null);
   const [entreprises, setEntreprises] = useState<Entreprise[]>([]);
@@ -269,9 +277,18 @@ function ProfileView({ data }: { data: PersonData }) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState<{ type: string; id: string; updated?: boolean } | null>(
+  const [success, setSuccess] = useState<{ type: string; id: string; updated?: boolean; mandatId?: string } | null>(
     null
   );
+
+  // Load mandats on mount (for candidat mandat selector)
+  useEffect(() => {
+    setMandatsLoading(true);
+    fetchMandats()
+      .then(setMandats)
+      .catch(() => setMandats([]))
+      .finally(() => setMandatsLoading(false));
+  }, []);
 
   // Load entreprises when switching to client mode
   useEffect(() => {
@@ -329,7 +346,21 @@ function ProfileView({ data }: { data: PersonData }) {
           .filter(Boolean),
       };
       const result = await createCandidat(payload);
-      setSuccess({ type: 'candidat', id: result.id, updated: result._updated });
+
+      // If a mandat is selected, also create the candidature
+      if (selectedMandatId) {
+        try {
+          await createCandidature({
+            candidatId: result.id,
+            mandatId: selectedMandatId,
+            stage: 'SOURCING',
+          });
+        } catch {
+          // Candidature may already exist (duplicate), that's ok
+        }
+      }
+
+      setSuccess({ type: 'candidat', id: result.id, updated: result._updated, mandatId: selectedMandatId || undefined });
     } catch (err) {
       if (err instanceof Error) {
         if (err.message === 'Failed to fetch') {
@@ -391,6 +422,9 @@ function ProfileView({ data }: { data: PersonData }) {
   if (success) {
     const label = success.type === 'candidat' ? 'Candidat' : 'Client';
     const actionLabel = success.updated ? 'mis \u00e0 jour' : 'ajout\u00e9';
+    const mandatLabel = success.mandatId
+      ? mandats.find((m) => m.id === success.mandatId)
+      : null;
     return (
       <div className="success-card">
         <div className="success-icon">{'\u2713'}</div>
@@ -399,8 +433,13 @@ function ProfileView({ data }: { data: PersonData }) {
           {prenom} {nom} a \u00e9t\u00e9 {actionLabel}(e) comme{' '}
           {label.toLowerCase()}.
         </p>
+        {mandatLabel && (
+          <p style={{ fontSize: '12px', color: '#6B7194', marginTop: '4px' }}>
+            Ajout\u00e9(e) au pipeline : <strong>{mandatLabel.titrePoste}</strong>
+          </p>
+        )}
         <a
-          href={`http://localhost:5173/${
+          href={`https://ats.propium.co/${
             success.type === 'candidat' ? 'candidats' : 'clients'
           }/${success.id}`}
           target="_blank"
@@ -492,6 +531,30 @@ function ProfileView({ data }: { data: PersonData }) {
             placeholder="ex : frontend, senior, react"
           />
         </div>
+
+        {/* Mandat selector (visible in default/candidat mode) */}
+        {mode !== 'client' && (
+          <div className="form-group">
+            <label>Associer \u00e0 un mandat (optionnel)</label>
+            {mandatsLoading ? (
+              <div style={{ padding: '8px', color: '#6B7194', fontSize: '12px' }}>
+                Chargement des mandats...
+              </div>
+            ) : (
+              <select
+                value={selectedMandatId}
+                onChange={(e) => setSelectedMandatId(e.target.value)}
+              >
+                <option value="">-- Aucun mandat --</option>
+                {mandats.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.titrePoste}{m.entreprise ? ` — ${m.entreprise.nom}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
 
         {/* Client mode: entreprise selector */}
         {mode === 'client' && (
@@ -678,7 +741,7 @@ function CompanyView({ data }: { data: CompanyData }) {
         <h3>Entreprise ajout\u00e9e !</h3>
         <p>{nom} a \u00e9t\u00e9 ajout\u00e9e au CRM.</p>
         <a
-          href={`http://localhost:5173/entreprises/${success}`}
+          href={`https://ats.propium.co/entreprises/${success}`}
           target="_blank"
           rel="noopener noreferrer"
         >

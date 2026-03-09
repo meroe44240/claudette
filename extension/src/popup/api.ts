@@ -198,3 +198,46 @@ export async function createEntreprise(
   }
   return res.json();
 }
+
+// --- Mandats ---
+
+export interface Mandat {
+  id: string;
+  titrePoste: string;
+  entreprise?: { id: string; nom: string };
+  statut: string;
+}
+
+export async function fetchMandats(): Promise<Mandat[]> {
+  const res = await apiFetch('/mandats?perPage=100&statut=EN_COURS');
+  if (!res.ok) {
+    throw new Error('Erreur lors du chargement des mandats');
+  }
+  const data = await res.json();
+  return data.data || data;
+}
+
+// --- Candidatures ---
+
+export interface CreateCandidaturePayload {
+  candidatId: string;
+  mandatId: string;
+  stage?: string;
+  notes?: string;
+}
+
+export async function createCandidature(
+  payload: CreateCandidaturePayload
+): Promise<{ id: string }> {
+  const res = await apiFetch('/candidatures', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(
+      err.message || 'Erreur lors de la cr\u00e9ation de la candidature'
+    );
+  }
+  return res.json();
+}
