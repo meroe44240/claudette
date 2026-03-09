@@ -1,6 +1,6 @@
 // HumanUp ATS - API Helper for Chrome Extension
 
-const API_BASE_URL = 'http://localhost:3001/api/v1';
+const API_BASE_URL = 'https://ats.propium.co/api/v1';
 
 async function getToken(): Promise<string | null> {
   return new Promise((resolve) => {

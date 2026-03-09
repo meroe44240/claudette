@@ -7,7 +7,7 @@
   "host_permissions": [
     "https://www.linkedin.com/*",
     "https://*.linkedin.com/*",
-    "http://localhost:3001/*"
+    "https://ats.propium.co/*"
   ],
   "action": {
     "default_popup": "popup.html",
