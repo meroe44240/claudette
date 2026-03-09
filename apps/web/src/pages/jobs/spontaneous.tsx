@@ -1,5 +1,5 @@
 /**
- * Candidature spontanee.
+ * Candidature spontanée.
  * URL: /jobs/candidature-spontanee
  */
 
@@ -9,14 +9,14 @@ import { ArrowLeft, Upload, Loader2, CheckCircle2, ArrowRight, Linkedin } from '
 import { publicPost } from '../../lib/public-api';
 
 const AVAILABILITY_OPTIONS = [
-  { value: 'immediate', label: 'Immediate' },
+  { value: 'immediate', label: 'Immédiate' },
   { value: '1_month', label: '1 mois' },
   { value: '3_months', label: '3 mois' },
   { value: 'passive', label: 'En veille' },
 ];
 
 const JOB_TYPE_OPTIONS = [
-  { value: '', label: 'Selectionnez...' },
+  { value: '', label: 'Sélectionnez...' },
   { value: 'sales_ae', label: 'Sales / Account Executive' },
   { value: 'management_commercial', label: 'Management Commercial' },
   { value: 'business_dev', label: 'Business Development' },
@@ -95,7 +95,7 @@ export default function SpontaneousApplicationPage() {
 
       <main className="mx-auto max-w-3xl px-6 py-8">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-[#1a1a2e] mb-2" style={{ fontFamily: 'var(--font-heading)' }}>Candidature spontanee</h1>
+          <h1 className="text-2xl font-bold text-[#1a1a2e] mb-2" style={{ fontFamily: 'var(--font-heading)' }}>Candidature spontanée</h1>
           <p className="text-neutral-500">
             Envoyez-nous votre CV. Nous vous contacterons si une opportunite correspond a votre profil.
           </p>

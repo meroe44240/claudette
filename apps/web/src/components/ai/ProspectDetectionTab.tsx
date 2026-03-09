@@ -711,10 +711,10 @@ export default function ProspectDetectionTab({
         <div className="rounded-xl border border-neutral-200 bg-white p-8">
           <div className="flex flex-col items-center gap-3 text-neutral-400">
             <Search size={32} strokeWidth={1.5} />
-            <p className="text-sm font-medium">Aucun prospect detecte</p>
+            <p className="text-sm font-medium">Aucun prospect détecté</p>
             <p className="text-xs text-center max-w-sm">
-              Essayez de modifier les parametres de recherche (secteurs, geographie, signaux)
-              pour obtenir plus de resultats.
+              Essayez de modifier les paramètres de recherche (secteurs, géographie, signaux)
+              pour obtenir plus de résultats.
             </p>
             <button
               onClick={() => {
@@ -723,7 +723,7 @@ export default function ProspectDetectionTab({
               }}
               className="mt-2 rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
             >
-              Modifier les parametres
+              Modifier les paramètres
             </button>
           </div>
         </div>

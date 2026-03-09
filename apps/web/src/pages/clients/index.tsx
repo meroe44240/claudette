@@ -65,10 +65,10 @@ const roleLabels: Record<RoleContact, string> = {
 const statutLabels: Record<StatutClient, string> = {
   LEAD: 'Lead',
   PREMIER_CONTACT: 'Premier contact',
-  BESOIN_QUALIFIE: 'Besoin qualifie',
-  PROPOSITION_ENVOYEE: 'Proposition envoyee',
-  MANDAT_SIGNE: 'Mandat signe',
-  RECURRENT: 'Recurrent',
+  BESOIN_QUALIFIE: 'Besoin qualifié',
+  PROPOSITION_ENVOYEE: 'Proposition envoyée',
+  MANDAT_SIGNE: 'Mandat signé',
+  RECURRENT: 'Récurrent',
   INACTIF: 'Inactif',
 };
 
@@ -125,10 +125,10 @@ const SECTOR_OPTIONS = [
 const STATUS_OPTIONS: { value: StatutClient; label: string }[] = [
   { value: 'LEAD', label: 'Lead' },
   { value: 'PREMIER_CONTACT', label: 'Premier contact' },
-  { value: 'BESOIN_QUALIFIE', label: 'Besoin qualifie' },
-  { value: 'PROPOSITION_ENVOYEE', label: 'Proposition envoyee' },
-  { value: 'MANDAT_SIGNE', label: 'Mandat signe' },
-  { value: 'RECURRENT', label: 'Recurrent' },
+  { value: 'BESOIN_QUALIFIE', label: 'Besoin qualifié' },
+  { value: 'PROPOSITION_ENVOYEE', label: 'Proposition envoyée' },
+  { value: 'MANDAT_SIGNE', label: 'Mandat signé' },
+  { value: 'RECURRENT', label: 'Récurrent' },
   { value: 'INACTIF', label: 'Inactif' },
 ];
 
@@ -278,8 +278,8 @@ export default function ClientsPage() {
     { key: 'status', label: 'Statut', type: 'multi-select', options: STATUS_OPTIONS },
     { key: 'city', label: 'Ville', type: 'multi-select', options: dynamicCityOptions },
     { key: 'role', label: 'Role', type: 'multi-select', options: ROLE_OPTIONS },
-    { key: 'assigned_to', label: 'Assigne a', type: 'single-select', options: [] },
-    { key: 'last_activity', label: 'Derniere activite', type: 'single-select', options: LAST_ACTIVITY_OPTIONS },
+    { key: 'assigned_to', label: 'Assigné à', type: 'single-select', options: [] },
+    { key: 'last_activity', label: 'Dernière activité', type: 'single-select', options: LAST_ACTIVITY_OPTIONS },
     { key: 'has_active_mandate', label: 'Mandat actif', type: 'toggle' },
   ], [dynamicCityOptions]);
 

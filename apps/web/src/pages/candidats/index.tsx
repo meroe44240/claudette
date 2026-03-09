@@ -90,16 +90,16 @@ const SOURCE_OPTIONS = [
 
 const STAGE_OPTIONS = [
   { value: 'SOURCING', label: 'Sourcing' },
-  { value: 'CONTACTE', label: 'Contacte' },
+  { value: 'CONTACTE', label: 'Contacté' },
   { value: 'ENTRETIEN_1', label: 'Entretien 1' },
   { value: 'ENTRETIEN_CLIENT', label: 'Entretien client' },
   { value: 'OFFRE', label: 'Offre' },
-  { value: 'PLACE', label: 'Place' },
-  { value: 'REFUSE', label: 'Refuse' },
+  { value: 'PLACE', label: 'Placé' },
+  { value: 'REFUSE', label: 'Refusé' },
 ];
 
 const DISPONIBILITE_OPTIONS = [
-  { value: 'immediate', label: 'Immediate' },
+  { value: 'immediate', label: 'Immédiate' },
   { value: '1mois', label: '1 mois' },
   { value: '3mois', label: '3 mois' },
   { value: 'en_poste', label: 'En poste' },
@@ -109,7 +109,7 @@ const DATE_ADDED_OPTIONS = [
   { value: 'week', label: 'Cette semaine' },
   { value: 'month', label: 'Ce mois' },
   { value: '3months', label: '3 derniers mois' },
-  { value: 'year', label: 'Cette annee' },
+  { value: 'year', label: 'Cette année' },
 ];
 
 // ── Selection actions ───────────────────────────────────────────
@@ -242,10 +242,10 @@ export default function CandidatsPage() {
     { key: 'entreprise', label: 'Entreprise', type: 'text', placeholder: 'Rechercher une entreprise...' },
     { key: 'city', label: 'Ville', type: 'multi-select', options: dynamicCityOptions },
     { key: 'source', label: 'Source', type: 'multi-select', options: SOURCE_OPTIONS },
-    { key: 'stage', label: 'Etape', type: 'multi-select', options: STAGE_OPTIONS },
+    { key: 'stage', label: 'Étape', type: 'multi-select', options: STAGE_OPTIONS },
     { key: 'mandat', label: 'Mandat', type: 'single-select', options: [{ value: 'vivier', label: 'Vivier (aucun)' }] },
-    { key: 'assigned_to', label: 'Assigne a', type: 'single-select', options: [] },
-    { key: 'disponibilite', label: 'Disponibilite', type: 'single-select', options: DISPONIBILITE_OPTIONS },
+    { key: 'assigned_to', label: 'Assigné à', type: 'single-select', options: [] },
+    { key: 'disponibilite', label: 'Disponibilité', type: 'single-select', options: DISPONIBILITE_OPTIONS },
     { key: 'date_added', label: 'Date ajout', type: 'single-select', options: DATE_ADDED_OPTIONS },
   ], [dynamicCityOptions]);
 

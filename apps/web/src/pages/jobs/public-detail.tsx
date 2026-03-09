@@ -37,7 +37,7 @@ interface JobDetail {
 }
 
 const AVAILABILITY_OPTIONS = [
-  { value: 'immediate', label: 'Immediate' },
+  { value: 'immediate', label: 'Immédiate' },
   { value: '1_month', label: '1 mois' },
   { value: '3_months', label: '3 mois' },
   { value: 'passive', label: 'En veille' },
@@ -47,12 +47,12 @@ function timeAgo(dateStr: string | null): string {
   if (!dateStr) return '';
   const diff = Date.now() - new Date(dateStr).getTime();
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  if (days === 0) return "Publiee aujourd'hui";
-  if (days === 1) return 'Publiee hier';
-  if (days < 7) return `Publiee il y a ${days} jours`;
+  if (days === 0) return "Publiée aujourd'hui";
+  if (days === 1) return 'Publiée hier';
+  if (days < 7) return `Publiée il y a ${days} jours`;
   const weeks = Math.floor(days / 7);
-  if (weeks === 1) return 'Publiee il y a 1 semaine';
-  return `Publiee il y a ${weeks} semaines`;
+  if (weeks === 1) return 'Publiée il y a 1 semaine';
+  return `Publiée il y a ${weeks} semaines`;
 }
 
 // ─── COMPONENT ──────────────────────────────────────
