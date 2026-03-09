@@ -43,6 +43,7 @@ import JobConfirmationPage from './pages/jobs/confirmation';
 import JobBoardPage from './pages/jobs/index';
 import JobBoardNewPage from './pages/jobs/new';
 import JobBoardEditPage from './pages/jobs/edit';
+import EmailsPage from './pages/emails/index';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuthStore();
@@ -101,6 +102,7 @@ export default function App() {
         <Route path="settings/integrations" element={<IntegrationsSettingsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="stats" element={<StatsPage />} />
+        <Route path="emails" element={<EmailsPage />} />
         <Route path="job-board" element={<JobBoardPage />} />
         <Route path="job-board/new" element={<JobBoardNewPage />} />
         <Route path="job-board/:id" element={<JobBoardEditPage />} />

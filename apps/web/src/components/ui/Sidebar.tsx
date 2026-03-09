@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Building2, Briefcase, FileText, ClipboardList, Bell, Upload, Settings, User, ListChecks, BookOpen, Zap, Crosshair, Send, ChevronDown, ChevronsLeft, BarChart3, Megaphone } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Briefcase, FileText, ClipboardList, Bell, Upload, Settings, User, ListChecks, BookOpen, Zap, Crosshair, Send, ChevronDown, ChevronsLeft, BarChart3, Megaphone, Mail } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 
 // ── Sidebar nav structure with grouped sections ─────────────────
@@ -52,6 +52,7 @@ const navSections: NavSection[] = [
     items: [
       { to: '/activites', icon: ClipboardList, label: 'Activités' },
       { to: '/taches', icon: ListChecks, label: 'Tâches' },
+      { to: '/emails', icon: Mail, label: 'Emails' },
       { to: '/stats', icon: BarChart3, label: 'Stats' },
       { to: '/templates', icon: BookOpen, label: 'Templates' },
       { to: '/notifications', icon: Bell, label: 'Notifications' },

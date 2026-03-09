@@ -585,3 +585,113 @@ export async function getUnreadCount(userId: string): Promise<number> {
 
   return data.messagesUnread ?? 0;
 }
+
+/**
+ * List Gmail messages with pagination, label filtering, and search.
+ */
+export async function listMessages(
+  userId: string,
+  opts: { maxResults: number; labelIds: string[]; q: string; pageToken?: string },
+) {
+  const accessToken = await getValidAccessToken(userId);
+
+  const params = new URLSearchParams();
+  params.set('maxResults', String(opts.maxResults));
+  if (opts.labelIds.length) {
+    opts.labelIds.forEach(l => params.append('labelIds', l));
+  }
+  if (opts.q) params.set('q', opts.q);
+  if (opts.pageToken) params.set('pageToken', opts.pageToken);
+
+  const listRes = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  const listData = await listRes.json() as any;
+
+  if (!listData.messages || listData.messages.length === 0) {
+    return { messages: [], nextPageToken: null, resultSizeEstimate: 0 };
+  }
+
+  // Fetch each message's metadata in parallel
+  const messages: InboxMessage[] = [];
+
+  const fetches = listData.messages.map(async (msg: any) => {
+    try {
+      const msgRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      const msgData = await msgRes.json() as any;
+
+      const headers = msgData.payload?.headers || [];
+      const subjectHeader = headers.find((h: any) => h.name === 'Subject');
+      const fromHeader = headers.find((h: any) => h.name === 'From');
+      const toHeader = headers.find((h: any) => h.name === 'To');
+      const dateHeader = headers.find((h: any) => h.name === 'Date');
+
+      const fromRaw = fromHeader?.value || '';
+      const emailMatch = fromRaw.match(/<([^>]+)>/);
+      const fromEmail = emailMatch ? emailMatch[1] : fromRaw.trim();
+      const fromName = emailMatch
+        ? fromRaw.replace(/<[^>]+>/, '').replace(/"/g, '').trim()
+        : fromRaw.split('@')[0];
+
+      const isRead = !(msgData.labelIds || []).includes('UNREAD');
+      const isSent = (msgData.labelIds || []).includes('SENT');
+
+      messages.push({
+        id: msg.id,
+        threadId: msg.threadId || msg.id,
+        from: { name: fromName || fromEmail, email: fromEmail },
+        subject: subjectHeader?.value || '(Sans objet)',
+        snippet: msgData.snippet || '',
+        date: dateHeader?.value || new Date().toISOString(),
+        isRead,
+        ...(isSent && { isSent: true }),
+        ...(toHeader && { to: toHeader.value }),
+      } as any);
+    } catch (e) {
+      console.warn(`[Gmail] Could not fetch message ${msg.id}:`, e);
+    }
+  });
+
+  await Promise.all(fetches);
+
+  // Sort by date descending
+  messages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Try to match sender emails to ATS contacts
+  const allEmails = messages.map(m => m.from.email.toLowerCase());
+  const uniqueEmails = [...new Set(allEmails)];
+
+  const [matchedCandidats, matchedClients] = await Promise.all([
+    prisma.candidat.findMany({
+      where: { email: { in: uniqueEmails, mode: 'insensitive' } },
+      select: { id: true, nom: true, prenom: true, email: true },
+    }),
+    prisma.client.findMany({
+      where: { email: { in: uniqueEmails, mode: 'insensitive' } },
+      select: { id: true, nom: true, prenom: true, email: true },
+    }),
+  ]);
+
+  const contactMap = new Map<string, { id: string; nom: string; prenom: string; type: string }>();
+  matchedCandidats.forEach(c => {
+    if (c.email) contactMap.set(c.email.toLowerCase(), { id: c.id, nom: c.nom, prenom: c.prenom || '', type: 'candidat' });
+  });
+  matchedClients.forEach(c => {
+    if (c.email) contactMap.set(c.email.toLowerCase(), { id: c.id, nom: c.nom, prenom: c.prenom || '', type: 'client' });
+  });
+
+  const enrichedMessages = messages.map(m => ({
+    ...m,
+    contact: contactMap.get(m.from.email.toLowerCase()) || null,
+  }));
+
+  return {
+    messages: enrichedMessages,
+    nextPageToken: listData.nextPageToken || null,
+    resultSizeEstimate: listData.resultSizeEstimate || messages.length,
+  };
+}

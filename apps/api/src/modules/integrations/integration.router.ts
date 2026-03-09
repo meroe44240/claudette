@@ -296,6 +296,43 @@ export default async function integrationRouter(fastify: FastifyInstance) {
     },
   });
 
+  // GET /gmail/messages - List Gmail messages with pagination (authenticated)
+  fastify.get('/gmail/messages', {
+    schema: {
+      description: 'Lister les emails Gmail avec pagination et filtres',
+      tags: ['Integrations - Gmail'],
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const query = request.query as {
+        maxResults?: string;
+        filter?: string; // 'all' | 'inbox' | 'sent'
+        q?: string; // search query
+        pageToken?: string;
+      };
+
+      const maxResults = Math.min(parseInt(query.maxResults || '20', 10), 50);
+      const filter = query.filter || 'all';
+      const searchQuery = query.q || '';
+      const pageToken = query.pageToken || undefined;
+
+      // Build Gmail label filter
+      let labelIds: string[] = [];
+      if (filter === 'inbox') labelIds = ['INBOX'];
+      else if (filter === 'sent') labelIds = ['SENT'];
+      // 'all' = no label filter
+
+      const result = await gmailService.listMessages(request.userId, {
+        maxResults,
+        labelIds,
+        q: searchQuery,
+        pageToken,
+      });
+
+      return result;
+    },
+  });
+
   // POST /gmail/disconnect - Disconnect Gmail (authenticated)
   fastify.post('/gmail/disconnect', {
     schema: {
