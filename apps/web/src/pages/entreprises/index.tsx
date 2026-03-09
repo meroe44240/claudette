@@ -323,54 +323,62 @@ export default function EntreprisesPage() {
     return (
       <div
         onClick={() => navigate(`/entreprises/${entreprise.id}`)}
-        className={`cursor-pointer rounded-2xl border bg-white p-6 shadow-card card-hover hover:shadow-card-hover ${
-          isSelected ? 'border-[#7C5CFC] ring-1 ring-[#7C5CFC]/20' : 'border-border/50'
+        className={`group relative cursor-pointer rounded-2xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
+          isSelected ? 'border-[#7C5CFC] ring-2 ring-[#7C5CFC]/20 shadow-md' : 'border-neutral-100 shadow-sm'
         }`}
       >
-        {/* Checkbox + Icon + Name */}
-        <div className="flex items-start gap-4">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={(e) => { e.stopPropagation(); toggleSelect(entreprise.id); }}
-            onClick={(e) => e.stopPropagation()}
-            className="mt-1 h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
-          />
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-neutral-50">
-            <Building size={22} className="text-neutral-400" />
+        {/* Top accent bar */}
+        <div className="h-1 w-full bg-gradient-to-r from-neutral-700 to-neutral-500" />
+
+        <div className="p-5">
+          {/* Header: Checkbox + Icon + Name */}
+          <div className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => { e.stopPropagation(); toggleSelect(entreprise.id); }}
+              onClick={(e) => e.stopPropagation()}
+              className="mt-1 h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
+            />
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-neutral-100 to-neutral-50 border border-neutral-100">
+              <Building size={20} className="text-neutral-500" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[16px] font-semibold text-neutral-900">
+                {entreprise.nom}
+              </p>
+              {entreprise.secteur && (
+                <p className="mt-0.5 text-[13px] text-neutral-500 truncate">{entreprise.secteur}</p>
+              )}
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[18px] font-semibold leading-tight text-text-primary">
-              {entreprise.nom}
-            </p>
-            {entreprise.secteur && (
-              <div className="mt-1.5">
-                <Badge variant="default" size="sm">{entreprise.secteur}</Badge>
+
+          {/* Stats chips */}
+          <div className="mt-4 flex items-center gap-3">
+            <div className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 border border-blue-100">
+              <span className="text-[14px] font-semibold text-blue-600">{clientCount}</span>
+              <span className="text-[11px] text-blue-500">client{clientCount > 1 ? 's' : ''}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-lg bg-violet-50 px-2.5 py-1.5 border border-violet-100">
+              <span className="text-[14px] font-semibold text-violet-600">{mandatCount}</span>
+              <span className="text-[11px] text-violet-500">mandat{mandatCount > 1 ? 's' : ''}</span>
+            </div>
+          </div>
+
+          {/* Location + Taille */}
+          <div className="mt-3 pt-3 border-t border-neutral-50 flex flex-wrap items-center gap-2">
+            {entreprise.localisation && (
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-50 px-2.5 py-1 text-[11px] font-medium text-neutral-600 border border-neutral-100">
+                <MapPin size={11} className="text-neutral-400" />
+                {entreprise.localisation}
               </div>
             )}
+            {entreprise.taille && (
+              <Badge variant={tailleVariant[entreprise.taille]} size="sm">
+                {tailleLabels[entreprise.taille]}
+              </Badge>
+            )}
           </div>
-        </div>
-
-        {/* Stats */}
-        <p className="mt-4 text-[13px] text-neutral-500">
-          {clientCount} client{clientCount > 1 ? 's' : ''}
-          {' · '}
-          {mandatCount} mandat{mandatCount > 1 ? 's' : ''}
-        </p>
-
-        {/* Location + Taille */}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {entreprise.localisation && (
-            <span className="inline-flex items-center gap-1 text-[13px] text-neutral-500">
-              <MapPin size={12} className="text-neutral-400" />
-              {entreprise.localisation}
-            </span>
-          )}
-          {entreprise.taille && (
-            <Badge variant={tailleVariant[entreprise.taille]} size="sm">
-              {tailleLabels[entreprise.taille]}
-            </Badge>
-          )}
         </div>
       </div>
     );

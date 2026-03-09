@@ -355,78 +355,78 @@ export default function CandidatsPage() {
     return (
       <div
         onClick={() => navigate(`/candidats/${candidat.id}`)}
-        className={`cursor-pointer rounded-2xl border bg-white p-5 shadow-card card-hover hover:shadow-card-hover ${
-          isSelected ? 'border-[#7C5CFC] ring-1 ring-[#7C5CFC]/20' : 'border-border/50'
+        className={`group relative cursor-pointer rounded-2xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
+          isSelected ? 'border-[#7C5CFC] ring-2 ring-[#7C5CFC]/20 shadow-md' : 'border-neutral-100 shadow-sm'
         }`}
       >
-        {/* Checkbox + Avatar + Name */}
-        <div className="flex flex-col items-center text-center">
-          <div className="flex items-center gap-2 self-start mb-2">
+        {/* Top accent bar */}
+        <div className="h-1 w-full bg-gradient-to-r from-[#7C5CFC] to-[#A78BFA]" />
+
+        <div className="p-5">
+          {/* Header: Checkbox + Avatar + Name */}
+          <div className="flex items-start gap-3">
             <input
               type="checkbox"
               checked={isSelected}
               onChange={(e) => { e.stopPropagation(); toggleSelect(candidat.id); }}
               onClick={(e) => e.stopPropagation()}
-              className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer"
+              className="mt-1 h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
             />
+            <Avatar src={candidat.photoUrl} nom={candidat.nom} prenom={candidat.prenom} size="lg" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[15px] font-semibold text-neutral-900">
+                {fullName}
+              </p>
+              {candidat.posteActuel && (
+                <p className="mt-0.5 truncate text-[13px] font-medium text-[#7C5CFC]">
+                  {candidat.posteActuel}
+                </p>
+              )}
+              {candidat.entrepriseActuelle && (
+                <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-neutral-500">
+                  <Building2 size={11} className="flex-shrink-0 text-neutral-400" />
+                  <span className="truncate">{candidat.entrepriseActuelle}</span>
+                </div>
+              )}
+            </div>
           </div>
-          <Avatar src={candidat.photoUrl} nom={candidat.nom} prenom={candidat.prenom} size="lg" />
-          <p className="mt-3 truncate text-[16px] font-semibold leading-tight text-text-primary w-full">
-            {fullName}
-          </p>
-          {candidat.posteActuel && (
-            <p className="mt-0.5 truncate text-[13px] font-medium text-[#7C5CFC] w-full">
-              {candidat.posteActuel}
-            </p>
-          )}
-          {candidat.entrepriseActuelle && (
-            <div className="mt-0.5 flex items-center justify-center gap-1 text-xs text-neutral-500">
-              <Building2 size={11} className="flex-shrink-0 text-neutral-400" />
-              <span className="truncate">{candidat.entrepriseActuelle}</span>
-            </div>
-          )}
-        </div>
 
-        {/* Key info grid */}
-        <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[12px]">
-          {candidat.localisation && (
-            <div className="flex items-center gap-1.5 text-neutral-600 min-w-0">
-              <MapPin size={12} className="flex-shrink-0 text-neutral-400" />
-              <span className="truncate">{candidat.localisation}</span>
-            </div>
-          )}
-          {candidat.anneesExperience != null && (
-            <div className="flex items-center gap-1.5 text-neutral-600 min-w-0">
-              <Clock size={12} className="flex-shrink-0 text-neutral-400" />
-              <span className="truncate">{candidat.anneesExperience} an{candidat.anneesExperience > 1 ? 's' : ''} exp.</span>
-            </div>
-          )}
-          {salaire && (
-            <div className="flex items-center gap-1.5 text-neutral-600 min-w-0">
-              <Banknote size={12} className="flex-shrink-0 text-neutral-400" />
-              <span className="truncate">{(salaire / 1000).toFixed(0)}k&euro;{candidat.salaireActuel ? '' : ' souh.'}</span>
-            </div>
-          )}
-          {!candidat.localisation && !candidat.anneesExperience && !salaire && (
-            <div className="col-span-2 text-center text-neutral-400 italic text-[11px] py-0.5">
-              Infos manquantes
-            </div>
-          )}
-        </div>
+          {/* Info chips */}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {candidat.localisation && (
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-50 px-2.5 py-1 text-[11px] font-medium text-neutral-600 border border-neutral-100">
+                <MapPin size={11} className="text-neutral-400" />
+                <span className="truncate max-w-[100px]">{candidat.localisation}</span>
+              </div>
+            )}
+            {candidat.anneesExperience != null && (
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-50 px-2.5 py-1 text-[11px] font-medium text-neutral-600 border border-neutral-100">
+                <Clock size={11} className="text-neutral-400" />
+                {candidat.anneesExperience} an{candidat.anneesExperience > 1 ? 's' : ''}
+              </div>
+            )}
+            {salaire && (
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-600 border border-emerald-100">
+                <Banknote size={11} />
+                {(salaire / 1000).toFixed(0)}k&euro;{candidat.salaireActuel ? '' : ' souh.'}
+              </div>
+            )}
+          </div>
 
-        {/* Tags row */}
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
-          {candidat.source && (
-            <Badge size="sm">{candidat.source}</Badge>
-          )}
-          {candidat.linkedinUrl && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-600 border border-blue-100">
-              <Linkedin size={10} />
-            </span>
-          )}
-          {(candidat._count?.candidatures ?? 0) > 0 && (
-            <Badge variant="info" size="sm">{candidat._count!.candidatures} mandat{candidat._count!.candidatures > 1 ? 's' : ''}</Badge>
-          )}
+          {/* Bottom: tags + mandats */}
+          <div className="mt-3 pt-3 border-t border-neutral-50 flex flex-wrap items-center gap-1.5">
+            {candidat.source && (
+              <Badge size="sm">{candidat.source}</Badge>
+            )}
+            {candidat.linkedinUrl && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-600 border border-blue-100">
+                <Linkedin size={10} />
+              </span>
+            )}
+            {(candidat._count?.candidatures ?? 0) > 0 && (
+              <Badge variant="info" size="sm">{candidat._count!.candidatures} mandat{candidat._count!.candidatures > 1 ? 's' : ''}</Badge>
+            )}
+          </div>
         </div>
       </div>
     );

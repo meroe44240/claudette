@@ -415,63 +415,78 @@ export default function ClientsPage() {
     const fullName = `${client.prenom || ''} ${client.nom}`.trim();
     const colorIdx = getAvatarColorIndex(client.nom);
     const isSelected = selectedIds.has(client.id);
+    const statutColor = {
+      LEAD: 'from-amber-400 to-orange-400',
+      PREMIER_CONTACT: 'from-blue-400 to-cyan-400',
+      BESOIN_QUALIFIE: 'from-teal-400 to-emerald-400',
+      PROPOSITION_ENVOYEE: 'from-[#7C5CFC] to-[#A78BFA]',
+      MANDAT_SIGNE: 'from-emerald-400 to-green-500',
+      RECURRENT: 'from-indigo-400 to-violet-400',
+      INACTIF: 'from-neutral-300 to-neutral-400',
+    }[client.statutClient] || 'from-neutral-300 to-neutral-400';
+
     return (
       <div
         onClick={() => navigate(`/clients/${client.id}`)}
-        className={`cursor-pointer rounded-2xl border bg-white p-5 shadow-card card-hover hover:shadow-card-hover ${
-          isSelected ? 'border-[#7C5CFC] ring-1 ring-[#7C5CFC]/20' : 'border-border/50'
+        className={`group relative cursor-pointer rounded-2xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
+          isSelected ? 'border-[#7C5CFC] ring-2 ring-[#7C5CFC]/20 shadow-md' : 'border-neutral-100 shadow-sm'
         }`}
       >
-        {/* Checkbox + Avatar + Name */}
-        <div className="flex items-center gap-3">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={(e) => { e.stopPropagation(); toggleSelect(client.id); }}
-            onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
-          />
-          <div
-            className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-white"
-            style={{ backgroundColor: AVATAR_BG[colorIdx] }}
-          >
-            {getInitials(client.prenom, client.nom)}
+        {/* Top accent bar — color based on status */}
+        <div className={`h-1 w-full bg-gradient-to-r ${statutColor}`} />
+
+        <div className="p-5">
+          {/* Header: Checkbox + Avatar + Name */}
+          <div className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => { e.stopPropagation(); toggleSelect(client.id); }}
+              onClick={(e) => e.stopPropagation()}
+              className="mt-1 h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
+            />
+            <div
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white"
+              style={{ backgroundColor: AVATAR_BG[colorIdx] }}
+            >
+              {getInitials(client.prenom, client.nom)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[15px] font-semibold text-neutral-900">{fullName}</p>
+              {client.poste && (
+                <p className="mt-0.5 truncate text-[13px] text-neutral-500">{client.poste}</p>
+              )}
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[16px] font-semibold leading-tight text-text-primary">{fullName}</p>
-            {client.poste && (
-              <p className="mt-0.5 truncate text-[14px] font-normal text-neutral-500">{client.poste}</p>
+
+          {/* Entreprise chip */}
+          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-neutral-50 px-2.5 py-1 text-[12px] font-medium text-neutral-600 border border-neutral-100">
+            <Building2 size={12} className="text-neutral-400" />
+            <span className="truncate max-w-[160px]">{client.entreprise.nom}</span>
+          </div>
+
+          {/* Status + Role badges */}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <Badge variant={statutVariant[client.statutClient]} size="sm">
+              {statutLabels[client.statutClient]}
+            </Badge>
+            {client.roleContact && (
+              <Badge variant="neutral" size="sm">{roleLabels[client.roleContact]}</Badge>
+            )}
+          </div>
+
+          {/* Owner indicator */}
+          <div className="mt-3 pt-3 border-t border-neutral-50 flex items-center gap-1.5">
+            {client.assignedTo ? (
+              <>
+                <Avatar nom={client.assignedTo.nom} prenom={client.assignedTo.prenom} size="xs" />
+                <span className="text-[12px] text-neutral-500 truncate">{client.assignedTo.prenom?.[0]}. {client.assignedTo.nom}</span>
+              </>
+            ) : (
+              <Badge variant="success" size="sm">Disponible</Badge>
             )}
           </div>
         </div>
-
-        {/* Entreprise */}
-        <div className="mt-3 flex items-center gap-1.5 text-xs text-neutral-500">
-          <Building2 size={12} className="flex-shrink-0 text-neutral-400" />
-          <span className="truncate">{client.entreprise.nom}</span>
-        </div>
-
-        {/* Tags row */}
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          {client.roleContact && (
-            <Badge variant="neutral" size="sm">{roleLabels[client.roleContact]}</Badge>
-          )}
-          <Badge variant={statutVariant[client.statutClient]} size="sm">
-            {statutLabels[client.statutClient]}
-          </Badge>
-        </div>
-
-        {/* Owner indicator */}
-        {client.assignedTo ? (
-          <div className="mt-2 flex items-center gap-1.5 text-xs text-neutral-500">
-            <Avatar nom={client.assignedTo.nom} prenom={client.assignedTo.prenom} size="xs" />
-            <span className="truncate">{client.assignedTo.prenom?.[0]}. {client.assignedTo.nom}</span>
-          </div>
-        ) : (
-          <div className="mt-2 flex items-center gap-1.5">
-            <Badge variant="success" size="sm">Disponible</Badge>
-          </div>
-        )}
       </div>
     );
   }
