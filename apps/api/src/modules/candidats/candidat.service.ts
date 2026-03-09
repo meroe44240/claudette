@@ -18,6 +18,8 @@ export async function list(
   assignedToId?: string,
   stages?: string[],
   dateAddedPeriod?: string,
+  sortBy?: string,
+  sortDir?: 'asc' | 'desc',
 ) {
   const where: any = {};
 
@@ -110,12 +112,26 @@ export async function list(
 
   const { skip, take } = paginationToSkipTake(params);
 
+  // Build orderBy from sortBy/sortDir
+  const allowedSorts: Record<string, any> = {
+    nom: { nom: sortDir || 'asc' },
+    prenom: { prenom: sortDir || 'asc' },
+    posteActuel: { posteActuel: sortDir || 'asc' },
+    entrepriseActuelle: { entrepriseActuelle: sortDir || 'asc' },
+    localisation: { localisation: sortDir || 'asc' },
+    salaireSouhaite: { salaireSouhaite: sortDir || 'desc' },
+    salaireActuel: { salaireActuel: sortDir || 'desc' },
+    anneesExperience: { anneesExperience: sortDir || 'desc' },
+    createdAt: { createdAt: sortDir || 'desc' },
+  };
+  const orderBy = (sortBy && allowedSorts[sortBy]) || { createdAt: 'desc' };
+
   const [data, total] = await Promise.all([
     prisma.candidat.findMany({
       where,
       skip,
       take,
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       include: {
         _count: { select: { candidatures: true } },
         assignedTo: { select: { id: true, nom: true, prenom: true } },

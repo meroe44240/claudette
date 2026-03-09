@@ -20,6 +20,13 @@ export async function listUsers() {
   });
 }
 
+export async function listTeamMembers() {
+  return prisma.user.findMany({
+    select: { id: true, nom: true, prenom: true },
+    orderBy: { nom: 'asc' },
+  });
+}
+
 export async function createUser(data: {
   email: string;
   nom: string;

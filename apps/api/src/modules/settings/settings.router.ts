@@ -18,6 +18,18 @@ const updateUserSchema = z.object({
 });
 
 export default async function settingsRouter(fastify: FastifyInstance) {
+  // GET /team - List team members (minimal info, any authenticated user)
+  fastify.get('/team', {
+    schema: {
+      description: 'Lister les membres de l\'équipe (id, nom, prenom)',
+      tags: ['Settings'],
+    },
+    preHandler: [authenticate],
+    handler: async () => {
+      return settingsService.listTeamMembers();
+    },
+  });
+
   // GET /users - List all users
   fastify.get('/users', {
     schema: {

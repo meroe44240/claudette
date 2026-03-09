@@ -242,7 +242,26 @@ export default function EntrepriseDetailPage() {
             {isEditing && editForm ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Input label="Nom" value={editForm.nom} onChange={setField('nom')} placeholder="Nom de l'entreprise" />
-                <Input label="Secteur" value={editForm.secteur} onChange={setField('secteur')} placeholder="Tech, Finance, Sant\u00e9..." />
+                <Select
+                  label="Secteur"
+                  options={[
+                    { value: '', label: 'Aucun' },
+                    { value: 'Tech / SaaS', label: 'Tech / SaaS' },
+                    { value: 'Finance / Banque', label: 'Finance / Banque' },
+                    { value: 'Conseil', label: 'Conseil' },
+                    { value: 'Industrie', label: 'Industrie' },
+                    { value: 'Santé / Pharma', label: 'Santé / Pharma' },
+                    { value: 'E-commerce / Retail', label: 'E-commerce / Retail' },
+                    { value: 'Immobilier', label: 'Immobilier' },
+                    { value: 'Énergie', label: 'Énergie' },
+                    { value: 'Média / Communication', label: 'Média / Communication' },
+                    { value: 'Assurance', label: 'Assurance' },
+                    { value: 'Autre', label: 'Autre' },
+                  ]}
+                  value={editForm.secteur}
+                  onChange={(val) => setEditForm((prev) => prev ? { ...prev, secteur: val } : prev)}
+                  searchable
+                />
                 <Input label="Site web" value={editForm.siteWeb} onChange={setField('siteWeb')} placeholder="https://www.exemple.com" />
                 <Select
                   label="Taille"

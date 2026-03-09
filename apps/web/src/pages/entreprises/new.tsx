@@ -142,11 +142,26 @@ export default function EntrepriseNewPage() {
               required
               error={errors.nom}
             />
-            <Input
+            <Select
               label="Secteur"
+              options={[
+                { value: '', label: 'Sélectionner...' },
+                { value: 'Tech / SaaS', label: 'Tech / SaaS' },
+                { value: 'Finance / Banque', label: 'Finance / Banque' },
+                { value: 'Conseil', label: 'Conseil' },
+                { value: 'Industrie', label: 'Industrie' },
+                { value: 'Santé / Pharma', label: 'Santé / Pharma' },
+                { value: 'E-commerce / Retail', label: 'E-commerce / Retail' },
+                { value: 'Immobilier', label: 'Immobilier' },
+                { value: 'Énergie', label: 'Énergie' },
+                { value: 'Média / Communication', label: 'Média / Communication' },
+                { value: 'Assurance', label: 'Assurance' },
+                { value: 'Autre', label: 'Autre' },
+              ]}
               value={form.secteur}
-              onChange={set('secteur')}
-              placeholder="Tech, Finance, Santé..."
+              onChange={(val) => setForm((prev) => ({ ...prev, secteur: val }))}
+              placeholder="Sélectionner un secteur"
+              searchable
             />
 
             <Input

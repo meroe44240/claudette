@@ -31,6 +31,8 @@ export default async function candidatRouter(fastify: FastifyInstance) {
           assignedToId: { type: 'string' },
           stage: { type: 'string', description: 'Comma-separated stages' },
           dateAddedPeriod: { type: 'string', enum: ['week', 'month', '3months', 'year'] },
+          sortBy: { type: 'string' },
+          sortDir: { type: 'string', enum: ['asc', 'desc'] },
         },
       },
     },
@@ -57,7 +59,24 @@ export default async function candidatRouter(fastify: FastifyInstance) {
         query.assignedToId,
         stages,
         query.dateAddedPeriod,
+        query.sortBy,
+        query.sortDir,
       );
+    },
+  });
+
+  // GET /tags - List all distinct tags for autocomplete
+  fastify.get('/tags', {
+    schema: {
+      description: 'Lister tous les tags distincts',
+      tags: ['Candidats'],
+    },
+    preHandler: [authenticate],
+    handler: async () => {
+      const result = await prisma.$queryRaw<{ tag: string }[]>`
+        SELECT DISTINCT unnest(tags) as tag FROM "Candidat" WHERE tags IS NOT NULL ORDER BY tag
+      `;
+      return result.map((r) => r.tag);
     },
   });
 

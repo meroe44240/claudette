@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { LayoutGrid, List, Plus, Search, Building2, Users, Calendar, Columns3, Briefcase } from 'lucide-react';
+import { LayoutGrid, List, Plus, Search, Building2, Users, Calendar, Columns3, Briefcase, Filter, X } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
@@ -112,17 +112,27 @@ export default function MandatsPage() {
   const [view, setView] = useState<ViewMode>('table');
   const navigate = useNavigate();
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const [filterStatut, setFilterStatut] = useState<string>('');
+  const [filterPriorite, setFilterPriorite] = useState<string>('');
+  const [showFilters, setShowFilters] = useState(false);
+
+  const activeFilterCount = [filterStatut, filterPriorite].filter(Boolean).length;
 
   const handleSort = useCallback((key: string) => {
     setSortConfig((prev) => toggleSort(prev, key));
   }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['mandats', page, search],
-    queryFn: () =>
-      api.get<PaginatedResponse>(
-        `/mandats?page=${page}&perPage=20${search ? `&search=${encodeURIComponent(search)}` : ''}`,
-      ),
+    queryKey: ['mandats', page, search, filterStatut, filterPriorite],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      params.set('page', String(page));
+      params.set('perPage', '20');
+      if (search) params.set('search', search);
+      if (filterStatut) params.set('statut', filterStatut);
+      if (filterPriorite) params.set('priorite', filterPriorite);
+      return api.get<PaginatedResponse>(`/mandats?${params.toString()}`);
+    },
   });
 
   const total = data?.meta?.total ?? 0;
@@ -350,23 +360,83 @@ export default function MandatsPage() {
         }
       />
 
-      {/* Search */}
-      <div className="mb-6">
-        <div className="relative max-w-[400px]">
-          <Search
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
-          />
-          <input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Rechercher un mandat..."
-            className="h-[48px] w-full rounded-lg border-[1.5px] border-neutral-100 bg-white pl-10 pr-4 text-sm shadow-sm outline-none transition-all focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.1)]"
-          />
+      {/* Search + Filters */}
+      <div className="mb-6 space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="relative max-w-[400px] flex-1">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
+            />
+            <input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Rechercher un mandat..."
+              className="h-[40px] w-full rounded-lg border-[1.5px] border-neutral-100 bg-white pl-10 pr-4 text-sm shadow-sm outline-none transition-all focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.1)]"
+            />
+          </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+              activeFilterCount > 0
+                ? 'border-primary-300 bg-primary-50 text-primary-600'
+                : 'border-neutral-200 bg-white text-text-secondary hover:bg-neutral-50'
+            }`}
+          >
+            <Filter size={14} />
+            Filtres
+            {activeFilterCount > 0 && (
+              <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary-500 text-[11px] font-bold text-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          {activeFilterCount > 0 && (
+            <button
+              onClick={() => { setFilterStatut(''); setFilterPriorite(''); setPage(1); }}
+              className="flex items-center gap-1 text-xs text-text-tertiary hover:text-text-primary transition-colors"
+            >
+              <X size={12} /> Réinitialiser
+            </button>
+          )}
         </div>
+        {showFilters && (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50/50 p-3">
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Statut</label>
+              <select
+                value={filterStatut}
+                onChange={(e) => { setFilterStatut(e.target.value); setPage(1); }}
+                className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-xs outline-none focus:border-primary-400"
+              >
+                <option value="">Tous</option>
+                <option value="OUVERT">Ouvert</option>
+                <option value="EN_COURS">En cours</option>
+                <option value="GAGNE">Gagné</option>
+                <option value="PERDU">Perdu</option>
+                <option value="ANNULE">Annulé</option>
+                <option value="CLOTURE">Clôturé</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Priorité</label>
+              <select
+                value={filterPriorite}
+                onChange={(e) => { setFilterPriorite(e.target.value); setPage(1); }}
+                className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-xs outline-none focus:border-primary-400"
+              >
+                <option value="">Toutes</option>
+                <option value="BASSE">Basse</option>
+                <option value="NORMALE">Normale</option>
+                <option value="HAUTE">Haute</option>
+                <option value="URGENTE">Urgente</option>
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Content */}

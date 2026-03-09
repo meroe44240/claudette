@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Plus, Search, LayoutGrid, List, MapPin, Building2, Linkedin, Mail, Zap, ArrowRightLeft, Download, Users, Banknote, Clock } from 'lucide-react';
+import { toast } from '../../components/ui/Toast';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
@@ -16,7 +17,7 @@ import FilterBar from '../../components/ui/FilterBar';
 import type { FilterConfig } from '../../components/ui/FilterBar';
 import SelectionBar from '../../components/ui/SelectionBar';
 import type { SelectionAction } from '../../components/ui/SelectionBar';
-import SortableHeader, { toggleSort, applySortToData } from '../../components/ui/SortableHeader';
+import SortableHeader, { toggleSort } from '../../components/ui/SortableHeader';
 import type { SortConfig } from '../../components/ui/SortableHeader';
 
 interface Candidat {
@@ -200,13 +201,9 @@ export default function CandidatsPage() {
     });
   }, []);
 
-  const handleSelectionAction = useCallback((key: string) => {
-    console.log('Selection action:', key, 'on ids:', Array.from(selectedIds));
-  }, [selectedIds]);
-
   // ── Data fetching ─────────────────────────────────────────────
   const { data, isLoading } = useQuery({
-    queryKey: ['candidats', page, search, filterValues],
+    queryKey: ['candidats', page, search, filterValues, sortConfig],
     queryFn: () => {
       const params = new URLSearchParams();
       params.set('page', String(page));
@@ -221,11 +218,37 @@ export default function CandidatsPage() {
       if (filterValues.assigned_to) params.set('assignedToId', filterValues.assigned_to);
       if (filterValues.disponibilite) params.set('disponibilite', filterValues.disponibilite);
       if (filterValues.date_added) params.set('dateAddedPeriod', filterValues.date_added);
+      // Pass sort params to server
+      if (sortConfig) {
+        const sortKeyMap: Record<string, string> = {
+          nom: 'nom',
+          poste: 'posteActuel',
+          entreprise: 'entrepriseActuelle',
+          localisation: 'localisation',
+        };
+        const apiSortKey = sortKeyMap[sortConfig.key] || sortConfig.key;
+        params.set('sortBy', apiSortKey);
+        params.set('sortDir', sortConfig.direction);
+      }
       return api.get<PaginatedResponse>(`/candidats?${params.toString()}`);
     },
   });
 
   const total = data?.meta?.total ?? 0;
+
+  // ── Fetch team members for "Assigné à" filter ───────────────
+  const { data: teamUsers } = useQuery({
+    queryKey: ['settings', 'team'],
+    queryFn: () => api.get<{ id: string; nom: string; prenom: string | null }[]>('/settings/team'),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const userOptions = useMemo(() =>
+    (teamUsers || []).map((u) => ({
+      value: u.id,
+      label: `${u.prenom || ''} ${u.nom}`.trim(),
+    })),
+  [teamUsers]);
 
   // ── Dynamic filter options ────────────────────────────────────
   const dynamicCityOptions = useMemo(() => {
@@ -244,26 +267,57 @@ export default function CandidatsPage() {
     { key: 'source', label: 'Source', type: 'multi-select', options: SOURCE_OPTIONS },
     { key: 'stage', label: 'Étape', type: 'multi-select', options: STAGE_OPTIONS },
     { key: 'mandat', label: 'Mandat', type: 'single-select', options: [{ value: 'vivier', label: 'Vivier (aucun)' }] },
-    { key: 'assigned_to', label: 'Assigné à', type: 'single-select', options: [] },
+    { key: 'assigned_to', label: 'Assigné à', type: 'single-select', options: userOptions },
     { key: 'disponibilite', label: 'Disponibilité', type: 'single-select', options: DISPONIBILITE_OPTIONS },
     { key: 'date_added', label: 'Date ajout', type: 'single-select', options: DATE_ADDED_OPTIONS },
-  ], [dynamicCityOptions]);
+  ], [dynamicCityOptions, userOptions]);
 
-  // ── Sorting (server handles filtering, client handles sort of current page) ──
+  // ── Data (server-side sorting) ──
   const allCandidats = data?.data ?? [];
+  const sortedCandidats = allCandidats; // sorting is now server-side
 
-  const sortedCandidats = useMemo(
-    () => applySortToData(allCandidats, sortConfig, (row, key) => {
-      switch (key) {
-        case 'nom': return `${row.prenom || ''} ${row.nom}`.trim();
-        case 'poste': return row.posteActuel;
-        case 'entreprise': return row.entrepriseActuelle;
-        case 'localisation': return row.localisation;
-        default: return null;
+  const handleSelectionAction = useCallback((key: string) => {
+    const ids = Array.from(selectedIds);
+    const selected = allCandidats.filter((c) => ids.includes(c.id));
+
+    switch (key) {
+      case 'export': {
+        const headers = ['Nom', 'Prénom', 'Email', 'Poste', 'Entreprise', 'Localisation', 'Salaire souhaité', 'Source', 'LinkedIn'];
+        const rows = selected.map((c) => [
+          c.nom,
+          c.prenom || '',
+          c.email || '',
+          c.posteActuel || '',
+          c.entrepriseActuelle || '',
+          c.localisation || '',
+          c.salaireSouhaite ? String(c.salaireSouhaite) : '',
+          c.source || '',
+          c.linkedinUrl || '',
+        ]);
+        const csvContent = [headers, ...rows].map((r) => r.map((v) => `"${v.replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `candidats-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('success', `${selected.length} candidat(s) exporté(s)`);
+        break;
       }
-    }),
-    [allCandidats, sortConfig],
-  );
+      case 'email':
+        toast('info', `Action email groupé pour ${selected.length} candidat(s) — bientôt disponible`);
+        break;
+      case 'sequence':
+        toast('info', `Lancer séquence pour ${selected.length} candidat(s) — bientôt disponible`);
+        break;
+      case 'stage':
+        toast('info', `Changement d'étape pour ${selected.length} candidat(s) — bientôt disponible`);
+        break;
+      default:
+        break;
+    }
+  }, [selectedIds, allCandidats]);
 
   const allSelected = sortedCandidats.length > 0 && sortedCandidats.every((c) => selectedIds.has(c.id));
 

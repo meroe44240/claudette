@@ -14,6 +14,7 @@ import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Input, { Textarea } from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
 import Skeleton, { SkeletonCard } from '../../components/ui/Skeleton';
 import Modal from '../../components/ui/Modal';
 import EmailComposer from '../../components/email/EmailComposer';
@@ -22,6 +23,7 @@ import ActivityJournal from '../../components/activity/ActivityJournal';
 import Avatar from '../../components/ui/Avatar';
 import DeleteConfirmModal from '../../components/ui/DeleteConfirmModal';
 import CallBriefPanel from '../../components/ai/CallBriefPanel';
+import TagPicker from '../../components/ui/TagPicker';
 import { toast } from '../../components/ui/Toast';
 
 interface Candidature {
@@ -97,7 +99,7 @@ interface EditForm {
   anneesExperience: string;
   disponibilite: string;
   mobilite: string;
-  tags: string;
+  tags: string[];
   notes: string;
 }
 
@@ -150,7 +152,7 @@ function buildEditForm(candidat: CandidatDetail): EditForm {
     anneesExperience: candidat.anneesExperience != null ? String(candidat.anneesExperience) : '',
     disponibilite: candidat.disponibilite || '',
     mobilite: candidat.mobilite || '',
-    tags: candidat.tags.join(', '),
+    tags: [...candidat.tags],
     notes: candidat.notes || '',
   };
 }
@@ -166,6 +168,10 @@ export default function CandidatDetailPage() {
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showCallBrief, setShowCallBrief] = useState(false);
+
+  // Add to mandat state
+  const [showAddToMandat, setShowAddToMandat] = useState(false);
+  const [selectedMandatId, setSelectedMandatId] = useState('');
 
   // CV upload modal state
   const [showCvUploadModal, setShowCvUploadModal] = useState(false);
@@ -212,6 +218,40 @@ export default function CandidatDetailPage() {
     queryKey: ['me'],
     queryFn: () => api.get<{ id: string; calendlyUrl?: string }>('/auth/me'),
     staleTime: 10 * 60 * 1000,
+  });
+
+  // Fetch existing tags for autocomplete
+  const { data: tagSuggestions } = useQuery({
+    queryKey: ['candidats', 'tags'],
+    queryFn: () => api.get<string[]>('/candidats/tags'),
+    staleTime: 2 * 60 * 1000,
+  });
+
+  // Fetch open mandats for "Ajouter au mandat"
+  const { data: mandatsData } = useQuery({
+    queryKey: ['mandats', 'open-for-add'],
+    queryFn: () => api.get<{ data: { id: string; titrePoste: string; entreprise: { nom: string } }[]; meta: any }>('/mandats?statut=OUVERT&perPage=200'),
+    enabled: showAddToMandat,
+    staleTime: 30_000,
+  });
+
+  const mandatOptions = (mandatsData?.data || []).map((m) => ({
+    value: m.id,
+    label: `${m.titrePoste} — ${m.entreprise.nom}`,
+  }));
+
+  const addToMandatMutation = useMutation({
+    mutationFn: (mandatId: string) =>
+      api.post('/candidatures', { candidatId: id, mandatId, stage: 'SOURCED' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidat', id] });
+      toast('success', 'Candidat ajouté au mandat !');
+      setShowAddToMandat(false);
+      setSelectedMandatId('');
+    },
+    onError: (error: any) => {
+      toast('error', error.message || 'Erreur lors de l\'ajout');
+    },
   });
 
   const handleCopyBookingLink = useCallback((link: string, fieldId: string) => {
@@ -440,9 +480,7 @@ export default function CandidatDetailPage() {
     else payload.disponibilite = null;
     if (editForm.mobilite.trim()) payload.mobilite = editForm.mobilite.trim();
     else payload.mobilite = null;
-    payload.tags = editForm.tags
-      ? editForm.tags.split(',').map((t) => t.trim()).filter(Boolean)
-      : [];
+    payload.tags = editForm.tags.filter(Boolean);
     if (editForm.notes.trim()) payload.notes = editForm.notes.trim();
     else payload.notes = null;
 
@@ -976,7 +1014,12 @@ export default function CandidatDetailPage() {
           </Card>
 
           <Card>
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">Candidatures</h2>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-text-primary">Candidatures</h2>
+              <Button variant="secondary" size="sm" onClick={() => setShowAddToMandat(true)}>
+                <Plus size={14} /> Ajouter au mandat
+              </Button>
+            </div>
             {candidat.candidatures.length === 0 ? (
               <p className="text-sm text-text-secondary">Aucune candidature pour le moment.</p>
             ) : (
@@ -998,6 +1041,29 @@ export default function CandidatDetailPage() {
                 ))}
               </div>
             )}
+
+            {/* Modal Ajouter au mandat */}
+            <Modal isOpen={showAddToMandat} onClose={() => { setShowAddToMandat(false); setSelectedMandatId(''); }} title="Ajouter au mandat">
+              <div className="space-y-4">
+                <Select
+                  label="Mandat"
+                  options={mandatOptions}
+                  value={selectedMandatId}
+                  onChange={(val) => setSelectedMandatId(val)}
+                  placeholder="Rechercher un mandat..."
+                  searchable
+                />
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" onClick={() => { setShowAddToMandat(false); setSelectedMandatId(''); }}>Annuler</Button>
+                  <Button
+                    disabled={!selectedMandatId || addToMandatMutation.isPending}
+                    onClick={() => addToMandatMutation.mutate(selectedMandatId)}
+                  >
+                    {addToMandatMutation.isPending ? 'Ajout...' : 'Ajouter'}
+                  </Button>
+                </div>
+              </div>
+            </Modal>
           </Card>
         </motion.div>
 
@@ -1010,7 +1076,18 @@ export default function CandidatDetailPage() {
                 <Input label="Salaire actuel (EUR)" type="number" value={editForm.salaireActuel} onChange={setField('salaireActuel')} placeholder="55000" />
                 <Input label="Salaire souhaité (EUR)" type="number" value={editForm.salaireSouhaite} onChange={setField('salaireSouhaite')} placeholder="65000" />
                 <Input label="Années d'expérience" type="number" value={editForm.anneesExperience} onChange={setField('anneesExperience')} placeholder="5" />
-                <Input label="Disponibilité" value={editForm.disponibilite} onChange={setField('disponibilite')} placeholder="Immédiate, 1 mois..." />
+                <Select
+                  label="Disponibilité"
+                  options={[
+                    { value: '', label: 'Sélectionner...' },
+                    { value: 'Immédiate', label: 'Immédiate' },
+                    { value: '1 mois', label: '1 mois' },
+                    { value: '3 mois', label: '3 mois' },
+                    { value: 'En poste', label: 'En poste' },
+                  ]}
+                  value={editForm.disponibilite}
+                  onChange={(val) => setEditForm((prev) => prev ? { ...prev, disponibilite: val } : prev)}
+                />
                 <Input label="Mobilité" value={editForm.mobilite} onChange={setField('mobilite')} placeholder="Île-de-France, Remote..." />
               </div>
             ) : (
@@ -1054,11 +1131,12 @@ export default function CandidatDetailPage() {
           <Card>
             <h2 className="mb-3 text-lg font-semibold text-text-primary">Tags</h2>
             {isEditing && editForm ? (
-              <Input
-                label="Tags (séparés par des virgules)"
-                value={editForm.tags}
-                onChange={setField('tags')}
-                placeholder="React, Node.js, Senior..."
+              <TagPicker
+                label="Tags"
+                tags={editForm.tags}
+                onChange={(newTags) => setEditForm((prev) => prev ? { ...prev, tags: newTags } : prev)}
+                suggestions={tagSuggestions || []}
+                placeholder="Ajouter un tag..."
               />
             ) : candidat.tags.length > 0 ? (
               <div className="flex flex-wrap gap-2">

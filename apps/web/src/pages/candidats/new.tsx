@@ -598,11 +598,18 @@ export default function CandidatNewPage() {
                   placeholder="5"
                 />
 
-                <Input
+                <Select
                   label="Disponibilité"
+                  options={[
+                    { value: '', label: 'Sélectionner...' },
+                    { value: 'Immédiate', label: 'Immédiate' },
+                    { value: '1 mois', label: '1 mois' },
+                    { value: '3 mois', label: '3 mois' },
+                    { value: 'En poste', label: 'En poste' },
+                  ]}
                   value={form.disponibilite}
-                  onChange={set('disponibilite')}
-                  placeholder="Immédiate, 1 mois..."
+                  onChange={(val) => setForm((prev) => ({ ...prev, disponibilite: val }))}
+                  placeholder="Sélectionner..."
                 />
                 <Input
                   label="Mobilité"
