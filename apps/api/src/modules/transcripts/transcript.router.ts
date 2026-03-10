@@ -12,6 +12,10 @@ const processTranscriptSchema = z.object({
   content: z.string().min(1, 'content est requis'),
 });
 
+const processDocSchema = z.object({
+  url: z.string().min(1, 'URL du Google Doc requise'),
+});
+
 const watchFolderSchema = z.object({
   folderId: z.string().min(1, 'folderId est requis'),
 });
@@ -19,10 +23,10 @@ const watchFolderSchema = z.object({
 // ─── ROUTER ─────────────────────────────────────────
 
 export default async function transcriptRouter(fastify: FastifyInstance) {
-  // POST /process - Manually process a transcript
+  // POST /process - Manually process a transcript (raw content)
   fastify.post('/process', {
     schema: {
-      description: 'Traiter manuellement un transcript Google Docs',
+      description: 'Traiter manuellement un transcript (contenu brut)',
       tags: ['Transcripts'],
     },
     preHandler: [authenticate],
@@ -30,6 +34,34 @@ export default async function transcriptRouter(fastify: FastifyInstance) {
       const input = processTranscriptSchema.parse(request.body);
       const result = await transcriptService.processTranscript(request.userId, input);
       reply.status(201);
+      return result;
+    },
+  });
+
+  // POST /process-doc - Process a Google Doc by URL/ID (fetches + parses with Gemini)
+  fastify.post('/process-doc', {
+    schema: {
+      description: 'Analyser un transcript Google Docs par URL (fetch + parsing Gemini)',
+      tags: ['Transcripts'],
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const input = processDocSchema.parse(request.body);
+      const result = await transcriptService.processGoogleDoc(request.userId, input.url);
+      reply.status(201);
+      return result;
+    },
+  });
+
+  // POST /scan-folder - Scan configured Drive folder for new transcripts
+  fastify.post('/scan-folder', {
+    schema: {
+      description: 'Scanner le dossier Drive configuré pour de nouveaux transcripts/CR',
+      tags: ['Transcripts'],
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const result = await transcriptService.scanDriveFolder(request.userId);
       return result;
     },
   });
@@ -55,7 +87,7 @@ export default async function transcriptRouter(fastify: FastifyInstance) {
   // PUT /watch - Configure drive folder to watch
   fastify.put('/watch', {
     schema: {
-      description: 'Configurer un dossier Google Drive a surveiller',
+      description: 'Configurer un dossier Google Drive à surveiller (transcripts uniquement)',
       tags: ['Transcripts'],
     },
     preHandler: [authenticate, requireRole('ADMIN')],
