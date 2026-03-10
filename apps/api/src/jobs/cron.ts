@@ -383,6 +383,40 @@ async function processBookingReminders(): Promise<void> {
   }
 }
 
+// ─── DRIVE TRANSCRIPT SCAN ──────────────────────────
+
+async function runDriveTranscriptScan(): Promise<void> {
+  try {
+    const { default: prisma } = await import('../lib/db.js');
+
+    // Find all users with google_docs watch configured
+    const watchConfigs = await prisma.integrationConfig.findMany({
+      where: { provider: 'google_docs', enabled: true },
+      select: { userId: true, config: true },
+    });
+
+    if (watchConfigs.length === 0) return;
+
+    const { scanDriveFolder } = await import('../modules/transcripts/transcript.service.js');
+
+    for (const cfg of watchConfigs) {
+      const folderId = (cfg.config as any)?.folderId;
+      if (!folderId) continue;
+
+      try {
+        const result = await scanDriveFolder(cfg.userId);
+        if (result.processed > 0) {
+          console.log(`[Cron] Drive transcript scan: ${result.message} (user ${cfg.userId})`);
+        }
+      } catch (err: any) {
+        console.error(`[Cron] Drive transcript scan failed for user ${cfg.userId}:`, err.message);
+      }
+    }
+  } catch (error) {
+    console.error('[Cron] Error in Drive transcript scan:', error);
+  }
+}
+
 // ─── START / STOP ───────────────────────────────────
 
 export function startCronJobs(): void {
@@ -414,12 +448,17 @@ export function startCronJobs(): void {
   const emailAutoCreateInterval = setInterval(runEmailAutoCreate, 15 * 60 * 1000);
   intervals.push(emailAutoCreateInterval);
 
+  // Drive transcript scan every 15 minutes
+  const driveTranscriptInterval = setInterval(runDriveTranscriptScan, 15 * 60 * 1000);
+  intervals.push(driveTranscriptInterval);
+
   console.log('[Cron] Scheduled jobs started:');
   console.log('  - Slack daily report: checked every 60s (sends Mon-Fri at configured time, Europe/Paris)');
   console.log('  - Calendar AI analysis: every 30 minutes');
   console.log('  - Pipeline AI analysis: every 60 minutes');
   console.log('  - Booking reminders: checked every 60s (day-before + 1h-before emails)');
   console.log('  - Email auto-create: every 15 minutes (perso → candidat, pro → client)');
+  console.log('  - Drive transcript scan: every 15 minutes (new transcripts/CR)');
 }
 
 export function stopCronJobs(): void {
