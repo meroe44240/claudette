@@ -97,7 +97,7 @@ export async function getClientPipeline() {
 
   const lastActivityMap = new Map<string, Date>();
   for (const a of lastActivities) {
-    if (!lastActivityMap.has(a.entiteId)) {
+    if (a.entiteId && !lastActivityMap.has(a.entiteId)) {
       lastActivityMap.set(a.entiteId, a.createdAt);
     }
   }

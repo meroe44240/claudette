@@ -103,7 +103,7 @@ export async function generateCallSummary(activiteId: string, userId: string) {
   let entityContext = '';
   if (activite.entiteType === 'CANDIDAT') {
     const candidat = await prisma.candidat.findUnique({
-      where: { id: activite.entiteId },
+      where: { id: activite.entiteId! },
       select: {
         nom: true,
         prenom: true,
@@ -127,12 +127,12 @@ export async function generateCallSummary(activiteId: string, userId: string) {
     }
   } else if (activite.entiteType === 'CLIENT') {
     const client = await prisma.client.findUnique({
-      where: { id: activite.entiteId },
+      where: { id: activite.entiteId! },
       select: {
         nom: true,
         prenom: true,
         poste: true,
-        entreprise: { select: { nom: true, secteur: true } },
+        entrepriseId: true,
         statutClient: true,
       },
     });
@@ -140,8 +140,6 @@ export async function generateCallSummary(activiteId: string, userId: string) {
       entityContext = `\n\nContexte du client :
 - Nom : ${client.prenom ?? ''} ${client.nom}
 - Poste : ${client.poste ?? 'Non renseigné'}
-- Entreprise : ${client.entreprise.nom}
-- Secteur : ${client.entreprise.secteur ?? 'Non renseigné'}
 - Statut : ${client.statutClient}`;
     }
   }
@@ -189,8 +187,8 @@ Analyse cet appel et retourne le JSON suivant :
   const summary = await prisma.aiCallSummary.create({
     data: {
       activiteId,
-      entityType: activite.entiteType,
-      entityId: activite.entiteId,
+      entityType: activite.entiteType ?? 'CANDIDAT',
+      entityId: activite.entiteId ?? '',
       userId,
       summaryJson: summaryJson as any,
       actionsAccepted: [],
@@ -204,8 +202,8 @@ Analyse cet appel et retourne le JSON suivant :
     type: 'AI_SUMMARY_READY',
     titre: 'Résumé IA disponible',
     contenu: `Le résumé de votre appel est prêt. ${summaryJson.action_items?.length ?? 0} action(s) suggérée(s).`,
-    entiteType: activite.entiteType as any,
-    entiteId: activite.entiteId,
+    entiteType: (activite.entiteType ?? undefined) as any,
+    entiteId: activite.entiteId ?? undefined,
   });
 
   // 9. Return the summary

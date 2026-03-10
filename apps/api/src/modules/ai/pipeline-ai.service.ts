@@ -377,7 +377,7 @@ export async function analyzePipelineMoves(userId: string) {
   // Build a map of candidatId -> last activity date
   const lastActivityMap = new Map<string, Date>();
   for (const a of lastActivities) {
-    if (!lastActivityMap.has(a.entiteId)) {
+    if (a.entiteId && !lastActivityMap.has(a.entiteId)) {
       lastActivityMap.set(a.entiteId, a.createdAt);
     }
   }
@@ -385,6 +385,7 @@ export async function analyzePipelineMoves(userId: string) {
   // Build activity map by candidatId
   const activityMap = new Map<string, typeof recentActivities>();
   for (const a of recentActivities) {
+    if (!a.entiteId) continue;
     if (!activityMap.has(a.entiteId)) activityMap.set(a.entiteId, []);
     activityMap.get(a.entiteId)!.push(a);
   }

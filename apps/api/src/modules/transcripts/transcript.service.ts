@@ -410,6 +410,7 @@ export async function processTranscript(userId: string, data: ProcessTranscriptI
   let mainActivite;
 
   if (entiteId) {
+    // ─── MATCHED — link transcript to identified contact ───
     mainActivite = await prisma.activite.create({
       data: {
         type: 'TRANSCRIPT',
@@ -426,23 +427,23 @@ export async function processTranscript(userId: string, data: ProcessTranscriptI
         fichiers: true,
       },
     });
-  } else {
-    // Fallback: store under a generic entity
-    const fallbackCandidat = await prisma.candidat.findFirst({
-      where: { createdById: userId },
-      select: { id: true },
+
+    // Create notification with action items
+    const actionCount = parsed.actionItems.length;
+    await notificationService.create({
+      userId,
+      type: 'TRANSCRIPT_PARSE',
+      titre: `Transcript analysé : ${data.title}`,
+      contenu: `${parsed.participants.length} participant(s), ${actionCount} action(s) proposée(s). Validez les prochaines étapes.`,
+      entiteType: (mainActivite.entiteType ?? undefined) as 'CANDIDAT' | 'CLIENT' | undefined,
+      entiteId: mainActivite.entiteId ?? undefined,
     });
-
-    if (!fallbackCandidat) {
-      throw new AppError(400, 'Aucun participant reconnu et aucun candidat existant pour associer le transcript');
-    }
-
+  } else {
+    // ─── UNMATCHED — create activity without entity + task to identify ───
     mainActivite = await prisma.activite.create({
       data: {
         type: 'TRANSCRIPT',
         source: 'GOOGLE_DOCS',
-        entiteType: 'CANDIDAT',
-        entiteId: fallbackCandidat.id,
         titre: data.title,
         contenu: parsed.summary,
         metadata,
@@ -453,18 +454,32 @@ export async function processTranscript(userId: string, data: ProcessTranscriptI
         fichiers: true,
       },
     });
-  }
 
-  // Create notification with action items for user to VALIDATE (not auto-create tasks)
-  const actionCount = parsed.actionItems.length;
-  await notificationService.create({
-    userId,
-    type: 'TRANSCRIPT_PARSE',
-    titre: `Transcript analysé : ${data.title}`,
-    contenu: `${parsed.participants.length} participant(s), ${actionCount} action(s) proposée(s). Validez les prochaines étapes.`,
-    entiteType: mainActivite.entiteType as 'CANDIDAT' | 'CLIENT',
-    entiteId: mainActivite.entiteId,
-  });
+    // Create TASK for recruiter to identify the participants
+    const participantList = parsed.participants.join(', ') || 'Aucun participant identifié';
+    await prisma.activite.create({
+      data: {
+        type: 'TACHE',
+        isTache: true,
+        userId,
+        titre: `Identifier les participants : ${data.title}`,
+        contenu: `Un transcript a été analysé mais aucun participant n'a pu être associé à un candidat ou client existant.\n\nParticipants détectés : ${participantList}\n\n→ Associez ce transcript au bon contact dans votre CRM.`,
+        source: 'GOOGLE_DOCS',
+        metadata: {
+          googleDocId: data.googleDocId,
+          activiteId: mainActivite.id,
+          detectedParticipants: parsed.participants,
+        },
+      },
+    });
+
+    await notificationService.create({
+      userId,
+      type: 'TRANSCRIPT_PARSE',
+      titre: `Transcript non attribué : ${data.title}`,
+      contenu: `Participants non reconnus (${participantList}). Une tâche a été créée pour les identifier.`,
+    });
+  }
 
   return {
     ...mainActivite,

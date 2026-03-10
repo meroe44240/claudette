@@ -646,10 +646,12 @@ export async function getStatsData(
 
   const lastActivityMap = new Map<string, Date>();
   for (const a of directActs) {
+    if (!a.entiteId) continue;
     const existing = lastActivityMap.get(a.entiteId);
     if (!existing || a.createdAt > existing) lastActivityMap.set(a.entiteId, a.createdAt);
   }
   for (const a of candActs) {
+    if (!a.entiteId) continue;
     const mId = candToMandatMap.get(a.entiteId);
     if (!mId) continue;
     const existing = lastActivityMap.get(mId);

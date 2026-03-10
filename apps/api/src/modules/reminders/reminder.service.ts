@@ -230,7 +230,7 @@ export async function generateAutoReminders(userId: string) {
       await createReminder({
         userId,
         type: 'TACHE_RETARD',
-        entityType: task.entiteType,
+        entityType: task.entiteType ?? 'CANDIDAT',
         entityId: task.id,
         titre: `Tâche en retard : ${task.titre || 'Sans titre'}`,
         description: `La tâche "${task.titre || 'Sans titre'}" est en retard de plus de 2 jours.`,

@@ -336,8 +336,8 @@ model Activite {
   id             String         @id @default(uuid()) @db.Uuid
   type           TypeActivite
   direction      Direction?
-  entiteType     EntiteType
-  entiteId       String         @db.Uuid
+  entiteType     EntiteType?
+  entiteId       String?        @db.Uuid
   userId         String?        @db.Uuid
   user           User?          @relation("ActiviteUser", fields: [userId], references: [id])
   titre          String?        @db.VarChar(500)

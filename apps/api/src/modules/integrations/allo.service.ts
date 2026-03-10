@@ -202,10 +202,10 @@ async function autoCreateContact(
   phone: string,
   alloContact: AlloContact | undefined,
   recruiterId: string | null,
-): Promise<PhoneMatchResult> {
+): Promise<PhoneMatchResult | null> {
   const firstName = alloContact?.name || '';
   const lastName = alloContact?.last_name || '';
-  const fullName = `${firstName} ${lastName}`.trim() || phone;
+  const fullName = `${firstName} ${lastName}`.trim();
   const companyName = alloContact?.company?.name;
   const jobTitle = alloContact?.job_title;
 
@@ -227,7 +227,14 @@ async function autoCreateContact(
     }
   }
 
-  // 2. Create new contact
+  // 2. If no real name available, DON'T create a phantom contact — return null
+  //    The caller will create a task for the recruiter to identify the contact
+  if (!firstName && !lastName) {
+    console.log(`[Allo Auto] No name for ${phone} — skipping contact creation, task will be created`);
+    return null;
+  }
+
+  // 3. Create new contact only when we have a real name
   if (companyName) {
     // ─── PRO → Create Entreprise + Client ───
     let entreprise = await prisma.entreprise.findFirst({
@@ -246,7 +253,7 @@ async function autoCreateContact(
 
     const client = await prisma.client.create({
       data: {
-        nom: lastName || firstName || phone,
+        nom: lastName || firstName,
         prenom: lastName ? firstName : undefined,
         telephone: phone,
         poste: jobTitle || undefined,
@@ -268,7 +275,7 @@ async function autoCreateContact(
     // ─── PERSO → Create Candidat ───
     const candidat = await prisma.candidat.create({
       data: {
-        nom: lastName || firstName || phone,
+        nom: lastName || firstName,
         prenom: lastName ? firstName : undefined,
         telephone: phone,
         source: 'ALLO',
@@ -336,6 +343,63 @@ export async function processAlloWebhook(
 
   const direction = payload.direction === 'inbound' ? 'ENTRANT' : 'SORTANT';
   const durationMinutes = Math.ceil(payload.duration / 60);
+
+  // ─── UNIDENTIFIED PHONE NUMBER — create task instead of phantom contact ───
+  if (!match) {
+    // Create activity without entity link
+    const activite = await prisma.activite.create({
+      data: {
+        type: 'APPEL',
+        direction,
+        userId: recruiterId,
+        titre: `Appel ${direction === 'ENTRANT' ? 'entrant' : 'sortant'} - ${externalPhone}`,
+        contenu: payload.transcript
+          ? `Appel de ${durationMinutes} min avec ${externalPhone}\n\n--- Transcript ---\n${payload.transcript}`
+          : `Appel de ${durationMinutes} min avec ${externalPhone}`,
+        source: 'ALLO',
+        metadata: {
+          callId: payload.callId,
+          from: payload.from,
+          to: payload.to,
+          duration: payload.duration,
+          recordingUrl: payload.recordingUrl,
+          transcript: payload.transcript || undefined,
+          matched: false,
+          unidentifiedPhone: externalPhone,
+        },
+      },
+    });
+
+    // Create TASK for recruiter to identify the contact
+    if (recruiterId) {
+      await prisma.activite.create({
+        data: {
+          type: 'TACHE',
+          isTache: true,
+          userId: recruiterId,
+          titre: `Identifier le contact : ${externalPhone}`,
+          contenu: `Un appel ${direction === 'ENTRANT' ? 'entrant' : 'sortant'} de ${durationMinutes} min a eu lieu avec le numéro ${externalPhone}.\n\nCe numéro n'est associé à aucun candidat ou client.\n→ Attribuez ce numéro au bon contact dans votre CRM.`,
+          source: 'ALLO',
+          metadata: {
+            unidentifiedPhone: externalPhone,
+            callId: payload.callId,
+            activiteId: activite.id,
+          },
+        },
+      });
+
+      await notificationService.create({
+        userId: recruiterId,
+        type: 'APPEL_ENTRANT',
+        titre: `Numéro non identifié : ${externalPhone}`,
+        contenu: `Appel de ${durationMinutes} min avec un numéro inconnu. Une tâche a été créée pour l'identifier.`,
+      });
+    }
+
+    return { processed: true, activiteId: activite.id, matched: false, unidentifiedPhone: externalPhone };
+  }
+
+  // ─── IDENTIFIED CONTACT — normal flow ───
   const contactName = `${match.prenom ?? ''} ${match.nom}`.trim();
 
   // Create Activite

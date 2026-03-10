@@ -449,6 +449,7 @@ async function getMandatsDormants() {
   const latestPerMandat = new Map<string, Date>();
 
   for (const a of directActivites) {
+    if (!a.entiteId) continue;
     const existing = latestPerMandat.get(a.entiteId);
     if (!existing || a.createdAt > existing) {
       latestPerMandat.set(a.entiteId, a.createdAt);
@@ -456,6 +457,7 @@ async function getMandatsDormants() {
   }
 
   for (const a of candidatureActivites) {
+    if (!a.entiteId) continue;
     const mandatId = candToMandat.get(a.entiteId);
     if (!mandatId) continue;
     const existing = latestPerMandat.get(mandatId);
@@ -909,10 +911,12 @@ export async function getSpaData(
   // Compute last activity per mandat
   const lastActivityMap = new Map<string, Date>();
   for (const a of directActs) {
+    if (!a.entiteId) continue;
     const existing = lastActivityMap.get(a.entiteId);
     if (!existing || a.createdAt > existing) lastActivityMap.set(a.entiteId, a.createdAt);
   }
   for (const a of candActs) {
+    if (!a.entiteId) continue;
     const mId = candToMandatMap.get(a.entiteId);
     if (!mId) continue;
     const existing = lastActivityMap.get(mId);
