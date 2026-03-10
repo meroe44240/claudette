@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -171,7 +171,8 @@ export default function CandidatDetailPage() {
 
   // Add to mandat state
   const [showAddToMandat, setShowAddToMandat] = useState(false);
-  const [selectedMandatId, setSelectedMandatId] = useState('');
+  const [mandatSearch, setMandatSearch] = useState('');
+  const mandatDropdownRef = useRef<HTMLDivElement>(null);
 
   // CV upload modal state
   const [showCvUploadModal, setShowCvUploadModal] = useState(false);
@@ -227,18 +228,21 @@ export default function CandidatDetailPage() {
     staleTime: 2 * 60 * 1000,
   });
 
-  // Fetch open mandats for "Ajouter au mandat"
+  // Fetch open mandats for "Ajouter au mandat" — always loaded
   const { data: mandatsData } = useQuery({
     queryKey: ['mandats', 'open-for-add'],
     queryFn: () => api.get<{ data: { id: string; titrePoste: string; entreprise: { nom: string } }[]; meta: any }>('/mandats?statut=OUVERT&perPage=200'),
-    enabled: showAddToMandat,
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 
-  const mandatOptions = (mandatsData?.data || []).map((m) => ({
-    value: m.id,
-    label: `${m.titrePoste} — ${m.entreprise.nom}`,
-  }));
+  // Filter out mandats where candidat is already added
+  const existingMandatIds = new Set(candidat?.candidatures.map((c) => c.mandat.id) || []);
+  const availableMandats = (mandatsData?.data || []).filter((m) => !existingMandatIds.has(m.id));
+  const filteredMandats = mandatSearch
+    ? availableMandats.filter((m) =>
+        `${m.titrePoste} ${m.entreprise.nom}`.toLowerCase().includes(mandatSearch.toLowerCase())
+      )
+    : availableMandats;
 
   const addToMandatMutation = useMutation({
     mutationFn: (mandatId: string) =>
@@ -247,12 +251,25 @@ export default function CandidatDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['candidat', id] });
       toast('success', 'Candidat ajouté au mandat !');
       setShowAddToMandat(false);
-      setSelectedMandatId('');
+      setMandatSearch('');
     },
     onError: (error: any) => {
       toast('error', error.message || 'Erreur lors de l\'ajout');
     },
   });
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showAddToMandat) return;
+    const handler = (e: MouseEvent) => {
+      if (mandatDropdownRef.current && !mandatDropdownRef.current.contains(e.target as Node)) {
+        setShowAddToMandat(false);
+        setMandatSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showAddToMandat]);
 
   const handleCopyBookingLink = useCallback((link: string, fieldId: string) => {
     navigator.clipboard.writeText(link).then(() => {
@@ -1018,9 +1035,62 @@ export default function CandidatDetailPage() {
           <Card>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-text-primary">Candidatures</h2>
-              <Button variant="secondary" size="sm" onClick={() => setShowAddToMandat(true)}>
-                <Plus size={14} /> Ajouter au mandat
-              </Button>
+              <div className="relative" ref={mandatDropdownRef}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => { setShowAddToMandat(!showAddToMandat); setMandatSearch(''); }}
+                >
+                  <Plus size={14} /> Ajouter au mandat
+                </Button>
+
+                {/* Inline dropdown — replaces the old Modal */}
+                <AnimatePresence>
+                  {showAddToMandat && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-border bg-white shadow-xl"
+                    >
+                      <div className="p-2">
+                        <div className="relative">
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                          <input
+                            autoFocus
+                            type="text"
+                            value={mandatSearch}
+                            onChange={(e) => setMandatSearch(e.target.value)}
+                            placeholder="Rechercher un mandat..."
+                            className="w-full rounded-lg border border-border bg-neutral-50 py-2 pl-9 pr-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="max-h-56 overflow-y-auto px-1 pb-1">
+                        {filteredMandats.length === 0 ? (
+                          <p className="px-3 py-4 text-center text-sm text-neutral-400">
+                            {availableMandats.length === 0 ? 'Aucun mandat ouvert disponible' : 'Aucun résultat'}
+                          </p>
+                        ) : (
+                          filteredMandats.map((m) => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              disabled={addToMandatMutation.isPending}
+                              onClick={() => addToMandatMutation.mutate(m.id)}
+                              className="w-full rounded-lg px-3 py-2.5 text-left hover:bg-primary-50 transition-colors group disabled:opacity-50"
+                            >
+                              <p className="text-sm font-medium text-text-primary group-hover:text-primary-700">{m.titrePoste}</p>
+                              <p className="text-xs text-text-secondary">{m.entreprise.nom}</p>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
             {candidat.candidatures.length === 0 ? (
               <p className="text-sm text-text-secondary">Aucune candidature pour le moment.</p>
@@ -1043,29 +1113,6 @@ export default function CandidatDetailPage() {
                 ))}
               </div>
             )}
-
-            {/* Modal Ajouter au mandat */}
-            <Modal isOpen={showAddToMandat} onClose={() => { setShowAddToMandat(false); setSelectedMandatId(''); }} title="Ajouter au mandat">
-              <div className="space-y-4">
-                <Select
-                  label="Mandat"
-                  options={mandatOptions}
-                  value={selectedMandatId}
-                  onChange={(val) => setSelectedMandatId(val)}
-                  placeholder="Rechercher un mandat..."
-                  searchable
-                />
-                <div className="flex justify-end gap-2">
-                  <Button variant="ghost" onClick={() => { setShowAddToMandat(false); setSelectedMandatId(''); }}>Annuler</Button>
-                  <Button
-                    disabled={!selectedMandatId || addToMandatMutation.isPending}
-                    onClick={() => addToMandatMutation.mutate(selectedMandatId)}
-                  >
-                    {addToMandatMutation.isPending ? 'Ajout...' : 'Ajouter'}
-                  </Button>
-                </div>
-              </div>
-            </Modal>
           </Card>
         </motion.div>
 
