@@ -9,10 +9,11 @@ const CALL_SUMMARY_SYSTEM_PROMPT = `Tu es un assistant pour recruteurs en cabine
 Tu analyses des transcriptions d'appels de recrutement.
 
 Ton rôle :
-1. Résumer l'appel en 3 bullet points maximum (chacun max 20 mots)
-2. Détecter le sentiment du contact (intéressé, hésitant, pas intéressé, etc.)
-3. Extraire les actions concrètes à faire
-4. Identifier les informations à mettre à jour sur la fiche (salaire, dispo, process concurrent, etc.)
+1. Identifier le nom complet de l'interlocuteur (prénom + nom) et son entreprise si mentionnés
+2. Résumer l'appel en 3 bullet points maximum (chacun max 20 mots)
+3. Détecter le sentiment du contact (intéressé, hésitant, pas intéressé, etc.)
+4. Extraire les actions concrètes à faire
+5. Identifier les informations à mettre à jour sur la fiche (salaire, dispo, process concurrent, etc.)
 
 Sois factuel et concis. Pas de blabla. Chaque bullet doit contenir une information actionnable.
 
@@ -21,6 +22,12 @@ Réponds UNIQUEMENT en JSON valide.`;
 // ─── TYPES ──────────────────────────────────────────
 
 interface CallSummaryJson {
+  interlocutor: {
+    first_name: string | null;
+    last_name: string | null;
+    company: string | null;
+    job_title: string | null;
+  };
   summary: string[];
   sentiment: 'positive_interested' | 'positive_cautious' | 'neutral' | 'hesitant' | 'negative_not_interested';
   sentiment_detail: string;
@@ -146,6 +153,12 @@ ${activite.contenu}${entityContext}
 
 Analyse cet appel et retourne le JSON suivant :
 {
+  "interlocutor": {
+    "first_name": "prénom de l'interlocuteur (pas le recruteur) ou null",
+    "last_name": "nom de famille ou null",
+    "company": "entreprise actuelle de l'interlocuteur ou null",
+    "job_title": "poste/titre actuel ou null"
+  },
   "summary": ["bullet 1 (max 20 mots)", "bullet 2 (max 20 mots)", "bullet 3 (max 20 mots)"],
   "sentiment": "positive_interested | positive_cautious | neutral | hesitant | negative_not_interested",
   "sentiment_detail": "explication en 1 phrase (max 25 mots)",

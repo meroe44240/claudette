@@ -227,6 +227,19 @@ export default async function integrationRouter(fastify: FastifyInstance) {
     },
   });
 
+  // POST /allo/process-transcripts - AI-analyze all unprocessed Allo calls
+  fastify.post('/allo/process-transcripts', {
+    schema: {
+      description: 'Analyser les transcripts Allo par IA (extraction noms, infos, création tâches)',
+      tags: ['Integrations - Allo'],
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const result = await alloService.autoProcessTranscripts(request.userId);
+      return result;
+    },
+  });
+
   // ═══════════════════════════════════════════════════
   // GMAIL ROUTES
   // ═══════════════════════════════════════════════════

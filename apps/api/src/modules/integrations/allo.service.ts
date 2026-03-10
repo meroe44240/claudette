@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import prisma from '../../lib/db.js';
 import { AppError } from '../../lib/errors.js';
 import * as notificationService from '../notifications/notification.service.js';
+import * as callSummaryService from '../ai/call-summary.service.js';
 
 // ─── TYPES ──────────────────────────────────────────
 
@@ -444,6 +445,187 @@ export async function syncCalls(userId: string) {
     console.error('[Allo Sync] Error:', e);
     return { status: 'error', message: 'Erreur lors de la synchronisation Allo' };
   }
+}
+
+// ─── AUTO-PROCESS TRANSCRIPTS WITH AI ────────────
+
+/**
+ * Find all Allo call activities with transcripts that haven't been AI-analyzed,
+ * then run AI summary → auto-update candidat/client name + fields → auto-create tasks.
+ */
+export async function autoProcessTranscripts(userId: string) {
+  // 1. Find ALLO call activities with content > 50 words but no AI summary yet
+  //    Use raw query since there's no Prisma relation between Activite and AiCallSummary
+  const activitiesWithSummary = await prisma.aiCallSummary.findMany({
+    where: { userId },
+    select: { activiteId: true },
+  });
+  const analyzedIds = new Set(activitiesWithSummary.map(s => s.activiteId));
+
+  const activities = await prisma.activite.findMany({
+    where: {
+      source: 'ALLO',
+      type: 'APPEL',
+      contenu: { not: null },
+    },
+    select: {
+      id: true,
+      contenu: true,
+      entiteType: true,
+      entiteId: true,
+    },
+  });
+
+  // Filter out already analyzed
+  const unanalyzed = activities.filter(a => !analyzedIds.has(a.id));
+
+  // Filter to those with >= 50 words (AI requirement)
+  const processable = unanalyzed.filter(a => {
+    const wordCount = (a.contenu ?? '').trim().split(/\s+/).length;
+    return wordCount >= 50;
+  });
+
+  console.log(`[Allo AI] Found ${processable.length} calls to process (out of ${unanalyzed.length} without summary)`);
+
+  let processed = 0;
+  let namesUpdated = 0;
+  let fieldsUpdated = 0;
+  let tasksCreated = 0;
+  const errors: string[] = [];
+
+  for (const activity of processable) {
+    try {
+      // 2. Generate AI summary
+      const summary = await callSummaryService.generateCallSummary(activity.id, userId);
+      const summaryJson = summary.summaryJson as any;
+      processed++;
+
+      // 3. Auto-update candidat/client name if currently a phone number
+      if (summaryJson.interlocutor && activity.entiteId) {
+        const { first_name, last_name, company, job_title } = summaryJson.interlocutor;
+
+        if (activity.entiteType === 'CANDIDAT' && (first_name || last_name)) {
+          const candidat = await prisma.candidat.findUnique({
+            where: { id: activity.entiteId },
+            select: { nom: true, prenom: true, posteActuel: true, entrepriseActuelle: true },
+          });
+
+          if (candidat) {
+            const updateData: Record<string, string> = {};
+
+            // Update name only if current name looks like a phone number
+            const isPhoneName = /^\+?\d[\d\s-]{6,}$/.test(candidat.nom);
+            if (isPhoneName) {
+              if (last_name) updateData.nom = last_name;
+              if (first_name) updateData.prenom = first_name;
+              console.log(`[Allo AI] Updated CANDIDAT name: ${candidat.nom} → ${first_name ?? ''} ${last_name ?? ''}`);
+              namesUpdated++;
+            }
+
+            // Update company/title if empty
+            if (!candidat.entrepriseActuelle && company) {
+              updateData.entrepriseActuelle = company;
+            }
+            if (!candidat.posteActuel && job_title) {
+              updateData.posteActuel = job_title;
+            }
+
+            if (Object.keys(updateData).length > 0) {
+              await prisma.candidat.update({
+                where: { id: activity.entiteId },
+                data: updateData,
+              });
+            }
+          }
+        } else if (activity.entiteType === 'CLIENT' && (first_name || last_name)) {
+          const client = await prisma.client.findUnique({
+            where: { id: activity.entiteId },
+            select: { nom: true, prenom: true, poste: true },
+          });
+
+          if (client) {
+            const updateData: Record<string, string> = {};
+            const isPhoneName = /^\+?\d[\d\s-]{6,}$/.test(client.nom);
+            if (isPhoneName) {
+              if (last_name) updateData.nom = last_name;
+              if (first_name) updateData.prenom = first_name;
+              console.log(`[Allo AI] Updated CLIENT name: ${client.nom} → ${first_name ?? ''} ${last_name ?? ''}`);
+              namesUpdated++;
+            }
+            if (!client.poste && job_title) {
+              updateData.poste = job_title;
+            }
+
+            if (Object.keys(updateData).length > 0) {
+              await prisma.client.update({
+                where: { id: activity.entiteId },
+                data: updateData,
+              });
+            }
+          }
+        }
+      }
+
+      // 4. Auto-apply all info_updates
+      if (summaryJson.info_updates && summaryJson.info_updates.length > 0) {
+        const allIndices = summaryJson.info_updates.map((_: unknown, i: number) => i);
+        const result = await callSummaryService.applyInfoUpdates(summary.id, allIndices, userId);
+        fieldsUpdated += result.appliedCount;
+      }
+
+      // 5. Auto-create tasks from high/medium priority action items
+      if (summaryJson.action_items && summaryJson.action_items.length > 0) {
+        for (let i = 0; i < summaryJson.action_items.length; i++) {
+          const action = summaryJson.action_items[i];
+          if (action.priority === 'high' || action.priority === 'medium') {
+            try {
+              await callSummaryService.acceptActionItem(summary.id, i, userId);
+              tasksCreated++;
+            } catch {
+              // Already accepted or other error — skip
+            }
+          }
+        }
+      }
+
+      // Update activity title with real name if we found one
+      if (summaryJson.interlocutor) {
+        const { first_name, last_name } = summaryJson.interlocutor;
+        if (first_name || last_name) {
+          const contactName = `${first_name ?? ''} ${last_name ?? ''}`.trim();
+          const currentActivity = await prisma.activite.findUnique({
+            where: { id: activity.id },
+            select: { titre: true, direction: true },
+          });
+          if (currentActivity?.titre?.match(/\+\d/)) {
+            // Title contains a phone number → replace with real name
+            const dirLabel = currentActivity.direction === 'ENTRANT' ? 'entrant' : 'sortant';
+            await prisma.activite.update({
+              where: { id: activity.id },
+              data: { titre: `Appel ${dirLabel} - ${contactName}` },
+            });
+          }
+        }
+      }
+
+    } catch (err: any) {
+      console.error(`[Allo AI] Error processing activity ${activity.id}:`, err.message);
+      errors.push(`${activity.id}: ${err.message}`);
+    }
+  }
+
+  console.log(`[Allo AI] Done. Processed: ${processed}, Names updated: ${namesUpdated}, Fields: ${fieldsUpdated}, Tasks: ${tasksCreated}`);
+
+  return {
+    status: 'completed',
+    processed,
+    total: processable.length,
+    namesUpdated,
+    fieldsUpdated,
+    tasksCreated,
+    errors: errors.length > 0 ? errors : undefined,
+    message: `${processed} appels analysés par IA. ${namesUpdated} noms mis à jour, ${fieldsUpdated} champs enrichis, ${tasksCreated} tâches créées.`,
+  };
 }
 
 /**
