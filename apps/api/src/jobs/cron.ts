@@ -405,7 +405,7 @@ async function runDriveTranscriptScan(): Promise<void> {
 
       try {
         const result = await scanDriveFolder(cfg.userId);
-        if (result.processed > 0) {
+        if ('processed' in result && result.processed > 0) {
           console.log(`[Cron] Drive transcript scan: ${result.message} (user ${cfg.userId})`);
         }
       } catch (err: any) {
