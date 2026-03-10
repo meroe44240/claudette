@@ -115,6 +115,24 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
       },
     });
 
+    // Log activity for stage change (audit trail)
+    const stageLabels: Record<string, string> = {
+      SOURCING: 'Sourcing', CONTACTE: 'Contacté', ENTRETIEN_1: 'Entretien 1',
+      ENTRETIEN_CLIENT: 'Entretien Client', SHORTLIST: 'Shortlist',
+      OFFRE: 'Offre', PLACE: 'Placé', REFUSE: 'Refusé',
+    };
+    await prisma.activite.create({
+      data: {
+        type: 'NOTE',
+        titre: `Pipeline : ${stageLabels[existing.stage] || existing.stage} → ${stageLabels[data.stage as string] || data.stage}`,
+        entiteType: 'CANDIDAT',
+        entiteId: existing.candidatId,
+        userId: changedById,
+        source: 'SYSTEME',
+        metadata: { stageChange: true, candidatureId: id, mandatId: existing.mandatId, fromStage: existing.stage, toStage: data.stage },
+      },
+    });
+
     // Auto-create follow-up tasks based on stage
     const stageTaskMap: Record<string, string[]> = {
       'CONTACTE': ['Préparer le brief candidat'],

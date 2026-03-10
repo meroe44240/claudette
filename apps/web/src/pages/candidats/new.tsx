@@ -149,6 +149,16 @@ export default function CandidatNewPage() {
   const [showAnonymized, setShowAnonymized] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  // Entreprise autocomplete
+  const { data: entrepriseSuggestions } = useQuery({
+    queryKey: ['entreprises', 'names'],
+    queryFn: async () => {
+      const res = await api.get<{ data: { id: string; nom: string }[] }>('/entreprises?perPage=500&fields=id,nom');
+      return res.data.map((e: { nom: string }) => e.nom);
+    },
+    staleTime: 5 * 60_000,
+  });
+
   // Duplicate detection
   const [duplicateMatch, setDuplicateMatch] = useState<{ id: string; nom: string; prenom?: string; email?: string } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -568,12 +578,22 @@ export default function CandidatNewPage() {
                   onChange={set('posteActuel')}
                   placeholder="Développeur Senior"
                 />
-                <Input
-                  label="Entreprise actuelle"
-                  value={form.entrepriseActuelle}
-                  onChange={set('entrepriseActuelle')}
-                  placeholder="Nom de l'entreprise"
-                />
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">Entreprise actuelle</label>
+                  <input
+                    type="text"
+                    list="entreprise-suggestions"
+                    value={form.entrepriseActuelle}
+                    onChange={(e) => set('entrepriseActuelle')(e as React.ChangeEvent<HTMLInputElement>)}
+                    placeholder="Nom de l'entreprise"
+                    className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-colors"
+                  />
+                  <datalist id="entreprise-suggestions">
+                    {(entrepriseSuggestions || []).map((nom: string) => (
+                      <option key={nom} value={nom} />
+                    ))}
+                  </datalist>
+                </div>
 
                 <Input
                   label="Salaire actuel (EUR)"

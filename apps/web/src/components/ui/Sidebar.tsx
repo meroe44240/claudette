@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutDashboard, Users, Building2, Briefcase, FileText, ClipboardList, Bell, Upload, Settings, User, ListChecks, BookOpen, Zap, Crosshair, Send, ChevronDown, ChevronsLeft, BarChart3, Megaphone, Mail } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
+import { api } from '../../lib/api-client';
 
 // ── Sidebar nav structure with grouped sections ─────────────────
 interface NavItem {
@@ -95,7 +97,7 @@ function SectionDivider({ label, collapsed }: { label: string; collapsed: boolea
   );
 }
 
-function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
+function NavItemLink({ item, collapsed, badge }: { item: NavItem; collapsed: boolean; badge?: number }) {
   return (
     <NavLink
       to={item.to}
@@ -117,7 +119,14 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
               transition={{ type: 'spring' as const, stiffness: 300, damping: 30 }}
             />
           )}
-          <item.icon size={20} strokeWidth={1.75} className={`shrink-0 ${isActive ? 'text-white' : 'text-neutral-400'}`} />
+          <div className="relative shrink-0">
+            <item.icon size={20} strokeWidth={1.75} className={isActive ? 'text-white' : 'text-neutral-400'} />
+            {badge != null && badge > 0 && collapsed && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                {badge > 99 ? '99+' : badge}
+              </span>
+            )}
+          </div>
           <AnimatePresence>
             {!collapsed && (
               <motion.span
@@ -125,9 +134,14 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.15 }}
-                className="whitespace-nowrap"
+                className="flex flex-1 items-center justify-between whitespace-nowrap"
               >
                 {item.label}
+                {badge != null && badge > 0 && (
+                  <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500/90 px-1.5 text-[10px] font-bold text-white">
+                    {badge > 99 ? '99+' : badge}
+                  </span>
+                )}
               </motion.span>
             )}
           </AnimatePresence>
@@ -140,6 +154,17 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
 export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCollapse }: SidebarProps) {
   const { user } = useAuthStore();
   const initials = `${user?.prenom?.[0] || ''}${user?.nom?.[0] || ''}`.toUpperCase();
+
+  // Fetch pending task count for badge
+  const { data: taskCount } = useQuery({
+    queryKey: ['tasks', 'pending-count'],
+    queryFn: async () => {
+      const res = await api.get<{ data: { id: string }[]; meta: { total: number } }>('/activites?isTache=true&tacheTerminee=false&perPage=1');
+      return res.meta.total;
+    },
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -184,7 +209,12 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
               <SectionDivider label={section.label} collapsed={collapsed} />
             )}
             {section.items.map((item) => (
-              <NavItemLink key={item.to} item={item} collapsed={collapsed} />
+              <NavItemLink
+                key={item.to}
+                item={item}
+                collapsed={collapsed}
+                badge={item.to === '/taches' ? taskCount : undefined}
+              />
             ))}
           </div>
         ))}

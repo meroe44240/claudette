@@ -320,7 +320,13 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
               autoFocus
               value={quickNote}
               onChange={e => setQuickNote(e.target.value)}
-              placeholder="Écrire une note..."
+              onKeyDown={e => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && quickNote.trim()) {
+                  e.preventDefault();
+                  quickNoteMutation.mutate();
+                }
+              }}
+              placeholder="Écrire une note... (Cmd+Enter pour sauvegarder)"
               className="w-full resize-none rounded-lg bg-neutral-50 px-3 py-2 text-[14px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
               rows={3}
             />

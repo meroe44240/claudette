@@ -563,6 +563,17 @@ export default function MandatDetailPage() {
     },
   });
 
+  const cloneMutation = useMutation({
+    mutationFn: () => api.post<{ id: string }>(`/mandats/${id}/clone`, {}),
+    onSuccess: (data) => {
+      toast('success', 'Mandat dupliqué !');
+      navigate(`/mandats/${data.id}`);
+    },
+    onError: (error: any) => {
+      toast('error', error.message || 'Erreur lors de la duplication');
+    },
+  });
+
   const matchingMutation = useMutation({
     mutationFn: () => api.post<{ matches: AiMatch[] }>(`/ai/matching/${id}`, {}),
     onSuccess: (data) => {
@@ -687,6 +698,9 @@ export default function MandatDetailPage() {
                 </Button>
                 <Button variant="secondary" size="sm" onClick={handleStartEdit}>
                   <Pencil size={14} /> Modifier
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => cloneMutation.mutate()} disabled={cloneMutation.isPending}>
+                  <Copy size={14} /> {cloneMutation.isPending ? 'Duplication...' : 'Dupliquer'}
                 </Button>
                 <Button variant="danger" size="sm" onClick={() => setShowDeleteModal(true)}>
                   <Trash2 size={14} /> Supprimer
