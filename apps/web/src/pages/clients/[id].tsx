@@ -490,7 +490,9 @@ export default function ClientDetailPage() {
                 {client.telephone && (
                   <div className="flex items-center gap-2 text-sm">
                     <Phone size={14} className="text-text-tertiary" />
-                    <span className="text-text-primary">{client.telephone}</span>
+                    <a href={`tel:${client.telephone}`} className="text-text-primary hover:text-accent transition-colors">
+                      {client.telephone}
+                    </a>
                   </div>
                 )}
                 {client.poste && (

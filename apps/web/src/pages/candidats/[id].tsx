@@ -722,7 +722,9 @@ export default function CandidatDetailPage() {
                 {candidat.telephone && (
                   <div className="flex items-center gap-2 text-sm">
                     <Phone size={14} className="text-text-tertiary" />
-                    <span className="text-text-primary">{candidat.telephone}</span>
+                    <a href={`tel:${candidat.telephone}`} className="text-text-primary hover:text-accent transition-colors">
+                      {candidat.telephone}
+                    </a>
                   </div>
                 )}
                 {candidat.localisation && (

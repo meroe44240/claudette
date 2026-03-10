@@ -369,10 +369,10 @@ export default function CandidatsPage() {
       key: 'telephone',
       header: 'Téléphone',
       render: (r: Candidat) => r.telephone ? (
-        <span className="flex items-center gap-1 text-neutral-600">
+        <a href={`tel:${r.telephone}`} className="flex items-center gap-1 text-neutral-600 hover:text-violet-600 transition-colors" onClick={(e) => e.stopPropagation()}>
           <Phone size={12} className="text-neutral-400" />
           {r.telephone}
-        </span>
+        </a>
       ) : '—',
     },
     {
@@ -494,10 +494,10 @@ export default function CandidatsPage() {
             {/* Téléphone */}
             <div className="w-[120px]">
               {candidat.telephone ? (
-                <div className="flex items-center gap-1.5 text-[12px] text-neutral-500">
+                <a href={`tel:${candidat.telephone}`} className="flex items-center gap-1.5 text-[12px] text-neutral-500 hover:text-violet-600 transition-colors" onClick={(e) => e.stopPropagation()}>
                   <Phone size={11} className="flex-shrink-0 text-neutral-400" />
                   <span className="truncate">{candidat.telephone}</span>
-                </div>
+                </a>
               ) : (
                 <span className="text-[12px] text-neutral-300">—</span>
               )}
