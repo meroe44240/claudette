@@ -636,7 +636,11 @@ export async function getRecruteurStats(userId: string) {
   const mesMandatsRaw = await prisma.mandat.findMany({
     where: {
       statut: { in: ['OUVERT', 'EN_COURS'] },
-      candidatures: { some: { createdById: userId } },
+      OR: [
+        { createdById: userId },
+        { assignedToId: userId },
+        { candidatures: { some: { createdById: userId } } },
+      ],
     },
     select: {
       id: true,
@@ -644,7 +648,6 @@ export async function getRecruteurStats(userId: string) {
       statut: true,
       entreprise: { select: { nom: true } },
       candidatures: {
-        where: { createdById: userId },
         select: { id: true, stage: true },
       },
     },

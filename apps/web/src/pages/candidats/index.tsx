@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Search, LayoutGrid, List, MapPin, Building2, Linkedin, Mail, Zap, ArrowRightLeft, Download, Users, Banknote, Clock } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, MapPin, Building2, Linkedin, Mail, Zap, ArrowRightLeft, Download, Users, Banknote, Clock, Phone } from 'lucide-react';
 import { toast } from '../../components/ui/Toast';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
@@ -25,6 +25,7 @@ interface Candidat {
   nom: string;
   prenom: string | null;
   email: string | null;
+  telephone: string | null;
   photoUrl: string | null;
   posteActuel: string | null;
   entrepriseActuelle: string | null;
@@ -365,8 +366,18 @@ export default function CandidatsPage() {
         ),
     },
     {
+      key: 'telephone',
+      header: 'Téléphone',
+      render: (r: Candidat) => r.telephone ? (
+        <span className="flex items-center gap-1 text-neutral-600">
+          <Phone size={12} className="text-neutral-400" />
+          {r.telephone}
+        </span>
+      ) : '—',
+    },
+    {
       key: 'poste',
-      header: (<SortableHeader label="Poste actuel" sortKey="poste" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
+      header: (<SortableHeader label="Poste" sortKey="poste" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
       render: (r: Candidat) => (
         <span className="text-text-secondary">{r.posteActuel || '—'}</span>
       ),
@@ -378,14 +389,18 @@ export default function CandidatsPage() {
     },
     {
       key: 'localisation',
-      header: (<SortableHeader label="Localisation" sortKey="localisation" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
+      header: (<SortableHeader label="Ville" sortKey="localisation" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
       render: (r: Candidat) => r.localisation || '—',
     },
     {
       key: 'salaire',
-      header: 'Salaire souhaite',
+      header: 'Salaire',
       render: (r: Candidat) =>
-        r.salaireSouhaite ? `${(r.salaireSouhaite / 1000).toFixed(0)}k€` : '—',
+        r.salaireSouhaite ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600">
+            {(r.salaireSouhaite / 1000).toFixed(0)}k€
+          </span>
+        ) : '—',
     },
     {
       key: 'source',
@@ -405,82 +420,128 @@ export default function CandidatsPage() {
   function CandidatCard({ candidat, index }: { candidat: Candidat; index: number }) {
     const fullName = `${candidat.prenom || ''} ${candidat.nom}`.trim();
     const isSelected = selectedIds.has(candidat.id);
-    const salaire = candidat.salaireActuel || candidat.salaireSouhaite;
+    const salaire = candidat.salaireSouhaite || candidat.salaireActuel;
     return (
       <div
         onClick={() => navigate(`/candidats/${candidat.id}`)}
-        className={`group relative cursor-pointer rounded-2xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
+        className={`group relative cursor-pointer rounded-xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:border-[#7C5CFC]/30 ${
           isSelected ? 'border-[#7C5CFC] ring-2 ring-[#7C5CFC]/20 shadow-md' : 'border-neutral-100 shadow-sm'
         }`}
       >
-        {/* Top accent bar */}
-        <div className="h-1 w-full bg-gradient-to-r from-[#7C5CFC] to-[#A78BFA]" />
+        <div className="flex items-center gap-4 px-4 py-3">
+          {/* Checkbox */}
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => { e.stopPropagation(); toggleSelect(candidat.id); }}
+            onClick={(e) => e.stopPropagation()}
+            className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
+          />
 
-        <div className="p-5">
-          {/* Header: Checkbox + Avatar + Name */}
-          <div className="flex items-start gap-3">
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={(e) => { e.stopPropagation(); toggleSelect(candidat.id); }}
-              onClick={(e) => e.stopPropagation()}
-              className="mt-1 h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
-            />
-            <Avatar src={candidat.photoUrl} nom={candidat.nom} prenom={candidat.prenom} size="lg" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-semibold text-neutral-900">
-                {fullName}
+          {/* Avatar */}
+          <Avatar src={candidat.photoUrl} nom={candidat.nom} prenom={candidat.prenom} size="md" />
+
+          {/* Name + Poste */}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[14px] font-semibold text-neutral-900">
+              {fullName}
+            </p>
+            {candidat.posteActuel && (
+              <p className="mt-0.5 truncate text-[12px] font-medium text-[#7C5CFC]">
+                {candidat.posteActuel}
               </p>
-              {candidat.posteActuel && (
-                <p className="mt-0.5 truncate text-[13px] font-medium text-[#7C5CFC]">
-                  {candidat.posteActuel}
-                </p>
-              )}
-              {candidat.entrepriseActuelle && (
-                <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-neutral-500">
-                  <Building2 size={11} className="flex-shrink-0 text-neutral-400" />
+            )}
+          </div>
+
+          {/* Info columns: Entreprise, Ville, Salaire, Téléphone */}
+          <div className="hidden lg:flex items-center gap-6 flex-shrink-0">
+            {/* Entreprise */}
+            <div className="w-[130px]">
+              {candidat.entrepriseActuelle ? (
+                <div className="flex items-center gap-1.5 text-[12px] text-neutral-600">
+                  <Building2 size={12} className="flex-shrink-0 text-neutral-400" />
                   <span className="truncate">{candidat.entrepriseActuelle}</span>
                 </div>
+              ) : (
+                <span className="text-[12px] text-neutral-300">—</span>
+              )}
+            </div>
+
+            {/* Ville */}
+            <div className="w-[110px]">
+              {candidat.localisation ? (
+                <div className="flex items-center gap-1.5 text-[12px] text-neutral-600">
+                  <MapPin size={12} className="flex-shrink-0 text-neutral-400" />
+                  <span className="truncate">{candidat.localisation}</span>
+                </div>
+              ) : (
+                <span className="text-[12px] text-neutral-300">—</span>
+              )}
+            </div>
+
+            {/* Salaire */}
+            <div className="w-[80px] text-right">
+              {salaire ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 border border-emerald-100">
+                  <Banknote size={11} />
+                  {(salaire / 1000).toFixed(0)}k€
+                </span>
+              ) : (
+                <span className="text-[12px] text-neutral-300">—</span>
+              )}
+            </div>
+
+            {/* Téléphone */}
+            <div className="w-[120px]">
+              {candidat.telephone ? (
+                <div className="flex items-center gap-1.5 text-[12px] text-neutral-500">
+                  <Phone size={11} className="flex-shrink-0 text-neutral-400" />
+                  <span className="truncate">{candidat.telephone}</span>
+                </div>
+              ) : (
+                <span className="text-[12px] text-neutral-300">—</span>
               )}
             </div>
           </div>
 
-          {/* Info chips */}
-          <div className="mt-4 flex flex-wrap gap-2">
-            {candidat.localisation && (
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-50 px-2.5 py-1 text-[11px] font-medium text-neutral-600 border border-neutral-100">
-                <MapPin size={11} className="text-neutral-400" />
-                <span className="truncate max-w-[100px]">{candidat.localisation}</span>
-              </div>
-            )}
-            {candidat.anneesExperience != null && (
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-50 px-2.5 py-1 text-[11px] font-medium text-neutral-600 border border-neutral-100">
-                <Clock size={11} className="text-neutral-400" />
-                {candidat.anneesExperience} an{candidat.anneesExperience > 1 ? 's' : ''}
-              </div>
-            )}
-            {salaire && (
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-600 border border-emerald-100">
-                <Banknote size={11} />
-                {(salaire / 1000).toFixed(0)}k&euro;{candidat.salaireActuel ? '' : ' souh.'}
-              </div>
-            )}
-          </div>
-
-          {/* Bottom: tags + mandats */}
-          <div className="mt-3 pt-3 border-t border-neutral-50 flex flex-wrap items-center gap-1.5">
-            {candidat.source && (
-              <Badge size="sm">{candidat.source}</Badge>
+          {/* Badges: mandats + source */}
+          <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
+            {(candidat._count?.candidatures ?? 0) > 0 && (
+              <Badge variant="info" size="sm">{candidat._count!.candidatures}</Badge>
             )}
             {candidat.linkedinUrl && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-600 border border-blue-100">
-                <Linkedin size={10} />
+              <span className="inline-flex items-center justify-center rounded-full bg-blue-50 w-6 h-6 text-blue-600 border border-blue-100">
+                <Linkedin size={11} />
               </span>
             )}
-            {(candidat._count?.candidatures ?? 0) > 0 && (
-              <Badge variant="info" size="sm">{candidat._count!.candidatures} mandat{candidat._count!.candidatures > 1 ? 's' : ''}</Badge>
-            )}
           </div>
+        </div>
+
+        {/* Mobile info row (visible on small screens only) */}
+        <div className="lg:hidden px-4 pb-3 flex flex-wrap gap-2">
+          {candidat.entrepriseActuelle && (
+            <div className="inline-flex items-center gap-1 text-[11px] text-neutral-500">
+              <Building2 size={10} className="text-neutral-400" />
+              {candidat.entrepriseActuelle}
+            </div>
+          )}
+          {candidat.localisation && (
+            <div className="inline-flex items-center gap-1 text-[11px] text-neutral-500">
+              <MapPin size={10} className="text-neutral-400" />
+              {candidat.localisation}
+            </div>
+          )}
+          {salaire && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
+              {(salaire / 1000).toFixed(0)}k€
+            </span>
+          )}
+          {candidat.telephone && (
+            <div className="inline-flex items-center gap-1 text-[11px] text-neutral-500">
+              <Phone size={10} className="text-neutral-400" />
+              {candidat.telephone}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -555,9 +616,9 @@ export default function CandidatsPage() {
       {/* Content */}
       {isLoading ? (
         view === 'grid' ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2">
             {Array.from({ length: 6 }).map((_, i) => (
-              <SkeletonCard key={i} />
+              <Skeleton key={i} className="h-14 w-full rounded-xl" />
             ))}
           </div>
         ) : (
@@ -574,7 +635,7 @@ export default function CandidatsPage() {
       ) : (
         <>
           {view === 'grid' ? (
-            <motion.div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" variants={listStagger} initial="hidden" animate="show">
+            <motion.div className="grid grid-cols-1 gap-2" variants={listStagger} initial="hidden" animate="show">
               {sortedCandidats.map((c, index) => (
                 <motion.div key={c.id} variants={listItem}>
                   <CandidatCard candidat={c} index={index} />

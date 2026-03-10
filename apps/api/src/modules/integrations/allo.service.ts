@@ -144,7 +144,55 @@ async function fetchAlloContacts(
 }
 
 /**
+ * Try to match by name (Allo contact name) against existing candidats/clients.
+ * Used as fallback when phone matching fails but Allo provides a name.
+ */
+async function matchByName(
+  firstName: string,
+  lastName: string,
+  companyName?: string,
+): Promise<PhoneMatchResult | null> {
+  if (!firstName && !lastName) return null;
+
+  // Try client first if company name is known
+  if (companyName && lastName) {
+    const client = await prisma.client.findFirst({
+      where: {
+        nom: { equals: lastName, mode: 'insensitive' },
+        ...(firstName ? { prenom: { equals: firstName, mode: 'insensitive' } } : {}),
+        entreprise: { nom: { equals: companyName, mode: 'insensitive' } },
+      },
+      select: { id: true, nom: true, prenom: true, telephone: true },
+    });
+    if (client) {
+      return { type: 'CLIENT', id: client.id, nom: client.nom, prenom: client.prenom, telephone: client.telephone };
+    }
+  }
+
+  // Try candidat by name
+  if (lastName) {
+    const candidat = await prisma.candidat.findFirst({
+      where: {
+        nom: { equals: lastName, mode: 'insensitive' },
+        ...(firstName ? { prenom: { equals: firstName, mode: 'insensitive' } } : {}),
+      },
+      select: { id: true, nom: true, prenom: true, telephone: true },
+    });
+    if (candidat) {
+      // Update phone number if missing
+      if (!candidat.telephone) {
+        // phone will be set by caller
+      }
+      return { type: 'CANDIDAT', id: candidat.id, nom: candidat.nom, prenom: candidat.prenom, telephone: candidat.telephone };
+    }
+  }
+
+  return null;
+}
+
+/**
  * Auto-create a Client or Candidat from an Allo contact or phone number.
+ * First tries name-based matching to avoid duplicates.
  *
  * Logic:
  *  - Has company → Client (pro)
@@ -161,9 +209,27 @@ async function autoCreateContact(
   const companyName = alloContact?.company?.name;
   const jobTitle = alloContact?.job_title;
 
+  // 1. Try name-based matching first (avoid duplicates)
+  if (firstName || lastName) {
+    const nameMatch = await matchByName(firstName, lastName, companyName);
+    if (nameMatch) {
+      // Update phone number on the matched contact if missing
+      if (!nameMatch.telephone) {
+        if (nameMatch.type === 'CANDIDAT') {
+          await prisma.candidat.update({ where: { id: nameMatch.id }, data: { telephone: phone } });
+        } else {
+          await prisma.client.update({ where: { id: nameMatch.id }, data: { telephone: phone } });
+        }
+        nameMatch.telephone = phone;
+      }
+      console.log(`[Allo Auto] Matched by name: ${fullName} → ${nameMatch.type} ${nameMatch.id}`);
+      return nameMatch;
+    }
+  }
+
+  // 2. Create new contact
   if (companyName) {
     // ─── PRO → Create Entreprise + Client ───
-    // Find or create the entreprise
     let entreprise = await prisma.entreprise.findFirst({
       where: { nom: { equals: companyName, mode: 'insensitive' } },
     });
@@ -566,27 +632,29 @@ export async function autoProcessTranscripts(userId: string) {
         }
       }
 
-      // 4. Auto-apply all info_updates
-      if (summaryJson.info_updates && summaryJson.info_updates.length > 0) {
-        const allIndices = summaryJson.info_updates.map((_: unknown, i: number) => i);
-        const result = await callSummaryService.applyInfoUpdates(summary.id, allIndices, userId);
-        fieldsUpdated += result.appliedCount;
-      }
+      // 4. Create notification for user to review & validate actions/updates
+      //    (NO auto-apply: the recruiter validates via notification → call summary page)
+      const actionCount = summaryJson.action_items?.length ?? 0;
+      const updateCount = summaryJson.info_updates?.length ?? 0;
+      const contactName = summaryJson.interlocutor
+        ? `${summaryJson.interlocutor.first_name ?? ''} ${summaryJson.interlocutor.last_name ?? ''}`.trim()
+        : null;
 
-      // 5. Auto-create tasks from high/medium priority action items
-      if (summaryJson.action_items && summaryJson.action_items.length > 0) {
-        for (let i = 0; i < summaryJson.action_items.length; i++) {
-          const action = summaryJson.action_items[i];
-          if (action.priority === 'high' || action.priority === 'medium') {
-            try {
-              await callSummaryService.acceptActionItem(summary.id, i, userId);
-              tasksCreated++;
-            } catch {
-              // Already accepted or other error — skip
-            }
-          }
-        }
-      }
+      const notifParts: string[] = [];
+      if (actionCount > 0) notifParts.push(`${actionCount} action${actionCount > 1 ? 's' : ''} proposée${actionCount > 1 ? 's' : ''}`);
+      if (updateCount > 0) notifParts.push(`${updateCount} info${updateCount > 1 ? 's' : ''} à valider`);
+
+      await notificationService.create({
+        userId,
+        type: 'AI_SUMMARY_READY',
+        titre: `Analyse IA : appel ${contactName || 'inconnu'}`,
+        contenu: notifParts.length > 0
+          ? `${summaryJson.summary?.[0] ?? 'Appel analysé'} — ${notifParts.join(', ')}`
+          : summaryJson.summary?.[0] ?? 'Appel analysé par IA',
+        entiteType: activity.entiteType === 'CANDIDAT' ? 'CANDIDAT' : 'CLIENT',
+        entiteId: activity.entiteId!,
+      });
+      tasksCreated++; // reuse counter for notifications created
 
       // Update activity title with real name if we found one
       if (summaryJson.interlocutor) {
@@ -614,7 +682,7 @@ export async function autoProcessTranscripts(userId: string) {
     }
   }
 
-  console.log(`[Allo AI] Done. Processed: ${processed}, Names updated: ${namesUpdated}, Fields: ${fieldsUpdated}, Tasks: ${tasksCreated}`);
+  console.log(`[Allo AI] Done. Processed: ${processed}, Names updated: ${namesUpdated}, Fields: ${fieldsUpdated}, Notifications: ${tasksCreated}`);
 
   return {
     status: 'completed',
@@ -622,9 +690,9 @@ export async function autoProcessTranscripts(userId: string) {
     total: processable.length,
     namesUpdated,
     fieldsUpdated,
-    tasksCreated,
+    notificationsSent: tasksCreated,
     errors: errors.length > 0 ? errors : undefined,
-    message: `${processed} appels analysés par IA. ${namesUpdated} noms mis à jour, ${fieldsUpdated} champs enrichis, ${tasksCreated} tâches créées.`,
+    message: `${processed} appels analysés par IA. ${namesUpdated} noms mis à jour, ${tasksCreated} notifications envoyées. Validez les actions proposées depuis vos notifications.`,
   };
 }
 

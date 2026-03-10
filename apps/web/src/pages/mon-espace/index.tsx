@@ -174,7 +174,7 @@ export default function MonEspacePage() {
           <Card>
             <EmptyState
               title="Aucun mandat actif"
-              description="Vos mandats avec des candidatures actives apparaîtront ici"
+              description="Vos mandats actifs apparaîtront ici"
               icon={<Briefcase size={40} strokeWidth={1} />}
             />
           </Card>
