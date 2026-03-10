@@ -13,6 +13,7 @@ interface AlloWebhookPayload {
   direction: 'inbound' | 'outbound';
   duration: number;         // seconds
   recordingUrl?: string;
+  transcript?: string;      // call transcript text
   timestamp: string;
   userId?: string;          // Allo user id (maps to recruiter)
   metadata?: Record<string, unknown>;
@@ -279,7 +280,9 @@ export async function processAlloWebhook(
       entiteId: match.id,
       userId: recruiterId,
       titre: `Appel ${direction === 'ENTRANT' ? 'entrant' : 'sortant'} - ${contactName}`,
-      contenu: `Appel de ${durationMinutes} min avec ${contactName}`,
+      contenu: payload.transcript
+        ? `Appel de ${durationMinutes} min avec ${contactName}\n\n--- Transcript ---\n${payload.transcript}`
+        : `Appel de ${durationMinutes} min avec ${contactName}`,
       source: 'ALLO',
       metadata: {
         callId: payload.callId,
@@ -287,6 +290,7 @@ export async function processAlloWebhook(
         to: payload.to,
         duration: payload.duration,
         recordingUrl: payload.recordingUrl,
+        transcript: payload.transcript || undefined,
         matched: true,
       },
     },
