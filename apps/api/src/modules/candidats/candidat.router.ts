@@ -74,7 +74,7 @@ export default async function candidatRouter(fastify: FastifyInstance) {
     preHandler: [authenticate],
     handler: async () => {
       const result = await prisma.$queryRaw<{ tag: string }[]>`
-        SELECT DISTINCT unnest(tags) as tag FROM "Candidat" WHERE tags IS NOT NULL ORDER BY tag
+        SELECT DISTINCT unnest(tags) as tag FROM "candidats" WHERE tags IS NOT NULL ORDER BY tag
       `;
       return result.map((r) => r.tag);
     },

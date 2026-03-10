@@ -3,6 +3,45 @@ import { NotFoundError, ConflictError, ValidationError } from '../../lib/errors.
 import type { CreateCandidatureInput, UpdateCandidatureInput } from './candidature.schema.js';
 import type { StageCandidature } from '@prisma/client';
 
+export async function list(filters: {
+  mandatId?: string;
+  stage?: StageCandidature;
+  include?: string;
+}) {
+  const where: any = {};
+  if (filters.mandatId) where.mandatId = filters.mandatId;
+  if (filters.stage) where.stage = filters.stage;
+
+  const candidatures = await prisma.candidature.findMany({
+    where,
+    include: {
+      candidat: filters.include === 'candidat' ? {
+        select: {
+          id: true,
+          nom: true,
+          prenom: true,
+          email: true,
+          telephone: true,
+          posteActuel: true,
+          entrepriseActuelle: true,
+          linkedinUrl: true,
+          localisation: true,
+          tags: true,
+          source: true,
+          anneesExperience: true,
+          aiPitchShort: true,
+        },
+      } : false,
+      mandat: {
+        select: { id: true, titrePoste: true },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return { data: candidatures };
+}
+
 export async function create(data: CreateCandidatureInput, createdById: string) {
   // Check for duplicate (mandatId + candidatId must be unique)
   const existing = await prisma.candidature.findUnique({

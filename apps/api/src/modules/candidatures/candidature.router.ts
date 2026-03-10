@@ -5,6 +5,24 @@ import * as candidatureService from './candidature.service.js';
 import { authenticate } from '../../middleware/auth.js';
 
 export default async function candidatureRouter(fastify: FastifyInstance) {
+  // GET / - List candidatures with optional filters
+  fastify.get('/', {
+    schema: {
+      description: 'Lister les candidatures (filtrage par mandatId, stage)',
+      tags: ['Candidatures'],
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const query = request.query as { mandatId?: string; stage?: string; include?: string };
+      const stage = query.stage ? z.enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE']).parse(query.stage) : undefined;
+      return candidatureService.list({
+        mandatId: query.mandatId,
+        stage,
+        include: query.include,
+      });
+    },
+  });
+
   // POST / - Create candidature
   fastify.post('/', {
     schema: {
