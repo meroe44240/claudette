@@ -1,5 +1,6 @@
 import prisma from '../../lib/db.js';
 import { callClaude } from '../../services/claudeAI.js';
+import { AppError } from '../../lib/errors.js';
 import * as notificationService from '../notifications/notification.service.js';
 
 // ─── SYSTEM PROMPT ──────────────────────────────────
@@ -215,14 +216,14 @@ export async function acceptActionItem(summaryId: string, actionIndex: number, u
   });
 
   if (!summary) {
-    throw new Error('Résumé IA introuvable');
+    throw new AppError(404, 'Résumé IA introuvable');
   }
 
   const summaryJson = summary.summaryJson as unknown as CallSummaryJson;
 
   // 2. Extract the action item
   if (!summaryJson.action_items || actionIndex < 0 || actionIndex >= summaryJson.action_items.length) {
-    throw new Error('Action introuvable dans le résumé');
+    throw new AppError(400, 'Action introuvable dans le résumé');
   }
 
   const actionItem = summaryJson.action_items[actionIndex];
@@ -230,7 +231,7 @@ export async function acceptActionItem(summaryId: string, actionIndex: number, u
   // Check if already accepted
   const accepted = (summary.actionsAccepted as number[]) ?? [];
   if (accepted.includes(actionIndex)) {
-    throw new Error('Cette action a déjà été acceptée');
+    throw new AppError(409, 'Cette action a déjà été acceptée');
   }
 
   // 3. Calculate deadline from hint
@@ -279,13 +280,13 @@ export async function applyInfoUpdates(summaryId: string, updateIndices: number[
   });
 
   if (!summary) {
-    throw new Error('Résumé IA introuvable');
+    throw new AppError(404, 'Résumé IA introuvable');
   }
 
   const summaryJson = summary.summaryJson as unknown as CallSummaryJson;
 
   if (!summaryJson.info_updates || summaryJson.info_updates.length === 0) {
-    throw new Error('Aucune mise à jour disponible dans ce résumé');
+    throw new AppError(400, 'Aucune mise à jour disponible dans ce résumé');
   }
 
   const alreadyApplied = (summary.updatesApplied as number[]) ?? [];
