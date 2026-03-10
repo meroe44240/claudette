@@ -50,8 +50,8 @@ type FilterType = 'all' | 'inbox' | 'sent';
 
 const FILTER_OPTIONS: { value: FilterType; label: string; icon: typeof Mail }[] = [
   { value: 'all', label: 'Tous', icon: Mail },
-  { value: 'inbox', label: 'Re\u00e7us', icon: Inbox },
-  { value: 'sent', label: 'Envoy\u00e9s', icon: Send },
+  { value: 'inbox', label: 'Reçus', icon: Inbox },
+  { value: 'sent', label: 'Envoyés', icon: Send },
 ];
 
 // ─── HELPER ──────────────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ function formatEmailDate(dateStr: string): string {
     const diffMin = Math.floor(diffMs / 60000);
     const diffH = Math.floor(diffMs / 3600000);
 
-    if (diffMin < 1) return '\u00c0 l\'instant';
+    if (diffMin < 1) return 'À l\'instant';
     if (diffMin < 60) return `Il y a ${diffMin} min`;
     if (diffH < 24) return `Il y a ${diffH}h`;
 
@@ -137,7 +137,7 @@ export default function EmailsPage() {
     setSyncing(true);
     try {
       await api.post('/integrations/email/sync', {});
-      toast('success', 'Synchronisation termin\u00e9e !');
+      toast('success', 'Synchronisation terminée !');
       fetchEmails();
     } catch (err: any) {
       toast('error', err?.message || 'Erreur de synchronisation.');
@@ -183,15 +183,15 @@ export default function EmailsPage() {
         <ToastContainer />
         <div className="mb-6">
           <h1 className="text-[22px] font-bold text-neutral-900">Emails</h1>
-          <p className="text-[14px] text-neutral-500 mt-1">Vos emails Gmail synchronis\u00e9s</p>
+          <p className="text-[14px] text-neutral-500 mt-1">Vos emails Gmail synchronisés</p>
         </div>
         <div className="bg-white rounded-xl border border-neutral-100 p-12 text-center">
           <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
             <AlertCircle size={32} className="text-amber-500" />
           </div>
-          <h2 className="text-[17px] font-semibold text-neutral-900 mb-2">Gmail non connect\u00e9</h2>
+          <h2 className="text-[17px] font-semibold text-neutral-900 mb-2">Gmail non connecté</h2>
           <p className="text-[14px] text-neutral-500 mb-6 max-w-md mx-auto">
-            Connectez votre compte Gmail dans les param\u00e8tres pour synchroniser vos emails.
+            Connectez votre compte Gmail dans les paramètres pour synchroniser vos emails.
           </p>
           <button
             onClick={() => navigate('/settings/integrations')}
@@ -212,7 +212,7 @@ export default function EmailsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-[22px] font-bold text-neutral-900">Emails</h1>
-          <p className="text-[14px] text-neutral-500 mt-1">Vos emails Gmail synchronis\u00e9s</p>
+          <p className="text-[14px] text-neutral-500 mt-1">Vos emails Gmail synchronisés</p>
         </div>
         <button
           onClick={handleSync}
@@ -272,7 +272,7 @@ export default function EmailsPage() {
           <div className="text-center py-16">
             <MailOpen size={32} className="text-neutral-300 mx-auto mb-3" />
             <p className="text-[14px] text-neutral-500">
-              {searchDebounced ? 'Aucun email trouv\u00e9 pour cette recherche.' : 'Aucun email \u00e0 afficher.'}
+              {searchDebounced ? 'Aucun email trouvé pour cette recherche.' : 'Aucun email à afficher.'}
             </p>
           </div>
         ) : (
@@ -315,7 +315,7 @@ export default function EmailsPage() {
                     <div className="flex items-center gap-2 mb-0.5">
                       {/* Sender name */}
                       <span className={`text-[14px] truncate ${!msg.isRead ? 'font-semibold text-neutral-900' : 'font-medium text-neutral-700'}`}>
-                        {msg.isSent ? `\u00c0 : ${msg.to?.split('<')[0]?.trim() || msg.to || ''}` : msg.from.name}
+                        {msg.isSent ? `À : ${msg.to?.split('<')[0]?.trim() || msg.to || ''}` : msg.from.name}
                       </span>
 
                       {/* Contact badge */}
@@ -367,7 +367,7 @@ export default function EmailsPage() {
               className="flex items-center gap-1.5 text-[13px] font-medium text-neutral-600 hover:text-neutral-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft size={14} />
-              Pr\u00e9c\u00e9dent
+              Précédent
             </button>
             <span className="text-[12px] text-neutral-400">Page {currentPage + 1}</span>
             <button

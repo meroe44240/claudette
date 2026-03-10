@@ -93,7 +93,7 @@ const PERIOD_OPTIONS: { key: Period; label: string }[] = [
   { key: 'week', label: 'Cette semaine' },
   { key: 'month', label: 'Ce mois' },
   { key: 'quarter', label: 'Ce trimestre' },
-  { key: 'year', label: 'Cette ann\u00e9e' },
+  { key: 'year', label: 'Cette année' },
 ];
 
 const SCORECARD_CONFIG: {
@@ -108,7 +108,7 @@ const SCORECARD_CONFIG: {
   { key: 'candidats', label: 'CANDIDATS', emoji: '\uD83D\uDC65', color: COLORS.pipelineViolet, format: (v) => String(v) },
   { key: 'mandats', label: 'MANDATS', emoji: '\uD83D\uDCCB', color: COLORS.warningAmber, format: (v) => String(v) },
   { key: 'ca', label: 'CA', emoji: '\uD83D\uDCB0', color: COLORS.revenueGreen, format: (v) => formatCurrency(v) },
-  { key: 'tauxPresentation', label: 'TAUX PR\u00c9SENTATION', emoji: '\uD83C\uDFAF', color: COLORS.activityBlue, format: (v) => `${v}%` },
+  { key: 'tauxPresentation', label: 'TAUX PRÉSENTATION', emoji: '\uD83C\uDFAF', color: COLORS.activityBlue, format: (v) => `${v}%` },
 ];
 
 // ─── HELPERS ────────────────────────────────────────────
@@ -664,14 +664,14 @@ function RevenueChart({
             />
             <Bar
               dataKey="facture"
-              name="CA factur\u00e9"
+              name="CA facturé"
               fill={COLORS.revenueGreen}
               barSize={24}
               radius={[6, 6, 0, 0]}
             />
             <Line
               dataKey="encaisseCumul"
-              name="Encaiss\u00e9 cumul\u00e9"
+              name="Encaissé cumulé"
               stroke={COLORS.revenueGreenDark}
               strokeWidth={2}
               dot={{ r: 3, fill: COLORS.revenueGreenDark }}
@@ -716,7 +716,7 @@ function RevenueChart({
         <div className="flex flex-wrap gap-6 pt-2">
           <div>
             <span className="block text-[11px] text-neutral-400 uppercase tracking-wider mb-0.5">
-              Pipe pond\u00e9r\u00e9
+              Pipe pondéré
             </span>
             <span className="text-[16px] font-bold text-neutral-900">
               {formatCurrency(pipeCommercial)}
@@ -724,7 +724,7 @@ function RevenueChart({
           </div>
           <div>
             <span className="block text-[11px] text-neutral-400 uppercase tracking-wider mb-0.5">
-              Impay\u00e9s
+              Impayés
             </span>
             <span className="text-[16px] font-bold text-red-500">
               {formatCurrency(impayes)}
@@ -759,7 +759,7 @@ function PerformanceRadar({ data }: { data: StatsData['radar'] }) {
               tickCount={4}
             />
             <Radar
-              name="\u00c9quipe"
+              name="Équipe"
               dataKey="teamAvg"
               stroke="#c4c4d0"
               fill="#c4c4d0"
@@ -804,7 +804,7 @@ function TimePerStageChart({
   return (
     <Card>
       <h3 className="text-[15px] font-semibold text-neutral-900 mb-4">
-        Temps par \u00e9tape
+        Temps par étape
       </h3>
       <div className="space-y-3 mb-4">
         {data.map((stage, i) => {
@@ -830,7 +830,7 @@ function TimePerStageChart({
                 <div
                   className="absolute top-0 h-full w-0.5 bg-neutral-400"
                   style={{ left: `${avgPct}%` }}
-                  title={`Moy. \u00e9quipe: ${stage.teamAvg}j`}
+                  title={`Moy. équipe: ${stage.teamAvg}j`}
                 />
               </div>
             </div>
@@ -849,7 +849,7 @@ function TimePerStageChart({
             </span>
             {teamTimeToFill !== null && (
               <span className="block text-[11px] text-neutral-400">
-                Moy. \u00e9quipe: {teamTimeToFill}j
+                Moy. équipe: {teamTimeToFill}j
               </span>
             )}
           </div>
@@ -907,7 +907,7 @@ function TeamComparisonChart({
     <Card>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-[15px] font-semibold text-neutral-900">
-          Comparaison \u00e9quipe
+          Comparaison équipe
         </h3>
         {topCounts && (
           <span className="flex items-center gap-1.5 text-[12px] font-semibold text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
@@ -957,7 +957,7 @@ function exportToCsv(stats: StatsData) {
 
   // Scorecards
   rows.push(['== Scorecards ==']);
-  rows.push(['M\u00e9trique', 'Valeur', 'Tendance %']);
+  rows.push(['Métrique', 'Valeur', 'Tendance %']);
   SCORECARD_CONFIG.forEach((cfg) => {
     const item = stats.scorecards[cfg.key];
     rows.push([cfg.label, String(item.value), `${item.trend}%`]);
@@ -978,7 +978,7 @@ function exportToCsv(stats: StatsData) {
 
   // Funnel
   rows.push(['== Pipeline ==']);
-  rows.push(['\u00c9tape', 'Nombre']);
+  rows.push(['Étape', 'Nombre']);
   stats.funnel.forEach((d) => rows.push([d.stage, String(d.count)]));
   rows.push([]);
 
@@ -992,25 +992,25 @@ function exportToCsv(stats: StatsData) {
 
   // Revenue
   rows.push(['== Chiffre d\'affaires ==']);
-  rows.push(['Mois', 'Factur\u00e9', 'Encaiss\u00e9']);
+  rows.push(['Mois', 'Facturé', 'Encaissé']);
   stats.revenueByMonth.forEach((d) => rows.push([d.month, String(d.facture), String(d.encaisse)]));
   rows.push([]);
 
   rows.push(['CA YTD', String(stats.caYtd)]);
   rows.push(['Objectif annuel', String(stats.objectifAnnuel)]);
   rows.push(['Pipe commercial', String(stats.pipeCommercial)]);
-  rows.push(['Impay\u00e9s', String(stats.impayes)]);
+  rows.push(['Impayés', String(stats.impayes)]);
   rows.push([]);
 
   // Radar
   rows.push(['== Performance ==']);
-  rows.push(['M\u00e9trique', 'Valeur', 'Moy. \u00e9quipe']);
+  rows.push(['Métrique', 'Valeur', 'Moy. équipe']);
   stats.radar.forEach((d) => rows.push([d.metric, String(d.value), String(d.teamAvg)]));
   rows.push([]);
 
   // Time per stage
-  rows.push(['== Temps par \u00e9tape ==']);
-  rows.push(['De', 'Vers', 'Jours', 'Moy. \u00e9quipe']);
+  rows.push(['== Temps par étape ==']);
+  rows.push(['De', 'Vers', 'Jours', 'Moy. équipe']);
   stats.timePerStage.forEach((d) => rows.push([d.from, d.to, String(d.days), String(d.teamAvg)]));
   if (stats.timeToFill !== null) {
     rows.push(['Time-to-fill', String(stats.timeToFill), '', stats.teamTimeToFill !== null ? String(stats.teamTimeToFill) : '']);
@@ -1019,7 +1019,7 @@ function exportToCsv(stats: StatsData) {
 
   // Team comparison
   if (stats.teamComparison) {
-    rows.push(['== Comparaison \u00e9quipe ==']);
+    rows.push(['== Comparaison équipe ==']);
     rows.push(['Nom', 'Appels', 'RDV', 'Candidats', 'CA']);
     stats.teamComparison.forEach((d) =>
       rows.push([`${d.prenom} ${d.nom}`, String(d.appels), String(d.rdv), String(d.candidats), String(d.ca)]),
@@ -1192,13 +1192,13 @@ export default function StatsPage() {
             Erreur de chargement
           </h3>
           <p className="text-[13px] text-neutral-500 mb-4">
-            {(error as any)?.message ?? 'Impossible de charger les statistiques. Veuillez r\u00e9essayer.'}
+            {(error as any)?.message ?? 'Impossible de charger les statistiques. Veuillez réessayer.'}
           </p>
           <button
             onClick={() => window.location.reload()}
             className="rounded-xl bg-blue-500 px-6 py-2.5 text-[13px] font-semibold text-white hover:bg-blue-600 transition-colors"
           >
-            R\u00e9essayer
+            Réessayer
           </button>
         </div>
       )}
@@ -1227,7 +1227,7 @@ export default function StatsPage() {
 
           {/* ────── SECTION 2: ACTIVITY ────── */}
           <section>
-            <SectionTitle>Activit\u00e9</SectionTitle>
+            <SectionTitle>Activité</SectionTitle>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <motion.div variants={fadeUp} custom={0}>
                 <CallsByDayChart data={stats.callsByDay} />
@@ -1267,7 +1267,7 @@ export default function StatsPage() {
 
           {/* ────── SECTION 5: EFFICIENCY ────── */}
           <section>
-            <SectionTitle>Efficacit\u00e9</SectionTitle>
+            <SectionTitle>Efficacité</SectionTitle>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <motion.div variants={fadeUp} custom={0}>
                 <PerformanceRadar data={stats.radar} />
@@ -1285,7 +1285,7 @@ export default function StatsPage() {
           {/* ────── SECTION 6: TEAM COMPARISON (ADMIN) ────── */}
           {isAdmin && stats.teamComparison && stats.teamComparison.length > 0 && (
             <section>
-              <SectionTitle>Comparaison \u00e9quipe</SectionTitle>
+              <SectionTitle>Comparaison équipe</SectionTitle>
               <motion.div variants={fadeUp} custom={0}>
                 <TeamComparisonChart data={stats.teamComparison} />
               </motion.div>

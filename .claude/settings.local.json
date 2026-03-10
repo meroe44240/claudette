@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PGPASSWORD=humanup_dev psql -h localhost -U humanup -d humanup_dev -c \"SELECT ''candidats'' as tbl, COUNT\\(*\\) FROM \"\"Candidat\"\" UNION ALL SELECT ''clients'', COUNT\\(*\\) FROM \"\"Client\"\" UNION ALL SELECT ''entreprises'', COUNT\\(*\\) FROM \"\"Entreprise\"\" UNION ALL SELECT ''mandats'', COUNT\\(*\\) FROM \"\"Mandat\"\" UNION ALL SELECT ''users'', COUNT\\(*\\) FROM \"\"User\"\";\")"
+    ]
+  }
+}

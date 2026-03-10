@@ -78,12 +78,12 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
 
     // Auto-create follow-up tasks based on stage
     const stageTaskMap: Record<string, string[]> = {
-      'CONTACTE': ['Pr\u00e9parer le brief candidat'],
-      'ENTRETIEN': ['Pr\u00e9parer le candidat pour l\'entretien', 'Confirmer la date d\'entretien'],
-      'ENTRETIEN_CLIENT': ['Envoyer le brief au client', 'Pr\u00e9parer le candidat pour le client'],
+      'CONTACTE': ['Préparer le brief candidat'],
+      'ENTRETIEN': ['Préparer le candidat pour l\'entretien', 'Confirmer la date d\'entretien'],
+      'ENTRETIEN_CLIENT': ['Envoyer le brief au client', 'Préparer le candidat pour le client'],
       'SHORTLIST': ['Envoyer la shortlist au client'],
-      'OFFRE': ['N\u00e9gocier les conditions', 'Pr\u00e9parer le contrat'],
-      'PLACE': ['Planifier le check-in \u00e0 1 mois', 'Envoyer la facturation'],
+      'OFFRE': ['Négocier les conditions', 'Préparer le contrat'],
+      'PLACE': ['Planifier le check-in à 1 mois', 'Envoyer la facturation'],
     };
 
     const tasksToCreate = stageTaskMap[data.stage as string] || [];
@@ -167,7 +167,7 @@ export async function bulkUpdateStage(
     await prisma.activite.create({
       data: {
         type: 'NOTE',
-        titre: `Stage chang\u00e9: ${existing.stage} \u2192 ${stage}`,
+        titre: `Stage changé: ${existing.stage} → ${stage}`,
         entiteType: 'CANDIDAT',
         entiteId: existing.candidatId,
         userId: changedById,

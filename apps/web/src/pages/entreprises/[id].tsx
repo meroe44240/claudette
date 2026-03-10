@@ -114,19 +114,19 @@ export default function EntrepriseDetailPage() {
       api.put<EntrepriseDetail>(`/entreprises/${id}`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entreprise', id] });
-      toast('success', 'Modifications enregistr\u00e9es');
+      toast('success', 'Modifications enregistrées');
       setIsEditing(false);
       setEditForm(null);
     },
     onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de la mise \u00e0 jour');
+      toast('error', error.message || 'Erreur lors de la mise à jour');
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`/entreprises/${id}`),
     onSuccess: () => {
-      toast('success', 'Supprim\u00e9 avec succ\u00e8s');
+      toast('success', 'Supprimé avec succès');
       navigate('/entreprises');
     },
     onError: (error: any) => {
@@ -356,7 +356,7 @@ export default function EntrepriseDetailPage() {
                     <dd className="mt-1 text-lg font-semibold text-text-primary">{stats.nombrePlacements}</dd>
                   </div>
                   <div>
-                    <dt className="text-text-tertiary">Revenue cumul\u00e9</dt>
+                    <dt className="text-text-tertiary">Revenue cumulé</dt>
                     <dd className="mt-1 text-lg font-semibold text-text-primary">{formatCurrency(stats.revenueCumule)}</dd>
                   </div>
                   <div>

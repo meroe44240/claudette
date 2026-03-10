@@ -110,7 +110,7 @@ export default function EmailComposer({
       clientId?: string;
     }) => api.post('/emails/send', payload),
     onSuccess: () => {
-      toast('success', 'Email envoy\u00e9 avec succ\u00e8s');
+      toast('success', 'Email envoyé avec succès');
       handleClose();
     },
     onError: (error: Error & { data?: { message?: string } }) => {
@@ -131,7 +131,7 @@ export default function EmailComposer({
       if (rendered.sujet) setSubject(rendered.sujet);
       setBody(rendered.contenu);
       setShowTemplates(false);
-      toast('info', 'Template appliqu\u00e9');
+      toast('info', 'Template appliqué');
     },
     onError: () => {
       toast('error', 'Erreur lors du rendu du template');

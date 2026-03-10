@@ -64,9 +64,9 @@ function getParisOffsetMs(): number {
 
 function formatCA(amount: number): string {
   if (amount >= 1000) {
-    return `${Math.round(amount / 1000)}k\u20AC`;
+    return `${Math.round(amount / 1000)}k€`;
   }
-  return `${amount}\u20AC`;
+  return `${amount}€`;
 }
 
 function formatDateFr(): string {
@@ -285,7 +285,7 @@ function buildSlackBlocks(data: DailyReportData): object {
     type: 'header',
     text: {
       type: 'plain_text',
-      text: `\uD83D\uDCCA HumanUp \u2014 R\u00E9sum\u00E9 du ${data.date}`,
+      text: `📊 HumanUp — Résumé du ${data.date}`,
       emoji: true,
     },
   });
@@ -297,7 +297,7 @@ function buildSlackBlocks(data: DailyReportData): object {
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: `*\uD83C\uDFE2 \u00C9quipe*\n\uD83D\uDCDE Appels : *${data.teamAppels}* | \uD83D\uDCC5 RDV : *${data.teamRdv}* | \uD83D\uDC65 Candidats avanc\u00E9s : *${data.teamCandidatsAvances}* | \uD83D\uDCB0 CA ${data.monthLabel} : *${formatCA(data.caMonth)}*`,
+      text: `*🏢 Équipe*\n📞 Appels : *${data.teamAppels}* | 📅 RDV : *${data.teamRdv}* | 👥 Candidats avancés : *${data.teamCandidatsAvances}* | 💰 CA ${data.monthLabel} : *${formatCA(data.caMonth)}*`,
     },
   });
 
@@ -314,7 +314,7 @@ function buildSlackBlocks(data: DailyReportData): object {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*${displayName}*\n\uD83D\uDCDE ${user.appels} appels | \uD83D\uDCC5 ${user.rdv} RDV | \uD83D\uDC65 ${user.candidatsAvances} candidats avanc\u00E9s | \u2705 ${user.tachesCompletees} t\u00E2ches`,
+        text: `*${displayName}*\n📞 ${user.appels} appels | 📅 ${user.rdv} RDV | 👥 ${user.candidatsAvances} candidats avancés | ✅ ${user.tachesCompletees} tâches`,
       },
     });
   }
@@ -325,7 +325,7 @@ function buildSlackBlocks(data: DailyReportData): object {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `_Aucune activit\u00E9 enregistr\u00E9e aujourd'hui._`,
+        text: `_Aucune activité enregistrée aujourd'hui._`,
       },
     });
   }
@@ -334,12 +334,12 @@ function buildSlackBlocks(data: DailyReportData): object {
 
   // Top performer + alerts
   const topLine = data.topPerformer
-    ? `\uD83C\uDFC6 *Top performer du jour* : ${data.topPerformer.name} (${data.topPerformer.appels} appels + ${data.topPerformer.rdv} RDV)`
-    : `\uD83C\uDFC6 *Top performer du jour* : _aucune activit\u00E9_`;
+    ? `🏆 *Top performer du jour* : ${data.topPerformer.name} (${data.topPerformer.appels} appels + ${data.topPerformer.rdv} RDV)`
+    : `🏆 *Top performer du jour* : _aucune activité_`;
 
   const alertLine =
     data.dormantMandats > 0
-      ? `\n\u26A0\uFE0F *Alertes* : ${data.dormantMandats} mandat${data.dormantMandats > 1 ? 's' : ''} dormant${data.dormantMandats > 1 ? 's' : ''}`
+      ? `\n⚠️ *Alertes* : ${data.dormantMandats} mandat${data.dormantMandats > 1 ? 's' : ''} dormant${data.dormantMandats > 1 ? 's' : ''}`
       : '';
 
   blocks.push({
@@ -357,7 +357,7 @@ function buildSlackBlocks(data: DailyReportData): object {
     elements: [
       {
         type: 'mrkdwn',
-        text: `\uD83D\uDCCA <${appUrl}/stats|Voir les stats d\u00E9taill\u00E9es>`,
+        text: `📊 <${appUrl}/stats|Voir les stats détaillées>`,
       },
     ],
   });
@@ -383,7 +383,7 @@ async function sendToWebhook(webhookUrl: string, payload: object): Promise<void>
 export async function sendDailyReport(): Promise<{ success: boolean; message: string }> {
   const config = await getSlackConfig();
   if (!config || !config.enabled) {
-    return { success: false, message: 'Slack non configur\u00E9 ou d\u00E9sactiv\u00E9' };
+    return { success: false, message: 'Slack non configuré ou désactivé' };
   }
 
   try {
@@ -391,7 +391,7 @@ export async function sendDailyReport(): Promise<{ success: boolean; message: st
     const payload = buildSlackBlocks(data);
     await sendToWebhook(config.webhookUrl, payload);
     console.log(`[Slack] Daily report sent successfully at ${new Date().toISOString()}`);
-    return { success: true, message: 'Rapport quotidien envoy\u00E9 avec succ\u00E8s' };
+    return { success: true, message: 'Rapport quotidien envoyé avec succès' };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Erreur inconnue';
     console.error('[Slack] Failed to send daily report:', msg);
@@ -404,7 +404,7 @@ export async function sendTestReport(
 ): Promise<{ success: boolean; message: string }> {
   const url = webhookUrl || (await getSlackConfig())?.webhookUrl;
   if (!url) {
-    return { success: false, message: 'Aucune URL webhook configur\u00E9e' };
+    return { success: false, message: 'Aucune URL webhook configurée' };
   }
 
   try {
@@ -417,13 +417,13 @@ export async function sendTestReport(
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `\uD83E\uDDEA *Message de test* \u2014 Ceci est un aper\u00E7u du rapport quotidien.`,
+        text: `🧪 *Message de test* — Ceci est un aperçu du rapport quotidien.`,
       },
     });
 
     await sendToWebhook(url, payload);
     console.log(`[Slack] Test report sent to ${url.substring(0, 40)}...`);
-    return { success: true, message: 'Message de test envoy\u00E9 avec succ\u00E8s' };
+    return { success: true, message: 'Message de test envoyé avec succès' };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Erreur inconnue';
     console.error('[Slack] Failed to send test report:', msg);

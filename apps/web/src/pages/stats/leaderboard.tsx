@@ -26,7 +26,7 @@ const periodOptions = [
   { value: 'week', label: 'Cette semaine' },
   { value: 'month', label: 'Ce mois' },
   { value: 'quarter', label: 'Ce trimestre' },
-  { value: 'year', label: 'Cette ann\u00e9e' },
+  { value: 'year', label: 'Cette année' },
 ];
 
 const rankColors = ['text-amber-500', 'text-neutral-400', 'text-amber-700'];

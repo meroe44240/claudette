@@ -75,7 +75,7 @@ export async function upload(
   // Validate mime type
   if (!ALLOWED_MIME_TYPES.has(mimeType)) {
     throw new ValidationError(
-      `Type de fichier non autoris\u00e9: ${mimeType}. Types accept\u00e9s: PDF, DOC, DOCX, PNG, JPG`,
+      `Type de fichier non autorisé: ${mimeType}. Types acceptés: PDF, DOC, DOCX, PNG, JPG`,
     );
   }
 
@@ -83,7 +83,7 @@ export async function upload(
   const ext = path.extname(originalName).toLowerCase();
   if (!ALLOWED_EXTENSIONS.has(ext)) {
     throw new ValidationError(
-      `Extension de fichier non autoris\u00e9e: ${ext}. Extensions accept\u00e9es: .pdf, .doc, .docx, .png, .jpg, .jpeg`,
+      `Extension de fichier non autorisée: ${ext}. Extensions acceptées: .pdf, .doc, .docx, .png, .jpg, .jpeg`,
     );
   }
 

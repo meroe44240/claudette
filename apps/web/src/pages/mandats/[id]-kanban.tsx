@@ -105,12 +105,12 @@ const STAGES: StageCandidature[] = [
 
 const STAGE_LABELS: Record<StageCandidature, string> = {
   SOURCING: 'Sourcing',
-  CONTACTE: 'Contact\u00e9',
+  CONTACTE: 'Contacté',
   ENTRETIEN_1: 'Entretien 1',
   ENTRETIEN_CLIENT: 'Entretien Client',
   OFFRE: 'Offre',
-  PLACE: 'Plac\u00e9',
-  REFUSE: 'Refus\u00e9',
+  PLACE: 'Placé',
+  REFUSE: 'Refusé',
 };
 
 const STAGE_COLORS: Record<StageCandidature, string> = {
@@ -125,8 +125,8 @@ const STAGE_COLORS: Record<StageCandidature, string> = {
 
 const MOTIF_REFUS_OPTIONS: { value: MotifRefus; label: string }[] = [
   { value: 'SALAIRE', label: 'Salaire' },
-  { value: 'PROFIL_PAS_ALIGNE', label: 'Profil pas align\u00e9' },
-  { value: 'CANDIDAT_DECLINE', label: 'Candidat d\u00e9cline' },
+  { value: 'PROFIL_PAS_ALIGNE', label: 'Profil pas aligné' },
+  { value: 'CANDIDAT_DECLINE', label: 'Candidat décline' },
   { value: 'CLIENT_REFUSE', label: 'Client refuse' },
   { value: 'TIMING', label: 'Timing' },
   { value: 'POSTE_POURVU', label: 'Poste pourvu' },
@@ -141,7 +141,7 @@ function formatRelativeTimeFr(dateStr: string): string {
   const then = new Date(dateStr).getTime();
   const diffMs = now - then;
 
-  if (diffMs < 0) return "\u00e0 l'instant";
+  if (diffMs < 0) return "à l'instant";
 
   const seconds = Math.floor(diffMs / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -155,7 +155,7 @@ function formatRelativeTimeFr(dateStr: string): string {
   if (days > 0) return `il y a ${days}j`;
   if (hours > 0) return `il y a ${hours}h`;
   if (minutes > 0) return `il y a ${minutes}min`;
-  return "\u00e0 l'instant";
+  return "à l'instant";
 }
 
 /** Calculate days in current stage */
@@ -470,7 +470,7 @@ export default function MandatKanbanPage() {
       queryClient.invalidateQueries({ queryKey: ['mandat-kanban', id] });
       setAddCandidatOpen(false);
       setCandidatSearch('');
-      toast('success', 'Candidat ajout\u00e9 au mandat');
+      toast('success', 'Candidat ajouté au mandat');
     },
     onError: () => {
       toast('error', "Erreur lors de l'ajout du candidat");
@@ -505,12 +505,12 @@ export default function MandatKanbanPage() {
       }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['mandat-kanban', id] });
-      toast('success', `Candidat d\u00e9plac\u00e9 vers ${STAGE_LABELS[variables.stage]}`);
+      toast('success', `Candidat déplacé vers ${STAGE_LABELS[variables.stage]}`);
     },
     onError: () => {
       // Revert optimistic update by refetching
       queryClient.invalidateQueries({ queryKey: ['mandat-kanban', id] });
-      toast('error', 'Erreur lors du d\u00e9placement du candidat');
+      toast('error', 'Erreur lors du déplacement du candidat');
     },
   });
 
@@ -692,7 +692,7 @@ export default function MandatKanbanPage() {
         subtitle={mandat?.entreprise?.nom}
         breadcrumbs={[
           { label: 'Mandats', href: '/mandats' },
-          { label: mandat?.titrePoste || 'D\u00e9tail', href: `/mandats/${id}` },
+          { label: mandat?.titrePoste || 'Détail', href: `/mandats/${id}` },
           { label: 'Kanban' },
         ]}
         actions={
@@ -706,7 +706,7 @@ export default function MandatKanbanPage() {
               </Button>
             </Link>
             <Button variant="ghost" onClick={() => navigate(`/mandats/${id}`)}>
-              <ArrowLeft size={16} /> D\u00e9tail
+              <ArrowLeft size={16} /> Détail
             </Button>
             <Button variant="secondary" disabled>
               <LayoutGrid size={16} /> Kanban
@@ -830,14 +830,14 @@ export default function MandatKanbanPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
-            Veuillez s\u00e9lectionner le motif de refus pour cette candidature.
+            Veuillez sélectionner le motif de refus pour cette candidature.
           </p>
           <Select
             label="Motif de refus"
             options={MOTIF_REFUS_OPTIONS}
             value={selectedMotif}
             onChange={setSelectedMotif}
-            placeholder="S\u00e9lectionner un motif..."
+            placeholder="Sélectionner un motif..."
           />
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={handleCancelRefusal}>
@@ -889,7 +889,7 @@ export default function MandatKanbanPage() {
               </div>
             ) : !candidatResults?.data?.length ? (
               <div className="py-8 text-center text-sm text-text-tertiary">
-                Aucun candidat trouv\u00e9
+                Aucun candidat trouvé
               </div>
             ) : (
               candidatResults.data.map((c) => (

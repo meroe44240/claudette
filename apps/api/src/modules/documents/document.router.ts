@@ -9,7 +9,7 @@ const VALID_ENTITY_TYPES = new Set(['candidat', 'client', 'entreprise', 'mandat'
 function validateEntityType(value: string): EntityType {
   if (!VALID_ENTITY_TYPES.has(value)) {
     throw new ValidationError(
-      `Type d'entit\u00e9 invalide: ${value}. Types accept\u00e9s: candidat, client, entreprise, mandat`,
+      `Type d'entité invalide: ${value}. Types acceptés: candidat, client, entreprise, mandat`,
     );
   }
   return value as EntityType;
@@ -19,7 +19,7 @@ export default async function documentRouter(fastify: FastifyInstance) {
   // POST /upload — Upload a document (multipart)
   fastify.post('/upload', {
     schema: {
-      description: 'T\u00e9l\u00e9verser un document (PDF, DOC, DOCX, PNG, JPG, max 10 Mo)',
+      description: 'Téléverser un document (PDF, DOC, DOCX, PNG, JPG, max 10 Mo)',
       tags: ['Documents'],
       consumes: ['multipart/form-data'],
     },
@@ -28,7 +28,7 @@ export default async function documentRouter(fastify: FastifyInstance) {
       const data = await request.file();
 
       if (!data) {
-        throw new ValidationError('Aucun fichier envoy\u00e9');
+        throw new ValidationError('Aucun fichier envoyé');
       }
 
       // Read the file fields
@@ -66,7 +66,7 @@ export default async function documentRouter(fastify: FastifyInstance) {
   // GET / — List documents for an entity
   fastify.get('/', {
     schema: {
-      description: 'Lister les documents d\'une entit\u00e9',
+      description: 'Lister les documents d\'une entité',
       tags: ['Documents'],
       querystring: {
         type: 'object',
@@ -111,7 +111,7 @@ export default async function documentRouter(fastify: FastifyInstance) {
       const entityType = validateEntityType(query.entityType);
 
       await documentService.remove(entityType, query.entityId, id);
-      return { message: 'Document supprim\u00e9' };
+      return { message: 'Document supprimé' };
     },
   });
 }

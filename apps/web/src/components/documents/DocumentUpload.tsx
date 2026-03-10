@@ -87,7 +87,7 @@ function validateFile(file: File): string | null {
   if (!ALLOWED_TYPES.includes(file.type)) {
     const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      return `Type de fichier non accept\u00e9. Accept\u00e9s: PDF, DOC, DOCX, PNG, JPG`;
+      return `Type de fichier non accepté. Acceptés: PDF, DOC, DOCX, PNG, JPG`;
     }
   }
   if (file.size > MAX_SIZE) {
@@ -115,7 +115,7 @@ async function uploadFile(file: File, entityType: string, entityId: string): Pro
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.message || 'Erreur lors du t\u00e9l\u00e9versement');
+    throw new Error(data.message || 'Erreur lors du téléversement');
   }
 
   return response.json();
@@ -177,7 +177,7 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
     mutationFn: (docId: string) => deleteDocument(docId, entityType, entityId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents', entityType, entityId] });
-      toast('success', 'Document supprim\u00e9');
+      toast('success', 'Document supprimé');
     },
     onError: () => {
       toast('error', 'Erreur lors de la suppression du document');
@@ -235,7 +235,7 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
 
         // Refresh document list
         queryClient.invalidateQueries({ queryKey: ['documents', entityType, entityId] });
-        toast('success', `${file.name} t\u00e9l\u00e9vers\u00e9 avec succ\u00e8s`);
+        toast('success', `${file.name} téléversé avec succès`);
       } catch (err: any) {
         setUploads((prev) =>
           prev.map((u) =>
@@ -250,7 +250,7 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
           setUploads((prev) => prev.filter((u) => u.file !== file));
         }, 5000);
 
-        toast('error', `Erreur: ${err.message || 'T\u00e9l\u00e9versement \u00e9chou\u00e9'}`);
+        toast('error', `Erreur: ${err.message || 'Téléversement échoué'}`);
       }
     }
   }, [entityType, entityId, queryClient]);
@@ -319,7 +319,7 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
           </div>
           <div>
             <p className="text-sm font-medium text-neutral-700">
-              {isDragOver ? 'D\u00e9posez vos fichiers ici' : 'Glissez-d\u00e9posez vos fichiers ici'}
+              {isDragOver ? 'Déposez vos fichiers ici' : 'Glissez-déposez vos fichiers ici'}
             </p>
             <p className="mt-1 text-xs text-neutral-400">
               ou <span className="text-primary-500 underline">parcourir</span> {'\u2022'} PDF, DOC, DOCX, PNG, JPG {'\u2022'} Max 10 Mo
@@ -432,7 +432,7 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600"
-                    title="T\u00e9l\u00e9charger"
+                    title="Télécharger"
                   >
                     <Download size={15} />
                   </a>

@@ -32,9 +32,9 @@ export default function RevenueForecastPage() {
   return (
     <div className="space-y-6 p-6">
       <PageHeader
-        title="Pr\u00e9visions de revenus"
-        subtitle="Projection des revenus bas\u00e9e sur votre pipeline actuel"
-        breadcrumbs={[{ label: 'Stats', href: '/stats' }, { label: 'Pr\u00e9visions' }]}
+        title="Prévisions de revenus"
+        subtitle="Projection des revenus basée sur votre pipeline actuel"
+        breadcrumbs={[{ label: 'Stats', href: '/stats' }, { label: 'Prévisions' }]}
       />
 
       {isLoading ? (
@@ -43,8 +43,8 @@ export default function RevenueForecastPage() {
         <>
           <div className="grid gap-4 sm:grid-cols-3">
             {[
-              { label: 'Confirm\u00e9', value: data.summary.totalConfirmed, icon: DollarSign, color: 'text-emerald-600 bg-emerald-50' },
-              { label: 'Projet\u00e9', value: data.summary.totalProjected, icon: Target, color: 'text-violet-600 bg-violet-50' },
+              { label: 'Confirmé', value: data.summary.totalConfirmed, icon: DollarSign, color: 'text-emerald-600 bg-emerald-50' },
+              { label: 'Projeté', value: data.summary.totalProjected, icon: Target, color: 'text-violet-600 bg-violet-50' },
               { label: 'Pipeline', value: data.summary.totalPipeline, icon: BarChart3, color: 'text-amber-600 bg-amber-50' },
             ].map((card, i) => (
               <motion.div
@@ -68,7 +68,7 @@ export default function RevenueForecastPage() {
           <div className="rounded-xl border border-neutral-200 bg-white p-6">
             <h3 className="mb-4 flex items-center gap-2 font-semibold text-neutral-900">
               <TrendingUp className="h-5 w-5 text-violet-500" />
-              Pr\u00e9visions mensuelles
+              Prévisions mensuelles
             </h3>
             <div className="space-y-3">
               {data.forecast.map((f, i) => (
@@ -92,8 +92,8 @@ export default function RevenueForecastPage() {
               ))}
             </div>
             <div className="mt-4 flex gap-6 text-xs text-neutral-500">
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />Confirm\u00e9</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-violet-400" />Projet\u00e9</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />Confirmé</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-violet-400" />Projeté</span>
               <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-300" />Pipeline</span>
             </div>
           </div>

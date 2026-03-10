@@ -442,7 +442,7 @@ function RecruiterDashboard() {
 
         {/* Text */}
         <div className="flex-1 text-[13px] text-neutral-700 truncate">
-          {bandeauItems.length > 0 ? bandeauItems.join(' \u00B7 ') : 'Tout est en ordre !'}
+          {bandeauItems.length > 0 ? bandeauItems.join(' · ') : 'Tout est en ordre !'}
         </div>
 
         {/* CTA */}

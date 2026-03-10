@@ -48,18 +48,18 @@ export async function exportCandidatsCSV(ids?: string[]): Promise<string> {
 
   const headers = [
     'Nom',
-    'Pr\u00e9nom',
+    'Prénom',
     'Email',
-    'T\u00e9l\u00e9phone',
+    'Téléphone',
     'Poste',
     'Entreprise',
     'Localisation',
     'Source',
     'Salaire actuel',
-    'Salaire souhait\u00e9',
-    'Disponibilit\u00e9',
+    'Salaire souhaité',
+    'Disponibilité',
     'Tags',
-    'Date cr\u00e9ation',
+    'Date création',
   ];
 
   const rows = candidats.map((c) => [
@@ -94,14 +94,14 @@ export async function exportClientsCSV(ids?: string[]): Promise<string> {
 
   const headers = [
     'Nom',
-    'Pr\u00e9nom',
+    'Prénom',
     'Email',
-    'T\u00e9l\u00e9phone',
+    'Téléphone',
     'Poste',
-    'R\u00f4le',
+    'Rôle',
     'Entreprise',
     'Statut',
-    'Date cr\u00e9ation',
+    'Date création',
   ];
 
   const rows = clients.map((c) => [
@@ -175,12 +175,12 @@ export async function exportMandatsCSV(ids?: string[]): Promise<string> {
     'Entreprise',
     'Client',
     'Statut',
-    'Priorit\u00e9',
+    'Priorité',
     'Salaire min',
     'Salaire max',
-    'Fee estim\u00e9',
+    'Fee estimé',
     'Nb candidats',
-    'Date cr\u00e9ation',
+    'Date création',
   ];
 
   const rows = mandats.map((m) => [

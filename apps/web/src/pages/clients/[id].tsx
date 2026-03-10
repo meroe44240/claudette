@@ -99,10 +99,10 @@ const roleContactOptions = [
 const statutLabels: Record<StatutClient, string> = {
   LEAD: 'Lead',
   PREMIER_CONTACT: 'Premier contact',
-  BESOIN_QUALIFIE: 'Besoin qualifi\u00e9',
-  PROPOSITION_ENVOYEE: 'Proposition envoy\u00e9e',
-  MANDAT_SIGNE: 'Mandat sign\u00e9',
-  RECURRENT: 'R\u00e9current',
+  BESOIN_QUALIFIE: 'Besoin qualifié',
+  PROPOSITION_ENVOYEE: 'Proposition envoyée',
+  MANDAT_SIGNE: 'Mandat signé',
+  RECURRENT: 'Récurrent',
   INACTIF: 'Inactif',
 };
 
@@ -204,19 +204,19 @@ export default function ClientDetailPage() {
       api.put<ClientDetail>(`/clients/${id}`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', id] });
-      toast('success', 'Modifications enregistr\u00e9es');
+      toast('success', 'Modifications enregistrées');
       setIsEditing(false);
       setEditForm(null);
     },
     onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de la mise \u00e0 jour');
+      toast('error', error.message || 'Erreur lors de la mise à jour');
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`/clients/${id}`),
     onSuccess: () => {
-      toast('success', 'Supprim\u00e9 avec succ\u00e8s');
+      toast('success', 'Supprimé avec succès');
       navigate('/clients');
     },
     onError: (error: any) => {
@@ -231,7 +231,7 @@ export default function ClientDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', id] });
       queryClient.invalidateQueries({ queryKey: ['clients'] });
-      toast('success', 'Prise en charge mise \u00e0 jour');
+      toast('success', 'Prise en charge mise à jour');
     },
     onError: (error: any) => {
       toast('error', error.message || 'Erreur lors de la prise en charge');
@@ -438,7 +438,7 @@ export default function ClientDetailPage() {
                 disabled={assignMutation.isPending}
                 className="ml-auto text-xs text-red-500 hover:underline disabled:opacity-50"
               >
-                Lib\u00e9rer
+                Libérer
               </button>
             )}
           </>
@@ -465,12 +465,12 @@ export default function ClientDetailPage() {
             {isEditing && editForm ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Input label="Nom" value={editForm.nom} onChange={setField('nom')} placeholder="Nom" />
-                <Input label="Pr\u00e9nom" value={editForm.prenom} onChange={setField('prenom')} placeholder="Pr\u00e9nom" />
+                <Input label="Prénom" value={editForm.prenom} onChange={setField('prenom')} placeholder="Prénom" />
                 <Input label="Email" type="email" value={editForm.email} onChange={setField('email')} placeholder="email@exemple.com" />
-                <Input label="T\u00e9l\u00e9phone" value={editForm.telephone} onChange={setField('telephone')} placeholder="+33 1 23 45 67 89" />
+                <Input label="Téléphone" value={editForm.telephone} onChange={setField('telephone')} placeholder="+33 1 23 45 67 89" />
                 <Input label="Poste" value={editForm.poste} onChange={setField('poste')} placeholder="Directeur des ressources humaines" />
                 <Select
-                  label="R\u00f4le contact"
+                  label="Rôle contact"
                   options={roleContactOptions}
                   value={editForm.roleContact}
                   onChange={(val) => setEditForm((prev) => prev ? { ...prev, roleContact: val } : prev)}
@@ -523,7 +523,7 @@ export default function ClientDetailPage() {
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">Mandats</h2>
             {client.mandats.length === 0 ? (
-              <p className="text-sm text-text-secondary">Aucun mandat associ\u00e9.</p>
+              <p className="text-sm text-text-secondary">Aucun mandat associé.</p>
             ) : (
               <div className="space-y-3">
                 {client.mandats.map((m) => (
@@ -553,7 +553,7 @@ export default function ClientDetailPage() {
         {/* Sidebar */}
         <motion.div className="space-y-6" variants={detailItem}>
           <Card>
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">D\u00e9tails</h2>
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">Détails</h2>
             <dl className="space-y-3 text-sm">
               <div>
                 <dt className="text-text-tertiary">Statut</dt>
@@ -564,7 +564,7 @@ export default function ClientDetailPage() {
                 </dd>
               </div>
               <div>
-                <dt className="text-text-tertiary">R\u00f4le</dt>
+                <dt className="text-text-tertiary">Rôle</dt>
                 <dd className="mt-1 font-medium text-text-primary">
                   {client.roleContact ? roleLabels[client.roleContact] : '\u2014'}
                 </dd>
@@ -581,13 +581,13 @@ export default function ClientDetailPage() {
                 </dd>
               </div>
               <div>
-                <dt className="text-text-tertiary">Mandats associ\u00e9s</dt>
+                <dt className="text-text-tertiary">Mandats associés</dt>
                 <dd className="mt-1">
                   <Badge variant="info">{client.mandats.length}</Badge>
                 </dd>
               </div>
               <div>
-                <dt className="text-text-tertiary">Assign\u00e9 \u00e0</dt>
+                <dt className="text-text-tertiary">Assigné à</dt>
                 <dd className="mt-1">
                   {client.assignedTo ? (
                     <span className="font-medium text-text-primary">
@@ -636,7 +636,7 @@ export default function ClientDetailPage() {
       <ScheduleMeeting
         isOpen={showScheduleMeeting}
         onClose={() => setShowScheduleMeeting(false)}
-        defaultTitle={`R\u00e9union - ${fullName}`}
+        defaultTitle={`Réunion - ${fullName}`}
         defaultParticipants={client.email ? [client.email] : []}
         entiteType="client"
         entiteId={client.id}

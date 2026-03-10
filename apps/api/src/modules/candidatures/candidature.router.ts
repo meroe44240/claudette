@@ -30,7 +30,7 @@ export default async function candidatureRouter(fastify: FastifyInstance) {
     handler: async (request) => {
       const input = z.object({
         ids: z.array(z.string().min(1)).min(1),
-        stage: z.string(),
+        stage: z.enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE']),
         motifRefus: z.string().optional(),
         motifRefusDetail: z.string().optional(),
       }).parse(request.body);

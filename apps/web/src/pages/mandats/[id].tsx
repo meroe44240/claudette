@@ -130,10 +130,10 @@ interface EditForm {
 const statutLabels: Record<StatutMandat, string> = {
   OUVERT: 'Ouvert',
   EN_COURS: 'En cours',
-  GAGNE: 'Gagn\u00e9',
+  GAGNE: 'Gagné',
   PERDU: 'Perdu',
-  ANNULE: 'Annul\u00e9',
-  CLOTURE: 'Cl\u00f4tur\u00e9',
+  ANNULE: 'Annulé',
+  CLOTURE: 'Clôturé',
 };
 
 const statutVariant: Record<StatutMandat, 'default' | 'info' | 'warning' | 'success' | 'error'> = {
@@ -148,10 +148,10 @@ const statutVariant: Record<StatutMandat, 'default' | 'info' | 'warning' | 'succ
 const statutOptions = [
   { value: 'OUVERT', label: 'Ouvert' },
   { value: 'EN_COURS', label: 'En cours' },
-  { value: 'GAGNE', label: 'Gagn\u00e9' },
+  { value: 'GAGNE', label: 'Gagné' },
   { value: 'PERDU', label: 'Perdu' },
-  { value: 'ANNULE', label: 'Annul\u00e9' },
-  { value: 'CLOTURE', label: 'Cl\u00f4tur\u00e9' },
+  { value: 'ANNULE', label: 'Annulé' },
+  { value: 'CLOTURE', label: 'Clôturé' },
 ];
 
 const prioriteLabels: Record<Priorite, string> = {
@@ -176,9 +176,9 @@ const prioriteOptions = [
 ];
 
 const feeStatutLabels: Record<FeeStatut, string> = {
-  NON_FACTURE: 'Non factur\u00e9',
-  FACTURE: 'Factur\u00e9',
-  PAYE: 'Pay\u00e9',
+  NON_FACTURE: 'Non facturé',
+  FACTURE: 'Facturé',
+  PAYE: 'Payé',
 };
 
 const feeStatutVariant: Record<FeeStatut, 'default' | 'warning' | 'success'> = {
@@ -199,12 +199,12 @@ const stageBadgeVariant: Record<string, 'sourcing' | 'contacte' | 'entretien1' |
 
 const stageLabels: Record<string, string> = {
   SOURCING: 'Sourcing',
-  CONTACTE: 'Contact\u00e9',
+  CONTACTE: 'Contacté',
   ENTRETIEN_1: 'Entretien 1',
   ENTRETIEN_CLIENT: 'Entretien Client',
   OFFRE: 'Offre',
-  PLACE: 'Plac\u00e9',
-  REFUSE: 'Refus\u00e9',
+  PLACE: 'Placé',
+  REFUSE: 'Refusé',
 };
 
 function formatSalary(value: number | null): string {
@@ -543,19 +543,19 @@ export default function MandatDetailPage() {
       api.put<MandatDetail>(`/mandats/${id}`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mandat', id] });
-      toast('success', 'Modifications enregistr\u00e9es');
+      toast('success', 'Modifications enregistrées');
       setIsEditing(false);
       setEditForm(null);
     },
     onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de la mise \u00e0 jour');
+      toast('error', error.message || 'Erreur lors de la mise à jour');
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`/mandats/${id}`),
     onSuccess: () => {
-      toast('success', 'Supprim\u00e9 avec succ\u00e8s');
+      toast('success', 'Supprimé avec succès');
       navigate('/mandats');
     },
     onError: (error: any) => {
@@ -569,7 +569,7 @@ export default function MandatDetailPage() {
       const matches = data?.matches || [];
       setMatchResults(matches);
       setShowMatching(true);
-      toast('success', `${matches.length} candidats trouv\u00e9s`);
+      toast('success', `${matches.length} candidats trouvés`);
     },
     onError: (error: any) => {
       toast('error', error?.message || 'Erreur lors du matching IA');
@@ -718,7 +718,7 @@ export default function MandatDetailPage() {
                 <Input label="Salaire max (EUR)" type="number" value={editForm.salaireMax} onChange={setField('salaireMax')} placeholder="65000" />
                 <Input label="Fee %" type="number" value={editForm.feePourcentage} onChange={setField('feePourcentage')} placeholder="20" />
                 <Select
-                  label="Priorit\u00e9"
+                  label="Priorité"
                   options={prioriteOptions}
                   value={editForm.priorite}
                   onChange={(val) => setEditForm((prev) => prev ? { ...prev, priorite: val } : prev)}
@@ -821,7 +821,7 @@ export default function MandatDetailPage() {
                         {match.prenom} {match.nom}
                       </p>
                       <p className="text-xs text-text-secondary">
-                        {[match.posteActuel, match.entrepriseActuelle].filter(Boolean).join(' @ ') || 'Aucun poste renseign\u00e9'}
+                        {[match.posteActuel, match.entrepriseActuelle].filter(Boolean).join(' @ ') || 'Aucun poste renseigné'}
                       </p>
                       {match.reasons.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
@@ -841,7 +841,7 @@ export default function MandatDetailPage() {
             )}
 
             {showMatching && matchResults.length === 0 && !matchingMutation.isPending && (
-              <p className="text-sm text-text-secondary">Aucun candidat correspondant trouv\u00e9. Essayez d'enrichir la scorecard.</p>
+              <p className="text-sm text-text-secondary">Aucun candidat correspondant trouvé. Essayez d'enrichir la scorecard.</p>
             )}
 
             {!showMatching && !matchingMutation.isPending && (
@@ -854,7 +854,7 @@ export default function MandatDetailPage() {
               Candidatures ({mandat.candidatures.length})
             </h2>
             {mandat.candidatures.length === 0 ? (
-              <p className="text-sm text-text-secondary">Aucun candidat associ\u00e9 pour le moment.</p>
+              <p className="text-sm text-text-secondary">Aucun candidat associé pour le moment.</p>
             ) : (
               <div className="space-y-3">
                 {mandat.candidatures.map((c) => (
@@ -870,7 +870,7 @@ export default function MandatDetailPage() {
                       <p className="text-xs text-text-secondary">
                         {[c.candidat.posteActuel, c.candidat.entrepriseActuelle]
                           .filter(Boolean)
-                          .join(' @ ') || 'Aucun poste renseign\u00e9'}
+                          .join(' @ ') || 'Aucun poste renseigné'}
                       </p>
                     </div>
                     <Badge variant={stageBadgeVariant[c.stage] || 'default'}>
@@ -886,10 +886,10 @@ export default function MandatDetailPage() {
         {/* Sidebar */}
         <motion.div className="space-y-6" variants={detailItem}>
           <Card>
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">D\u00e9tails</h2>
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">Détails</h2>
             <dl className="space-y-3 text-sm">
               <div>
-                <dt className="text-text-tertiary">Priorit\u00e9</dt>
+                <dt className="text-text-tertiary">Priorité</dt>
                 <dd className="mt-1">
                   <Badge variant={prioriteVariant[mandat.priorite]}>
                     {prioriteLabels[mandat.priorite]}
@@ -906,7 +906,7 @@ export default function MandatDetailPage() {
               </div>
               {mandat.dateCloture && (
                 <div>
-                  <dt className="text-text-tertiary">Date de cl\u00f4ture</dt>
+                  <dt className="text-text-tertiary">Date de clôture</dt>
                   <dd className="font-medium text-text-primary">{formatDate(mandat.dateCloture)}</dd>
                 </div>
               )}
@@ -935,11 +935,11 @@ export default function MandatDetailPage() {
                 <dd className="font-medium text-text-primary">{Number(mandat.feePourcentage)}%</dd>
               </div>
               <div>
-                <dt className="text-text-tertiary">Fee estim\u00e9</dt>
+                <dt className="text-text-tertiary">Fee estimé</dt>
                 <dd className="font-medium text-text-primary">{formatSalary(mandat.feeMontantEstime)}</dd>
               </div>
               <div>
-                <dt className="text-text-tertiary">Fee factur\u00e9</dt>
+                <dt className="text-text-tertiary">Fee facturé</dt>
                 <dd className="font-medium text-text-primary">{formatSalary(mandat.feeMontantFacture)}</dd>
               </div>
               <div>

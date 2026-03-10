@@ -25,7 +25,7 @@ export default async function exportRouter(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             format: { type: 'string', enum: ['csv'] },
-            ids: { type: 'string', description: 'IDs s\u00e9par\u00e9s par des virgules' },
+            ids: { type: 'string', description: 'IDs séparés par des virgules' },
           },
         },
       },
@@ -34,7 +34,7 @@ export default async function exportRouter(fastify: FastifyInstance) {
         const query = request.query as { format?: string; ids?: string };
 
         if (query.format !== 'csv') {
-          throw new ValidationError('Format non support\u00e9. Utilisez format=csv');
+          throw new ValidationError('Format non supporté. Utilisez format=csv');
         }
 
         const ids = query.ids

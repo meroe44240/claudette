@@ -20,7 +20,7 @@ export default async function emailRouter(fastify: FastifyInstance) {
   // POST /send - Send an email via Gmail
   fastify.post('/send', {
     schema: {
-      description: 'Envoyer un email via Gmail avec suivi d\'activit\u00e9',
+      description: 'Envoyer un email via Gmail avec suivi d\'activité',
       tags: ['Emails'],
     },
     preHandler: [authenticate],

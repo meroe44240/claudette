@@ -56,7 +56,7 @@ export default function PlacementsPage() {
                     {p.followUpDue && <Badge variant="warning">Follow-up requis</Badge>}
                   </div>
                   <div className="mt-1 flex items-center gap-4 text-sm text-neutral-500">
-                    <span className="flex items-center gap-1"><Building className="h-3.5 w-3.5" />{p.mandatTitre}{p.entrepriseNom ? ` \u00b7 ${p.entrepriseNom}` : ''}</span>
+                    <span className="flex items-center gap-1"><Building className="h-3.5 w-3.5" />{p.mandatTitre}{p.entrepriseNom ? ` · ${p.entrepriseNom}` : ''}</span>
                     <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />Place il y a {p.daysSincePlacement}j</span>
                   </div>
                   <p className="mt-2 text-sm font-medium text-violet-600">{p.nextFollowUp}</p>
