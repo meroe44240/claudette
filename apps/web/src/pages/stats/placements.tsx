@@ -28,7 +28,7 @@ export default function PlacementsPage() {
     <div className="space-y-6 p-6">
       <PageHeader
         title="Suivi des placements"
-        subtitle="Follow-up post-embauche de vos candidats plac&eacute;s"
+        subtitle="Follow-up post-embauche de vos candidats placés"
         breadcrumbs={[{ label: 'Stats', href: '/stats' }, { label: 'Placements' }]}
       />
 
@@ -36,7 +36,7 @@ export default function PlacementsPage() {
         <div className="space-y-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
       ) : !data?.placements.length ? (
         <div className="rounded-xl border border-neutral-200 bg-white p-12 text-center">
-          <p className="text-neutral-500">Aucun placement a suivre</p>
+          <p className="text-neutral-500">Aucun placement à suivre</p>
         </div>
       ) : (
         <div className="space-y-4">

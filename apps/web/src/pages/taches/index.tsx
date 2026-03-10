@@ -464,11 +464,11 @@ export default function TachesPage() {
                 titre: createForm.titre,
                 contenu: createForm.contenu || undefined,
                 entiteType: createForm.entiteType,
-                entiteId: createForm.entiteId,
+                entiteId: createForm.entiteId || undefined,
                 tacheDueDate: createForm.tacheDueDate ? new Date(createForm.tacheDueDate).toISOString() : undefined,
                 tachePriority: createForm.tachePriority,
               })}
-              disabled={!createForm.titre || !createForm.entiteId || createMutation.isPending}
+              disabled={!createForm.titre || createMutation.isPending}
             >
               {createMutation.isPending ? 'Création...' : 'Créer la tâche'}
             </Button>

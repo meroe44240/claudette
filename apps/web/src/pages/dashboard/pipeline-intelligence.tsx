@@ -112,7 +112,7 @@ export default function PipelineIntelligencePage() {
                   <div className="flex items-center gap-4">
                     <div className="text-right text-xs text-neutral-500 space-y-1">
                       <div className="flex items-center gap-1"><Users size={12} /> {m.stats.activeCandidats}/{m.stats.totalCandidats} actifs</div>
-                      <div className="flex items-center gap-1"><Clock size={12} /> {m.stats.daysSinceLastActivity}j sans activit&eacute;</div>
+                      <div className="flex items-center gap-1"><Clock size={12} /> {m.stats.daysSinceLastActivity}j sans activité</div>
                       <div className="flex items-center gap-1"><Activity size={12} /> {m.stats.conversionRate}% conversion</div>
                     </div>
                     <div className="text-center">
