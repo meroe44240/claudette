@@ -29,7 +29,7 @@ export default async function candidatureRouter(fastify: FastifyInstance) {
     preHandler: [authenticate],
     handler: async (request) => {
       const input = z.object({
-        ids: z.array(z.string().uuid()).min(1),
+        ids: z.array(z.string().min(1)).min(1),
         stage: z.string(),
         motifRefus: z.string().optional(),
         motifRefusDetail: z.string().optional(),
