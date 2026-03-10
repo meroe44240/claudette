@@ -86,12 +86,17 @@ async function buildApp() {
 
   await app.register(rateLimit, {
     max: (request, key) => {
-      if (key.startsWith('apikey:')) return 100;
-      return 30;
+      if (key.startsWith('apikey:')) return 200;
+      // Authenticated users (with Bearer token) get higher limit
+      if (request.headers.authorization?.startsWith('Bearer ')) return 150;
+      return 60;
     },
     timeWindow: '1 minute',
     keyGenerator: (request) => {
       if (request.headers['x-api-key']) return `apikey:${request.headers['x-api-key']}`;
+      // Use auth token hash for per-user limiting instead of IP (all behind reverse proxy = same IP)
+      const auth = request.headers.authorization;
+      if (auth) return `auth:${auth.slice(-20)}`;
       return request.ip;
     },
   });
