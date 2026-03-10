@@ -46,6 +46,7 @@ const TRANSCRIPT_KEYWORDS = [
   'entretien',
   'debrief',
   'call notes',
+  'notes by gemini',   // Gemini auto-generated meeting notes
 ];
 
 function isTranscriptDoc(name: string): boolean {
