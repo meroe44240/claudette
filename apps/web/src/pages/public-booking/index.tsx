@@ -39,10 +39,11 @@ import { toast, ToastContainer } from '../../components/ui/Toast';
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
 interface RecruiterInfo {
-  user: {
+  recruiter: {
     nom: string;
     prenom: string;
     email: string;
+    avatarUrl?: string | null;
   };
   settings: {
     slotDuration: number;
@@ -218,13 +219,13 @@ function BookingHeader({
       {/* Recruiter avatar */}
       <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#3B82F6] to-[#7C5CFC] flex items-center justify-center mx-auto mb-4">
         <span className="text-white font-bold text-xl">
-          {recruiter.user.prenom[0]}
-          {recruiter.user.nom[0]}
+          {recruiter.recruiter.prenom[0]}
+          {recruiter.recruiter.nom[0]}
         </span>
       </div>
 
       <h1 className="text-[24px] font-semibold text-[#1a1a2e] mb-1">
-        {recruiter.user.prenom} {recruiter.user.nom}
+        {recruiter.recruiter.prenom} {recruiter.recruiter.nom}
       </h1>
       <p className="text-[15px] text-neutral-500">
         Prenez rendez-vous en quelques clics
@@ -1203,7 +1204,7 @@ export default function PublicBookingPage() {
           date: dateStr,
           time: selectedSlot,
           duration: effectiveDuration,
-          recruiterName: `${recruiter.user.prenom} ${recruiter.user.nom}`,
+          recruiterName: `${recruiter.recruiter.prenom} ${recruiter.recruiter.nom}`,
           candidateEmail: formData.email,
           bookingId: result.bookingId,
         });
