@@ -387,6 +387,27 @@ export async function syncCalls(userId: string) {
 
         if (!existing) {
           const durationSeconds = Math.round((call.length_in_minutes || 0) * 60);
+
+          // Convert Allo transcript array to readable text
+          let transcriptText: string | undefined;
+          if (Array.isArray(call.transcript) && call.transcript.length > 0) {
+            transcriptText = call.transcript
+              .map((t: { source?: string; text?: string }) => {
+                const speaker = t.source === 'USER' ? 'Recruteur' : 'Interlocuteur';
+                return `${speaker}: ${t.text}`;
+              })
+              .join('\n');
+          } else if (typeof call.transcript === 'string' && call.transcript) {
+            transcriptText = call.transcript;
+          }
+
+          // Append Allo AI summary if available
+          if (call.summary) {
+            transcriptText = transcriptText
+              ? `${transcriptText}\n\n--- Résumé Allo ---\n${call.summary}`
+              : call.summary;
+          }
+
           const result = await processAlloWebhook(
             {
               event: 'call.ended',
@@ -396,6 +417,7 @@ export async function syncCalls(userId: string) {
               direction: call.type === 'INBOUND' ? 'inbound' : 'outbound',
               duration: durationSeconds,
               recordingUrl: call.recording_url || call.recordingUrl,
+              transcript: transcriptText,
               timestamp: call.start_date || call.timestamp || call.createdAt,
               userId: call.userId,
             },
