@@ -10,6 +10,7 @@ import Dropdown from '../ui/Dropdown';
 import { toast, ToastContainer } from '../ui/Toast';
 import { useAuthStore } from '../../stores/auth-store';
 import { api } from '../../lib/api-client';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
 interface BookingType {
   id: string;
@@ -34,6 +35,7 @@ export default function MainLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [bookingPanelOpen, setBookingPanelOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const { showHelp, setShowHelp, shortcuts } = useKeyboardShortcuts();
 
   // Fetch booking types
   const { data: bookingData } = useQuery({
@@ -296,6 +298,26 @@ export default function MainLayout() {
           </>
         )}
       </AnimatePresence>
+
+      {/* Keyboard Shortcuts Help */}
+      {showHelp && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowHelp(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="mb-4 text-lg font-semibold text-neutral-900">Raccourcis clavier</h3>
+            <div className="space-y-2">
+              {shortcuts.map(s => (
+                <div key={s.key} className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-neutral-50">
+                  <span className="text-sm text-neutral-600">{s.description}</span>
+                  <kbd className="rounded bg-neutral-100 px-2 py-1 text-xs font-mono text-neutral-700">
+                    {s.ctrl ? 'Ctrl + ' : ''}{s.key}
+                  </kbd>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-xs text-neutral-400 text-center">Appuyez sur / pour afficher/masquer</p>
+          </div>
+        </div>
+      )}
 
       <ToastContainer />
     </div>

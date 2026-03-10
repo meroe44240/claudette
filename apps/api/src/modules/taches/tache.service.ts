@@ -65,6 +65,7 @@ export async function create(data: {
   entiteType: string;
   entiteId: string;
   tacheDueDate?: string;
+  tachePriority?: 'HAUTE' | 'MOYENNE' | 'BASSE';
   userId: string;
 }) {
   return prisma.activite.create({
@@ -79,6 +80,7 @@ export async function create(data: {
       tacheDueDate: data.tacheDueDate ? new Date(data.tacheDueDate) : undefined,
       userId: data.userId,
       source: 'MANUEL',
+      metadata: data.tachePriority ? { priority: data.tachePriority } : undefined,
     },
     include: {
       user: { select: { nom: true, prenom: true } },
@@ -153,4 +155,72 @@ export async function complete(id: string) {
       fichiers: true,
     },
   });
+}
+
+export async function update(id: string, data: {
+  titre?: string;
+  contenu?: string;
+  tacheDueDate?: string | null;
+  tachePriority?: 'HAUTE' | 'MOYENNE' | 'BASSE';
+}) {
+  const existing = await prisma.activite.findUnique({ where: { id } });
+  if (!existing) throw new NotFoundError('Tache', id);
+
+  const updateData: any = {};
+  if (data.titre !== undefined) updateData.titre = data.titre;
+  if (data.contenu !== undefined) updateData.contenu = data.contenu;
+  if (data.tacheDueDate !== undefined) updateData.tacheDueDate = data.tacheDueDate ? new Date(data.tacheDueDate) : null;
+  if (data.tachePriority !== undefined) {
+    const metadata = (existing.metadata as Record<string, any>) || {};
+    metadata.priority = data.tachePriority;
+    updateData.metadata = metadata;
+  }
+
+  return prisma.activite.update({
+    where: { id },
+    data: updateData,
+    include: {
+      user: { select: { nom: true, prenom: true } },
+      fichiers: true,
+    },
+  });
+}
+
+export async function uncomplete(id: string) {
+  const existing = await prisma.activite.findUnique({ where: { id } });
+  if (!existing) throw new NotFoundError('Tache', id);
+
+  return prisma.activite.update({
+    where: { id },
+    data: { tacheCompleted: false },
+    include: {
+      user: { select: { nom: true, prenom: true } },
+      fichiers: true,
+    },
+  });
+}
+
+export async function snooze(id: string, days: number) {
+  const existing = await prisma.activite.findUnique({ where: { id } });
+  if (!existing) throw new NotFoundError('Tache', id);
+
+  const baseDate = existing.tacheDueDate || new Date();
+  const newDate = new Date(baseDate);
+  newDate.setDate(newDate.getDate() + days);
+
+  return prisma.activite.update({
+    where: { id },
+    data: { tacheDueDate: newDate },
+    include: {
+      user: { select: { nom: true, prenom: true } },
+      fichiers: true,
+    },
+  });
+}
+
+export async function remove(id: string) {
+  const existing = await prisma.activite.findUnique({ where: { id } });
+  if (!existing) throw new NotFoundError('Tache', id);
+
+  return prisma.activite.delete({ where: { id } });
 }

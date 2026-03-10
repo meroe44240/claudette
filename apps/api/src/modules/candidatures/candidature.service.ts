@@ -75,6 +75,36 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
         changedById,
       },
     });
+
+    // Auto-create follow-up tasks based on stage
+    const stageTaskMap: Record<string, string[]> = {
+      'CONTACTE': ['Pr\u00e9parer le brief candidat'],
+      'ENTRETIEN': ['Pr\u00e9parer le candidat pour l\'entretien', 'Confirmer la date d\'entretien'],
+      'ENTRETIEN_CLIENT': ['Envoyer le brief au client', 'Pr\u00e9parer le candidat pour le client'],
+      'SHORTLIST': ['Envoyer la shortlist au client'],
+      'OFFRE': ['N\u00e9gocier les conditions', 'Pr\u00e9parer le contrat'],
+      'PLACE': ['Planifier le check-in \u00e0 1 mois', 'Envoyer la facturation'],
+    };
+
+    const tasksToCreate = stageTaskMap[data.stage as string] || [];
+    for (const taskTitle of tasksToCreate) {
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 3); // Default: 3 days
+      await prisma.activite.create({
+        data: {
+          type: 'TACHE',
+          isTache: true,
+          tacheCompleted: false,
+          titre: taskTitle,
+          entiteType: 'CANDIDAT',
+          entiteId: existing.candidatId,
+          userId: changedById,
+          source: 'SYSTEME',
+          tacheDueDate: dueDate,
+          metadata: { autoCreated: true, candidatureId: id, mandatId: existing.mandatId, triggerStage: data.stage },
+        },
+      });
+    }
   }
 
   return candidature;
@@ -96,4 +126,57 @@ export async function getHistory(id: string) {
     where: { candidatureId: id },
     orderBy: { changedAt: 'desc' },
   });
+}
+
+export async function bulkUpdateStage(
+  ids: string[],
+  stage: string,
+  changedById: string,
+  motifRefus?: string,
+  motifRefusDetail?: string
+) {
+  if (stage === 'REFUSE' && !motifRefus) {
+    throw new ValidationError('Le motif de refus est requis pour le stage REFUSE');
+  }
+
+  const results = [];
+  for (const id of ids) {
+    const existing = await prisma.candidature.findUnique({ where: { id } });
+    if (!existing) continue;
+    if (existing.stage === stage) continue;
+
+    const updateData: any = { stage };
+    if (motifRefus) updateData.motifRefus = motifRefus;
+    if (motifRefusDetail) updateData.motifRefusDetail = motifRefusDetail;
+
+    const updated = await prisma.candidature.update({
+      where: { id },
+      data: updateData,
+    });
+
+    await prisma.stageHistory.create({
+      data: {
+        candidatureId: id,
+        fromStage: existing.stage as StageCandidature,
+        toStage: stage as StageCandidature,
+        changedById,
+      },
+    });
+
+    // Auto-create activity for stage change
+    await prisma.activite.create({
+      data: {
+        type: 'NOTE',
+        titre: `Stage chang\u00e9: ${existing.stage} \u2192 ${stage}`,
+        entiteType: 'CANDIDAT',
+        entiteId: existing.candidatId,
+        userId: changedById,
+        source: 'SYSTEME',
+        metadata: { stageChange: true, candidatureId: id, mandatId: existing.mandatId, fromStage: existing.stage, toStage: stage },
+      },
+    });
+
+    results.push(updated);
+  }
+  return { updated: results.length, results };
 }

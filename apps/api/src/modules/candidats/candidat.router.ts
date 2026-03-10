@@ -80,6 +80,37 @@ export default async function candidatRouter(fastify: FastifyInstance) {
     },
   });
 
+  // GET /duplicates - Detect duplicate candidates
+  fastify.get('/duplicates', {
+    schema: { description: 'Detect duplicate candidates', tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async () => {
+      const { detectDuplicates } = await import('./duplicate.service.js');
+      return detectDuplicates();
+    },
+  });
+
+  // POST /merge - Merge two candidates
+  fastify.post('/merge', {
+    schema: { description: 'Merge duplicate candidates', tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { primaryId, duplicateId } = request.body as { primaryId: string; duplicateId: string };
+      const { mergeCandidates } = await import('./duplicate.service.js');
+      return mergeCandidates(primaryId, duplicateId);
+    },
+  });
+
+  // GET /engagement - Engagement scoring for candidats
+  fastify.get('/engagement', {
+    schema: { description: 'Candidat engagement scoring', tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async () => {
+      const { getEngagementScores } = await import('./engagement.service.js');
+      return getEngagementScores();
+    },
+  });
+
   // POST / - Create candidat
   fastify.post('/', {
     schema: {
@@ -205,6 +236,21 @@ export default async function candidatRouter(fastify: FastifyInstance) {
     handler: async (request, reply) => {
       const { id } = request.params as { id: string };
       return candidatService.exportData(id);
+    },
+  });
+
+  // GET /:id/engagement - Get engagement score
+  fastify.get('/:id/engagement', {
+    schema: {
+      description: 'Get candidate engagement score',
+      tags: ['Candidats'],
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      const { calculateEngagement } = await import('./engagement.service.js');
+      return calculateEngagement(id);
     },
   });
 

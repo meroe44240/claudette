@@ -99,6 +99,38 @@ export default async function dashboardRouter(fastify: FastifyInstance) {
     },
   });
 
+  // GET /pipeline-intelligence - Pipeline intelligence with mandat health scores
+  fastify.get('/pipeline-intelligence', {
+    schema: { description: 'Pipeline intelligence with mandat health scores', tags: ['Dashboard'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { getPipelineIntelligence } = await import('./pipeline-intelligence.service.js');
+      return getPipelineIntelligence(request.userId);
+    },
+  });
+
+  // GET /alerts - Automation alerts (stagnant candidatures, dormant mandats, overdue tasks)
+  fastify.get('/alerts', {
+    schema: { description: 'Alertes automatisees — candidatures stagnantes, mandats dormants, taches en retard', tags: ['Dashboard'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { runAutomationChecks } = await import('../automations/automation.service.js');
+      return runAutomationChecks(request.userId);
+    },
+  });
+
+  // POST /alerts/create-tasks - Create tasks from critical alerts
+  fastify.post('/alerts/create-tasks', {
+    schema: { description: 'Creer des taches depuis les alertes critiques', tags: ['Dashboard'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { runAutomationChecks, createTasksFromAlerts } = await import('../automations/automation.service.js');
+      const { alerts } = await runAutomationChecks(request.userId);
+      const tasksCreated = await createTasksFromAlerts(request.userId, alerts);
+      return { tasksCreated, message: `${tasksCreated} tache(s) creee(s) depuis les alertes critiques` };
+    },
+  });
+
   // GET /recruteur - Personal stats for connected user
   fastify.get('/recruteur', {
     schema: {

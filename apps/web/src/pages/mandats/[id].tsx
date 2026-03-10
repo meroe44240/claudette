@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Megaphone, Sparkles, Loader2, ChevronDown, ChevronUp, Plus, AlertTriangle, ClipboardList, MessageSquare, Target, Copy } from 'lucide-react';
+import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Megaphone, Sparkles, Loader2, ChevronDown, ChevronUp, Plus, AlertTriangle, ClipboardList, MessageSquare, Target, Copy, Zap, Star } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
@@ -102,6 +102,17 @@ interface Scorecard {
   questionsEntretien: ScorecardQuestion[];
   profilIdeal: string;
   redFlags: string[];
+}
+
+interface AiMatch {
+  candidatId: string;
+  nom: string;
+  prenom: string | null;
+  score: number;
+  reasons: string[];
+  posteActuel: string | null;
+  entrepriseActuelle: string | null;
+  localisation: string | null;
 }
 
 interface EditForm {
@@ -510,6 +521,8 @@ export default function MandatDetailPage() {
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [bookingCopied, setBookingCopied] = useState(false);
+  const [showMatching, setShowMatching] = useState(false);
+  const [matchResults, setMatchResults] = useState<AiMatch[]>([]);
 
   // Fetch booking settings to get current user's slug
   const { data: bookingSettings } = useQuery({
@@ -547,6 +560,19 @@ export default function MandatDetailPage() {
     },
     onError: (error: any) => {
       toast('error', error.message || 'Erreur lors de la suppression');
+    },
+  });
+
+  const matchingMutation = useMutation({
+    mutationFn: () => api.post<{ matches: AiMatch[] }>(`/ai/matching/${id}`, {}),
+    onSuccess: (data) => {
+      const matches = data?.matches || [];
+      setMatchResults(matches);
+      setShowMatching(true);
+      toast('success', `${matches.length} candidats trouv\u00e9s`);
+    },
+    onError: (error: any) => {
+      toast('error', error?.message || 'Erreur lors du matching IA');
     },
   });
 
@@ -765,6 +791,63 @@ export default function MandatDetailPage() {
             scorecard={mandat.scorecard}
             scorecardGeneratedAt={mandat.scorecardGeneratedAt}
           />
+
+          {/* AI Matching Section */}
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
+                <Zap size={18} className="text-violet-500" /> AI Matching
+              </h2>
+              <button
+                onClick={() => matchingMutation.mutate()}
+                disabled={matchingMutation.isPending}
+                className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-500 to-indigo-500 px-4 py-2 text-sm font-medium text-white transition-all hover:from-violet-600 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {matchingMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                Lancer le matching IA
+              </button>
+            </div>
+
+            {showMatching && matchResults.length > 0 && (
+              <div className="space-y-2">
+                {matchResults.map((match, idx) => (
+                  <div
+                    key={match.candidatId}
+                    className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-primary-50/30 cursor-pointer transition-colors"
+                    onClick={() => navigate(`/candidats/${match.candidatId}`)}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-text-primary">
+                        {match.prenom} {match.nom}
+                      </p>
+                      <p className="text-xs text-text-secondary">
+                        {[match.posteActuel, match.entrepriseActuelle].filter(Boolean).join(' @ ') || 'Aucun poste renseign\u00e9'}
+                      </p>
+                      {match.reasons.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {match.reasons.slice(0, 3).map((r, i) => (
+                            <span key={i} className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] text-violet-600">{r}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="ml-3 flex items-center gap-1.5">
+                      <Star size={14} className="text-amber-400" />
+                      <span className="text-sm font-bold text-text-primary">{match.score}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {showMatching && matchResults.length === 0 && !matchingMutation.isPending && (
+              <p className="text-sm text-text-secondary">Aucun candidat correspondant trouv\u00e9. Essayez d'enrichir la scorecard.</p>
+            )}
+
+            {!showMatching && !matchingMutation.isPending && (
+              <p className="text-sm text-text-secondary">Lancez le matching IA pour trouver les meilleurs candidats de votre base pour ce mandat.</p>
+            )}
+          </Card>
 
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">

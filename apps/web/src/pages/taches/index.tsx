@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Check, Clock, AlertTriangle, Calendar, Plus, Send,
-  ChevronDown, ChevronUp, Mail, Loader2,
+  ChevronDown, ChevronUp, Mail, Loader2, Trash2, AlarmClock,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import Badge from '../../components/ui/Badge';
@@ -11,6 +11,9 @@ import Pagination from '../../components/ui/Pagination';
 import EmptyState from '../../components/ui/EmptyState';
 import Skeleton from '../../components/ui/Skeleton';
 import Button from '../../components/ui/Button';
+import Modal from '../../components/ui/Modal';
+import Input, { Textarea } from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
 import { toast } from '../../components/ui/Toast';
 
 interface Tache {
@@ -55,6 +58,17 @@ export default function TachesPage() {
   const [activeTab, setActiveTab] = useState('todo');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    titre: '',
+    contenu: '',
+    entiteType: 'CANDIDAT' as string,
+    entiteId: '',
+    tacheDueDate: '',
+    tachePriority: 'MOYENNE' as string,
+  });
+
+  const queryClient = useQueryClient();
 
   const filters = new URLSearchParams({ page: String(page), perPage: '20' });
   if (activeTab !== 'all') filters.set('status', activeTab);
@@ -62,6 +76,27 @@ export default function TachesPage() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['taches', page, activeTab],
     queryFn: () => api.get<PaginatedResponse>(`/taches?${filters}`),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: any) => api.post('/taches', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['taches'] });
+      toast('success', 'Tâche créée');
+      setShowCreateModal(false);
+      setCreateForm({ titre: '', contenu: '', entiteType: 'CANDIDAT', entiteId: '', tacheDueDate: '', tachePriority: 'MOYENNE' });
+    },
+    onError: () => toast('error', 'Erreur lors de la création'),
+  });
+
+  const snoozeMutation = useMutation({
+    mutationFn: ({ id, days }: { id: string; days: number }) => api.put(`/taches/${id}/snooze`, { days }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['taches'] }); toast('success', 'Tâche reportée'); },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/taches/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['taches'] }); toast('success', 'Tâche supprimée'); },
   });
 
   const isAdchaseTask = (t: Tache) => !!(t.metadata?.adchaseCampaignId);
@@ -116,7 +151,7 @@ export default function TachesPage() {
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-[28px] font-bold text-neutral-900">Tâches</h1>
-        <Button variant="primary">
+        <Button variant="primary" onClick={() => setShowCreateModal(true)}>
           <Plus size={16} /> Nouvelle tâche
         </Button>
       </div>
@@ -265,11 +300,44 @@ export default function TachesPage() {
                         {formatDate(t.tacheDueDate)}
                       </span>
                     )}
+                    {!t.tacheCompleted && t.tacheDueDate && (
+                      <div className="relative inline-flex">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); snoozeMutation.mutate({ id: t.id, days: 1 }); }}
+                          className="ml-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+                          title="Reporter +1 jour"
+                        >
+                          +1j
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); snoozeMutation.mutate({ id: t.id, days: 3 }); }}
+                          className="rounded px-1.5 py-0.5 text-[11px] font-medium text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+                          title="Reporter +3 jours"
+                        >
+                          +3j
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); snoozeMutation.mutate({ id: t.id, days: 7 }); }}
+                          className="rounded px-1.5 py-0.5 text-[11px] font-medium text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+                          title="Reporter +1 semaine"
+                        >
+                          +7j
+                        </button>
+                      </div>
+                    )}
 
                     {t.user && (
                       <span className="ml-auto text-neutral-400">
                         Assigné à {t.user.prenom} {t.user.nom}
                       </span>
+                    )}
+                    {!isAdchase && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); if(confirm('Supprimer cette tâche ?')) deleteMutation.mutate(t.id); }}
+                        className="ml-2 rounded p-1 text-neutral-300 hover:bg-red-50 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     )}
                   </div>
 
@@ -339,6 +407,74 @@ export default function TachesPage() {
           </div>
         )}
       </div>
+
+      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Nouvelle tâche">
+        <div className="space-y-4">
+          <Input
+            label="Titre"
+            placeholder="Ex: Relancer le candidat"
+            value={createForm.titre}
+            onChange={(e) => setCreateForm(f => ({ ...f, titre: e.target.value }))}
+          />
+          <Textarea
+            label="Description (optionnel)"
+            placeholder="Détails de la tâche..."
+            value={createForm.contenu}
+            onChange={(e) => setCreateForm(f => ({ ...f, contenu: e.target.value }))}
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Type d'entité"
+              options={[
+                { value: 'CANDIDAT', label: 'Candidat' },
+                { value: 'CLIENT', label: 'Client' },
+                { value: 'ENTREPRISE', label: 'Entreprise' },
+                { value: 'MANDAT', label: 'Mandat' },
+              ]}
+              value={createForm.entiteType}
+              onChange={(val) => setCreateForm(f => ({ ...f, entiteType: val }))}
+            />
+            <Select
+              label="Priorité"
+              options={[
+                { value: 'HAUTE', label: 'Haute' },
+                { value: 'MOYENNE', label: 'Moyenne' },
+                { value: 'BASSE', label: 'Basse' },
+              ]}
+              value={createForm.tachePriority}
+              onChange={(val) => setCreateForm(f => ({ ...f, tachePriority: val }))}
+            />
+          </div>
+          <Input
+            label="Date d'échéance"
+            type="datetime-local"
+            value={createForm.tacheDueDate}
+            onChange={(e) => setCreateForm(f => ({ ...f, tacheDueDate: e.target.value }))}
+          />
+          <Input
+            label="ID de l'entité liée"
+            placeholder="UUID de l'entité"
+            value={createForm.entiteId}
+            onChange={(e) => setCreateForm(f => ({ ...f, entiteId: e.target.value }))}
+          />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setShowCreateModal(false)}>Annuler</Button>
+            <Button
+              onClick={() => createMutation.mutate({
+                titre: createForm.titre,
+                contenu: createForm.contenu || undefined,
+                entiteType: createForm.entiteType,
+                entiteId: createForm.entiteId,
+                tacheDueDate: createForm.tacheDueDate ? new Date(createForm.tacheDueDate).toISOString() : undefined,
+                tachePriority: createForm.tachePriority,
+              })}
+              disabled={!createForm.titre || !createForm.entiteId || createMutation.isPending}
+            >
+              {createMutation.isPending ? 'Création...' : 'Créer la tâche'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

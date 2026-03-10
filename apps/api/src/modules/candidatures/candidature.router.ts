@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { createCandidatureSchema, updateCandidatureSchema } from './candidature.schema.js';
 import * as candidatureService from './candidature.service.js';
 import { authenticate } from '../../middleware/auth.js';
@@ -16,6 +17,24 @@ export default async function candidatureRouter(fastify: FastifyInstance) {
       const candidature = await candidatureService.create(input, request.userId);
       reply.status(201);
       return candidature;
+    },
+  });
+
+  // POST /bulk-stage - Bulk update stage
+  fastify.post('/bulk-stage', {
+    schema: {
+      description: 'Changer le stage de plusieurs candidatures',
+      tags: ['Candidatures'],
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const input = z.object({
+        ids: z.array(z.string().uuid()).min(1),
+        stage: z.string(),
+        motifRefus: z.string().optional(),
+        motifRefusDetail: z.string().optional(),
+      }).parse(request.body);
+      return candidatureService.bulkUpdateStage(input.ids, input.stage, request.userId, input.motifRefus, input.motifRefusDetail);
     },
   });
 

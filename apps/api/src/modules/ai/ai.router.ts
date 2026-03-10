@@ -9,6 +9,8 @@ import * as callBriefService from './call-brief.service.js';
 import * as prospectDetectionService from './prospect-detection.service.js';
 import { authenticate } from '../../middleware/auth.js';
 import { ValidationError } from '../../lib/errors.js';
+import prisma from '../../lib/db.js';
+import { callClaude } from '../../services/claudeAI.js';
 
 /** Convert AI errors to user-friendly 503 responses instead of generic 500 */
 function handleAiError(err: any, reply: FastifyReply) {
@@ -646,6 +648,31 @@ Rédige un email de prospection sharp pour présenter ce profil à un client.`,
     },
   });
 
+  // ─── AI CANDIDATE MATCHING ─────────────────────────────
+
+  // POST /matching/:mandatId — AI candidate matching for a mandat
+  fastify.post('/matching/:mandatId', {
+    schema: {
+      description: 'AI-powered candidate matching for a mandat',
+      tags: ['AI'],
+      params: { type: 'object', required: ['mandatId'], properties: { mandatId: { type: 'string' } } },
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      try {
+        const { mandatId } = request.params as { mandatId: string };
+        const { matchCandidatesForMandat } = await import('./matching.service.js');
+        return matchCandidatesForMandat(mandatId, request.userId);
+      } catch (err: any) {
+        if (err.message?.includes('not found')) {
+          reply.status(404);
+          return { error: 'NOT_FOUND', message: err.message };
+        }
+        return handleAiError(err, reply);
+      }
+    },
+  });
+
   // POST /update-from-cv — Parse a CV and update an existing candidat with AI fields
   fastify.post('/update-from-cv', {
     schema: {
@@ -697,6 +724,78 @@ Rédige un email de prospection sharp pour présenter ce profil à un client.`,
       );
 
       return { data: result };
+    },
+  });
+
+  // ─── MORNING BRIEFING ──────────────────────────────────
+
+  // GET /morning-briefing — AI-generated morning briefing
+  fastify.get('/morning-briefing', {
+    schema: {
+      description: 'AI-generated morning briefing',
+      tags: ['AI'],
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const userId = request.userId;
+
+      // Gather data for briefing
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+      const [overdueTasks, todayTasks, activeMandats, recentActivities] = await Promise.all([
+        prisma.activite.count({
+          where: { userId, isTache: true, tacheCompleted: false, tacheDueDate: { lt: startOfDay } },
+        }),
+        prisma.activite.findMany({
+          where: { userId, isTache: true, tacheCompleted: false, tacheDueDate: { gte: startOfDay, lt: new Date(startOfDay.getTime() + 86400000) } },
+          select: { titre: true, entiteType: true },
+          take: 10,
+        }),
+        prisma.mandat.findMany({
+          where: { assignedToId: userId, statut: { in: ['OUVERT', 'EN_COURS'] } },
+          select: { titrePoste: true, candidatures: { select: { stage: true } } },
+        }),
+        prisma.activite.count({
+          where: { userId, type: { in: ['EMAIL'] }, createdAt: { gte: new Date(today.getTime() - 86400000) } },
+        }),
+      ]);
+
+      const mandatSummaries = activeMandats.map(m => {
+        const stages = m.candidatures.reduce((acc: Record<string, number>, c) => {
+          acc[c.stage] = (acc[c.stage] || 0) + 1;
+          return acc;
+        }, {});
+        return `${m.titrePoste}: ${Object.entries(stages).map(([s, n]) => `${n} en ${s}`).join(', ') || 'aucun candidat'}`;
+      });
+
+      const systemPrompt = `Tu es un assistant de recruteur. Genere un briefing matinal concis (max 5 bullet points) en francais.
+Format: JSON array de strings, chaque string = 1 priorite du jour. Ex: ["Relancer X car tache en retard", "Mandat Y a besoin de sourcing"]`;
+
+      const userPrompt = `Donnees:
+- ${overdueTasks} taches en retard
+- ${todayTasks.length} taches aujourd'hui: ${todayTasks.map(t => t.titre).join(', ') || 'aucune'}
+- ${activeMandats.length} mandats actifs: ${mandatSummaries.join('; ') || 'aucun'}
+- ${recentActivities} activites email dans les 24h`;
+
+      try {
+        const response = await callClaude({
+          feature: 'task_extraction',
+          systemPrompt,
+          userPrompt,
+          userId,
+          maxTokens: 1000,
+          temperature: 0.4,
+        });
+        const rawText = typeof response.content === 'string'
+          ? response.content
+          : response.rawText;
+        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+        const priorities = jsonMatch ? JSON.parse(jsonMatch[0]) : ['Consultez votre dashboard pour les priorites du jour'];
+        return { priorities, stats: { overdueTasks, todayTasks: todayTasks.length, activeMandats: activeMandats.length, recentActivities } };
+      } catch {
+        return { priorities: ['Erreur lors de la generation du briefing'], stats: { overdueTasks, todayTasks: todayTasks.length, activeMandats: activeMandats.length, recentActivities } };
+      }
     },
   });
 }

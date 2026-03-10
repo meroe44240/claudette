@@ -93,4 +93,28 @@ export default async function settingsRouter(fastify: FastifyInstance) {
       return settingsService.deleteUser(id);
     },
   });
+
+  // GET /general - Get general settings
+  fastify.get('/general', {
+    schema: { description: 'Get general settings', tags: ['Settings'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      return settingsService.getGeneralSettings(request.userId);
+    },
+  });
+
+  // PUT /general - Update general settings
+  fastify.put('/general', {
+    schema: { description: 'Update general settings', tags: ['Settings'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const input = z.object({
+        companyName: z.string().optional(),
+        currency: z.string().optional(),
+        timezone: z.string().optional(),
+        language: z.string().optional(),
+      }).parse(request.body);
+      return settingsService.updateGeneralSettings(request.userId, input);
+    },
+  });
 }

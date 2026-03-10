@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -22,7 +22,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useDroppable } from '@dnd-kit/core';
 import { motion } from 'framer-motion';
-import { ArrowLeft, LayoutGrid, Search, UserPlus, Loader2, GripVertical } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Search, UserPlus, Loader2, GripVertical, Zap } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../components/ui/Toast';
 import PageHeader from '../../components/ui/PageHeader';
@@ -700,6 +700,11 @@ export default function MandatKanbanPage() {
             <Button variant="primary" onClick={() => setAddCandidatOpen(true)}>
               <UserPlus size={16} /> Ajouter un candidat
             </Button>
+            <Link to={`/mandats/${id}/review`}>
+              <Button variant="secondary">
+                <Zap size={16} /> Fast Review
+              </Button>
+            </Link>
             <Button variant="ghost" onClick={() => navigate(`/mandats/${id}`)}>
               <ArrowLeft size={16} /> D\u00e9tail
             </Button>

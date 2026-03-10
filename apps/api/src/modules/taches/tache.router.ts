@@ -10,6 +10,14 @@ const createTacheSchema = z.object({
   entiteType: z.enum(['CANDIDAT', 'CLIENT', 'ENTREPRISE', 'MANDAT']),
   entiteId: z.string().uuid(),
   tacheDueDate: z.string().datetime().optional(),
+  tachePriority: z.enum(['HAUTE', 'MOYENNE', 'BASSE']).optional(),
+});
+
+const updateTacheSchema = z.object({
+  titre: z.string().min(1).optional(),
+  contenu: z.string().optional(),
+  tacheDueDate: z.string().datetime().nullable().optional(),
+  tachePriority: z.enum(['HAUTE', 'MOYENNE', 'BASSE']).optional(),
 });
 
 export default async function tacheRouter(fastify: FastifyInstance) {
@@ -70,6 +78,81 @@ export default async function tacheRouter(fastify: FastifyInstance) {
     handler: async (request, reply) => {
       const { id } = request.params as { id: string };
       return tacheService.complete(id);
+    },
+  });
+
+  // PUT /:id - Update tache
+  fastify.put('/:id', {
+    schema: {
+      description: 'Mettre a jour une tache',
+      tags: ['Taches'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', format: 'uuid' } },
+      },
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const input = updateTacheSchema.parse(request.body);
+      return tacheService.update(id, input);
+    },
+  });
+
+  // PUT /:id/uncomplete - Reopen tache
+  fastify.put('/:id/uncomplete', {
+    schema: {
+      description: 'Reouvrir une tache',
+      tags: ['Taches'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', format: 'uuid' } },
+      },
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { id } = request.params as { id: string };
+      return tacheService.uncomplete(id);
+    },
+  });
+
+  // PUT /:id/snooze - Snooze tache
+  fastify.put('/:id/snooze', {
+    schema: {
+      description: 'Reporter une tache de X jours',
+      tags: ['Taches'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', format: 'uuid' } },
+      },
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { days } = z.object({ days: z.number().int().min(1).max(90) }).parse(request.body);
+      return tacheService.snooze(id, days);
+    },
+  });
+
+  // DELETE /:id - Delete tache
+  fastify.delete('/:id', {
+    schema: {
+      description: 'Supprimer une tache',
+      tags: ['Taches'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', format: 'uuid' } },
+      },
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { id } = request.params as { id: string };
+      await tacheService.remove(id);
+      return { message: 'Tache supprimee' };
     },
   });
 }

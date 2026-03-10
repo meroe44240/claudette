@@ -18,6 +18,7 @@ import ClientDetailPage from './pages/clients/[id]';
 import MandatsPage from './pages/mandats/index';
 import MandatDetailPage from './pages/mandats/[id]';
 import MandatKanbanPage from './pages/mandats/[id]-kanban';
+import FastReviewPage from './pages/mandats/[id]-review';
 import ClientPipelinePage from './pages/clients/pipeline';
 import ActivitesPage from './pages/activites/index';
 import TachesPage from './pages/taches/index';
@@ -34,6 +35,8 @@ import EntrepriseNewPage from './pages/entreprises/new';
 import MandatNewPage from './pages/mandats/new';
 import ReportsPage from './pages/reports/index';
 import StatsPage from './pages/stats/index';
+import LeaderboardPage from './pages/stats/leaderboard';
+import PipelineIntelligencePage from './pages/dashboard/pipeline-intelligence';
 import PublicBookingPage from './pages/public-booking/index';
 import BookingCancelPage from './pages/public-booking/cancel';
 import PublicJobListPage from './pages/jobs/public-list';
@@ -44,6 +47,10 @@ import JobBoardPage from './pages/jobs/index';
 import JobBoardNewPage from './pages/jobs/new';
 import JobBoardEditPage from './pages/jobs/edit';
 import EmailsPage from './pages/emails/index';
+import InterviewSchedulerPage from './pages/settings/interview-scheduler';
+import AlertsPage from './pages/dashboard/alerts';
+import PlacementsPage from './pages/stats/placements';
+import RevenueForecastPage from './pages/stats/revenue-forecast';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuthStore();
@@ -88,6 +95,7 @@ export default function App() {
         <Route path="mandats" element={<MandatsPage />} />
         <Route path="mandats/new" element={<MandatNewPage />} />
         <Route path="mandats/:id/kanban" element={<MandatKanbanPage />} />
+        <Route path="mandats/:id/review" element={<FastReviewPage />} />
         <Route path="mandats/:id" element={<MandatDetailPage />} />
         <Route path="activites" element={<ActivitesPage />} />
         <Route path="taches" element={<TachesPage />} />
@@ -100,8 +108,14 @@ export default function App() {
         <Route path="adchase" element={<AdchasePage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="settings/integrations" element={<IntegrationsSettingsPage />} />
+        <Route path="settings/interview-scheduler" element={<InterviewSchedulerPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="stats" element={<StatsPage />} />
+        <Route path="leaderboard" element={<LeaderboardPage />} />
+        <Route path="pipeline-intelligence" element={<PipelineIntelligencePage />} />
+        <Route path="alerts" element={<AlertsPage />} />
+        <Route path="placements" element={<PlacementsPage />} />
+        <Route path="revenue-forecast" element={<RevenueForecastPage />} />
         <Route path="emails" element={<EmailsPage />} />
         <Route path="job-board" element={<JobBoardPage />} />
         <Route path="job-board/new" element={<JobBoardNewPage />} />

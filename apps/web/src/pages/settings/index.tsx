@@ -184,6 +184,31 @@ export default function SettingsPage() {
     });
   };
 
+  // General settings query
+  const { data: generalSettings } = useQuery({
+    queryKey: ['settings', 'general'],
+    queryFn: () => api.get<{ companyName: string; currency: string; timezone: string; language: string }>('/settings/general'),
+    enabled: activeSection === 'general',
+  });
+
+  useEffect(() => {
+    if (generalSettings) {
+      setCompanyName(generalSettings.companyName || '');
+      setCurrency(generalSettings.currency || 'EUR');
+      setTimezone(generalSettings.timezone || 'Europe/Paris');
+      setLanguage(generalSettings.language || 'fr');
+    }
+  }, [generalSettings]);
+
+  const saveGeneralMutation = useMutation({
+    mutationFn: (data: any) => api.put('/settings/general', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings', 'general'] });
+      toast('success', 'Paramètres enregistrés');
+    },
+    onError: () => toast('error', 'Erreur lors de la sauvegarde'),
+  });
+
   // Booking settings queries
   const { data: bookingSettingsData } = useQuery({
     queryKey: ['booking-settings'],
@@ -464,7 +489,12 @@ export default function SettingsPage() {
                   onChange={setLanguage}
                 />
                 <div className="flex justify-end pt-2">
-                  <Button>Enregistrer</Button>
+                  <Button
+                    onClick={() => saveGeneralMutation.mutate({ companyName, currency, timezone, language })}
+                    loading={saveGeneralMutation.isPending}
+                  >
+                    Enregistrer
+                  </Button>
                 </div>
               </div>
             </div>
