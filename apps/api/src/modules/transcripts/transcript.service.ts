@@ -513,11 +513,26 @@ export async function watchDriveFolder(userId: string, folderId: string) {
   }
 }
 
+// Scan lock per user to prevent concurrent scans (race condition → duplicates)
+const scanLocks = new Map<string, boolean>();
+
 /**
  * Scan a configured Drive folder and process any new/unprocessed transcripts.
  * Only processes docs whose title matches transcript/call summary keywords.
  */
 export async function scanDriveFolder(userId: string) {
+  if (scanLocks.get(userId)) {
+    return { status: 'skipped', message: 'Scan déjà en cours pour cet utilisateur' };
+  }
+  scanLocks.set(userId, true);
+  try {
+    return await _doScanDriveFolder(userId);
+  } finally {
+    scanLocks.delete(userId);
+  }
+}
+
+async function _doScanDriveFolder(userId: string) {
   const config = await prisma.integrationConfig.findUnique({
     where: { userId_provider: { userId, provider: 'google_docs' } },
   });
@@ -554,6 +569,20 @@ export async function scanDriveFolder(userId: string) {
 
   for (const doc of newDocs) {
     try {
+      // Re-check before processing to prevent duplicates from concurrent operations
+      const alreadyExists = await prisma.activite.findFirst({
+        where: {
+          source: 'GOOGLE_DOCS',
+          type: 'TRANSCRIPT',
+          userId,
+          metadata: { path: ['googleDocId'], equals: doc.id },
+        },
+        select: { id: true },
+      });
+      if (alreadyExists) {
+        console.log(`[Transcript] Skip already processed: ${doc.name}`);
+        continue;
+      }
       await processGoogleDoc(userId, doc.id);
       processed++;
     } catch (err: any) {
