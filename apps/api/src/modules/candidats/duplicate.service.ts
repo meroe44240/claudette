@@ -11,7 +11,7 @@ export async function detectDuplicates(): Promise<{ groups: DuplicateGroup[] }> 
   // 1. Find email duplicates
   const emailDupes = await prisma.$queryRaw<Array<{ email: string; count: bigint }>>`
     SELECT email, COUNT(*) as count
-    FROM "Candidat"
+    FROM "candidats"
     WHERE email IS NOT NULL AND email != ''
     GROUP BY email
     HAVING COUNT(*) > 1
@@ -39,7 +39,7 @@ export async function detectDuplicates(): Promise<{ groups: DuplicateGroup[] }> 
   // 2. Find LinkedIn URL duplicates
   const linkedinDupes = await prisma.$queryRaw<Array<{ linkedinUrl: string; count: bigint }>>`
     SELECT "linkedinUrl", COUNT(*) as count
-    FROM "Candidat"
+    FROM "candidats"
     WHERE "linkedinUrl" IS NOT NULL AND "linkedinUrl" != ''
     GROUP BY "linkedinUrl"
     HAVING COUNT(*) > 1

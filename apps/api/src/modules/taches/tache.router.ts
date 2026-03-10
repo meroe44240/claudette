@@ -7,8 +7,8 @@ import { parsePagination } from '../../lib/pagination.js';
 const createTacheSchema = z.object({
   titre: z.string().min(1, 'Le titre est requis'),
   contenu: z.string().optional(),
-  entiteType: z.enum(['CANDIDAT', 'CLIENT', 'ENTREPRISE', 'MANDAT']),
-  entiteId: z.string().uuid(),
+  entiteType: z.enum(['CANDIDAT', 'CLIENT', 'ENTREPRISE', 'MANDAT']).default('CANDIDAT'),
+  entiteId: z.string().uuid().default('00000000-0000-0000-0000-000000000000'),
   tacheDueDate: z.string().datetime().optional(),
   tachePriority: z.enum(['HAUTE', 'MOYENNE', 'BASSE']).optional(),
 });
