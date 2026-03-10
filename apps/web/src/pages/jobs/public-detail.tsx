@@ -1,6 +1,7 @@
 /**
  * Public Job Detail + Application Form.
  * URL: /jobs/:slug
+ * Branding HumanUp.io — Brand Book v4
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -129,34 +130,54 @@ export default function PublicJobDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center app-bg">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
+      <div className="flex min-h-screen items-center justify-center" style={{ background: '#FAFAFA' }}>
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: '#7C5CFC', borderTopColor: 'transparent' }} />
       </div>
     );
   }
 
   if (notFound || !job) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center app-bg p-6">
-        <p className="text-lg font-medium text-[#1a1a2e] mb-4">Offre introuvable</p>
-        <Link to="/jobs" className="text-primary-500 hover:text-primary-600 font-medium">
-          ← Retour aux offres
+      <div className="flex min-h-screen flex-col items-center justify-center p-6" style={{ background: '#FAFAFA' }}>
+        <p className="text-lg font-medium text-[#1a1a2e] mb-4" style={{ fontFamily: "'Domine', serif" }}>Offre introuvable</p>
+        <Link to="/jobs" className="font-medium" style={{ color: '#7C5CFC' }}>
+          &larr; Retour aux offres
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen app-bg">
+    <div
+      className="min-h-screen"
+      style={{
+        background: '#FAFAFA',
+        fontFamily: "'Inter', sans-serif",
+      }}
+    >
+      {/* Google Fonts */}
+      <link
+        href="https://fonts.googleapis.com/css2?family=Domine:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+      />
+
       {/* Header */}
-      <header className="glass sticky top-0 z-10 border-b border-white/30">
+      <header
+        className="sticky top-0 z-10"
+        style={{
+          background: 'rgba(255,255,255,.92)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          borderBottom: '1px solid #ECECEC',
+        }}
+      >
         <div className="mx-auto max-w-4xl px-6 py-4 flex items-center justify-between">
-          <Link to="/jobs" className="flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-700 transition-colors">
+          <Link to="/jobs" className="flex items-center gap-2 text-sm text-[#999] hover:text-[#1a1a2e] transition-colors">
             <ArrowLeft size={16} /> Retour aux offres
           </Link>
           <div className="flex items-center gap-2">
             <img src="/logo-icon.png" alt="HumanUp" className="h-8 w-auto" />
-            <span className="text-sm font-semibold text-[#1a1a2e]" style={{ fontFamily: 'var(--font-heading)' }}>HumanUp</span>
+            <span className="text-sm font-semibold text-[#1a1a2e]" style={{ fontFamily: "'Domine', serif" }}>HumanUp<span style={{ color: '#7C5CFC' }}>.io</span></span>
           </div>
         </div>
       </header>
@@ -165,7 +186,7 @@ export default function PublicJobDetailPage() {
         {/* Job Header */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">
-            <h1 className="text-2xl font-bold text-[#1a1a2e]" style={{ fontFamily: 'var(--font-heading)' }}>{job.title}</h1>
+            <h1 className="text-2xl font-bold text-[#1a1a2e]" style={{ fontFamily: "'Domine', serif" }}>{job.title}</h1>
             {job.isUrgent && (
               <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-2.5 py-0.5 text-xs font-semibold text-white">
                 <Flame size={10} /> URGENT
@@ -173,9 +194,9 @@ export default function PublicJobDetailPage() {
             )}
           </div>
           {job.companyDescription && (
-            <p className="text-neutral-600 mb-3">{job.companyDescription}</p>
+            <p className="text-[#666] mb-3">{job.companyDescription}</p>
           )}
-          <div className="flex flex-wrap gap-4 text-sm text-neutral-500">
+          <div className="flex flex-wrap gap-4 text-sm text-[#999]">
             {job.location && (
               <span className="flex items-center gap-1.5"><MapPin size={14} /> {job.location}</span>
             )}
@@ -189,7 +210,7 @@ export default function PublicJobDetailPage() {
           {job.tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-4">
               {job.tags.map((tag) => (
-                <span key={tag} className="rounded-full bg-primary-50 border border-primary-100 px-3 py-1 text-xs font-medium text-primary-700">
+                <span key={tag} className="rounded-full px-3 py-1 text-xs font-medium" style={{ background: 'rgba(124,92,252,.08)', color: '#7C5CFC', border: '1px solid rgba(124,92,252,.15)' }}>
                   {tag}
                 </span>
               ))}
@@ -202,18 +223,19 @@ export default function PublicJobDetailPage() {
           <div className="lg:col-span-2">
             {job.description ? (
               <div
-                className="glass-card rounded-2xl p-8 prose prose-neutral max-w-none"
+                className="rounded-2xl p-8 prose prose-neutral max-w-none"
+                style={{ background: '#fff', border: '1px solid #ECECEC' }}
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(job.description) }}
               />
             ) : (
-              <p className="text-neutral-500 italic">Aucune description disponible pour cette offre.</p>
+              <p className="text-[#999] italic">Aucune description disponible pour cette offre.</p>
             )}
           </div>
 
           {/* Similar Jobs Sidebar */}
           {job.similarJobs.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-neutral-500 uppercase tracking-wide mb-3">
+              <h3 className="text-sm font-semibold text-[#999] uppercase tracking-wide mb-3">
                 Offres similaires
               </h3>
               <div className="space-y-3">
@@ -221,14 +243,15 @@ export default function PublicJobDetailPage() {
                   <Link
                     key={sj.slug}
                     to={`/jobs/${sj.slug}`}
-                    className="block glass-card rounded-xl p-4 card-hover"
+                    className="block rounded-xl p-4 transition-all hover:-translate-y-0.5"
+                    style={{ background: '#fff', border: '1px solid #ECECEC' }}
                   >
-                    <p className="font-medium text-[#1a1a2e] text-sm">{sj.title}</p>
+                    <p className="font-medium text-[#1a1a2e] text-sm" style={{ fontFamily: "'Domine', serif" }}>{sj.title}</p>
                     {sj.location && (
-                      <p className="text-xs text-neutral-500 mt-1"><MapPin size={12} className="inline mr-1" />{sj.location}</p>
+                      <p className="text-xs text-[#999] mt-1"><MapPin size={12} className="inline mr-1" />{sj.location}</p>
                     )}
                     {sj.salaryRange && (
-                      <p className="text-xs text-neutral-500 mt-0.5">{sj.salaryRange}</p>
+                      <p className="text-xs text-[#999] mt-0.5">{sj.salaryRange}</p>
                     )}
                   </Link>
                 ))}
@@ -238,58 +261,62 @@ export default function PublicJobDetailPage() {
         </div>
 
         {/* Application Form */}
-        <div className="mt-12 glass-card rounded-2xl p-8" id="postuler">
-          <h2 className="text-xl font-bold text-[#1a1a2e] mb-6" style={{ fontFamily: 'var(--font-heading)' }}>Postuler</h2>
+        <div className="mt-12 rounded-2xl p-8" id="postuler" style={{ background: '#fff', border: '1px solid #ECECEC' }}>
+          <h2 className="text-xl font-bold text-[#1a1a2e] mb-6" style={{ fontFamily: "'Domine', serif" }}>Postuler</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Prenom *</label>
+                <label className="block text-sm font-medium text-[#555] mb-1">Prenom *</label>
                 <input
                   name="firstName"
                   value={form.firstName}
                   onChange={handleChange}
                   required
-                  className="w-full rounded-xl border border-white/50 bg-white/60 px-3 py-2.5 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none transition-all"
+                  style={{ background: '#F5F5F5', border: '1px solid #E5E5E5', color: '#1a1a2e' }}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Nom *</label>
+                <label className="block text-sm font-medium text-[#555] mb-1">Nom *</label>
                 <input
                   name="lastName"
                   value={form.lastName}
                   onChange={handleChange}
                   required
-                  className="w-full rounded-xl border border-white/50 bg-white/60 px-3 py-2.5 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none transition-all"
+                  style={{ background: '#F5F5F5', border: '1px solid #E5E5E5', color: '#1a1a2e' }}
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Email *</label>
+                <label className="block text-sm font-medium text-[#555] mb-1">Email *</label>
                 <input
                   name="email"
                   type="email"
                   value={form.email}
                   onChange={handleChange}
                   required
-                  className="w-full rounded-xl border border-white/50 bg-white/60 px-3 py-2.5 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none transition-all"
+                  style={{ background: '#F5F5F5', border: '1px solid #E5E5E5', color: '#1a1a2e' }}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Telephone *</label>
+                <label className="block text-sm font-medium text-[#555] mb-1">Telephone *</label>
                 <input
                   name="phone"
                   type="tel"
                   value={form.phone}
                   onChange={handleChange}
-                  className="w-full rounded-xl border border-white/50 bg-white/60 px-3 py-2.5 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none transition-all"
+                  style={{ background: '#F5F5F5', border: '1px solid #E5E5E5', color: '#1a1a2e' }}
                 />
               </div>
             </div>
             {/* LinkedIn */}
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">
+              <label className="block text-sm font-medium text-[#555] mb-1">
                 <span className="inline-flex items-center gap-1.5">
                   <Linkedin size={14} className="text-[#0A66C2]" /> Profil LinkedIn
                 </span>
@@ -299,44 +326,48 @@ export default function PublicJobDetailPage() {
                 value={form.linkedinUrl}
                 onChange={handleChange}
                 placeholder="https://linkedin.com/in/votre-profil"
-                className="w-full rounded-xl border border-white/50 bg-white/60 px-3 py-2.5 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none transition-all"
+                  style={{ background: '#F5F5F5', border: '1px solid #E5E5E5', color: '#1a1a2e' }}
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Salaire actuel</label>
+                <label className="block text-sm font-medium text-[#555] mb-1">Salaire actuel</label>
                 <input
                   name="salaryCurrent"
                   value={form.salaryCurrent}
                   onChange={handleChange}
                   placeholder="ex: 55k"
-                  className="w-full rounded-xl border border-white/50 bg-white/60 px-3 py-2.5 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none transition-all"
+                  style={{ background: '#F5F5F5', border: '1px solid #E5E5E5', color: '#1a1a2e' }}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Entreprise actuelle</label>
+                <label className="block text-sm font-medium text-[#555] mb-1">Entreprise actuelle</label>
                 <input
                   name="currentCompany"
                   value={form.currentCompany}
                   onChange={handleChange}
-                  className="w-full rounded-xl border border-white/50 bg-white/60 px-3 py-2.5 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none transition-all"
+                  style={{ background: '#F5F5F5', border: '1px solid #E5E5E5', color: '#1a1a2e' }}
                 />
               </div>
             </div>
 
             {/* Availability */}
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">Disponibilite</label>
+              <label className="block text-sm font-medium text-[#555] mb-2">Disponibilit&eacute;</label>
               <div className="flex flex-wrap gap-3">
                 {AVAILABILITY_OPTIONS.map((opt) => (
                   <label
                     key={opt.value}
-                    className={`cursor-pointer rounded-full border px-4 py-2 text-sm transition-all ${
+                    className="cursor-pointer rounded-full border px-4 py-2 text-sm transition-all"
+                    style={
                       form.availability === opt.value
-                        ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium shadow-sm'
-                        : 'border-white/50 bg-white/60 text-neutral-600 hover:border-primary-300'
-                    }`}
+                        ? { borderColor: '#7C5CFC', background: 'rgba(124,92,252,.08)', color: '#7C5CFC', fontWeight: 500 }
+                        : { borderColor: '#E5E5E5', background: '#F5F5F5', color: '#555' }
+                    }
                   >
                     <input
                       type="radio"
@@ -354,24 +385,25 @@ export default function PublicJobDetailPage() {
 
             {/* CV Upload */}
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">CV (PDF)</label>
+              <label className="block text-sm font-medium text-[#555] mb-2">CV (PDF)</label>
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className={`cursor-pointer rounded-2xl border-2 border-dashed p-6 text-center transition-all ${
+                className="cursor-pointer rounded-2xl border-2 border-dashed p-6 text-center transition-all"
+                style={
                   cvFile
-                    ? 'border-primary-400 bg-primary-50/50'
-                    : 'border-white/60 hover:border-primary-300 bg-white/40'
-                }`}
+                    ? { borderColor: '#7C5CFC', background: 'rgba(124,92,252,.05)' }
+                    : { borderColor: '#E5E5E5', background: '#FAFAFA' }
+                }
               >
                 {cvFile ? (
-                  <div className="flex items-center justify-center gap-2 text-primary-600">
+                  <div className="flex items-center justify-center gap-2" style={{ color: '#7C5CFC' }}>
                     <CheckCircle2 size={20} />
                     <span className="text-sm font-medium">{cvFile.name}</span>
                   </div>
                 ) : (
                   <>
-                    <Upload size={24} className="mx-auto mb-2 text-neutral-400" />
-                    <p className="text-sm text-neutral-500">
+                    <Upload size={24} className="mx-auto mb-2 text-[#BCBCBC]" />
+                    <p className="text-sm text-[#999]">
                       Cliquez ou glissez votre CV ici (PDF)
                     </p>
                   </>
@@ -393,7 +425,8 @@ export default function PublicJobDetailPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full gradient-btn rounded-full py-3 text-sm font-semibold text-white disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
+              className="w-full rounded-full py-3 text-sm font-semibold text-white disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg hover:-translate-y-0.5"
+              style={{ background: 'linear-gradient(135deg, #7C5CFC, #6344E0)' }}
             >
               {submitting ? (
                 <>
@@ -408,7 +441,7 @@ export default function PublicJobDetailPage() {
           </form>
         </div>
 
-        <p className="mt-6 text-center text-sm text-neutral-400">
+        <p className="mt-6 text-center text-sm text-[#BCBCBC]">
           Une question ? Contactez-nous : contact@humanup.io
         </p>
       </main>

@@ -130,18 +130,16 @@ export default function PublicJobListPage() {
     <div
       className="min-h-screen"
       style={{
-        background: '#f0eef6',
+        background: '#FAFAFA',
         backgroundImage:
-          'radial-gradient(ellipse 90% 70% at 5% 10%, rgba(34,211,238,.08) 0%, transparent 50%), ' +
-          'radial-gradient(ellipse 80% 80% at 95% 90%, rgba(139,92,246,.06) 0%, transparent 50%), ' +
-          'radial-gradient(ellipse 60% 40% at 50% 50%, rgba(59,130,246,.04) 0%, transparent 40%)',
+          'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(124,92,252,.04) 0%, transparent 50%)',
         backgroundAttachment: 'fixed',
         fontFamily: "'Inter', sans-serif",
       }}
     >
-      {/* Google Fonts — Poppins for headings */}
+      {/* Google Fonts — Domine for headings, Inter for body */}
       <link
-        href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Domine:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
         rel="stylesheet"
       />
 
@@ -149,33 +147,25 @@ export default function PublicJobListPage() {
       <header
         className="sticky top-0 z-10"
         style={{
-          background: 'rgba(255,255,255,.55)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderBottom: '1px solid rgba(255,255,255,.7)',
+          background: 'rgba(255,255,255,.92)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          borderBottom: '1px solid #ECECEC',
         }}
       >
-        <div className="mx-auto max-w-5xl px-6 py-6">
+        <div className="mx-auto max-w-5xl px-6 py-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <img src="/logo-icon.png" alt="HumanUp" className="h-10 w-auto" />
               <div>
                 <h1
-                  className="text-2xl font-extrabold tracking-tight text-[#1a1a2e]"
-                  style={{ fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.04em' }}
+                  className="text-2xl font-bold tracking-tight text-[#1a1a2e]"
+                  style={{ fontFamily: "'Domine', serif", letterSpacing: '-0.02em' }}
                 >
-                  Humanup
-                  <span
-                    style={{
-                      background: 'linear-gradient(135deg, #22D3EE, #3B82F6, #8B5CF6)',
-                      WebkitBackgroundClip: 'text',
-                      WebkitTextFillColor: 'transparent',
-                    }}
-                  >
-                    .io
-                  </span>
+                  HumanUp
+                  <span style={{ color: '#7C5CFC' }}>.io</span>
                 </h1>
-                <p className="text-xs text-[#7878A0]" style={{ letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 500 }}>
+                <p className="text-[11px] text-[#999]" style={{ letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 500 }}>
                   Cabinet de recrutement sp&eacute;cialis&eacute;
                 </p>
               </div>
@@ -183,8 +173,8 @@ export default function PublicJobListPage() {
             <div className="hidden sm:block">
               <Link
                 to="/jobs/candidature-spontanee"
-                className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-xs font-semibold text-white shadow-md transition-all hover:shadow-lg hover:-translate-y-0.5"
-                style={{ background: 'linear-gradient(135deg, #3B82F6, #6366F1)', letterSpacing: '0.02em' }}
+                className="inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-xs font-semibold text-white shadow-md transition-all hover:shadow-lg hover:-translate-y-0.5"
+                style={{ background: 'linear-gradient(135deg, #7C5CFC, #6344E0)', letterSpacing: '0.02em' }}
               >
                 Candidature spontan&eacute;e <ArrowRight size={12} />
               </Link>
@@ -193,30 +183,40 @@ export default function PublicJobListPage() {
         </div>
       </header>
 
+      {/* Hero tagline */}
+      <div className="mx-auto max-w-5xl px-6 pt-10 pb-2 text-center">
+        <h2
+          className="text-3xl font-bold text-[#1a1a2e] mb-2"
+          style={{ fontFamily: "'Domine', serif", letterSpacing: '-0.02em' }}
+        >
+          Pr&ecirc;t &agrave; recruter les meilleurs talents ?
+        </h2>
+        <p className="text-sm text-[#999] max-w-md mx-auto">
+          D&eacute;couvrez nos opportunit&eacute;s et rejoignez des entreprises ambitieuses.
+        </p>
+      </div>
+
       {/* Filters */}
       <div
         style={{
-          background: 'rgba(255,255,255,.4)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          borderBottom: '1px solid rgba(255,255,255,.6)',
+          background: '#fff',
+          borderBottom: '1px solid #ECECEC',
         }}
       >
         <div className="mx-auto max-w-5xl px-6 py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7878A0]" />
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999]" />
               <input
                 type="text"
                 placeholder="Rechercher un poste..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                className="w-full rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none transition-all"
+                className="w-full rounded-lg py-2.5 pl-10 pr-4 text-sm outline-none transition-all"
                 style={{
-                  background: 'rgba(255,255,255,.6)',
-                  border: '1px solid rgba(255,255,255,.7)',
-                  backdropFilter: 'blur(8px)',
+                  background: '#F5F5F5',
+                  border: '1px solid #E5E5E5',
                   color: '#1a1a2e',
                 }}
               />
@@ -224,8 +224,8 @@ export default function PublicJobListPage() {
             <select
               value={sector}
               onChange={(e) => { setSector(e.target.value); }}
-              className="rounded-xl px-3 py-2.5 text-sm outline-none"
-              style={{ background: 'rgba(255,255,255,.6)', border: '1px solid rgba(255,255,255,.7)', color: '#1a1a2e' }}
+              className="rounded-lg px-3 py-2.5 text-sm outline-none"
+              style={{ background: '#F5F5F5', border: '1px solid #E5E5E5', color: '#1a1a2e' }}
             >
               {SECTORS.map((s) => (
                 <option key={s.value} value={s.value}>{s.label}</option>
@@ -237,14 +237,14 @@ export default function PublicJobListPage() {
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              className="rounded-xl px-3 py-2.5 text-sm outline-none w-28"
-              style={{ background: 'rgba(255,255,255,.6)', border: '1px solid rgba(255,255,255,.7)', color: '#1a1a2e' }}
+              className="rounded-lg px-3 py-2.5 text-sm outline-none w-28"
+              style={{ background: '#F5F5F5', border: '1px solid #E5E5E5', color: '#1a1a2e' }}
             />
             <select
               value={jobType}
               onChange={(e) => { setJobType(e.target.value); }}
-              className="rounded-xl px-3 py-2.5 text-sm outline-none"
-              style={{ background: 'rgba(255,255,255,.6)', border: '1px solid rgba(255,255,255,.7)', color: '#1a1a2e' }}
+              className="rounded-lg px-3 py-2.5 text-sm outline-none"
+              style={{ background: '#F5F5F5', border: '1px solid #E5E5E5', color: '#1a1a2e' }}
             >
               {JOB_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>{t.label}</option>
@@ -253,7 +253,7 @@ export default function PublicJobListPage() {
             <button
               onClick={handleSearch}
               className="rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg hover:-translate-y-0.5"
-              style={{ background: 'linear-gradient(135deg, #3B82F6, #6366F1)' }}
+              style={{ background: 'linear-gradient(135deg, #7C5CFC, #6344E0)' }}
             >
               Rechercher
             </button>
@@ -272,23 +272,22 @@ export default function PublicJobListPage() {
           <div className="flex items-center justify-center py-20">
             <div
               className="h-8 w-8 animate-spin rounded-full border-2 border-t-transparent"
-              style={{ borderColor: '#3B82F6', borderTopColor: 'transparent' }}
+              style={{ borderColor: '#7C5CFC', borderTopColor: 'transparent' }}
             />
           </div>
         ) : jobs.length === 0 ? (
           <div
             className="rounded-2xl p-12 text-center"
             style={{
-              background: 'rgba(255,255,255,.55)',
-              backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255,255,255,.7)',
+              background: '#fff',
+              border: '1px solid #ECECEC',
             }}
           >
             <Briefcase size={48} className="mx-auto mb-4 text-[#D4D0E4]" />
-            <p className="text-lg font-semibold text-[#1a1a2e]" style={{ fontFamily: "'Poppins', sans-serif" }}>
+            <p className="text-lg font-semibold text-[#1a1a2e]" style={{ fontFamily: "'Domine', serif" }}>
               Aucune offre pour le moment
             </p>
-            <p className="mt-2 text-sm text-[#7878A0]">
+            <p className="mt-2 text-sm text-[#999]">
               Envoyez-nous votre CV, on vous contactera.
             </p>
           </div>
@@ -300,19 +299,18 @@ export default function PublicJobListPage() {
                 to={`/jobs/${job.slug}`}
                 className="group block rounded-2xl p-6 transition-all"
                 style={{
-                  background: 'rgba(255,255,255,.55)',
-                  backdropFilter: 'blur(20px)',
-                  border: '1px solid rgba(255,255,255,.7)',
-                  boxShadow: '0 2px 12px rgba(59,130,246,.03)',
+                  background: '#fff',
+                  border: '1px solid #ECECEC',
+                  boxShadow: '0 1px 4px rgba(0,0,0,.03)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(59,130,246,.2)';
-                  e.currentTarget.style.boxShadow = '0 8px 40px rgba(59,130,246,.06), 0 0 0 1px rgba(59,130,246,.05)';
+                  e.currentTarget.style.borderColor = 'rgba(124,92,252,.25)';
+                  e.currentTarget.style.boxShadow = '0 8px 32px rgba(124,92,252,.08)';
                   e.currentTarget.style.transform = 'translateY(-2px)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,.7)';
-                  e.currentTarget.style.boxShadow = '0 2px 12px rgba(59,130,246,.03)';
+                  e.currentTarget.style.borderColor = '#ECECEC';
+                  e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,.03)';
                   e.currentTarget.style.transform = 'translateY(0)';
                 }}
               >
@@ -321,14 +319,14 @@ export default function PublicJobListPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <h2
                         className="text-base font-semibold text-[#1a1a2e] transition-colors"
-                        style={{ fontFamily: "'Poppins', sans-serif" }}
+                        style={{ fontFamily: "'Domine', serif" }}
                       >
                         {job.title}
                       </h2>
                       {isNew(job.publishedAt) && (
                         <span
                           className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold text-white"
-                          style={{ background: 'linear-gradient(135deg, #22D3EE, #3B82F6)' }}
+                          style={{ background: 'linear-gradient(135deg, #7C5CFC, #6344E0)' }}
                         >
                           <Sparkles size={9} /> NEW
                         </span>
@@ -343,7 +341,7 @@ export default function PublicJobListPage() {
                     <div className="flex flex-wrap items-center gap-3 mb-2">
                       {job.companyDescription && (
                         <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
-                          style={{ background: 'rgba(59,130,246,.08)', color: '#3B82F6' }}
+                          style={{ background: 'rgba(124,92,252,.08)', color: '#7C5CFC' }}
                         >
                           <Briefcase size={11} /> {job.companyDescription}
                         </span>
@@ -377,7 +375,7 @@ export default function PublicJobListPage() {
                   <div className="shrink-0">
                     <span
                       className="inline-flex items-center gap-1 rounded-full px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all group-hover:shadow-md"
-                      style={{ background: 'linear-gradient(135deg, #3B82F6, #6366F1)' }}
+                      style={{ background: 'linear-gradient(135deg, #7C5CFC, #6344E0)' }}
                     >
                       Voir <ArrowRight size={12} />
                     </span>
@@ -398,8 +396,8 @@ export default function PublicJobListPage() {
                 className="h-9 w-9 rounded-full text-xs font-semibold transition-all"
                 style={
                   p === meta.page
-                    ? { background: 'linear-gradient(135deg, #3B82F6, #6366F1)', color: '#fff', boxShadow: '0 2px 16px rgba(59,130,246,.2)' }
-                    : { background: 'rgba(255,255,255,.6)', color: '#7878A0', border: '1px solid rgba(255,255,255,.8)' }
+                    ? { background: 'linear-gradient(135deg, #7C5CFC, #6344E0)', color: '#fff', boxShadow: '0 2px 16px rgba(124,92,252,.2)' }
+                    : { background: '#fff', color: '#7878A0', border: '1px solid #ECECEC' }
                 }
               >
                 {p}
@@ -412,18 +410,13 @@ export default function PublicJobListPage() {
         <div
           className="mt-12 rounded-2xl p-8 text-center relative overflow-hidden"
           style={{
-            background: 'linear-gradient(135deg, #3B82F6, #6366F1, #8B5CF6)',
+            background: 'linear-gradient(135deg, #7C5CFC, #6344E0)',
           }}
         >
-          {/* Subtle overlay gradient */}
-          <div
-            className="absolute inset-0 opacity-20"
-            style={{ background: 'linear-gradient(135deg, rgba(34,211,238,.3), transparent 50%, rgba(139,92,246,.2))' }}
-          />
           <div className="relative z-10">
             <p
               className="text-lg font-bold text-white mb-2"
-              style={{ fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.02em' }}
+              style={{ fontFamily: "'Domine', serif", letterSpacing: '-0.02em' }}
             >
               Vous ne trouvez pas votre poste ?
             </p>
@@ -433,7 +426,7 @@ export default function PublicJobListPage() {
             <Link
               to="/jobs/candidature-spontanee"
               className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold transition-all hover:shadow-lg hover:-translate-y-0.5"
-              style={{ color: '#3B82F6' }}
+              style={{ color: '#7C5CFC' }}
             >
               Candidature spontan&eacute;e <ArrowRight size={14} />
             </Link>
@@ -444,26 +437,21 @@ export default function PublicJobListPage() {
       {/* Footer */}
       <footer
         style={{
-          background: 'rgba(255,255,255,.4)',
-          backdropFilter: 'blur(12px)',
-          borderTop: '1px solid rgba(255,255,255,.6)',
+          background: '#fff',
+          borderTop: '1px solid #ECECEC',
         }}
       >
         <div className="mx-auto max-w-5xl px-6 py-6 text-center">
           <p className="text-sm text-[#7878A0]">
             <span
               className="font-bold"
-              style={{
-                background: 'linear-gradient(135deg, #22D3EE, #3B82F6, #8B5CF6)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
+              style={{ color: '#7C5CFC' }}
             >
-              Humanup.io
+              HumanUp.io
             </span>
             {' '}&middot; Cabinet de recrutement sp&eacute;cialis&eacute;
           </p>
-          <p className="text-xs text-[#D4D0E4] mt-1">
+          <p className="text-xs text-[#BCBCBC] mt-1">
             Recrutement sur-mesure &middot; contact@humanup.io
           </p>
         </div>
