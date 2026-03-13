@@ -21,8 +21,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useDroppable } from '@dnd-kit/core';
-import { motion } from 'framer-motion';
-import { ArrowLeft, LayoutGrid, Search, UserPlus, Loader2, GripVertical, Zap } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, LayoutGrid, Search, UserPlus, Loader2, GripVertical, Zap, Phone, Mail, CheckCircle2, ListTodo, X } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../components/ui/Toast';
 import PageHeader from '../../components/ui/PageHeader';
@@ -56,6 +56,7 @@ interface KanbanCandidat {
   nom: string;
   prenom: string | null;
   email: string | null;
+  telephone: string | null;
   posteActuel: string | null;
   entrepriseActuelle: string | null;
   localisation: string | null;
@@ -132,6 +133,15 @@ const MOTIF_REFUS_OPTIONS: { value: MotifRefus; label: string }[] = [
   { value: 'POSTE_POURVU', label: 'Poste pourvu' },
   { value: 'AUTRE', label: 'Autre' },
 ];
+
+// ── Stage → suggested follow-up task ──
+const STAGE_TASK_SUGGESTIONS: Partial<Record<StageCandidature, { titre: string; days: number }>> = {
+  CONTACTE: { titre: 'Contacter le candidat', days: 1 },
+  ENTRETIEN_1: { titre: "Planifier l'entretien 1", days: 3 },
+  ENTRETIEN_CLIENT: { titre: "Planifier l'entretien client", days: 3 },
+  OFFRE: { titre: "Préparer et envoyer l'offre", days: 2 },
+  PLACE: { titre: 'Finaliser le placement et onboarding', days: 5 },
+};
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -274,6 +284,33 @@ function SortableKanbanCard({ candidature, onClick }: SortableCardProps) {
               {[candidature.candidat.posteActuel, candidature.candidat.entrepriseActuelle].filter(Boolean).join(' \u2022 ')}
             </p>
           )}
+
+          {/* Phone + Email quick actions */}
+          {(candidature.candidat.telephone || candidature.candidat.email) && (
+            <div className="mt-1 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              {candidature.candidat.telephone && (
+                <a
+                  href={`tel:${candidature.candidat.telephone}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-600 hover:bg-emerald-100 transition-colors"
+                  title={candidature.candidat.telephone}
+                >
+                  <Phone size={10} />
+                  {candidature.candidat.telephone}
+                </a>
+              )}
+              {candidature.candidat.email && (
+                <a
+                  href={`mailto:${candidature.candidat.email}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-600 hover:bg-blue-100 transition-colors truncate"
+                  title={candidature.candidat.email}
+                >
+                  <Mail size={10} />
+                </a>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Days in stage badge */}
@@ -410,6 +447,15 @@ export default function MandatKanbanPage() {
   }>({ open: false, candidatureId: null, sourceStage: null });
   const [selectedMotif, setSelectedMotif] = useState<string>('');
 
+  // Task suggestion after stage change
+  const [taskSuggestion, setTaskSuggestion] = useState<{
+    candidatId: string;
+    candidatName: string;
+    stage: StageCandidature;
+    titre: string;
+    dueDate: string;
+  } | null>(null);
+
   // Add candidate modal state
   const [addCandidatOpen, setAddCandidatOpen] = useState(false);
   const [candidatSearch, setCandidatSearch] = useState('');
@@ -477,6 +523,20 @@ export default function MandatKanbanPage() {
     },
   });
 
+  // Create follow-up task mutation
+  const createTaskMutation = useMutation({
+    mutationFn: (data: { titre: string; entiteType: string; entiteId: string; tacheDueDate: string }) =>
+      api.post('/taches', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['taches'] });
+      toast('success', 'Tâche de suivi créée');
+      setTaskSuggestion(null);
+    },
+    onError: () => {
+      toast('error', 'Erreur lors de la création de la tâche');
+    },
+  });
+
   // Filtered kanban data based on search
   const filteredKanban = useMemo(() => {
     if (!kanban) return null;
@@ -498,7 +558,7 @@ export default function MandatKanbanPage() {
 
   // Mutation for updating candidature stage
   const updateStageMutation = useMutation({
-    mutationFn: (params: { candidatureId: string; stage: StageCandidature; motifRefus?: MotifRefus }) =>
+    mutationFn: (params: { candidatureId: string; stage: StageCandidature; motifRefus?: MotifRefus; candidatId?: string; candidatName?: string }) =>
       api.put(`/candidatures/${params.candidatureId}`, {
         stage: params.stage,
         ...(params.motifRefus ? { motifRefus: params.motifRefus } : {}),
@@ -506,6 +566,20 @@ export default function MandatKanbanPage() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['mandat-kanban', id] });
       toast('success', `Candidat déplacé vers ${STAGE_LABELS[variables.stage]}`);
+
+      // Suggest follow-up task if applicable
+      const suggestion = STAGE_TASK_SUGGESTIONS[variables.stage];
+      if (suggestion && variables.candidatId) {
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + suggestion.days);
+        setTaskSuggestion({
+          candidatId: variables.candidatId,
+          candidatName: variables.candidatName || 'Candidat',
+          stage: variables.stage,
+          titre: suggestion.titre,
+          dueDate: dueDate.toISOString(),
+        });
+      }
     },
     onError: () => {
       // Revert optimistic update by refetching
@@ -589,8 +663,14 @@ export default function MandatKanbanPage() {
 
     queryClient.setQueryData(['mandat-kanban', id], updatedKanban);
 
-    // Fire the mutation
-    updateStageMutation.mutate({ candidatureId, stage: targetStage });
+    // Fire the mutation with candidat info for task suggestion
+    const candidatName = `${movedItem.candidat.prenom || ''} ${movedItem.candidat.nom}`.trim();
+    updateStageMutation.mutate({
+      candidatureId,
+      stage: targetStage,
+      candidatId: movedItem.candidat.id,
+      candidatName,
+    });
   }, [kanban, id, queryClient, updateStageMutation]);
 
   const handleDragCancel = useCallback(() => {
@@ -820,6 +900,52 @@ export default function MandatKanbanPage() {
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {/* Task suggestion banner after stage change */}
+      <AnimatePresence>
+        {taskSuggestion && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl border border-violet-200 bg-white px-5 py-3.5 shadow-[0_8px_32px_rgba(124,92,252,0.15)]"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100">
+              <ListTodo size={18} className="text-violet-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-neutral-900">
+                {taskSuggestion.titre}
+              </p>
+              <p className="text-xs text-neutral-400">
+                Pour {taskSuggestion.candidatName} \u2022 {STAGE_LABELS[taskSuggestion.stage]}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                createTaskMutation.mutate({
+                  titre: `${taskSuggestion.titre} \u2014 ${taskSuggestion.candidatName}`,
+                  entiteType: 'CANDIDAT',
+                  entiteId: taskSuggestion.candidatId,
+                  tacheDueDate: taskSuggestion.dueDate,
+                });
+              }}
+              disabled={createTaskMutation.isPending}
+              className="flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 transition-colors disabled:opacity-50"
+            >
+              <CheckCircle2 size={14} />
+              Créer
+            </button>
+            <button
+              onClick={() => setTaskSuggestion(null)}
+              className="rounded-lg p-1 text-neutral-300 hover:text-neutral-500 hover:bg-neutral-50 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Refusal Modal */}
       <Modal

@@ -840,7 +840,7 @@ export async function getSpaData(
     // Recent emails
     getRecentEmails(userId),
 
-    // Tasks (incomplete, sorted by due date)
+    // Tasks (incomplete, sorted by due date then priority)
     prisma.activite.findMany({
       where: {
         ...userFilter,
@@ -855,6 +855,9 @@ export async function getSpaData(
         tacheDueDate: true,
         tacheCompleted: true,
         metadata: true,
+        entiteType: true,
+        entiteId: true,
+        type: true,
       },
     }),
   ]);

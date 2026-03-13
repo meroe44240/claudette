@@ -209,6 +209,7 @@ export async function getKanban(id: string) {
           nom: true,
           prenom: true,
           email: true,
+          telephone: true,
           posteActuel: true,
           entrepriseActuelle: true,
           localisation: true,

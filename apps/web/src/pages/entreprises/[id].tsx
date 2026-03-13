@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Globe, MapPin, Linkedin, Users, FileText, Pencil, Trash2, Save, X, Building } from 'lucide-react';
+import { ArrowLeft, Globe, MapPin, Linkedin, Users, FileText, Pencil, Trash2, Save, X, Building, Phone, Mail, ChevronDown, ChevronUp, Briefcase } from 'lucide-react';
+import { Link } from 'react-router';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
@@ -17,6 +18,23 @@ import { toast } from '../../components/ui/Toast';
 
 type TailleEntreprise = 'STARTUP' | 'PME' | 'ETI' | 'GRAND_GROUPE';
 
+interface ClientContact {
+  id: string;
+  nom: string;
+  prenom: string | null;
+  email: string | null;
+  telephone: string | null;
+  poste: string | null;
+}
+
+interface MandatInfo {
+  id: string;
+  titrePoste: string;
+  statut: string;
+  createdAt: string;
+  _count?: { candidatures: number };
+}
+
 interface EntrepriseDetail {
   id: string;
   nom: string;
@@ -28,9 +46,29 @@ interface EntrepriseDetail {
   logoUrl: string | null;
   notes: string | null;
   _count?: { clients: number; mandats: number };
+  clients?: ClientContact[];
+  mandats?: MandatInfo[];
   createdAt: string;
   updatedAt: string;
 }
+
+const STATUT_COLORS: Record<string, string> = {
+  OUVERT: 'bg-blue-50 text-blue-600',
+  EN_COURS: 'bg-violet-50 text-violet-600',
+  GAGNE: 'bg-emerald-50 text-emerald-600',
+  PERDU: 'bg-red-50 text-red-600',
+  ANNULE: 'bg-neutral-100 text-neutral-500',
+  CLOTURE: 'bg-neutral-100 text-neutral-500',
+};
+
+const STATUT_LABELS: Record<string, string> = {
+  OUVERT: 'Ouvert',
+  EN_COURS: 'En cours',
+  GAGNE: 'Gagné',
+  PERDU: 'Perdu',
+  ANNULE: 'Annulé',
+  CLOTURE: 'Clôturé',
+};
 
 interface EntrepriseStats {
   revenueCumule: number;
@@ -394,6 +432,102 @@ export default function EntrepriseDetailPage() {
           </Card>
         </motion.div>
       </motion.div>
+
+      {/* Contacts section */}
+      {entreprise.clients && entreprise.clients.length > 0 && (
+        <motion.div className="mt-6" variants={detailItem}>
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
+                <Users size={18} className="text-violet-500" />
+                Contacts ({entreprise.clients.length})
+              </h2>
+            </div>
+            <div className="divide-y divide-neutral-50">
+              {entreprise.clients.map((c) => (
+                <Link
+                  key={c.id}
+                  to={`/clients/${c.id}`}
+                  className="flex items-center gap-3 py-3 px-1 rounded-lg hover:bg-neutral-50 transition-colors group"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-600">
+                    {(c.prenom?.[0] || '').toUpperCase()}{(c.nom[0] || '').toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-neutral-900 group-hover:text-violet-600 transition-colors">
+                      {c.prenom} {c.nom}
+                    </p>
+                    {c.poste && <p className="text-xs text-neutral-500">{c.poste}</p>}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {c.telephone && (
+                      <a
+                        href={`tel:${c.telephone}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] text-emerald-600 hover:bg-emerald-100 transition-colors"
+                      >
+                        <Phone size={11} />
+                        {c.telephone}
+                      </a>
+                    )}
+                    {c.email && (
+                      <a
+                        href={`mailto:${c.email}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-[11px] text-blue-600 hover:bg-blue-100 transition-colors"
+                      >
+                        <Mail size={11} />
+                      </a>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Mandats section */}
+      {entreprise.mandats && entreprise.mandats.length > 0 && (
+        <motion.div className="mt-6" variants={detailItem}>
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
+                <Briefcase size={18} className="text-violet-500" />
+                Mandats ({entreprise.mandats.length})
+              </h2>
+            </div>
+            <div className="divide-y divide-neutral-50">
+              {entreprise.mandats.map((m) => (
+                <Link
+                  key={m.id}
+                  to={`/mandats/${m.id}`}
+                  className="flex items-center gap-3 py-3 px-1 rounded-lg hover:bg-neutral-50 transition-colors group"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50">
+                    <FileText size={16} className="text-blue-500" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-neutral-900 group-hover:text-violet-600 transition-colors">
+                      {m.titrePoste}
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUT_COLORS[m.statut] || 'bg-neutral-100 text-neutral-500'}`}>
+                        {STATUT_LABELS[m.statut] || m.statut}
+                      </span>
+                      {m._count?.candidatures !== undefined && m._count.candidatures > 0 && (
+                        <span className="text-[11px] text-neutral-400">
+                          {m._count.candidatures} candidat{m._count.candidatures > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </Card>
+        </motion.div>
+      )}
 
       <div className="mt-8">
         <ActivityJournal entiteType="ENTREPRISE" entiteId={entreprise.id} />

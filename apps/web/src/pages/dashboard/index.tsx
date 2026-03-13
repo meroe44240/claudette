@@ -65,7 +65,17 @@ interface TacheSpa {
   tacheDueDate: string | null;
   tacheCompleted: boolean;
   metadata: any;
+  entiteType?: string | null;
+  entiteId?: string | null;
+  type?: string | null;
 }
+
+const ENTITE_ROUTE_MAP: Record<string, string> = {
+  CANDIDAT: '/candidats',
+  CLIENT: '/clients',
+  ENTREPRISE: '/entreprises',
+  MANDAT: '/mandats',
+};
 
 interface GmailMessage {
   id: string;
@@ -353,7 +363,24 @@ function RecruiterDashboard() {
   const bandeau = spaData?.bandeau;
   const kpis = spaData?.kpis;
   const mandats = spaData?.mandats ?? [];
-  const taches = spaData?.taches ?? [];
+  const tachesRaw = spaData?.taches ?? [];
+  // Sort tasks: overdue first, then by priority (HAUTE > MOYENNE > BASSE), then by date
+  const taches = useMemo(() => {
+    const PRIORITY_ORDER: Record<string, number> = { HAUTE: 0, MOYENNE: 1, BASSE: 2 };
+    const now = new Date();
+    return [...tachesRaw].sort((a, b) => {
+      const aOverdue = a.tacheDueDate && new Date(a.tacheDueDate) < now ? 1 : 0;
+      const bOverdue = b.tacheDueDate && new Date(b.tacheDueDate) < now ? 1 : 0;
+      if (aOverdue !== bOverdue) return bOverdue - aOverdue; // overdue first
+      const aPrio = PRIORITY_ORDER[a.metadata?.priority || a.type || ''] ?? 1;
+      const bPrio = PRIORITY_ORDER[b.metadata?.priority || b.type || ''] ?? 1;
+      if (aPrio !== bPrio) return aPrio - bPrio; // high prio first
+      // then by date
+      const aDate = a.tacheDueDate ? new Date(a.tacheDueDate).getTime() : Infinity;
+      const bDate = b.tacheDueDate ? new Date(b.tacheDueDate).getTime() : Infinity;
+      return aDate - bDate;
+    });
+  }, [tachesRaw]);
   const emails = spaData?.recentEmails;
   const weeklyActivity = spaData?.weeklyActivity ?? [];
   const calendarDots = spaData?.calendarDots ?? {};
@@ -961,6 +988,15 @@ function RecruiterDashboard() {
                             <Zap size={8} />
                             {t.metadata?.channel ?? 'Seq'}
                           </span>
+                        )}
+                        {t.entiteType && t.entiteId && ENTITE_ROUTE_MAP[t.entiteType] && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); navigate(`${ENTITE_ROUTE_MAP[t.entiteType!]}/${t.entiteId}`); }}
+                            className="flex items-center gap-0.5 rounded-full bg-violet-50 px-1.5 py-0.5 text-[9px] font-medium text-violet-600 hover:bg-violet-100 transition-colors"
+                          >
+                            <Link2 size={8} />
+                            {t.entiteType === 'CANDIDAT' ? 'Candidat' : t.entiteType === 'CLIENT' ? 'Client' : t.entiteType === 'ENTREPRISE' ? 'Entreprise' : 'Mandat'}
+                          </button>
                         )}
                       </div>
                     </div>

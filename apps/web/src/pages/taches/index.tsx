@@ -4,7 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Check, Clock, AlertTriangle, Calendar, Plus, Send,
   ChevronDown, ChevronUp, Mail, Loader2, Trash2, AlarmClock,
+  User, Building2, FileText, Briefcase, ExternalLink,
 } from 'lucide-react';
+import { Link } from 'react-router';
 import { api } from '../../lib/api-client';
 import Badge from '../../components/ui/Badge';
 import Pagination from '../../components/ui/Pagination';
@@ -26,7 +28,31 @@ interface Tache {
   createdAt: string;
   metadata?: Record<string, any>;
   user?: { nom: string; prenom: string | null };
+  entiteType?: string | null;
+  entiteId?: string | null;
+  entiteNom?: string | null;
 }
+
+const ENTITE_ROUTES: Record<string, string> = {
+  CANDIDAT: '/candidats',
+  CLIENT: '/clients',
+  ENTREPRISE: '/entreprises',
+  MANDAT: '/mandats',
+};
+
+const ENTITE_ICONS: Record<string, typeof User> = {
+  CANDIDAT: User,
+  CLIENT: Building2,
+  ENTREPRISE: Briefcase,
+  MANDAT: FileText,
+};
+
+const ENTITE_LABELS: Record<string, string> = {
+  CANDIDAT: 'Candidat',
+  CLIENT: 'Client',
+  ENTREPRISE: 'Entreprise',
+  MANDAT: 'Mandat',
+};
 
 interface PaginatedResponse {
   data: Tache[];
@@ -279,6 +305,22 @@ export default function TachesPage() {
                   {/* Description */}
                   {t.contenu && (
                     <p className="mt-1 text-[13px] text-neutral-500 line-clamp-2">{t.contenu}</p>
+                  )}
+
+                  {/* Entity link */}
+                  {t.entiteType && t.entiteId && ENTITE_ROUTES[t.entiteType] && (
+                    <Link
+                      to={`${ENTITE_ROUTES[t.entiteType]}/${t.entiteId}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-600 hover:bg-violet-100 transition-colors"
+                    >
+                      {(() => {
+                        const Icon = ENTITE_ICONS[t.entiteType!] || FileText;
+                        return <Icon size={11} />;
+                      })()}
+                      {t.entiteNom || ENTITE_LABELS[t.entiteType] || t.entiteType}
+                      <ExternalLink size={9} className="opacity-50" />
+                    </Link>
                   )}
 
                   {/* Metadata row */}

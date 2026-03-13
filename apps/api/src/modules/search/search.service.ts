@@ -5,27 +5,40 @@ interface SearchResult {
   type: 'candidat' | 'client' | 'entreprise' | 'mandat';
   title: string;
   subtitle: string | null;
+  extra?: string | null;
   score: number;
 }
+
+const STAGE_LABELS: Record<string, string> = {
+  SOURCING: 'Sourcing',
+  CONTACTE: 'Contacté',
+  ENTRETIEN_1: 'Entretien 1',
+  ENTRETIEN_CLIENT: 'Entretien Client',
+  OFFRE: 'Offre',
+  PLACE: 'Placé',
+  REFUSE: 'Refusé',
+};
+
+const STATUT_LABELS: Record<string, string> = {
+  OUVERT: 'Ouvert',
+  EN_COURS: 'En cours',
+  GAGNE: 'Gagné',
+  PERDU: 'Perdu',
+  ANNULE: 'Annulé',
+  CLOTURE: 'Clôturé',
+};
 
 function scoreResult(title: string, subtitle: string | null, query: string): number {
   const lowerQuery = query.toLowerCase();
   const lowerTitle = title.toLowerCase();
   const lowerSubtitle = (subtitle || '').toLowerCase();
 
-  // Exact match on title gets highest score
   if (lowerTitle === lowerQuery) return 100;
-  // Title starts with query
   if (lowerTitle.startsWith(lowerQuery)) return 80;
-  // Title contains query
   if (lowerTitle.includes(lowerQuery)) return 60;
-  // Subtitle exact match
   if (lowerSubtitle === lowerQuery) return 50;
-  // Subtitle starts with query
   if (lowerSubtitle.startsWith(lowerQuery)) return 40;
-  // Subtitle contains query
   if (lowerSubtitle.includes(lowerQuery)) return 30;
-  // Partial match (fallback)
   return 10;
 }
 
@@ -48,7 +61,20 @@ export async function globalSearch(query: string): Promise<{ data: SearchResult[
         ],
       },
       take: 15,
-      select: { id: true, nom: true, prenom: true, posteActuel: true, entrepriseActuelle: true },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        posteActuel: true,
+        entrepriseActuelle: true,
+        localisation: true,
+        telephone: true,
+        candidatures: {
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+          select: { stage: true },
+        },
+      },
     }),
     prisma.client.findMany({
       where: {
@@ -60,7 +86,10 @@ export async function globalSearch(query: string): Promise<{ data: SearchResult[
         ],
       },
       take: 15,
-      include: { entreprise: { select: { nom: true } } },
+      include: {
+        entreprise: { select: { nom: true } },
+        _count: { select: { mandats: true } },
+      },
     }),
     prisma.entreprise.findMany({
       where: {
@@ -70,7 +99,13 @@ export async function globalSearch(query: string): Promise<{ data: SearchResult[
         ],
       },
       take: 15,
-      select: { id: true, nom: true, secteur: true },
+      select: {
+        id: true,
+        nom: true,
+        secteur: true,
+        localisation: true,
+        _count: { select: { mandats: true, clients: true } },
+      },
     }),
     prisma.mandat.findMany({
       where: {
@@ -80,58 +115,80 @@ export async function globalSearch(query: string): Promise<{ data: SearchResult[
         ],
       },
       take: 15,
-      include: { entreprise: { select: { nom: true } } },
+      include: {
+        entreprise: { select: { nom: true } },
+        _count: { select: { candidatures: true } },
+      },
     }),
   ]);
 
   const data: SearchResult[] = [
     ...candidats.map((c) => {
       const title = `${c.prenom || ''} ${c.nom}`.trim();
-      const subtitle = [c.posteActuel, c.entrepriseActuelle].filter(Boolean).join(' \u2014 ') || null;
+      const subtitle = [c.posteActuel, c.entrepriseActuelle].filter(Boolean).join(' — ') || null;
+      const extraParts: string[] = [];
+      if (c.localisation) extraParts.push(c.localisation);
+      const lastStage = c.candidatures[0]?.stage;
+      if (lastStage) extraParts.push(STAGE_LABELS[lastStage] || lastStage);
       return {
         id: c.id,
         type: 'candidat' as const,
         title,
         subtitle,
+        extra: extraParts.length > 0 ? extraParts.join(' · ') : null,
         score: scoreResult(title, subtitle, query),
       };
     }),
     ...clients.map((c) => {
       const title = `${c.prenom || ''} ${c.nom}`.trim();
       const subtitle = c.entreprise?.nom || null;
+      const mandatsCount = (c._count as any)?.mandats ?? 0;
+      const extra = mandatsCount > 0 ? `${mandatsCount} mandat${mandatsCount > 1 ? 's' : ''}` : null;
       return {
         id: c.id,
         type: 'client' as const,
         title,
         subtitle,
+        extra,
         score: scoreResult(title, subtitle, query),
       };
     }),
     ...entreprises.map((e) => {
       const title = e.nom;
       const subtitle = e.secteur || null;
+      const extraParts: string[] = [];
+      if (e.localisation) extraParts.push(e.localisation);
+      const mandatsCount = e._count?.mandats ?? 0;
+      const clientsCount = e._count?.clients ?? 0;
+      if (mandatsCount > 0) extraParts.push(`${mandatsCount} mandat${mandatsCount > 1 ? 's' : ''}`);
+      if (clientsCount > 0) extraParts.push(`${clientsCount} contact${clientsCount > 1 ? 's' : ''}`);
       return {
         id: e.id,
         type: 'entreprise' as const,
         title,
         subtitle,
+        extra: extraParts.length > 0 ? extraParts.join(' · ') : null,
         score: scoreResult(title, subtitle, query),
       };
     }),
     ...mandats.map((m) => {
       const title = m.titrePoste;
       const subtitle = m.entreprise?.nom || null;
+      const extraParts: string[] = [];
+      if (m.statut) extraParts.push(STATUT_LABELS[m.statut] || m.statut);
+      const candidatsCount = (m._count as any)?.candidatures ?? 0;
+      if (candidatsCount > 0) extraParts.push(`${candidatsCount} candidat${candidatsCount > 1 ? 's' : ''}`);
       return {
         id: m.id,
         type: 'mandat' as const,
         title,
         subtitle,
+        extra: extraParts.length > 0 ? extraParts.join(' · ') : null,
         score: scoreResult(title, subtitle, query),
       };
     }),
   ];
 
-  // Sort by relevance score (highest first)
   data.sort((a, b) => b.score - a.score);
 
   return { data };

@@ -7,6 +7,7 @@ interface SearchResult {
   type: string;
   title: string;
   subtitle?: string;
+  extra?: string;
 }
 
 interface SearchBarProps {
@@ -269,9 +270,10 @@ export default function SearchBar({ onSearch, onSelect, onCreate, placeholder = 
                         activeIndex === currentIdx ? 'bg-violet-50 text-violet-700' : 'text-neutral-900 hover:bg-neutral-50'
                       }`}
                     >
-                      <div>
-                        <p className="font-medium">{item.title}</p>
-                        {item.subtitle && <p className="text-xs text-neutral-500">{item.subtitle}</p>}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{item.title}</p>
+                        {item.subtitle && <p className="text-xs text-neutral-500 truncate">{item.subtitle}</p>}
+                        {item.extra && <p className="text-[10px] text-neutral-400 truncate">{item.extra}</p>}
                       </div>
                     </button>
                   );

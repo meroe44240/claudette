@@ -56,7 +56,10 @@ export async function list(params: PaginationParams, filters: TacheFilters) {
     prisma.activite.count({ where }),
   ]);
 
-  return paginatedResult(data, total, params);
+  // Resolve entity names for linked tasks
+  const enriched = await resolveEntiteNames(data);
+
+  return paginatedResult(enriched, total, params);
 }
 
 export async function create(data: {
@@ -223,4 +226,46 @@ export async function remove(id: string) {
   if (!existing) throw new NotFoundError('Tache', id);
 
   return prisma.activite.delete({ where: { id } });
+}
+
+// Resolve entity names for tasks that have entiteType + entiteId
+async function resolveEntiteNames(tasks: any[]): Promise<any[]> {
+  const ids: Record<string, Set<string>> = {
+    CANDIDAT: new Set(),
+    CLIENT: new Set(),
+    ENTREPRISE: new Set(),
+    MANDAT: new Set(),
+  };
+
+  for (const t of tasks) {
+    if (t.entiteType && t.entiteId && ids[t.entiteType]) {
+      ids[t.entiteType].add(t.entiteId);
+    }
+  }
+
+  const [candidats, clients, entreprises, mandats] = await Promise.all([
+    ids.CANDIDAT.size > 0
+      ? prisma.candidat.findMany({ where: { id: { in: [...ids.CANDIDAT] } }, select: { id: true, nom: true, prenom: true } })
+      : [],
+    ids.CLIENT.size > 0
+      ? prisma.client.findMany({ where: { id: { in: [...ids.CLIENT] } }, select: { id: true, nom: true, prenom: true } })
+      : [],
+    ids.ENTREPRISE.size > 0
+      ? prisma.entreprise.findMany({ where: { id: { in: [...ids.ENTREPRISE] } }, select: { id: true, nom: true } })
+      : [],
+    ids.MANDAT.size > 0
+      ? prisma.mandat.findMany({ where: { id: { in: [...ids.MANDAT] } }, select: { id: true, titrePoste: true } })
+      : [],
+  ]);
+
+  const nameMap: Record<string, string> = {};
+  for (const c of candidats) nameMap[c.id] = `${c.prenom || ''} ${c.nom}`.trim();
+  for (const c of clients) nameMap[c.id] = `${c.prenom || ''} ${c.nom}`.trim();
+  for (const e of entreprises) nameMap[e.id] = e.nom;
+  for (const m of mandats) nameMap[m.id] = m.titrePoste;
+
+  return tasks.map((t) => ({
+    ...t,
+    entiteNom: (t.entiteId && nameMap[t.entiteId]) || null,
+  }));
 }

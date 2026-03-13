@@ -306,14 +306,25 @@ export default function CandidatsPage() {
         toast('success', `${selected.length} candidat(s) exporté(s)`);
         break;
       }
-      case 'email':
-        toast('info', `Action email groupé pour ${selected.length} candidat(s) — bientôt disponible`);
+      case 'email': {
+        const emails = selected
+          .map((c) => c.email)
+          .filter((e): e is string => !!e);
+        if (emails.length === 0) {
+          toast('error', 'Aucun candidat sélectionné n\'a d\'email');
+          break;
+        }
+        // Open mailto with BCC for privacy
+        const mailto = `mailto:?bcc=${emails.join(',')}`;
+        window.open(mailto, '_blank');
+        toast('success', `Email groupé ouvert pour ${emails.length} candidat(s)`);
         break;
+      }
       case 'sequence':
         toast('info', `Lancer séquence pour ${selected.length} candidat(s) — bientôt disponible`);
         break;
       case 'stage':
-        toast('info', `Changement d'étape pour ${selected.length} candidat(s) — bientôt disponible`);
+        toast('info', `Changement d'étape groupé pour ${selected.length} candidat(s) — bientôt disponible`);
         break;
       default:
         break;

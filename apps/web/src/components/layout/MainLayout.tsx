@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, LogOut, CalendarPlus, Check, Copy, Mail, X, Users, Building2 } from 'lucide-react';
 import Sidebar from '../ui/Sidebar';
 import SearchBar from '../ui/SearchBar';
+import EntityPreview from '../ui/EntityPreview';
 import Avatar from '../ui/Avatar';
 import Dropdown from '../ui/Dropdown';
 import { toast, ToastContainer } from '../ui/Toast';
@@ -36,6 +37,9 @@ export default function MainLayout() {
   const [bookingPanelOpen, setBookingPanelOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const { showHelp, setShowHelp, shortcuts } = useKeyboardShortcuts();
+
+  // Entity preview state (SlideOver)
+  const [previewEntity, setPreviewEntity] = useState<{ type: string; id: string } | null>(null);
 
   // Fetch booking types
   const { data: bookingData } = useQuery({
@@ -78,6 +82,7 @@ export default function MainLayout() {
         type: item.type,
         title: item.title,
         subtitle: item.subtitle,
+        extra: item.extra,
       }));
     } catch {
       return [];
@@ -85,13 +90,8 @@ export default function MainLayout() {
   };
 
   const handleSearchSelect = (result: { id: string; type: string }) => {
-    const routes: Record<string, string> = {
-      candidat: '/candidats',
-      client: '/clients',
-      entreprise: '/entreprises',
-      mandat: '/mandats',
-    };
-    navigate(`${routes[result.type] || '/'}/${result.id}`);
+    // Open entity preview SlideOver instead of navigating
+    setPreviewEntity({ type: result.type, id: result.id });
   };
 
   const handleSearchCreate = useCallback((type: string, prefill: string) => {
@@ -329,6 +329,14 @@ export default function MainLayout() {
           </div>
         </div>
       )}
+
+      {/* Entity Preview SlideOver (from search results) */}
+      <EntityPreview
+        isOpen={!!previewEntity}
+        onClose={() => setPreviewEntity(null)}
+        entityType={previewEntity?.type || null}
+        entityId={previewEntity?.id || null}
+      />
 
       <ToastContainer />
     </div>

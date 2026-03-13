@@ -89,6 +89,29 @@ export async function getById(id: string) {
     where: { id },
     include: {
       _count: { select: { clients: true, mandats: true } },
+      clients: {
+        select: {
+          id: true,
+          nom: true,
+          prenom: true,
+          email: true,
+          telephone: true,
+          poste: true,
+        },
+        take: 20,
+        orderBy: { createdAt: 'desc' },
+      },
+      mandats: {
+        select: {
+          id: true,
+          titrePoste: true,
+          statut: true,
+          createdAt: true,
+          _count: { select: { candidatures: true } },
+        },
+        take: 20,
+        orderBy: { createdAt: 'desc' },
+      },
     },
   });
 
