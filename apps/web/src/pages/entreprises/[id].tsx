@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Globe, MapPin, Linkedin, Users, FileText, Pencil, Trash2, Save, X } from 'lucide-react';
+import { ArrowLeft, Globe, MapPin, Linkedin, Users, FileText, Pencil, Trash2, Save, X, Building } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
@@ -25,6 +25,7 @@ interface EntrepriseDetail {
   taille: TailleEntreprise | null;
   localisation: string | null;
   linkedinUrl: string | null;
+  logoUrl: string | null;
   notes: string | null;
   _count?: { clients: number; mandats: number };
   createdAt: string;
@@ -201,7 +202,23 @@ export default function EntrepriseDetailPage() {
   return (
     <div>
       <PageHeader
-        title={entreprise.nom}
+        title={
+          <div className="flex items-center gap-3">
+            {entreprise.logoUrl ? (
+              <img
+                src={entreprise.logoUrl}
+                alt={entreprise.nom}
+                className="h-10 w-10 rounded-lg object-contain border border-neutral-100 bg-white p-0.5"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-neutral-50 border border-neutral-100">
+                <Building size={20} className="text-neutral-400" />
+              </div>
+            )}
+            <span>{entreprise.nom}</span>
+          </div>
+        }
         breadcrumbs={[
           { label: 'Entreprises', href: '/entreprises' },
           { label: entreprise.nom },

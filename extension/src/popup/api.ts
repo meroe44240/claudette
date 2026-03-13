@@ -165,6 +165,7 @@ export interface CreateEntreprisePayload {
   taille?: string;
   localisation?: string;
   linkedinUrl?: string;
+  logoUrl?: string;
   notes?: string;
 }
 

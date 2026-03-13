@@ -47,6 +47,7 @@ interface CompanyData {
   localisation: string;
   linkedinUrl: string;
   siteWeb: string;
+  logoUrl: string;
 }
 
 type PageData = PersonData | CompanyData | { type: 'unknown' };
@@ -781,6 +782,7 @@ function CompanyView({ data }: { data: CompanyData }) {
         taille: mapTaille(taille),
         localisation: localisation.trim() || undefined,
         linkedinUrl: data.linkedinUrl,
+        logoUrl: data.logoUrl || undefined,
         notes: notes.trim() || undefined,
       };
       const result = await createEntreprise(payload);

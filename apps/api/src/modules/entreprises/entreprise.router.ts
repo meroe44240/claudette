@@ -55,6 +55,7 @@ export default async function entrepriseRouter(fastify: FastifyInstance) {
           taille: { type: 'string', enum: ['STARTUP', 'PME', 'ETI', 'GRAND_GROUPE'] },
           localisation: { type: 'string' },
           linkedinUrl: { type: 'string' },
+          logoUrl: { type: 'string' },
           notes: { type: 'string' },
         },
       },
@@ -129,6 +130,7 @@ export default async function entrepriseRouter(fastify: FastifyInstance) {
           taille: { type: 'string', enum: ['STARTUP', 'PME', 'ETI', 'GRAND_GROUPE'] },
           localisation: { type: 'string' },
           linkedinUrl: { type: 'string' },
+          logoUrl: { type: 'string' },
           notes: { type: 'string' },
         },
       },
@@ -159,6 +161,19 @@ export default async function entrepriseRouter(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
       await entrepriseService.remove(id);
       return { message: 'Entreprise supprimee' };
+    },
+  });
+
+  // POST /backfill-logos - Remplir les logos manquants (one-shot)
+  fastify.post('/backfill-logos', {
+    schema: {
+      description: 'Backfill logos pour les entreprises ayant un siteWeb mais pas de logoUrl',
+      tags: ['Entreprises'],
+    },
+    preHandler: [authenticate, requireRole('ADMIN')],
+    handler: async (request, reply) => {
+      const count = await entrepriseService.backfillLogos();
+      return { message: `${count} logos mis a jour` };
     },
   });
 

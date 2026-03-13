@@ -28,6 +28,7 @@ interface Entreprise {
   taille: TailleEntreprise | null;
   localisation: string | null;
   linkedinUrl: string | null;
+  logoUrl: string | null;
   _count?: { clients: number; mandats: number };
 }
 
@@ -65,6 +66,22 @@ const listItem = {
 };
 
 type ViewMode = 'grid' | 'table';
+
+function CompanyLogo({ src, name, size = 11 }: { src: string | null; name: string; size?: number }) {
+  const [imgError, setImgError] = useState(false);
+  if (src && !imgError) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        className={`h-${size} w-${size} object-contain p-0.5`}
+        style={{ height: size * 4, width: size * 4 }}
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+  return <Building size={size < 11 ? 18 : 20} className="text-neutral-500" />;
+}
 
 // ── Filter options ──────────────────────────────────────────────
 const SECTOR_OPTIONS = [
@@ -274,8 +291,8 @@ export default function EntreprisesPage() {
       header: (<SortableHeader label="Nom" sortKey="nom" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
       render: (r: Entreprise) => (
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-50">
-            <Building size={18} className="text-neutral-400" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-50 overflow-hidden">
+            <CompanyLogo src={r.logoUrl} name={r.nom} size={10} />
           </div>
           <span className="font-medium">{r.nom}</span>
         </div>
@@ -340,8 +357,8 @@ export default function EntreprisesPage() {
               onClick={(e) => e.stopPropagation()}
               className="mt-1 h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
             />
-            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-neutral-100 to-neutral-50 border border-neutral-100">
-              <Building size={20} className="text-neutral-500" />
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-neutral-100 to-neutral-50 border border-neutral-100 overflow-hidden">
+              <CompanyLogo src={entreprise.logoUrl} name={entreprise.nom} />
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[16px] font-semibold text-neutral-900">

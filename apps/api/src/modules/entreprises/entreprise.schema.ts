@@ -7,6 +7,7 @@ export const createEntrepriseSchema = z.object({
   taille: z.enum(['STARTUP', 'PME', 'ETI', 'GRAND_GROUPE']).optional(),
   localisation: z.string().optional(),
   linkedinUrl: z.string().optional(),
+  logoUrl: z.string().optional(),
   notes: z.string().optional(),
 });
 

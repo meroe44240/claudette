@@ -69,6 +69,7 @@ model Entreprise {
   taille       TailleEntreprise?
   localisation String?           @db.VarChar(255)
   linkedinUrl  String?           @db.VarChar(500)
+  logoUrl      String?           @db.VarChar(1000)
   notes        String?           @db.Text
   createdById  String?           @db.Uuid
   createdBy    User?             @relation("EntrepriseCreatedBy", fields: [createdById], references: [id])

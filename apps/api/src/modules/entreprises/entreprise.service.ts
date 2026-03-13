@@ -7,6 +7,20 @@ import {
 } from '../../lib/pagination.js';
 import type { CreateEntrepriseInput, UpdateEntrepriseInput } from './entreprise.schema.js';
 
+/**
+ * Generate a logo URL from a website URL using Clearbit Logo API.
+ * Returns null if the URL is invalid.
+ */
+function generateLogoUrl(siteWeb: string): string | null {
+  try {
+    const hostname = new URL(siteWeb.startsWith('http') ? siteWeb : `https://${siteWeb}`).hostname;
+    if (!hostname || hostname === 'localhost') return null;
+    return `https://logo.clearbit.com/${hostname}`;
+  } catch {
+    return null;
+  }
+}
+
 export async function list(
   params: PaginationParams,
   search?: string,
@@ -74,6 +88,12 @@ export async function getById(id: string) {
 }
 
 export async function create(data: CreateEntrepriseInput, createdById: string) {
+  // Auto-generate logo URL from siteWeb if not provided
+  if (data.siteWeb && !data.logoUrl) {
+    const logo = generateLogoUrl(data.siteWeb);
+    if (logo) data.logoUrl = logo;
+  }
+
   return prisma.entreprise.create({
     data: {
       ...data,
@@ -85,6 +105,12 @@ export async function create(data: CreateEntrepriseInput, createdById: string) {
 export async function update(id: string, data: UpdateEntrepriseInput) {
   const existing = await prisma.entreprise.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError('Entreprise', id);
+
+  // Auto-generate logo URL if siteWeb changed and no logoUrl provided
+  if (data.siteWeb && !data.logoUrl && !existing.logoUrl) {
+    const logo = generateLogoUrl(data.siteWeb);
+    if (logo) data.logoUrl = logo;
+  }
 
   return prisma.entreprise.update({
     where: { id },
@@ -221,4 +247,28 @@ export async function getStats(id: string) {
     nombrePlacements,
     feeMoyen,
   };
+}
+
+export async function backfillLogos() {
+  const entreprises = await prisma.entreprise.findMany({
+    where: {
+      siteWeb: { not: null },
+      logoUrl: null,
+    },
+    select: { id: true, siteWeb: true },
+  });
+
+  let count = 0;
+  for (const ent of entreprises) {
+    if (!ent.siteWeb) continue;
+    const logo = generateLogoUrl(ent.siteWeb);
+    if (logo) {
+      await prisma.entreprise.update({
+        where: { id: ent.id },
+        data: { logoUrl: logo },
+      });
+      count++;
+    }
+  }
+  return count;
 }
