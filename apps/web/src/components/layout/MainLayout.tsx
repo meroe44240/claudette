@@ -94,6 +94,16 @@ export default function MainLayout() {
     navigate(`${routes[result.type] || '/'}/${result.id}`);
   };
 
+  const handleSearchCreate = useCallback((type: string, prefill: string) => {
+    const routes: Record<string, string> = {
+      candidat: '/candidats/new',
+      entreprise: '/entreprises/new',
+      client: '/clients/new',
+    };
+    const url = routes[type];
+    if (url) navigate(`${url}?prefill=${encodeURIComponent(prefill)}`);
+  }, [navigate]);
+
   return (
     <div className="flex h-screen app-bg">
       <Sidebar isAdmin={user?.role === 'ADMIN'} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(c => !c)} />
@@ -104,6 +114,7 @@ export default function MainLayout() {
             <SearchBar
               onSearch={handleSearch}
               onSelect={handleSearchSelect}
+              onCreate={handleSearchCreate}
               placeholder="Rechercher candidats, clients, mandats... (Ctrl+K)"
             />
           </div>

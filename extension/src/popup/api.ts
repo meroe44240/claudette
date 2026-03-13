@@ -209,12 +209,24 @@ export interface Mandat {
 }
 
 export async function fetchMandats(): Promise<Mandat[]> {
-  const res = await apiFetch('/mandats?perPage=100&statut=EN_COURS');
-  if (!res.ok) {
+  // Fetch both OUVERT and EN_COURS mandats
+  const [res1, res2] = await Promise.all([
+    apiFetch('/mandats?perPage=100&statut=EN_COURS'),
+    apiFetch('/mandats?perPage=100&statut=OUVERT'),
+  ]);
+  if (!res1.ok && !res2.ok) {
     throw new Error('Erreur lors du chargement des mandats');
   }
-  const data = await res.json();
-  return data.data || data;
+  const data1 = res1.ok ? await res1.json() : { data: [] };
+  const data2 = res2.ok ? await res2.json() : { data: [] };
+  const all = [...(data1.data || []), ...(data2.data || [])];
+  // Deduplicate by id
+  const seen = new Set<string>();
+  return all.filter((m: Mandat) => {
+    if (seen.has(m.id)) return false;
+    seen.add(m.id);
+    return true;
+  });
 }
 
 // --- Candidatures ---

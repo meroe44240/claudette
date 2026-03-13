@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Megaphone, Sparkles, Loader2, ChevronDown, ChevronUp, Plus, AlertTriangle, ClipboardList, MessageSquare, Target, Copy, Zap, Star } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Megaphone, Sparkles, Loader2, ChevronDown, ChevronUp, Plus, AlertTriangle, ClipboardList, MessageSquare, Target, Copy, Zap, Star, Search } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
@@ -523,6 +523,11 @@ export default function MandatDetailPage() {
   const [bookingCopied, setBookingCopied] = useState(false);
   const [showMatching, setShowMatching] = useState(false);
   const [matchResults, setMatchResults] = useState<AiMatch[]>([]);
+  const [showAddCandidat, setShowAddCandidat] = useState(false);
+  const [candidatSearch, setCandidatSearch] = useState('');
+  const [candidatResults, setCandidatResults] = useState<{ id: string; nom: string; prenom: string | null; posteActuel: string | null; entrepriseActuelle: string | null }[]>([]);
+  const [candidatSearchLoading, setCandidatSearchLoading] = useState(false);
+  const addCandidatDropdownRef = useRef<HTMLDivElement>(null);
 
   // Fetch booking settings to get current user's slug
   const { data: bookingSettings } = useQuery({
@@ -586,6 +591,59 @@ export default function MandatDetailPage() {
       toast('error', error?.message || 'Erreur lors du matching IA');
     },
   });
+
+  // --- Add candidat to mandat ---
+  const existingCandidatIds = new Set(mandat?.candidatures.map((c) => c.candidat.id) || []);
+
+  const addCandidatMutation = useMutation({
+    mutationFn: (candidatId: string) =>
+      api.post('/candidatures', { candidatId, mandatId: id, stage: 'SOURCING' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mandat', id] });
+      toast('success', 'Candidat ajouté au mandat !');
+      setShowAddCandidat(false);
+      setCandidatSearch('');
+      setCandidatResults([]);
+    },
+    onError: (error: any) => {
+      toast('error', error.message || 'Erreur lors de l\'ajout');
+    },
+  });
+
+  // Search candidats with debounce
+  useEffect(() => {
+    if (!candidatSearch || candidatSearch.length < 2) {
+      setCandidatResults([]);
+      return;
+    }
+    setCandidatSearchLoading(true);
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await api.get<{ data: any[] }>(`/candidats?search=${encodeURIComponent(candidatSearch)}&perPage=10`);
+        const results = (res.data || []).filter((c: any) => !existingCandidatIds.has(c.id));
+        setCandidatResults(results);
+      } catch {
+        setCandidatResults([]);
+      } finally {
+        setCandidatSearchLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [candidatSearch]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showAddCandidat) return;
+    const handler = (e: MouseEvent) => {
+      if (addCandidatDropdownRef.current && !addCandidatDropdownRef.current.contains(e.target as Node)) {
+        setShowAddCandidat(false);
+        setCandidatSearch('');
+        setCandidatResults([]);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showAddCandidat]);
 
   const handleStartEdit = () => {
     if (mandat) {
@@ -864,9 +922,74 @@ export default function MandatDetailPage() {
           </Card>
 
           <Card>
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">
-              Candidatures ({mandat.candidatures.length})
-            </h2>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-text-primary">
+                Candidatures ({mandat.candidatures.length})
+              </h2>
+              <div className="relative" ref={addCandidatDropdownRef}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => { setShowAddCandidat(!showAddCandidat); setCandidatSearch(''); setCandidatResults([]); }}
+                >
+                  <Plus size={14} /> Ajouter un candidat
+                </Button>
+
+                <AnimatePresence>
+                  {showAddCandidat && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-border bg-white shadow-xl"
+                    >
+                      <div className="p-2">
+                        <div className="relative">
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                          <input
+                            autoFocus
+                            type="text"
+                            value={candidatSearch}
+                            onChange={(e) => setCandidatSearch(e.target.value)}
+                            placeholder="Rechercher un candidat..."
+                            className="w-full rounded-lg border border-border bg-neutral-50 py-2 pl-9 pr-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="max-h-56 overflow-y-auto px-1 pb-1">
+                        {candidatSearchLoading ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 size={16} className="animate-spin text-neutral-400" />
+                          </div>
+                        ) : candidatSearch.length < 2 ? (
+                          <p className="px-3 py-4 text-center text-xs text-neutral-400">Tapez au moins 2 caractères</p>
+                        ) : candidatResults.length === 0 ? (
+                          <p className="px-3 py-4 text-center text-sm text-neutral-400">Aucun résultat</p>
+                        ) : (
+                          candidatResults.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              disabled={addCandidatMutation.isPending}
+                              onClick={() => addCandidatMutation.mutate(c.id)}
+                              className="w-full rounded-lg px-3 py-2.5 text-left hover:bg-primary-50 transition-colors group disabled:opacity-50"
+                            >
+                              <p className="text-sm font-medium text-text-primary group-hover:text-primary-700">
+                                {c.prenom} {c.nom}
+                              </p>
+                              <p className="text-xs text-text-secondary">
+                                {[c.posteActuel, c.entrepriseActuelle].filter(Boolean).join(' @ ') || 'Aucun poste'}
+                              </p>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
             {mandat.candidatures.length === 0 ? (
               <p className="text-sm text-text-secondary">Aucun candidat associé pour le moment.</p>
             ) : (

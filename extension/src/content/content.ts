@@ -520,15 +520,52 @@ function nameFromUrlSlug(): string {
 
 function extractAllExperiences(): ExperienceData[] {
   const experiences: ExperienceData[] = [];
+
+  // Strategy 1: Find section via #experience anchor
+  let section: Element | null = null;
   const experienceAnchor = document.querySelector('#experience');
-  if (!experienceAnchor) return experiences;
+  if (experienceAnchor) {
+    section = experienceAnchor.closest('section') || experienceAnchor.parentElement?.parentElement || null;
+  }
 
-  const section = experienceAnchor.closest('section') || experienceAnchor.parentElement?.parentElement;
-  if (!section) return experiences;
+  // Strategy 2: Find experience section by aria-label or heading text
+  if (!section) {
+    const allSections = document.querySelectorAll('main section');
+    for (const sec of allSections) {
+      const heading = sec.querySelector('h2, [role="heading"]');
+      const text = heading?.textContent?.trim().toLowerCase() || '';
+      if (text.includes('experience') || text.includes('expérience') || text.includes('exp\u00e9rience')) {
+        section = sec;
+        break;
+      }
+    }
+  }
 
+  // Strategy 3: Find by data attributes or class patterns
+  if (!section) {
+    const anchors = document.querySelectorAll('[id*="experience"], [data-section="experience"]');
+    for (const anchor of anchors) {
+      const sec = anchor.closest('section');
+      if (sec) { section = sec; break; }
+    }
+  }
+
+  if (!section) {
+    console.log('[HumanUp] No experience section found in DOM');
+    return experiences;
+  }
+
+  console.log('[HumanUp] Experience section found, extracting...');
+
+  // Get all list items in the experience section
   const listItems = section.querySelectorAll('li.pvs-list__paged-list-item');
 
-  for (const item of listItems) {
+  // Fallback: try broader selector if the specific one yields nothing
+  const items = listItems.length > 0
+    ? listItems
+    : section.querySelectorAll('li[class*="pvs-list"], li[class*="artdeco-list"]');
+
+  for (const item of items) {
     const nestedList = item.querySelector('ul, .pvs-list__container');
 
     if (nestedList) {
@@ -542,10 +579,16 @@ function extractAllExperiences(): ExperienceData[] {
         const companyLink = item.querySelector(':scope > div a[href*="/company/"] span[aria-hidden="true"]');
         if (companyLink?.textContent?.trim()) companyName = companyLink.textContent.trim();
       }
+      // Fallback: any bold text at top level
+      if (!companyName) {
+        const anyBold = item.querySelector(':scope > div [class*="bold"] span');
+        if (anyBold?.textContent?.trim()) companyName = anyBold.textContent.trim();
+      }
 
       const nestedItems = nestedList.querySelectorAll('li');
       for (const nestedItem of nestedItems) {
-        const roleTitle = nestedItem.querySelector('.t-bold span[aria-hidden="true"]');
+        const roleTitle = nestedItem.querySelector('.t-bold span[aria-hidden="true"]')
+          || nestedItem.querySelector('[class*="bold"] span');
         const titre = roleTitle?.textContent?.trim() || '';
         if (!titre) continue;
 
@@ -559,11 +602,18 @@ function extractAllExperiences(): ExperienceData[] {
       }
     } else {
       // Single role layout
-      const boldSpans = item.querySelectorAll('.t-bold span[aria-hidden="true"]');
       let titre = '';
+      const boldSpans = item.querySelectorAll('.t-bold span[aria-hidden="true"]');
       for (const span of boldSpans) {
         const text = clean(span.textContent || '');
         if (text && text.length >= 2) { titre = text; break; }
+      }
+      // Fallback: any bold-like span
+      if (!titre) {
+        const anyBold = item.querySelector('[class*="bold"] span');
+        if (anyBold?.textContent?.trim() && anyBold.textContent.trim().length >= 2) {
+          titre = anyBold.textContent.trim();
+        }
       }
       if (!titre) continue;
 
@@ -591,29 +641,56 @@ function extractAllExperiences(): ExperienceData[] {
     }
   }
 
+  console.log(`[HumanUp] Extracted ${experiences.length} experiences`);
   return experiences;
 }
 
 function extractDatesFromItem(item: Element): { anneeDebut: number | null; anneeFin: number | null } {
   // Look for date-like text: "janv. 2020 - présent", "2018 - 2021", etc.
-  const dateTexts = item.querySelectorAll('.t-14.t-normal.t-black--light span[aria-hidden="true"], .pvs-entity__caption-wrapper span[aria-hidden="true"]');
-  for (const el of dateTexts) {
-    const text = clean(el.textContent || '');
-    // Match patterns like "janv. 2020 - mai 2023" or "2020 - Present"
-    const yearMatches = text.match(/\b(20\d{2}|19\d{2})\b/g);
-    if (yearMatches && yearMatches.length >= 1) {
-      const anneeDebut = parseInt(yearMatches[0], 10);
-      let anneeFin: number | null = null;
-      if (yearMatches.length >= 2) {
-        anneeFin = parseInt(yearMatches[yearMatches.length - 1], 10);
+  // Use multiple selector strategies for robustness
+  const dateSelectors = [
+    '.t-14.t-normal.t-black--light span[aria-hidden="true"]',
+    '.pvs-entity__caption-wrapper span[aria-hidden="true"]',
+    '[class*="black--light"] span[aria-hidden="true"]',
+    '.t-14 span[aria-hidden="true"]',
+  ];
+
+  for (const sel of dateSelectors) {
+    const dateTexts = item.querySelectorAll(sel);
+    for (const el of dateTexts) {
+      const text = clean(el.textContent || '');
+      // Match patterns like "janv. 2020 - mai 2023" or "2020 - Present"
+      const yearMatches = text.match(/\b(20\d{2}|19\d{2})\b/g);
+      if (yearMatches && yearMatches.length >= 1) {
+        const anneeDebut = parseInt(yearMatches[0], 10);
+        let anneeFin: number | null = null;
+        if (yearMatches.length >= 2) {
+          anneeFin = parseInt(yearMatches[yearMatches.length - 1], 10);
+        }
+        // If "présent" or "present" or "aujourd'hui" is mentioned, anneeFin = null (current)
+        if (/pr[eé]sent|present|aujourd|current|actuel/i.test(text)) {
+          anneeFin = null;
+        }
+        return { anneeDebut, anneeFin };
       }
-      // If "présent" or "present" or "aujourd'hui" is mentioned, anneeFin = null (current)
-      if (/pr[eé]sent|present|aujourd|current|actuel/i.test(text)) {
-        anneeFin = null;
-      }
-      return { anneeDebut, anneeFin };
     }
   }
+
+  // Fallback: scan all text content in the item for year patterns
+  const allText = item.textContent || '';
+  const yearMatches = allText.match(/\b(20\d{2}|19\d{2})\b/g);
+  if (yearMatches && yearMatches.length >= 1) {
+    const anneeDebut = parseInt(yearMatches[0], 10);
+    let anneeFin: number | null = null;
+    if (yearMatches.length >= 2) {
+      anneeFin = parseInt(yearMatches[yearMatches.length - 1], 10);
+    }
+    if (/pr[eé]sent|present|aujourd|current|actuel/i.test(allText)) {
+      anneeFin = null;
+    }
+    return { anneeDebut, anneeFin };
+  }
+
   return { anneeDebut: null, anneeFin: null };
 }
 

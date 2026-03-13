@@ -246,7 +246,7 @@ export default function CandidatDetailPage() {
 
   const addToMandatMutation = useMutation({
     mutationFn: (mandatId: string) =>
-      api.post('/candidatures', { candidatId: id, mandatId, stage: 'SOURCED' }),
+      api.post('/candidatures', { candidatId: id, mandatId, stage: 'SOURCING' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['candidat', id] });
       toast('success', 'Candidat ajouté au mandat !');

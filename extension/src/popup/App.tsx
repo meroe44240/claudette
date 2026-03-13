@@ -276,6 +276,7 @@ function ProfileView({ data }: { data: PersonData }) {
   const [mandats, setMandats] = useState<Mandat[]>([]);
   const [mandatsLoading, setMandatsLoading] = useState(false);
   const [selectedMandatId, setSelectedMandatId] = useState('');
+  const [selectedStage, setSelectedStage] = useState('SOURCING');
 
   // Client-specific
   const [mode, setMode] = useState<'candidat' | 'client' | null>(null);
@@ -363,10 +364,16 @@ function ProfileView({ data }: { data: PersonData }) {
           await createCandidature({
             candidatId: result.id,
             mandatId: selectedMandatId,
-            stage: 'SOURCING',
+            stage: selectedStage,
           });
-        } catch {
-          // Candidature may already exist (duplicate), that's ok
+        } catch (candidatureErr) {
+          // Show error unless it's a duplicate (which is ok)
+          const msg = candidatureErr instanceof Error ? candidatureErr.message : '';
+          if (!msg.includes('deja associe') && !msg.includes('already')) {
+            setError(`Candidat créé, mais erreur pipeline : ${msg || 'Erreur inconnue'}`);
+            setSuccess({ type: 'candidat', id: result.id, updated: result._updated });
+            return;
+          }
         }
       }
 
@@ -577,6 +584,7 @@ function ProfileView({ data }: { data: PersonData }) {
 
         {/* Mandat selector (visible in default/candidat mode) */}
         {mode !== 'client' && (
+          <>
           <div className="form-group">
             <label>Associer \u00e0 un mandat (optionnel)</label>
             {mandatsLoading ? (
@@ -597,6 +605,25 @@ function ProfileView({ data }: { data: PersonData }) {
               </select>
             )}
           </div>
+
+            {/* Stage selector — shown when a mandat is selected */}
+            {selectedMandatId && (
+              <div className="form-group">
+                <label>{'\u00c9'}tape du pipeline</label>
+                <select
+                  value={selectedStage}
+                  onChange={(e) => setSelectedStage(e.target.value)}
+                >
+                  <option value="SOURCING">Sourcing</option>
+                  <option value="CONTACTE">Contact{'\u00e9'}</option>
+                  <option value="ENTRETIEN_1">Entretien 1</option>
+                  <option value="ENTRETIEN_CLIENT">Entretien Client</option>
+                  <option value="OFFRE">Offre</option>
+                  <option value="PLACE">Plac{'\u00e9'}</option>
+                </select>
+              </div>
+            )}
+          </>
         )}
 
         {/* Client mode: entreprise selector */}
