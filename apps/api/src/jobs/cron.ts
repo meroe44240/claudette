@@ -383,6 +383,44 @@ async function processBookingReminders(): Promise<void> {
   }
 }
 
+// ─── ALLO AUTO-SYNC ────────────────────────────────
+
+async function runAlloSync(): Promise<void> {
+  try {
+    const { default: prisma } = await import('../lib/db.js');
+
+    // Find all users with Allo integration enabled
+    const alloConfigs = await prisma.integrationConfig.findMany({
+      where: { provider: 'allo', enabled: true },
+      select: { userId: true },
+    });
+
+    if (alloConfigs.length === 0) return;
+
+    const { syncCalls, autoProcessTranscripts } = await import(
+      '../modules/integrations/allo.service.js'
+    );
+
+    for (const config of alloConfigs) {
+      try {
+        const result = await syncCalls(config.userId);
+        if (result.status === 'completed' && result.synced && result.synced > 0) {
+          console.log(
+            `[Cron] Allo sync (user ${config.userId}): ${result.synced} synced, ${result.message}`,
+          );
+        }
+
+        // Auto-process any new transcripts
+        await autoProcessTranscripts(config.userId);
+      } catch (err: any) {
+        console.error(`[Cron] Allo sync failed for user ${config.userId}:`, err.message);
+      }
+    }
+  } catch (error) {
+    console.error('[Cron] Error in Allo sync:', error);
+  }
+}
+
 // ─── DRIVE TRANSCRIPT SCAN ──────────────────────────
 
 async function runDriveTranscriptScan(): Promise<void> {
@@ -452,6 +490,10 @@ export function startCronJobs(): void {
   const driveTranscriptInterval = setInterval(runDriveTranscriptScan, 15 * 60 * 1000);
   intervals.push(driveTranscriptInterval);
 
+  // Allo auto-sync every 10 minutes
+  const alloSyncInterval = setInterval(runAlloSync, 10 * 60 * 1000);
+  intervals.push(alloSyncInterval);
+
   console.log('[Cron] Scheduled jobs started:');
   console.log('  - Slack daily report: checked every 60s (sends Mon-Fri at configured time, Europe/Paris)');
   console.log('  - Calendar AI analysis: every 30 minutes');
@@ -459,6 +501,7 @@ export function startCronJobs(): void {
   console.log('  - Booking reminders: checked every 60s (day-before + 1h-before emails)');
   console.log('  - Email auto-create: every 15 minutes (perso → candidat, pro → client)');
   console.log('  - Drive transcript scan: every 15 minutes (new transcripts/CR)');
+  console.log('  - Allo auto-sync: every 10 minutes (calls + transcripts)');
 }
 
 export function stopCronJobs(): void {

@@ -20,6 +20,7 @@ export default async function activiteRouter(fastify: FastifyInstance) {
           type: { type: 'string' },
           source: { type: 'string' },
           bookmarked: { type: 'string' },
+          search: { type: 'string' },
         },
       },
     },
@@ -34,6 +35,7 @@ export default async function activiteRouter(fastify: FastifyInstance) {
       if (query.type) filters.type = query.type;
       if (query.source) filters.source = query.source;
       if (query.bookmarked !== undefined) filters.bookmarked = query.bookmarked === 'true';
+      if (query.search) filters.search = query.search;
 
       return activiteService.list(params, filters);
     },

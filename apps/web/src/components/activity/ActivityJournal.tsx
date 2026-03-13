@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Phone, Mail, Send, MailOpen, Calendar, FileText, StickyNote, ListChecks, CheckCircle, Mic, Star, Plus, Loader2, ArrowRight, Zap, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -107,6 +107,7 @@ const TABS = [
   { id: 'EMAIL', label: 'Emails' },
   { id: 'MEETING', label: 'Meetings' },
   { id: 'NOTE', label: 'Notes' },
+  { id: 'TRANSCRIPT', label: '🎙️ Transcripts', source: 'ALLO' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -187,7 +188,18 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
     },
   });
 
+  // -- Debounced search --
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // -- Query --
+  const activeTabConfig = TABS.find((t) => t.id === activeTab);
   const filters = new URLSearchParams({
     entiteType,
     entiteId,
@@ -195,10 +207,12 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
     perPage: '20',
   });
   if (activeTab !== 'all') filters.set('type', activeTab);
+  if (activeTabConfig?.source) filters.set('source', activeTabConfig.source);
   if (bookmarkedOnly) filters.set('bookmarked', 'true');
+  if (debouncedSearch.trim()) filters.set('search', debouncedSearch.trim());
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['activites', entiteType, entiteId, page, activeTab, bookmarkedOnly],
+    queryKey: ['activites', entiteType, entiteId, page, activeTab, bookmarkedOnly, debouncedSearch],
     queryFn: () => api.get<PaginatedResponse>(`/activites?${filters}`),
   });
 
@@ -303,6 +317,26 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
             {tab.label}
           </button>
         ))}
+      </div>
+
+      {/* Search bar */}
+      <div className="mb-4 relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Rechercher dans les activités..."
+          className="w-full rounded-xl border border-neutral-200 bg-white py-2.5 pl-9 pr-4 text-[14px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 transition-colors"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       {/* Quick note input */}

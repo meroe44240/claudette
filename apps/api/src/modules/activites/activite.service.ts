@@ -13,6 +13,7 @@ interface ListFilters {
   isTache?: boolean;
   tacheCompleted?: boolean;
   userId?: string;
+  search?: string;
 }
 
 export async function list(params: PaginationParams, filters: ListFilters) {
@@ -26,6 +27,13 @@ export async function list(params: PaginationParams, filters: ListFilters) {
   if (filters.isTache !== undefined) where.isTache = filters.isTache;
   if (filters.tacheCompleted !== undefined) where.tacheCompleted = filters.tacheCompleted;
   if (filters.userId) where.userId = filters.userId;
+
+  if (filters.search) {
+    where.OR = [
+      { titre: { contains: filters.search, mode: 'insensitive' } },
+      { contenu: { contains: filters.search, mode: 'insensitive' } },
+    ];
+  }
 
   const { skip, take } = paginationToSkipTake(params);
 
