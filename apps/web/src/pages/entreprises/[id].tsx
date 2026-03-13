@@ -204,18 +204,26 @@ export default function EntrepriseDetailPage() {
       <PageHeader
         title={
           <div className="flex items-center gap-3">
-            {entreprise.logoUrl ? (
-              <img
-                src={entreprise.logoUrl}
-                alt={entreprise.nom}
-                className="h-10 w-10 rounded-lg object-contain border border-neutral-100 bg-white p-0.5"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
-            ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-neutral-50 border border-neutral-100">
-                <Building size={20} className="text-neutral-400" />
-              </div>
-            )}
+            {(() => {
+              const logoSrc = entreprise.logoUrl || (entreprise.siteWeb ? (() => {
+                try {
+                  const h = new URL(entreprise.siteWeb.startsWith('http') ? entreprise.siteWeb : `https://${entreprise.siteWeb}`).hostname;
+                  return h && h !== 'localhost' ? `https://www.google.com/s2/favicons?domain=${h}&sz=128` : null;
+                } catch { return null; }
+              })() : null);
+              return logoSrc ? (
+                <img
+                  src={logoSrc}
+                  alt={entreprise.nom}
+                  className="h-10 w-10 rounded-lg object-contain border border-neutral-100 bg-white p-0.5"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-neutral-50 border border-neutral-100">
+                  <Building size={20} className="text-neutral-400" />
+                </div>
+              );
+            })()}
             <span>{entreprise.nom}</span>
           </div>
         }

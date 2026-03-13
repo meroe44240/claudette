@@ -67,14 +67,27 @@ const listItem = {
 
 type ViewMode = 'grid' | 'table';
 
-function CompanyLogo({ src, name, size = 11 }: { src: string | null; name: string; size?: number }) {
+function getLogoFromSiteWeb(siteWeb: string | null): string | null {
+  if (!siteWeb) return null;
+  try {
+    const hostname = new URL(siteWeb.startsWith('http') ? siteWeb : `https://${siteWeb}`).hostname;
+    if (!hostname || hostname === 'localhost') return null;
+    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
+  } catch {
+    return null;
+  }
+}
+
+function CompanyLogo({ src, siteWeb, name, size = 11 }: { src: string | null; siteWeb?: string | null; name: string; size?: number }) {
   const [imgError, setImgError] = useState(false);
-  if (src && !imgError) {
+  // Use logoUrl if available, otherwise auto-generate from siteWeb
+  const imgSrc = src || getLogoFromSiteWeb(siteWeb ?? null);
+  if (imgSrc && !imgError) {
     return (
       <img
-        src={src}
+        src={imgSrc}
         alt={name}
-        className={`h-${size} w-${size} object-contain p-0.5`}
+        className="object-contain rounded"
         style={{ height: size * 4, width: size * 4 }}
         onError={() => setImgError(true)}
       />
@@ -292,7 +305,7 @@ export default function EntreprisesPage() {
       render: (r: Entreprise) => (
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-50 overflow-hidden">
-            <CompanyLogo src={r.logoUrl} name={r.nom} size={10} />
+            <CompanyLogo src={r.logoUrl} siteWeb={r.siteWeb} name={r.nom} size={10} />
           </div>
           <span className="font-medium">{r.nom}</span>
         </div>
@@ -358,7 +371,7 @@ export default function EntreprisesPage() {
               className="mt-1 h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
             />
             <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-neutral-100 to-neutral-50 border border-neutral-100 overflow-hidden">
-              <CompanyLogo src={entreprise.logoUrl} name={entreprise.nom} />
+              <CompanyLogo src={entreprise.logoUrl} siteWeb={entreprise.siteWeb} name={entreprise.nom} />
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[16px] font-semibold text-neutral-900">

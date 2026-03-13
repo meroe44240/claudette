@@ -8,17 +8,27 @@ import {
 import type { CreateEntrepriseInput, UpdateEntrepriseInput } from './entreprise.schema.js';
 
 /**
- * Generate a logo URL from a website URL using Clearbit Logo API.
+ * Extract hostname from a website URL.
  * Returns null if the URL is invalid.
  */
-function generateLogoUrl(siteWeb: string): string | null {
+function extractHostname(siteWeb: string): string | null {
   try {
     const hostname = new URL(siteWeb.startsWith('http') ? siteWeb : `https://${siteWeb}`).hostname;
     if (!hostname || hostname === 'localhost') return null;
-    return `https://logo.clearbit.com/${hostname}`;
+    return hostname;
   } catch {
     return null;
   }
+}
+
+/**
+ * Generate a logo URL from a website URL using Google Favicon API.
+ * Returns a 128px favicon for the domain — reliable and free.
+ */
+function generateLogoUrl(siteWeb: string): string | null {
+  const hostname = extractHostname(siteWeb);
+  if (!hostname) return null;
+  return `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
 }
 
 export async function list(
@@ -106,8 +116,9 @@ export async function update(id: string, data: UpdateEntrepriseInput) {
   const existing = await prisma.entreprise.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError('Entreprise', id);
 
-  // Auto-generate logo URL if siteWeb changed and no logoUrl provided
-  if (data.siteWeb && !data.logoUrl && !existing.logoUrl) {
+  // Auto-generate logo URL if siteWeb changed and no logoUrl provided (or old Clearbit URL)
+  const hasBrokenLogo = existing.logoUrl?.includes('logo.clearbit.com');
+  if (data.siteWeb && !data.logoUrl && (!existing.logoUrl || hasBrokenLogo)) {
     const logo = generateLogoUrl(data.siteWeb);
     if (logo) data.logoUrl = logo;
   }
@@ -250,10 +261,15 @@ export async function getStats(id: string) {
 }
 
 export async function backfillLogos() {
+  // Backfill: set logo for entreprises with siteWeb but no logo,
+  // AND replace broken Clearbit URLs from old backfill
   const entreprises = await prisma.entreprise.findMany({
     where: {
       siteWeb: { not: null },
-      logoUrl: null,
+      OR: [
+        { logoUrl: null },
+        { logoUrl: { contains: 'logo.clearbit.com' } },
+      ],
     },
     select: { id: true, siteWeb: true },
   });
