@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,6 +22,9 @@ import Select from '../../components/ui/Select';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { toast } from '../../components/ui/Toast';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
+import DuplicateWarning from '../../components/candidats/DuplicateWarning';
+import { useAutosave } from '../../hooks/useAutosave';
 
 const sourceOptions = [
   { value: '', label: 'Sélectionner...' },
@@ -133,6 +136,23 @@ export default function CandidatNewPage() {
   const [form, setForm] = useState<FormData>(initialForm);
   const [selectedMandatId, setSelectedMandatId] = useState(preselectedMandatId);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
+
+  const isDirty = useMemo(
+    () => Object.keys(initialForm).some((key) => form[key as keyof FormData] !== initialForm[key as keyof FormData]),
+    [form],
+  );
+  const { unsavedChangesModal } = useUnsavedChanges(isDirty);
+
+  // Autosave draft
+  const { restoredData, clearDraft } = useAutosave<FormData>('draft-candidat-new', form);
+
+  useEffect(() => {
+    if (restoredData) {
+      setForm(restoredData);
+      toast('success', 'Brouillon restauré');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // CV parsing state
   const [cvParsed, setCvParsed] = useState<CvParsingResult | null>(null);
@@ -373,6 +393,7 @@ export default function CandidatNewPage() {
         }
       }
 
+      clearDraft();
       toast('success', selectedMandatId ? 'Candidat créé et affilié au mandat' : 'Candidat créé');
       navigate(`/candidats/${created.id}`);
     },
@@ -525,6 +546,7 @@ export default function CandidatNewPage() {
         {/* Form Column */}
         <div className={cvParsed ? 'lg:col-span-2' : ''}>
           <form onSubmit={handleSubmit}>
+            <DuplicateWarning email={form.email} linkedinUrl={form.linkedinUrl} />
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring' as const, stiffness: 260, damping: 25 }}>
             <Card>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -896,6 +918,7 @@ export default function CandidatNewPage() {
           )}
         </AnimatePresence>
       </div>
+      {unsavedChangesModal}
     </div>
   );
 }

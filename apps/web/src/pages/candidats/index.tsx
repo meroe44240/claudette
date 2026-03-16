@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Plus, Search, LayoutGrid, List, MapPin, Building2, Linkedin, Mail, Zap, ArrowRightLeft, Download, Users, Banknote, Clock, Phone, ExternalLink } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { useListNavigation } from '../../hooks/useListNavigation';
+import { usePrefetch } from '../../hooks/usePrefetch';
 import { toast } from '../../components/ui/Toast';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
@@ -160,6 +162,7 @@ export default function CandidatsPage() {
   const [view, setView] = useState<ViewMode>('grid');
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { prefetchOnHover, cancelPrefetch } = usePrefetch();
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
   const handleSort = useCallback((key: string) => {
@@ -278,6 +281,10 @@ export default function CandidatsPage() {
   // ── Data (server-side sorting) ──
   const allCandidats = data?.data ?? [];
   const sortedCandidats = allCandidats; // sorting is now server-side
+
+  const { focusedIndex, setFocusedIndex } = useListNavigation(sortedCandidats.length, {
+    onSelect: (index) => navigate(`/candidats/${sortedCandidats[index].id}`),
+  });
 
   const handleSelectionAction = useCallback((key: string) => {
     const ids = Array.from(selectedIds);
@@ -478,9 +485,11 @@ export default function CandidatsPage() {
     return (
       <div
         onClick={() => navigate(`/candidats/${candidat.id}`)}
+        onMouseEnter={() => prefetchOnHover(['candidat', candidat.id], `/candidats/${candidat.id}`)}
+        onMouseLeave={cancelPrefetch}
         className={`group relative cursor-pointer rounded-xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:border-[#7C5CFC]/30 ${
           isSelected ? 'border-[#7C5CFC] ring-2 ring-[#7C5CFC]/20 shadow-md' : 'border-neutral-100 shadow-sm'
-        }`}
+        } ${focusedIndex === index ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}`}
       >
         <div className="flex items-center gap-4 px-4 py-3">
           {/* Checkbox */}
@@ -702,6 +711,9 @@ export default function CandidatsPage() {
               data={sortedCandidats}
               keyExtractor={(r) => r.id}
               onRowClick={(r) => navigate(`/candidats/${r.id}`)}
+              onRowMouseEnter={(r) => prefetchOnHover(['candidat', r.id], `/candidats/${r.id}`)}
+              onRowMouseLeave={cancelPrefetch}
+              rowClassName={(_r, i) => focusedIndex === i ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}
             />
           )}
           {data?.meta && (

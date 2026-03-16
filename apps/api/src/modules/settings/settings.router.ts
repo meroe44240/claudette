@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import * as settingsService from './settings.service.js';
 import { authenticate, requireRole } from '../../middleware/auth.js';
+import prisma from '../../lib/db.js';
 
 const createUserSchema = z.object({
   email: z.string().email(),
@@ -115,6 +116,22 @@ export default async function settingsRouter(fastify: FastifyInstance) {
         language: z.string().optional(),
       }).parse(request.body);
       return settingsService.updateGeneralSettings(request.userId, input);
+    },
+  });
+
+  // POST /onboarding-complete - Mark onboarding as completed
+  fastify.post('/onboarding-complete', {
+    schema: {
+      description: 'Marquer l\'onboarding comme terminé',
+      tags: ['Settings'],
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      await prisma.user.update({
+        where: { id: request.userId },
+        data: { onboardingCompleted: true },
+      });
+      return { success: true };
     },
   });
 }

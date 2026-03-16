@@ -387,4 +387,47 @@ export default async function candidatRouter(fastify: FastifyInstance) {
       return { message: 'CV uploadé avec succès', cvUrl, candidat: updated };
     },
   });
+
+  // POST /check-duplicate - Check for potential duplicates before creation
+  fastify.post('/check-duplicate', {
+    schema: {
+      description: 'Vérifier les doublons potentiels (email / LinkedIn)',
+      tags: ['Candidats'],
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { email, linkedinUrl, excludeId } = request.body as {
+        email?: string;
+        linkedinUrl?: string;
+        excludeId?: string;
+      };
+
+      if (!email && !linkedinUrl) {
+        return { duplicates: [] };
+      }
+
+      const conditions: any[] = [];
+      if (email) conditions.push({ email: { equals: email, mode: 'insensitive' } });
+      if (linkedinUrl) conditions.push({ linkedinUrl: { equals: linkedinUrl, mode: 'insensitive' } });
+
+      const where: any = { OR: conditions };
+      if (excludeId) {
+        where.NOT = { id: excludeId };
+      }
+
+      const duplicates = await prisma.candidat.findMany({
+        where,
+        select: {
+          id: true,
+          nom: true,
+          prenom: true,
+          email: true,
+          linkedinUrl: true,
+        },
+        take: 5,
+      });
+
+      return { duplicates };
+    },
+  });
 }

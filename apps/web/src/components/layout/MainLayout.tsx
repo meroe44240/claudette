@@ -2,12 +2,14 @@ import { useState, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, LogOut, CalendarPlus, Check, Copy, Mail, X, Users, Building2 } from 'lucide-react';
+import { Bell, LogOut, CalendarPlus, Check, Copy, Mail, X, Users, Building2, Menu } from 'lucide-react';
 import Sidebar from '../ui/Sidebar';
 import SearchBar from '../ui/SearchBar';
 import EntityPreview from '../ui/EntityPreview';
 import Avatar from '../ui/Avatar';
 import Dropdown from '../ui/Dropdown';
+import OfflineBanner from '../ui/OfflineBanner';
+import OnboardingWizard from '../onboarding/OnboardingWizard';
 import { toast, ToastContainer } from '../ui/Toast';
 import { useAuthStore } from '../../stores/auth-store';
 import { api } from '../../lib/api-client';
@@ -34,8 +36,10 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [bookingPanelOpen, setBookingPanelOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(() => !(user as any)?.onboardingCompleted);
   const { showHelp, setShowHelp, shortcuts } = useKeyboardShortcuts();
 
   // Entity preview state (SlideOver)
@@ -106,10 +110,19 @@ export default function MainLayout() {
 
   return (
     <div className="flex h-screen app-bg">
-      <Sidebar isAdmin={user?.role === 'ADMIN'} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(c => !c)} />
+      <Sidebar isAdmin={user?.role === 'ADMIN'} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(c => !c)} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between shadow-[0_1px_0_rgba(0,0,0,0.05)] bg-white/70 backdrop-blur-xl backdrop-saturate-[1.8] px-6">
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between shadow-[0_1px_0_rgba(0,0,0,0.05)] bg-white/70 backdrop-blur-xl backdrop-saturate-[1.8] px-4 md:px-6">
+          {/* Mobile hamburger menu */}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="mr-2 flex h-10 w-10 items-center justify-center rounded-lg text-neutral-600 hover:bg-neutral-100 transition-colors md:hidden"
+            aria-label="Ouvrir le menu"
+          >
+            <Menu size={22} />
+          </button>
+
           <div className="max-w-[400px] flex-1">
             <SearchBar
               onSearch={handleSearch}
@@ -155,7 +168,8 @@ export default function MainLayout() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-8">
+        <OfflineBanner />
+        <main className="flex-1 overflow-auto p-4 md:p-8">
           <div className="mx-auto max-w-[1280px]">
             <AnimatePresence mode="wait">
               <motion.div
@@ -337,6 +351,11 @@ export default function MainLayout() {
         entityType={previewEntity?.type || null}
         entityId={previewEntity?.id || null}
       />
+
+      {/* Onboarding Wizard for first-time users */}
+      {showOnboarding && (
+        <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
+      )}
 
       <ToastContainer />
     </div>

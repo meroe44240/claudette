@@ -31,6 +31,8 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Select from '../../components/ui/Select';
 import Skeleton from '../../components/ui/Skeleton';
+import Confetti from '../../components/ui/Confetti';
+import ScoreBadge from '../../components/ui/ScoreBadge';
 
 // ── Types ────────────────────────────────────────────
 
@@ -68,6 +70,7 @@ interface KanbanCandidature {
   stage: StageCandidature;
   notes: string | null;
   candidat: KanbanCandidat;
+  score?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -314,20 +317,26 @@ function SortableKanbanCard({ candidature, onClick }: SortableCardProps) {
           )}
         </div>
 
-        {/* Days in stage badge */}
-        {days > 0 && (
-          <span
-            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-              days > 14
-                ? 'bg-red-50 text-red-600'
-                : days > 7
-                  ? 'bg-amber-50 text-amber-600'
-                  : 'bg-neutral-100 text-neutral-500'
-            }`}
-          >
-            {days}j
-          </span>
-        )}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          {/* Compatibility score */}
+          {candidature.score != null && candidature.score > 0 && (
+            <ScoreBadge score={candidature.score} size="sm" />
+          )}
+          {/* Days in stage badge */}
+          {days > 0 && (
+            <span
+              className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                days > 14
+                  ? 'bg-red-50 text-red-600'
+                  : days > 7
+                    ? 'bg-amber-50 text-amber-600'
+                    : 'bg-neutral-100 text-neutral-500'
+              }`}
+            >
+              {days}j
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -470,6 +479,7 @@ export default function MandatKanbanPage() {
   const [addCandidatOpen, setAddCandidatOpen] = useState(false);
   const [candidatSearch, setCandidatSearch] = useState('');
   const [debouncedCandidatSearch, setDebouncedCandidatSearch] = useState('');
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Debounce the candidate search input
   useEffect(() => {
@@ -568,16 +578,50 @@ export default function MandatKanbanPage() {
     return filtered;
   }, [kanban, search]);
 
-  // Mutation for updating candidature stage
+  // Mutation for updating candidature stage (optimistic)
   const updateStageMutation = useMutation({
-    mutationFn: (params: { candidatureId: string; stage: StageCandidature; motifRefus?: MotifRefus; candidatId?: string; candidatName?: string }) =>
+    mutationFn: (params: { candidatureId: string; stage: StageCandidature; motifRefus?: MotifRefus; candidatId?: string; candidatName?: string; sourceStage?: StageCandidature }) =>
       api.put(`/candidatures/${params.candidatureId}`, {
         stage: params.stage,
         ...(params.motifRefus ? { motifRefus: params.motifRefus } : {}),
       }),
+    onMutate: async (variables) => {
+      // Cancel any in-flight queries for this kanban
+      await queryClient.cancelQueries({ queryKey: ['mandat-kanban', id] });
+
+      // Snapshot previous kanban state for rollback
+      const previousKanban = queryClient.getQueryData(['mandat-kanban', id]);
+
+      // Optimistically move the card
+      queryClient.setQueryData(['mandat-kanban', id], (old: KanbanData | undefined) => {
+        if (!old) return old;
+        const updated = { ...old };
+        const sourceStage = variables.sourceStage || findStageForCandidature(old, variables.candidatureId);
+        if (!sourceStage) return old;
+
+        const sourceItems = [...updated[sourceStage]];
+        const sourceIndex = sourceItems.findIndex((c) => c.id === variables.candidatureId);
+        if (sourceIndex === -1) return old;
+
+        const [movedItem] = sourceItems.splice(sourceIndex, 1);
+        const destItems = [...updated[variables.stage]];
+        destItems.push({ ...movedItem, stage: variables.stage, updatedAt: new Date().toISOString() });
+
+        updated[sourceStage] = sourceItems;
+        updated[variables.stage] = destItems;
+        return updated;
+      });
+
+      return { previousKanban };
+    },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['mandat-kanban', id] });
       toast('success', `Candidat déplacé vers ${STAGE_LABELS[variables.stage]}`);
+
+      // Confetti on placement!
+      if (variables.stage === 'PLACE') {
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 3000);
+      }
 
       // Suggest follow-up task if applicable
       const suggestion = STAGE_TASK_SUGGESTIONS[variables.stage];
@@ -593,10 +637,16 @@ export default function MandatKanbanPage() {
         });
       }
     },
-    onError: () => {
-      // Revert optimistic update by refetching
-      queryClient.invalidateQueries({ queryKey: ['mandat-kanban', id] });
+    onError: (_err, _variables, context) => {
+      // Rollback to snapshot
+      if (context?.previousKanban) {
+        queryClient.setQueryData(['mandat-kanban', id], context.previousKanban);
+      }
       toast('error', 'Erreur lors du déplacement du candidat');
+    },
+    onSettled: () => {
+      // Always refetch to ensure server consistency
+      queryClient.invalidateQueries({ queryKey: ['mandat-kanban', id] });
     },
   });
 
@@ -658,32 +708,20 @@ export default function MandatKanbanPage() {
       return;
     }
 
-    // Optimistic update
-    const updatedKanban = { ...kanban };
-    const sourceItems = [...updatedKanban[sourceStage]];
-    const sourceIndex = sourceItems.findIndex((c) => c.id === candidatureId);
-
-    if (sourceIndex === -1) return;
-
-    const [movedItem] = sourceItems.splice(sourceIndex, 1);
-    const destItems = [...updatedKanban[targetStage]];
-    const updatedItem = { ...movedItem, stage: targetStage, updatedAt: new Date().toISOString() };
-    destItems.push(updatedItem);
-
-    updatedKanban[sourceStage] = sourceItems;
-    updatedKanban[targetStage] = destItems;
-
-    queryClient.setQueryData(['mandat-kanban', id], updatedKanban);
-
-    // Fire the mutation with candidat info for task suggestion
+    // Find candidat info for task suggestion
+    const movedItem = kanban[sourceStage].find((c) => c.id === candidatureId);
+    if (!movedItem) return;
     const candidatName = `${movedItem.candidat.prenom || ''} ${movedItem.candidat.nom}`.trim();
+
+    // Optimistic update happens in onMutate
     updateStageMutation.mutate({
       candidatureId,
       stage: targetStage,
+      sourceStage,
       candidatId: movedItem.candidat.id,
       candidatName,
     });
-  }, [kanban, id, queryClient, updateStageMutation]);
+  }, [kanban, id, updateStageMutation]);
 
   const handleDragCancel = useCallback(() => {
     setActiveDragId(null);
@@ -704,30 +742,12 @@ export default function MandatKanbanPage() {
   function handleConfirmRefusal() {
     if (!refusalModal.candidatureId || !selectedMotif || !kanban) return;
 
-    // Optimistic update
-    const sourceStage = refusalModal.sourceStage;
-    if (sourceStage) {
-      const updatedKanban = { ...kanban };
-      const sourceItems = [...updatedKanban[sourceStage]];
-      const sourceIndex = sourceItems.findIndex((c) => c.id === refusalModal.candidatureId);
-
-      if (sourceIndex !== -1) {
-        const [movedItem] = sourceItems.splice(sourceIndex, 1);
-        const destItems = [...updatedKanban.REFUSE];
-        const updatedItem = { ...movedItem, stage: 'REFUSE' as StageCandidature, updatedAt: new Date().toISOString() };
-        destItems.push(updatedItem);
-
-        updatedKanban[sourceStage] = sourceItems;
-        updatedKanban.REFUSE = destItems;
-
-        queryClient.setQueryData(['mandat-kanban', id], updatedKanban);
-      }
-    }
-
+    // Optimistic update happens in onMutate
     updateStageMutation.mutate({
       candidatureId: refusalModal.candidatureId,
       stage: 'REFUSE',
       motifRefus: selectedMotif as MotifRefus,
+      sourceStage: refusalModal.sourceStage || undefined,
     });
 
     setRefusalModal({ open: false, candidatureId: null, sourceStage: null });
@@ -779,6 +799,7 @@ export default function MandatKanbanPage() {
 
   return (
     <div>
+      <Confetti active={showConfetti} />
       <PageHeader
         title={mandat ? `Kanban \u2014 ${mandat.titrePoste}` : 'Vue Kanban'}
         subtitle={mandat?.entreprise?.nom}
@@ -864,7 +885,7 @@ export default function MandatKanbanPage() {
         onDragCancel={handleDragCancel}
       >
         <motion.div
-          className="flex gap-4 overflow-x-auto pb-4"
+          className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory touch-pan-x"
           variants={columnStagger}
           initial="hidden"
           animate="show"
@@ -874,7 +895,7 @@ export default function MandatKanbanPage() {
             const itemIds = items.map((c) => c.id);
 
             return (
-              <motion.div key={stage} variants={columnItem}>
+              <motion.div key={stage} variants={columnItem} className="snap-start min-w-[280px]">
                 <DroppableColumn
                   stage={stage}
                   items={items}

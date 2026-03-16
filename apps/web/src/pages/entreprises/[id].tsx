@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -15,6 +15,8 @@ import Select from '../../components/ui/Select';
 import Skeleton, { SkeletonCard } from '../../components/ui/Skeleton';
 import ActivityJournal from '../../components/activity/ActivityJournal';
 import DeleteConfirmModal from '../../components/ui/DeleteConfirmModal';
+import InlineEdit from '../../components/ui/InlineEdit';
+import ProfileCompleteness from '../../components/ui/ProfileCompleteness';
 import { toast } from '../../components/ui/Toast';
 
 type TailleEntreprise = 'STARTUP' | 'PME' | 'ETI' | 'GRAND_GROUPE';
@@ -144,6 +146,18 @@ export default function EntrepriseDetailPage() {
   });
 
   usePageTitle(entreprise ? entreprise.nom : 'Entreprise');
+
+  const completenessFields = useMemo(() => {
+    if (!entreprise) return [];
+    return [
+      { key: 'nom', label: 'Nom', filled: !!entreprise.nom },
+      { key: 'secteur', label: 'Secteur', filled: !!entreprise.secteur },
+      { key: 'siteWeb', label: 'Site web', filled: !!entreprise.siteWeb },
+      { key: 'taille', label: 'Taille', filled: !!entreprise.taille },
+      { key: 'localisation', label: 'Localisation', filled: !!entreprise.localisation },
+      { key: 'linkedinUrl', label: 'LinkedIn', filled: !!entreprise.linkedinUrl },
+    ];
+  }, [entreprise]);
 
   const { data: stats } = useQuery({
     queryKey: ['entreprise-stats', id],
@@ -340,12 +354,22 @@ export default function EntrepriseDetailPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {entreprise.secteur && (
-                  <div className="text-sm">
-                    <span className="text-text-tertiary">Secteur : </span>
-                    <span className="text-text-primary">{entreprise.secteur}</span>
-                  </div>
-                )}
+                <div className="sm:col-span-2">
+                  <InlineEdit
+                    value={entreprise.nom || ''}
+                    onSave={async (v) => { if (v) updateMutation.mutateAsync({ nom: v }); }}
+                    placeholder="Nom de l'entreprise"
+                    label="Nom"
+                  />
+                </div>
+                <div className="text-sm">
+                  <InlineEdit
+                    value={entreprise.secteur || ''}
+                    onSave={async (v) => { updateMutation.mutateAsync({ secteur: v || null }); }}
+                    placeholder="Secteur"
+                    label="Secteur"
+                  />
+                </div>
                 {entreprise.taille && (
                   <div className="text-sm">
                     <span className="text-text-tertiary">Taille : </span>
@@ -358,14 +382,15 @@ export default function EntrepriseDetailPage() {
                     <span className="text-text-primary">{entreprise.localisation}</span>
                   </div>
                 )}
-                {entreprise.siteWeb && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Globe size={14} className="text-text-tertiary" />
-                    <a href={entreprise.siteWeb} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                      {entreprise.siteWeb}
-                    </a>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 text-sm">
+                  <Globe size={14} className="shrink-0 text-text-tertiary" />
+                  <InlineEdit
+                    value={entreprise.siteWeb || ''}
+                    onSave={async (v) => { updateMutation.mutateAsync({ siteWeb: v || null }); }}
+                    placeholder="https://www.exemple.com"
+                    type="url"
+                  />
+                </div>
                 {entreprise.linkedinUrl && (
                   <div className="flex items-center gap-2 text-sm">
                     <Linkedin size={14} className="text-text-tertiary" />
@@ -396,6 +421,7 @@ export default function EntrepriseDetailPage() {
 
         {/* Sidebar */}
         <motion.div className="space-y-6" variants={detailItem}>
+          <ProfileCompleteness fields={completenessFields} />
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">Statistiques</h2>
             <dl className="space-y-3 text-sm">

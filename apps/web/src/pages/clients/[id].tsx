@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Mail, Phone, Linkedin, Building2, Briefcase, Calendar, Send, Pencil, Trash2, Save, X, UserPlus, Bot, Link2, Check, CalendarPlus, Copy, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Linkedin, Building2, Briefcase, Calendar, Send, Pencil, Trash2, Save, X, UserPlus, Bot, Link2, Check, CalendarPlus, Copy, ChevronDown, User } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
 import { usePageTitle } from '../../hooks/usePageTitle';
@@ -19,6 +19,8 @@ import ScheduleMeeting from '../../components/calendar/ScheduleMeeting';
 import ActivityJournal from '../../components/activity/ActivityJournal';
 import DeleteConfirmModal from '../../components/ui/DeleteConfirmModal';
 import CallBriefPanel from '../../components/ai/CallBriefPanel';
+import InlineEdit from '../../components/ui/InlineEdit';
+import ProfileCompleteness from '../../components/ui/ProfileCompleteness';
 import { toast } from '../../components/ui/Toast';
 
 type RoleContact = 'HIRING_MANAGER' | 'DRH' | 'PROCUREMENT' | 'CEO' | 'AUTRE';
@@ -189,6 +191,19 @@ export default function ClientDetailPage() {
   });
 
   usePageTitle(client ? `${client.prenom || ''} ${client.nom}`.trim() : 'Client');
+
+  const completenessFields = useMemo(() => {
+    if (!client) return [];
+    return [
+      { key: 'nom', label: 'Nom', filled: !!client.nom },
+      { key: 'email', label: 'Email', filled: !!client.email },
+      { key: 'telephone', label: 'Téléphone', filled: !!client.telephone },
+      { key: 'poste', label: 'Poste', filled: !!client.poste },
+      { key: 'entreprise', label: 'Entreprise', filled: !!client.entreprise },
+      { key: 'roleContact', label: 'Rôle contact', filled: !!client.roleContact },
+      { key: 'linkedinUrl', label: 'LinkedIn', filled: !!client.linkedinUrl },
+    ];
+  }, [client]);
 
   const handleSendBookingEmail = useCallback(() => {
     if (!bookingSlug || !client) return;
@@ -482,28 +497,41 @@ export default function ClientDetailPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {client.email && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mail size={14} className="text-text-tertiary" />
-                    <a href={`mailto:${client.email}`} className="text-accent hover:underline">
-                      {client.email}
-                    </a>
-                  </div>
-                )}
-                {client.telephone && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone size={14} className="text-text-tertiary" />
-                    <a href={`tel:${client.telephone}`} className="text-text-primary hover:text-accent transition-colors">
-                      {client.telephone}
-                    </a>
-                  </div>
-                )}
-                {client.poste && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Briefcase size={14} className="text-text-tertiary" />
-                    <span className="text-text-primary">{client.poste}</span>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 text-sm sm:col-span-2">
+                  <User size={14} className="shrink-0 text-text-tertiary" />
+                  <InlineEdit
+                    value={client.nom || ''}
+                    onSave={async (v) => { if (v) updateMutation.mutateAsync({ nom: v }); }}
+                    placeholder="Nom"
+                    label="Nom"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail size={14} className="shrink-0 text-text-tertiary" />
+                  <InlineEdit
+                    value={client.email || ''}
+                    onSave={async (v) => { updateMutation.mutateAsync({ email: v || null }); }}
+                    placeholder="email@exemple.com"
+                    type="email"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone size={14} className="shrink-0 text-text-tertiary" />
+                  <InlineEdit
+                    value={client.telephone || ''}
+                    onSave={async (v) => { updateMutation.mutateAsync({ telephone: v || null }); }}
+                    placeholder="+33 1 23 45 67 89"
+                    type="tel"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Briefcase size={14} className="shrink-0 text-text-tertiary" />
+                  <InlineEdit
+                    value={client.poste || ''}
+                    onSave={async (v) => { updateMutation.mutateAsync({ poste: v || null }); }}
+                    placeholder="Poste"
+                  />
+                </div>
                 {client.linkedinUrl && (
                   <div className="flex items-center gap-2 text-sm">
                     <Linkedin size={14} className="text-text-tertiary" />
@@ -557,6 +585,7 @@ export default function ClientDetailPage() {
 
         {/* Sidebar */}
         <motion.div className="space-y-6" variants={detailItem}>
+          <ProfileCompleteness fields={completenessFields} />
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">Détails</h2>
             <dl className="space-y-3 text-sm">

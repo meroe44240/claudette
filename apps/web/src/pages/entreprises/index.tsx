@@ -4,7 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Plus, Search, LayoutGrid, List, MapPin, Building, Download } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { useListNavigation } from '../../hooks/useListNavigation';
+import { usePrefetch } from '../../hooks/usePrefetch';
 import { api } from '../../lib/api-client';
+import { downloadCSV } from '../../lib/export';
+import { toast } from '../../components/ui/Toast';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
 import Table from '../../components/ui/Table';
@@ -169,6 +173,7 @@ export default function EntreprisesPage() {
   const [view, setView] = useState<ViewMode>('grid');
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { prefetchOnHover, cancelPrefetch } = usePrefetch();
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
   const handleSort = useCallback((key: string) => {
@@ -214,7 +219,18 @@ export default function EntreprisesPage() {
   }, []);
 
   const handleSelectionAction = useCallback((key: string) => {
-    console.log('Selection action:', key, 'on ids:', Array.from(selectedIds));
+    const ids = Array.from(selectedIds);
+
+    switch (key) {
+      case 'export': {
+        downloadCSV('entreprises', ids)
+          .then(() => toast('success', `${ids.length} entreprise(s) exportée(s)`))
+          .catch(() => toast('error', "Erreur lors de l'export"));
+        break;
+      }
+      default:
+        break;
+    }
   }, [selectedIds]);
 
   // ── Data fetching ─────────────────────────────────────────────
@@ -267,6 +283,10 @@ export default function EntreprisesPage() {
     }),
     [allEntreprises, sortConfig],
   );
+
+  const { focusedIndex, setFocusedIndex } = useListNavigation(sortedEntreprises.length, {
+    onSelect: (index) => navigate(`/entreprises/${sortedEntreprises[index].id}`),
+  });
 
   const allSelected = sortedEntreprises.length > 0 && sortedEntreprises.every((e) => selectedIds.has(e.id));
 
@@ -355,9 +375,11 @@ export default function EntreprisesPage() {
     return (
       <div
         onClick={() => navigate(`/entreprises/${entreprise.id}`)}
+        onMouseEnter={() => prefetchOnHover(['entreprise', entreprise.id], `/entreprises/${entreprise.id}`)}
+        onMouseLeave={cancelPrefetch}
         className={`group relative cursor-pointer rounded-2xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
           isSelected ? 'border-[#7C5CFC] ring-2 ring-[#7C5CFC]/20 shadow-md' : 'border-neutral-100 shadow-sm'
-        }`}
+        } ${focusedIndex === index ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}`}
       >
         {/* Top accent bar */}
         <div className="h-1 w-full bg-gradient-to-r from-neutral-700 to-neutral-500" />
@@ -517,6 +539,9 @@ export default function EntreprisesPage() {
               data={sortedEntreprises}
               keyExtractor={(r) => r.id}
               onRowClick={(r) => navigate(`/entreprises/${r.id}`)}
+              onRowMouseEnter={(r) => prefetchOnHover(['entreprise', r.id], `/entreprises/${r.id}`)}
+              onRowMouseLeave={cancelPrefetch}
+              rowClassName={(_r, i) => focusedIndex === i ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}
             />
           )}
           {data?.meta && (

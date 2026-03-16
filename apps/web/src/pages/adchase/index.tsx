@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { api } from '../../lib/api-client';
 import { toast } from '../../components/ui/Toast';
+import PageHeader from '../../components/ui/PageHeader';
 import ProspectDetectionTab from '../../components/ai/ProspectDetectionTab';
 import type { SelectedProspect } from '../../components/ai/ProspectDetectionTab';
 
@@ -1406,15 +1407,18 @@ export default function AdchasePage() {
     <div className="min-h-screen bg-[#F9FAFB]">
       {/* Header */}
       <div className="border-b border-neutral-200 bg-white px-8 pt-6 pb-0">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100">
-            <Send size={20} className="text-primary-600" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-neutral-800">Adchase</h1>
-            <p className="text-sm text-neutral-500">Push candidat anonymisé vers des prospects</p>
-          </div>
-        </div>
+        <PageHeader
+          title={
+            <span className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100">
+                <Send size={20} className="text-primary-600" />
+              </span>
+              Adchase
+            </span>
+          }
+          subtitle="Push candidat anonymisé vers des prospects"
+          breadcrumbs={[{ label: 'Adchase' }]}
+        />
 
         {/* Tabs */}
         <div className="flex gap-0">

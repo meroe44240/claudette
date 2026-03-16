@@ -8,6 +8,7 @@ interface User {
   prenom: string | null;
   role: 'ADMIN' | 'MANAGER' | 'RECRUTEUR';
   mustChangePassword: boolean;
+  onboardingCompleted?: boolean;
 }
 
 interface AuthState {

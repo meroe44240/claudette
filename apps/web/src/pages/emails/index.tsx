@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast, ToastContainer } from '../../components/ui/Toast';
+import PageHeader from '../../components/ui/PageHeader';
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -208,21 +209,21 @@ export default function EmailsPage() {
     <div>
       <ToastContainer />
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-[22px] font-bold text-neutral-900">Emails</h1>
-          <p className="text-[14px] text-neutral-500 mt-1">Vos emails Gmail synchronisés</p>
-        </div>
-        <button
-          onClick={handleSync}
-          disabled={syncing}
-          className="flex items-center gap-2 h-9 px-4 bg-white border border-neutral-200 rounded-lg text-[13px] font-medium text-neutral-600 hover:bg-neutral-50 transition-colors disabled:opacity-60"
-        >
-          <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-          {syncing ? 'Sync...' : 'Synchroniser'}
-        </button>
-      </div>
+      <PageHeader
+        title="Emails"
+        subtitle="Vos emails Gmail synchronisés"
+        breadcrumbs={[{ label: 'Emails' }]}
+        actions={
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex items-center gap-2 h-9 px-4 bg-white border border-neutral-200 rounded-lg text-[13px] font-medium text-neutral-600 hover:bg-neutral-50 transition-colors disabled:opacity-60"
+          >
+            <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+            {syncing ? 'Sync...' : 'Synchroniser'}
+          </button>
+        }
+      />
 
       {/* Filters + Search */}
       <div className="flex items-center gap-3 mb-5">

@@ -19,6 +19,7 @@ export default function InterviewSchedulerPage() {
       <PageHeader
         title="Planificateur d'entretiens"
         subtitle="Configurez vos créneaux de disponibilité pour les entretiens"
+        breadcrumbs={[{ label: 'Paramètres', href: '/settings' }, { label: 'Planification entretiens' }]}
       />
 
       <div className="rounded-xl border border-neutral-200 bg-white p-6">

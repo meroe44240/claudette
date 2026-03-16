@@ -4,7 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { LayoutGrid, List, Plus, Search, Building2, Mail, Send, Download } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { downloadCSV } from '../../lib/export';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { useListNavigation } from '../../hooks/useListNavigation';
+import { usePrefetch } from '../../hooks/usePrefetch';
+import { toast } from '../../components/ui/Toast';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
 import Table from '../../components/ui/Table';
@@ -194,6 +198,7 @@ export default function ClientsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const entrepriseId = searchParams.get('entrepriseId') || undefined;
   const navigate = useNavigate();
+  const { prefetchOnHover, cancelPrefetch } = usePrefetch();
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
   const handleSort = useCallback((key: string) => {
@@ -240,11 +245,6 @@ export default function ClientsPage() {
     });
   }, []);
 
-  const handleSelectionAction = useCallback((key: string) => {
-    // Placeholder for action handling
-    console.log('Selection action:', key, 'on ids:', Array.from(selectedIds));
-  }, [selectedIds]);
-
   // ── Data fetching ─────────────────────────────────────────────
   const { data, isLoading } = useQuery({
     queryKey: ['clients', page, search, entrepriseId, filterValues],
@@ -288,6 +288,38 @@ export default function ClientsPage() {
   // ── Sorting (server handles filtering, client handles sort of current page) ──
   const allClients = data?.data ?? [];
 
+  const handleSelectionAction = useCallback((key: string) => {
+    const ids = Array.from(selectedIds);
+
+    switch (key) {
+      case 'export': {
+        downloadCSV('clients', ids)
+          .then(() => toast('success', `${ids.length} client(s) exporté(s)`))
+          .catch(() => toast('error', "Erreur lors de l'export"));
+        break;
+      }
+      case 'email': {
+        const selected = allClients.filter((c) => ids.includes(c.id));
+        const emails = selected
+          .map((c) => c.email)
+          .filter((e): e is string => !!e);
+        if (emails.length === 0) {
+          toast('error', "Aucun client sélectionné n'a d'email");
+          break;
+        }
+        const mailto = `mailto:?bcc=${emails.join(',')}`;
+        window.open(mailto, '_blank');
+        toast('success', `Email groupé ouvert pour ${emails.length} client(s)`);
+        break;
+      }
+      case 'relance':
+        toast('info', `Relance groupée pour ${ids.length} client(s) — bientôt disponible`);
+        break;
+      default:
+        break;
+    }
+  }, [selectedIds, allClients]);
+
   const sortedClients = useMemo(
     () => applySortToData(allClients, sortConfig, (row, key) => {
       switch (key) {
@@ -302,6 +334,11 @@ export default function ClientsPage() {
   );
 
   const total = data?.meta?.total ?? 0;
+
+  const { focusedIndex, setFocusedIndex } = useListNavigation(sortedClients.length, {
+    onSelect: (index) => navigate(`/clients/${sortedClients[index].id}`),
+  });
+
   const allSelected = sortedClients.length > 0 && sortedClients.every((c) => selectedIds.has(c.id));
 
   const toggleSelectAll = useCallback(() => {
@@ -432,9 +469,11 @@ export default function ClientsPage() {
     return (
       <div
         onClick={() => navigate(`/clients/${client.id}`)}
+        onMouseEnter={() => prefetchOnHover(['client', client.id], `/clients/${client.id}`)}
+        onMouseLeave={cancelPrefetch}
         className={`group relative cursor-pointer rounded-2xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
           isSelected ? 'border-[#7C5CFC] ring-2 ring-[#7C5CFC]/20 shadow-md' : 'border-neutral-100 shadow-sm'
-        }`}
+        } ${focusedIndex === index ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}`}
       >
         {/* Top accent bar — color based on status */}
         <div className={`h-1 w-full bg-gradient-to-r ${statutColor}`} />
@@ -599,6 +638,9 @@ export default function ClientsPage() {
               data={sortedClients}
               keyExtractor={(r) => r.id}
               onRowClick={(r) => navigate(`/clients/${r.id}`)}
+              onRowMouseEnter={(r) => prefetchOnHover(['client', r.id], `/clients/${r.id}`)}
+              onRowMouseLeave={cancelPrefetch}
+              rowClassName={(_r, i) => focusedIndex === i ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}
             />
           )}
           {data?.meta && (

@@ -11,6 +11,7 @@ import {
   ChevronUp,
   Loader2,
   X,
+  Download,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../components/ui/Toast';
@@ -175,6 +176,18 @@ function StepIndicator({ current }: { current: number }) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function downloadCsvTemplate(entityType: EntityType) {
+  const fields = fieldOptions[entityType].filter((f) => f.value);
+  const header = fields.map((f) => f.label).join(',');
+  const blob = new Blob([header + '\n'], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `modele-${entityType}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;
@@ -409,6 +422,16 @@ export default function ImportPage() {
               value={entityType}
               onChange={(v) => setEntityType(v as EntityType)}
             />
+
+            {/* Download CSV template */}
+            <button
+              type="button"
+              onClick={() => downloadCsvTemplate(entityType)}
+              className="inline-flex items-center gap-1.5 text-sm text-primary-500 hover:text-primary-700 transition-colors"
+            >
+              <Download size={14} />
+              Télécharger un modèle CSV ({entityLabels[entityType]})
+            </button>
 
             {/* Dropzone */}
             <div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Fragment } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import {
@@ -12,7 +12,7 @@ import {
   AlertTriangle, Zap, Clock, CheckCircle2, Circle,
   ArrowRight, Eye, Bot, Link2,
 } from 'lucide-react';
-import { motion, useSpring, useTransform, useMotionValue, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { format, isToday as isTodayFn, isPast, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { api } from '../../lib/api-client';
@@ -25,6 +25,8 @@ import { toast } from '../../components/ui/Toast';
 import CallBriefPanel from '../../components/ai/CallBriefPanel';
 import CalendarAiSuggestions from '../../components/dashboard/CalendarAiSuggestions';
 import PipelineAiSuggestions from '../../components/dashboard/PipelineAiSuggestions';
+import PageHeader from '../../components/ui/PageHeader';
+import AnimatedCounterComponent from '../../components/ui/AnimatedCounter';
 import {
   categorizeEvents, countByType,
   MEETING_COLORS, MEETING_LABELS, type CategorizedEvent, type MeetingType,
@@ -144,14 +146,10 @@ function TrendBadge({ value }: { value: number | null }) {
   );
 }
 
-// ─── ANIMATED COUNTER ───────────────────────────────
+// ─── ANIMATED COUNTER (imported from components/ui) ─
 
-function AnimatedCounter({ value, suffix = '' }: { value: number; suffix?: string }) {
-  const mv = useMotionValue(0);
-  const sv = useSpring(mv, { stiffness: 100, damping: 30 });
-  const display = useTransform(sv, (v: number) => Math.round(v).toLocaleString('fr-FR'));
-  useEffect(() => { mv.set(value); }, [value, mv]);
-  return <><motion.span>{display}</motion.span>{suffix}</>;
+function AnimatedCounter({ value, suffix = '', formatFn }: { value: number; suffix?: string; formatFn?: (n: number) => string }) {
+  return <><AnimatedCounterComponent value={value} formatFn={formatFn} />{suffix}</>;
 }
 
 // ─── STAGGER ────────────────────────────────────────
@@ -448,6 +446,12 @@ function RecruiterDashboard() {
       className="flex flex-col dash-root"
       style={{ height: 'calc(100vh - 64px)', background: '#F8F8FA', overflow: 'hidden' }}
     >
+      <div className="shrink-0 px-6 pt-2">
+        <PageHeader
+          title="Dashboard"
+          breadcrumbs={[{ label: 'Dashboard' }]}
+        />
+      </div>
       {/* ── BANDEAU NOTIFICATION (36px) ── */}
       <motion.div
         initial={{ opacity: 0, y: -4 }}
@@ -547,7 +551,7 @@ function RecruiterDashboard() {
               </div>
               <div className="flex items-baseline gap-2 mt-0.5">
                 <span className="text-[18px] font-bold text-revenue-500 leading-none">
-                  {formatCurrency(kpis?.caMois.value ?? 0)}
+                  <AnimatedCounter value={kpis?.caMois.value ?? 0} formatFn={formatCurrency} />
                 </span>
                 <TrendBadge value={kpis?.caMois.delta ?? null} />
               </div>
@@ -607,7 +611,7 @@ function RecruiterDashboard() {
               </div>
               <div className="flex items-baseline gap-2 mt-0.5">
                 <span className="text-[18px] font-bold text-brand-500 leading-none">
-                  {formatCurrency(kpis?.pipePondere.value ?? 0)}
+                  <AnimatedCounter value={kpis?.pipePondere.value ?? 0} formatFn={formatCurrency} />
                 </span>
                 <TrendBadge value={kpis?.pipePondere.delta ?? null} />
               </div>
@@ -627,22 +631,22 @@ function RecruiterDashboard() {
             <div className="h-3 w-px bg-neutral-200" />
             <div className="flex items-center gap-1">
               <span className="text-[11px] text-neutral-500">CA global</span>
-              <span className="text-[12px] font-bold text-revenue-500">{formatCurrency(structureKpis.caStructure)}</span>
+              <span className="text-[12px] font-bold text-revenue-500"><AnimatedCounter value={structureKpis.caStructure} formatFn={formatCurrency} /></span>
             </div>
             <div className="h-3 w-px bg-neutral-200" />
             <div className="flex items-center gap-1">
               <span className="text-[11px] text-neutral-500">Mandats actifs</span>
-              <span className="text-[12px] font-bold text-neutral-800">{structureKpis.mandatsActifs}</span>
+              <span className="text-[12px] font-bold text-neutral-800"><AnimatedCounter value={structureKpis.mandatsActifs} /></span>
             </div>
             <div className="h-3 w-px bg-neutral-200" />
             <div className="flex items-center gap-1">
               <span className="text-[11px] text-neutral-500">Candidats en process</span>
-              <span className="text-[12px] font-bold text-pipeline-500">{structureKpis.candidatsEnProcess}</span>
+              <span className="text-[12px] font-bold text-pipeline-500"><AnimatedCounter value={structureKpis.candidatsEnProcess} /></span>
             </div>
             <div className="h-3 w-px bg-neutral-200" />
             <div className="flex items-center gap-1">
               <span className="text-[11px] text-neutral-500">Pipe global</span>
-              <span className="text-[12px] font-bold text-brand-500">{formatCurrency(structureKpis.pipeStructure)}</span>
+              <span className="text-[12px] font-bold text-brand-500"><AnimatedCounter value={structureKpis.pipeStructure} formatFn={formatCurrency} /></span>
             </div>
           </div>
         </div>

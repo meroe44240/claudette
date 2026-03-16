@@ -25,6 +25,8 @@ import Avatar from '../../components/ui/Avatar';
 import DeleteConfirmModal from '../../components/ui/DeleteConfirmModal';
 import CallBriefPanel from '../../components/ai/CallBriefPanel';
 import TagPicker from '../../components/ui/TagPicker';
+import InlineEdit from '../../components/ui/InlineEdit';
+import ProfileCompleteness from '../../components/ui/ProfileCompleteness';
 import { toast } from '../../components/ui/Toast';
 
 interface Candidature {
@@ -237,6 +239,22 @@ export default function CandidatDetailPage() {
   });
 
   usePageTitle(candidat ? `${candidat.prenom || ''} ${candidat.nom}`.trim() : 'Candidat');
+
+  const completenessFields = useMemo(() => {
+    if (!candidat) return [];
+    return [
+      { key: 'nom', label: 'Nom', filled: !!candidat.nom },
+      { key: 'email', label: 'Email', filled: !!candidat.email },
+      { key: 'telephone', label: 'Téléphone', filled: !!candidat.telephone },
+      { key: 'posteActuel', label: 'Poste actuel', filled: !!candidat.posteActuel },
+      { key: 'localisation', label: 'Localisation', filled: !!candidat.localisation },
+      { key: 'linkedinUrl', label: 'LinkedIn', filled: !!candidat.linkedinUrl },
+      { key: 'salaireSouhaite', label: 'Salaire souhaité', filled: !!candidat.salaireSouhaite },
+      { key: 'disponibilite', label: 'Disponibilité', filled: !!candidat.disponibilite },
+      { key: 'cvUrl', label: 'CV', filled: !!candidat.cvUrl },
+      { key: 'tags', label: 'Tags', filled: Array.isArray(candidat.tags) && candidat.tags.length > 0 },
+    ];
+  }, [candidat]);
 
   // Filter out mandats where candidat is already added
   const existingMandatIds = new Set(candidat?.candidatures.map((c) => c.mandat.id) || []);
@@ -737,42 +755,49 @@ export default function CandidatDetailPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {candidat.email && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mail size={14} className="text-text-tertiary" />
-                    <a href={`mailto:${candidat.email}`} className="text-accent hover:underline">
-                      {candidat.email}
-                    </a>
-                  </div>
-                )}
-                {candidat.telephone && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone size={14} className="text-text-tertiary" />
-                    <a href={`tel:${candidat.telephone}`} className="text-text-primary hover:text-accent transition-colors">
-                      {candidat.telephone}
-                    </a>
-                  </div>
-                )}
-                {candidat.localisation && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <MapPin size={14} className="text-text-tertiary" />
-                    <span className="text-text-primary">{candidat.localisation}</span>
-                  </div>
-                )}
-                {candidat.linkedinUrl && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Linkedin size={14} className="text-text-tertiary" />
-                    <a href={candidat.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                      LinkedIn
-                    </a>
-                  </div>
-                )}
-                {candidat.posteActuel && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Briefcase size={14} className="text-text-tertiary" />
-                    <span className="text-text-primary">{candidat.posteActuel}</span>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail size={14} className="shrink-0 text-text-tertiary" />
+                  <InlineEdit
+                    value={candidat.email || ''}
+                    onSave={async (v) => { updateMutation.mutateAsync({ email: v || null }); }}
+                    placeholder="email@exemple.com"
+                    type="email"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Phone size={14} className="shrink-0 text-text-tertiary" />
+                  <InlineEdit
+                    value={candidat.telephone || ''}
+                    onSave={async (v) => { updateMutation.mutateAsync({ telephone: v || null }); }}
+                    placeholder="+33 6 12 34 56 78"
+                    type="tel"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Briefcase size={14} className="shrink-0 text-text-tertiary" />
+                  <InlineEdit
+                    value={candidat.posteActuel || ''}
+                    onSave={async (v) => { updateMutation.mutateAsync({ posteActuel: v || null }); }}
+                    placeholder="Poste actuel"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <MapPin size={14} className="shrink-0 text-text-tertiary" />
+                  <InlineEdit
+                    value={candidat.localisation || ''}
+                    onSave={async (v) => { updateMutation.mutateAsync({ localisation: v || null }); }}
+                    placeholder="Localisation"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Linkedin size={14} className="shrink-0 text-text-tertiary" />
+                  <InlineEdit
+                    value={candidat.linkedinUrl || ''}
+                    onSave={async (v) => { updateMutation.mutateAsync({ linkedinUrl: v || null }); }}
+                    placeholder="URL LinkedIn"
+                    type="url"
+                  />
+                </div>
                 {candidat.entrepriseActuelle && (
                   <div className="flex items-center gap-2 text-sm">
                     <Building2 size={14} className="text-text-tertiary" />
@@ -1127,6 +1152,7 @@ export default function CandidatDetailPage() {
 
         {/* Sidebar */}
         <motion.div className="space-y-6" variants={detailItem}>
+          <ProfileCompleteness fields={completenessFields} />
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">Détails</h2>
             {isEditing && editForm ? (

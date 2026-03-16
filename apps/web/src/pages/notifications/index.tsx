@@ -15,6 +15,7 @@ import Pagination from '../../components/ui/Pagination';
 import EmptyState from '../../components/ui/EmptyState';
 import Skeleton from '../../components/ui/Skeleton';
 import { toast } from '../../components/ui/Toast';
+import PageHeader from '../../components/ui/PageHeader';
 
 interface Notification {
   id: string;
@@ -188,17 +189,19 @@ export default function NotificationsPage() {
 
   return (
     <div className="font-['Plus_Jakarta_Sans']">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-[28px] font-bold text-neutral-900">Notifications</h1>
-        <button
-          onClick={() => markAllAsReadMutation.mutate()}
-          disabled={markAllAsReadMutation.isPending || !data?.unreadCount}
-          className="text-sm font-medium text-[#7C5CFC] hover:text-[#6344E0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Tout marquer comme lu
-        </button>
-      </div>
+      <PageHeader
+        title="Notifications"
+        breadcrumbs={[{ label: 'Notifications' }]}
+        actions={
+          <button
+            onClick={() => markAllAsReadMutation.mutate()}
+            disabled={markAllAsReadMutation.isPending || !data?.unreadCount}
+            className="text-sm font-medium text-[#7C5CFC] hover:text-[#6344E0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Tout marquer comme lu
+          </button>
+        }
+      />
 
       {/* Pill-style tabs */}
       <div className="mb-6 flex items-center gap-1">

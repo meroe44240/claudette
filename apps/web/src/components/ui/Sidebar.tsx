@@ -67,10 +67,26 @@ const adminItems: NavItem[] = [
   { to: '/settings', icon: Settings, label: 'Paramètres' },
 ];
 
+// Keyboard shortcut hints shown next to nav items
+const SHORTCUT_HINTS: Record<string, string> = {
+  '/': 'd',
+  '/candidats': 'c',
+  '/mandats': 'm',
+  '/taches': 't',
+  '/entreprises': 'e',
+  '/clients': 'k',
+  '/activites': 'a',
+  '/stats': 's',
+};
+
 interface SidebarProps {
   isAdmin?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  /** Mobile drawer: when true, sidebar shows as a fixed overlay on small screens */
+  isOpen?: boolean;
+  /** Called when the mobile drawer backdrop is tapped or close is triggered */
+  onClose?: () => void;
 }
 
 function SectionDivider({ label, collapsed }: { label: string; collapsed: boolean }) {
@@ -97,11 +113,12 @@ function SectionDivider({ label, collapsed }: { label: string; collapsed: boolea
   );
 }
 
-function NavItemLink({ item, collapsed, badge }: { item: NavItem; collapsed: boolean; badge?: number }) {
+function NavItemLink({ item, collapsed, badge, onNavigate }: { item: NavItem; collapsed: boolean; badge?: number; onNavigate?: () => void }) {
   return (
     <NavLink
       to={item.to}
       end={item.to === '/'}
+      onClick={onNavigate}
       className={({ isActive }) =>
         `relative mx-3 my-0.5 flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm transition-all duration-200 ${
           isActive
@@ -137,11 +154,18 @@ function NavItemLink({ item, collapsed, badge }: { item: NavItem; collapsed: boo
                 className="flex flex-1 items-center justify-between whitespace-nowrap"
               >
                 {item.label}
-                {badge != null && badge > 0 && (
-                  <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500/90 px-1.5 text-[10px] font-bold text-white">
-                    {badge > 99 ? '99+' : badge}
-                  </span>
-                )}
+                <span className="ml-auto flex items-center gap-1.5">
+                  {badge != null && badge > 0 && (
+                    <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500/90 px-1.5 text-[10px] font-bold text-white">
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  )}
+                  {SHORTCUT_HINTS[item.to] && (
+                    <kbd className="hidden text-[10px] font-mono text-neutral-500 opacity-0 transition-opacity group-hover/sidebar:opacity-60 lg:inline">
+                      {SHORTCUT_HINTS[item.to]}
+                    </kbd>
+                  )}
+                </span>
               </motion.span>
             )}
           </AnimatePresence>
@@ -151,7 +175,7 @@ function NavItemLink({ item, collapsed, badge }: { item: NavItem; collapsed: boo
   );
 }
 
-export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCollapse }: SidebarProps) {
+export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCollapse, isOpen = false, onClose }: SidebarProps) {
   const { user } = useAuthStore();
   const initials = `${user?.prenom?.[0] || ''}${user?.nom?.[0] || ''}`.toUpperCase();
 
@@ -177,17 +201,14 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
     return () => window.removeEventListener('keydown', handleKey);
   }, [onToggleCollapse]);
 
-  return (
-    <motion.aside
-      animate={{ width: collapsed ? 72 : 240 }}
-      transition={{ type: 'spring' as const, stiffness: 200, damping: 30 }}
-      className="sticky top-0 flex h-screen flex-col bg-[#1A1625] overflow-hidden"
-    >
+  // Shared sidebar content (used by both desktop and mobile)
+  const sidebarContent = (mobile: boolean) => (
+    <>
       {/* Logo */}
       <div className="flex h-16 items-center gap-3 px-6">
         <img src="/logo-icon.png" alt="HumanUp" className="h-9 w-auto shrink-0" />
         <AnimatePresence>
-          {!collapsed && (
+          {(mobile || !collapsed) && (
             <motion.span
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -206,14 +227,15 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
         {navSections.map((section, sectionIdx) => (
           <div key={section.label ?? `top-${sectionIdx}`}>
             {section.label && (
-              <SectionDivider label={section.label} collapsed={collapsed} />
+              <SectionDivider label={section.label} collapsed={mobile ? false : collapsed} />
             )}
             {section.items.map((item) => (
               <NavItemLink
                 key={item.to}
                 item={item}
-                collapsed={collapsed}
+                collapsed={mobile ? false : collapsed}
                 badge={item.to === '/taches' ? taskCount : undefined}
+                onNavigate={mobile ? onClose : undefined}
               />
             ))}
           </div>
@@ -224,7 +246,7 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
             {/* Admin separator */}
             <div className="mx-6 my-3 border-t border-white/10" />
             <AnimatePresence>
-              {!collapsed && (
+              {(mobile || !collapsed) && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -238,27 +260,29 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
                 </motion.div>
               )}
             </AnimatePresence>
-            {collapsed && <div className="mb-2" />}
+            {(mobile ? false : collapsed) && <div className="mb-2" />}
             {adminItems.map((item) => (
-              <NavItemLink key={item.to} item={item} collapsed={collapsed} />
+              <NavItemLink key={item.to} item={item} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
             ))}
           </>
         )}
       </nav>
 
-      {/* Collapse toggle */}
-      <button
-        onClick={onToggleCollapse}
-        className="mx-3 mb-2 flex items-center justify-center rounded-lg py-2 text-neutral-400 hover:bg-white/5 hover:text-neutral-200 transition-all duration-200"
-        title={collapsed ? 'Expand sidebar (Ctrl+\\)' : 'Collapse sidebar (Ctrl+\\)'}
-      >
-        <motion.div
-          animate={{ rotate: collapsed ? 180 : 0 }}
-          transition={{ type: 'spring' as const, stiffness: 200, damping: 20 }}
+      {/* Collapse toggle — desktop only */}
+      {!mobile && (
+        <button
+          onClick={onToggleCollapse}
+          className="mx-3 mb-2 flex items-center justify-center rounded-lg py-2 text-neutral-400 hover:bg-white/5 hover:text-neutral-200 transition-all duration-200"
+          title={collapsed ? 'Expand sidebar (Ctrl+\\)' : 'Collapse sidebar (Ctrl+\\)'}
         >
-          <ChevronsLeft size={18} />
-        </motion.div>
-      </button>
+          <motion.div
+            animate={{ rotate: collapsed ? 180 : 0 }}
+            transition={{ type: 'spring' as const, stiffness: 200, damping: 20 }}
+          >
+            <ChevronsLeft size={18} />
+          </motion.div>
+        </button>
+      )}
 
       {/* User footer */}
       <div className="flex items-center gap-3 border-t border-white/10 px-6 py-4">
@@ -266,7 +290,7 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
           <span className="text-[13px] font-bold text-white">{initials}</span>
         </div>
         <AnimatePresence>
-          {!collapsed && (
+          {(mobile || !collapsed) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -282,6 +306,47 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
           )}
         </AnimatePresence>
       </div>
-    </motion.aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar — hidden on mobile, visible from md up */}
+      <motion.aside
+        animate={{ width: collapsed ? 72 : 240 }}
+        transition={{ type: 'spring' as const, stiffness: 200, damping: 30 }}
+        className="group/sidebar sticky top-0 hidden h-screen flex-col bg-[#1A1625] overflow-hidden md:flex"
+      >
+        {sidebarContent(false)}
+      </motion.aside>
+
+      {/* Mobile drawer — visible only on small screens when isOpen */}
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* Dark backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] md:hidden"
+              onClick={onClose}
+            />
+            {/* Sidebar panel sliding from left */}
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+              className="fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col bg-[#1A1625] shadow-2xl md:hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {sidebarContent(true)}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

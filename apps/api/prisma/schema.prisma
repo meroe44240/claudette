@@ -49,6 +49,7 @@ model User {
   assignedJobPostings  JobPosting[]    @relation("JobPostingAssignedTo")
   createdJobPostings   JobPosting[]    @relation("JobPostingCreatedBy")
   reviewedApplications JobApplication[] @relation("JobApplicationReviewedBy")
+  onboardingCompleted  Boolean   @default(false)
 
   @@map("users")
 }

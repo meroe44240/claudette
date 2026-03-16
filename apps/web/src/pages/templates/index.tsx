@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Globe, User, Mail, FileText, File, MoreVertical, BookOpen } from 'lucide-react';
+import { Plus, Globe, User, Mail, FileText, File, MoreVertical, BookOpen, Search, Copy } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -13,6 +13,7 @@ import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import { toast } from '../../components/ui/Toast';
+import PageHeader from '../../components/ui/PageHeader';
 
 interface Template {
   id: string;
@@ -84,6 +85,8 @@ const listItem = {
 export default function TemplatesPage() {
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [ownershipFilter, setOwnershipFilter] = useState<'all' | 'mine'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTemplate, setNewTemplate] = useState({ nom: '', type: 'EMAIL_PRISE_CONTACT', sujet: '' });
   const navigate = useNavigate();
@@ -109,6 +112,23 @@ export default function TemplatesPage() {
     },
   });
 
+  const duplicateMutation = useMutation({
+    mutationFn: (template: Template) =>
+      api.post<Template>('/templates', {
+        nom: `${template.nom} (copie)`,
+        type: template.type,
+        sujet: template.sujet || '',
+        contenu: template.contenu,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['templates'] });
+      toast('success', 'Template dupliqué');
+    },
+    onError: () => {
+      toast('error', 'Erreur lors de la duplication');
+    },
+  });
+
   const handleCreate = () => {
     if (!newTemplate.nom.trim()) {
       toast('warning', 'Le nom est requis');
@@ -122,37 +142,96 @@ export default function TemplatesPage() {
     });
   };
 
-  // Filter by tab category
-  const filteredTemplates = data?.data.filter((t) => {
-    if (activeTab === 'all') return true;
-    return getTypeCategory(t.type) === activeTab;
-  }) ?? [];
+  // Filter by tab category, search query, and ownership
+  const filteredTemplates = useMemo(() => {
+    let result = data?.data ?? [];
+    // Tab filter
+    if (activeTab !== 'all') {
+      result = result.filter((t) => getTypeCategory(t.type) === activeTab);
+    }
+    // Ownership filter
+    if (ownershipFilter === 'mine') {
+      result = result.filter((t) => !t.isGlobal);
+    }
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter((t) =>
+        t.nom.toLowerCase().includes(q) ||
+        (t.sujet && t.sujet.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [data?.data, activeTab, ownershipFilter, searchQuery]);
 
   return (
     <div className="font-['Plus_Jakarta_Sans']">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-[28px] font-bold text-neutral-900">Templates</h1>
-        <Button variant="primary" onClick={() => setShowCreateModal(true)}>
-          <Plus size={16} /> Nouveau template
-        </Button>
-      </div>
+      <PageHeader
+        title="Templates"
+        breadcrumbs={[{ label: 'Templates' }]}
+        actions={
+          <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+            <Plus size={16} /> Nouveau template
+          </Button>
+        }
+      />
 
-      {/* Pill-style tabs */}
-      <div className="mb-6 flex items-center gap-1">
-        {TABS.map((tab) => (
+      {/* Search + Ownership toggle + Tabs */}
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        {/* Search input */}
+        <div className="relative" style={{ width: 240 }}>
+          <Search
+            size={14}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary"
+          />
+          <input
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+            placeholder="Rechercher un template..."
+            className="h-8 w-full rounded-md border border-neutral-200 bg-white pl-8 pr-3 text-xs outline-none transition-all focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+          />
+        </div>
+
+        {/* Ownership toggle */}
+        <div className="flex items-center rounded-lg border border-neutral-200 bg-neutral-50 p-0.5">
           <button
-            key={tab.id}
-            onClick={() => { setActiveTab(tab.id); setPage(1); }}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
-              activeTab === tab.id
-                ? 'bg-[#7C5CFC] text-white shadow-sm'
-                : 'bg-transparent text-neutral-500 hover:bg-neutral-50'
+            onClick={() => { setOwnershipFilter('all'); setPage(1); }}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              ownershipFilter === 'all'
+                ? 'bg-white text-neutral-900 shadow-sm'
+                : 'text-neutral-500 hover:text-neutral-700'
             }`}
           >
-            {tab.label}
+            Tous
           </button>
-        ))}
+          <button
+            onClick={() => { setOwnershipFilter('mine'); setPage(1); }}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              ownershipFilter === 'mine'
+                ? 'bg-white text-neutral-900 shadow-sm'
+                : 'text-neutral-500 hover:text-neutral-700'
+            }`}
+          >
+            Mes templates
+          </button>
+        </div>
+
+        {/* Pill-style tabs */}
+        <div className="flex items-center gap-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => { setActiveTab(tab.id); setPage(1); }}
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
+                activeTab === tab.id
+                  ? 'bg-[#7C5CFC] text-white shadow-sm'
+                  : 'bg-transparent text-neutral-500 hover:bg-neutral-50'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Card grid */}
@@ -217,17 +296,29 @@ export default function TemplatesPage() {
                     </Badge>
                   </div>
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/templates/${template.id}`);
-                    }}
-                  >
-                    Modifier
-                  </Button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        duplicateMutation.mutate(template);
+                      }}
+                      title="Dupliquer"
+                    >
+                      <Copy size={13} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/templates/${template.id}`);
+                      }}
+                    >
+                      Modifier
+                    </Button>
+                  </div>
                 </div>
               </div></motion.div>
             ))}

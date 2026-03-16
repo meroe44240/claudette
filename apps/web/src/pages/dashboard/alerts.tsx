@@ -63,6 +63,7 @@ export default function AlertsPage() {
         <PageHeader
           title="Centre d'alertes"
           subtitle="Candidatures stagnantes, mandats dormants, taches en retard"
+          breadcrumbs={[{ label: 'Dashboard', href: '/' }, { label: 'Alertes' }]}
         />
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => refetch()} disabled={isLoading}>

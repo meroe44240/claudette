@@ -19,6 +19,8 @@ export function useKeyboardShortcuts() {
     { key: 't', description: 'Tâches', action: () => navigate('/taches') },
     { key: 'e', description: 'Entreprises', action: () => navigate('/entreprises') },
     { key: 'k', description: 'Clients', action: () => navigate('/clients') },
+    { key: 'a', description: 'Activités', action: () => navigate('/activites') },
+    { key: 's', description: 'Statistiques', action: () => navigate('/stats') },
     { key: 'n', ctrl: true, description: 'Nouveau candidat', action: () => navigate('/candidats/new') },
     { key: '/', description: 'Aide raccourcis', action: () => setShowHelp(prev => !prev) },
   ];

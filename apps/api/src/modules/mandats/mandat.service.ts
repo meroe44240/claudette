@@ -3,6 +3,7 @@ import { NotFoundError } from '../../lib/errors.js';
 import { paginatedResult, paginationToSkipTake } from '../../lib/pagination.js';
 import type { PaginationParams } from '../../lib/pagination.js';
 import type { CreateMandatInput, UpdateMandatInput, UpdateFeeInput } from './mandat.schema.js';
+import { scoreCandidature } from '../candidatures/scoring.service.js';
 
 function calculateFeeMontantEstime(salaireMin?: number | null, salaireMax?: number | null, feePourcentage?: number | null): number | undefined {
   if (salaireMin != null && salaireMax != null && feePourcentage != null) {
@@ -197,7 +198,16 @@ export async function clone(id: string) {
 }
 
 export async function getKanban(id: string) {
-  const existing = await prisma.mandat.findUnique({ where: { id } });
+  const existing = await prisma.mandat.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      salaireMin: true,
+      salaireMax: true,
+      localisation: true,
+      scorecard: true,
+    },
+  });
   if (!existing) throw new NotFoundError('Mandat', id);
 
   const candidatures = await prisma.candidature.findMany({
@@ -213,18 +223,37 @@ export async function getKanban(id: string) {
           posteActuel: true,
           entrepriseActuelle: true,
           localisation: true,
+          salaireSouhaite: true,
+          anneesExperience: true,
+          disponibilite: true,
+          tags: true,
         },
       },
     },
     orderBy: { updatedAt: 'desc' },
   });
 
+  // Extract tags from scorecard if available
+  const mandatTags: string[] = [];
+  if (existing.scorecard && typeof existing.scorecard === 'object') {
+    const sc = existing.scorecard as any;
+    if (Array.isArray(sc.tags)) mandatTags.push(...sc.tags);
+    if (Array.isArray(sc.competences)) mandatTags.push(...sc.competences);
+  }
+
+  // Compute compatibility score for each candidature
+  const mandatForScoring = { ...existing, tags: mandatTags };
+  const scoredCandidatures = candidatures.map((c) => ({
+    ...c,
+    score: scoreCandidature(c.candidat, mandatForScoring),
+  }));
+
   // Group candidatures by stage
   const stages = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE'] as const;
-  const kanban: Record<string, typeof candidatures> = {};
+  const kanban: Record<string, typeof scoredCandidatures> = {};
 
   for (const stage of stages) {
-    kanban[stage] = candidatures.filter((c) => c.stage === stage);
+    kanban[stage] = scoredCandidatures.filter((c) => c.stage === stage);
   }
 
   return kanban;

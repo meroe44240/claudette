@@ -2,9 +2,13 @@ import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { LayoutGrid, List, Plus, Search, Building2, Users, Calendar, Columns3, Briefcase, Filter, X } from 'lucide-react';
+import { LayoutGrid, List, Plus, Search, Building2, Users, Calendar, Columns3, Briefcase, Filter, X, Download, Mail } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { useListNavigation } from '../../hooks/useListNavigation';
+import { usePrefetch } from '../../hooks/usePrefetch';
 import { api } from '../../lib/api-client';
+import { toast } from '../../components/ui/Toast';
+import { downloadCSV } from '../../lib/export';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
 import Table from '../../components/ui/Table';
@@ -12,6 +16,8 @@ import Badge from '../../components/ui/Badge';
 import Pagination from '../../components/ui/Pagination';
 import EmptyState from '../../components/ui/EmptyState';
 import Skeleton, { SkeletonCard } from '../../components/ui/Skeleton';
+import SelectionBar from '../../components/ui/SelectionBar';
+import type { SelectionAction } from '../../components/ui/SelectionBar';
 import SortableHeader, { toggleSort, applySortToData } from '../../components/ui/SortableHeader';
 import type { SortConfig } from '../../components/ui/SortableHeader';
 
@@ -107,18 +113,36 @@ const listItem = {
 
 type ViewMode = 'grid' | 'table';
 
+// ── Selection actions ───────────────────────────────────────────
+const SELECTION_ACTIONS: SelectionAction[] = [
+  { key: 'export', label: 'Exporter CSV', icon: Download, variant: 'primary' },
+  { key: 'email', label: 'Email clients', icon: Mail, variant: 'secondary' },
+];
+
 export default function MandatsPage() {
   usePageTitle('Mandats');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [view, setView] = useState<ViewMode>('table');
   const navigate = useNavigate();
+  const { prefetchOnHover, cancelPrefetch } = usePrefetch();
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [filterStatut, setFilterStatut] = useState<string>('');
   const [filterPriorite, setFilterPriorite] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
 
   const activeFilterCount = [filterStatut, filterPriorite].filter(Boolean).length;
+
+  // ── Selection state ───────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
 
   const handleSort = useCallback((key: string) => {
     setSortConfig((prev) => toggleSort(prev, key));
@@ -157,7 +181,65 @@ export default function MandatsPage() {
     [data?.data, sortConfig],
   );
 
+  const { focusedIndex, setFocusedIndex } = useListNavigation(sortedMandats.length, {
+    onSelect: (index) => navigate(`/mandats/${sortedMandats[index].id}`),
+  });
+
+  // ── Selection helpers ──────────────────────────────────────────
+  const handleSelectionAction = useCallback((key: string) => {
+    const ids = Array.from(selectedIds);
+
+    switch (key) {
+      case 'export': {
+        downloadCSV('mandats', ids)
+          .then(() => toast('success', `${ids.length} mandat(s) exporté(s)`))
+          .catch(() => toast('error', "Erreur lors de l'export"));
+        break;
+      }
+      case 'email': {
+        const selected = sortedMandats.filter((m) => ids.includes(m.id));
+        // Collect unique client info — in a real app you'd use client emails
+        const clientNames = selected.map((m) => `${m.client.prenom || ''} ${m.client.nom}`.trim());
+        toast('info', `Email groupé pour les clients : ${clientNames.join(', ')}`);
+        break;
+      }
+      default:
+        break;
+    }
+  }, [selectedIds, sortedMandats]);
+
+  const allSelected = sortedMandats.length > 0 && sortedMandats.every((m) => selectedIds.has(m.id));
+
+  const toggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sortedMandats.map((m) => m.id)));
+    }
+  }, [allSelected, sortedMandats]);
+
   const columns = [
+    {
+      key: 'checkbox',
+      header: (
+        <input
+          type="checkbox"
+          checked={allSelected}
+          onChange={toggleSelectAll}
+          className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer"
+        />
+      ) as unknown as string,
+      render: (r: Mandat) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.has(r.id)}
+          onChange={(e) => { e.stopPropagation(); toggleSelect(r.id); }}
+          onClick={(e) => e.stopPropagation()}
+          className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer"
+        />
+      ),
+      className: 'w-10',
+    },
     {
       key: 'titrePoste',
       header: (<SortableHeader label="Poste" sortKey="titrePoste" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
@@ -255,7 +337,9 @@ export default function MandatsPage() {
     return (
       <div
         onClick={() => navigate(`/mandats/${mandat.id}`)}
-        className="cursor-pointer rounded-2xl border border-border/50 bg-white p-5 shadow-card card-hover hover:shadow-card-hover flex flex-col"
+        onMouseEnter={() => prefetchOnHover(['mandat', mandat.id], `/mandats/${mandat.id}`)}
+        onMouseLeave={cancelPrefetch}
+        className={`cursor-pointer rounded-2xl border border-border/50 bg-white p-5 shadow-card card-hover hover:shadow-card-hover flex flex-col ${focusedIndex === index ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}`}
       >
         {/* Header: Title + Status */}
         <div className="flex items-start justify-between gap-2">
@@ -476,6 +560,9 @@ export default function MandatsPage() {
               data={sortedMandats}
               keyExtractor={(r) => r.id}
               onRowClick={(r) => navigate(`/mandats/${r.id}`)}
+              onRowMouseEnter={(r) => prefetchOnHover(['mandat', r.id], `/mandats/${r.id}`)}
+              onRowMouseLeave={cancelPrefetch}
+              rowClassName={(_r, i) => focusedIndex === i ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}
             />
           )}
           {data?.meta && (
@@ -489,6 +576,15 @@ export default function MandatsPage() {
           )}
         </>
       )}
+
+      {/* Selection bar */}
+      <SelectionBar
+        count={selectedIds.size}
+        entityLabel="mandats"
+        actions={SELECTION_ACTIONS}
+        onAction={handleSelectionAction}
+        onCancel={() => setSelectedIds(new Set())}
+      />
     </div>
   );
 }

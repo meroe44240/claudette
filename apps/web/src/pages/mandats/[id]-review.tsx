@@ -12,6 +12,7 @@ import { api } from '../../lib/api-client';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { toast } from '../../components/ui/Toast';
+import PageHeader from '../../components/ui/PageHeader';
 
 interface Candidature {
   id: string;
@@ -215,35 +216,33 @@ export default function FastReviewPage() {
 
   return (
     <div className="font-['Plus_Jakarta_Sans'] min-h-[80vh]">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link to={`/mandats/${mandatId}/kanban`} className="rounded-lg p-2 hover:bg-neutral-100 transition-colors">
-            <ChevronLeft size={20} className="text-neutral-500" />
-          </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <Zap size={18} className="text-amber-500" />
-              <h1 className="text-xl font-bold text-neutral-900">Fast Review</h1>
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            <Link to={`/mandats/${mandatId}/kanban`} className="rounded-lg p-2 hover:bg-neutral-100 transition-colors">
+              <ChevronLeft size={20} className="text-neutral-500" />
+            </Link>
+            <Zap size={18} className="text-amber-500" />
+            Fast Review
+          </span>
+        }
+        subtitle={`${mandat?.titrePoste || ''}${mandat?.entreprise?.nom ? ` — ${mandat.entreprise.nom}` : ''}`}
+        breadcrumbs={[{ label: 'Mandats', href: '/mandats' }, { label: mandat?.titrePoste || 'Mandat', href: `/mandats/${mandatId}` }, { label: 'Fast Review' }]}
+        actions={
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm text-neutral-500">
+              <Users size={16} />
+              <span>{remaining} restant{remaining > 1 ? 's' : ''}</span>
             </div>
-            <p className="text-sm text-neutral-500">
-              {mandat?.titrePoste} {mandat?.entreprise?.nom ? `— ${mandat.entreprise.nom}` : ''}
-            </p>
+            <button
+              onClick={() => setShowShortcuts(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-50 transition-colors"
+            >
+              <Keyboard size={14} /> Raccourcis
+            </button>
           </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm text-neutral-500">
-            <Users size={16} />
-            <span>{remaining} restant{remaining > 1 ? 's' : ''}</span>
-          </div>
-          <button
-            onClick={() => setShowShortcuts(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-50 transition-colors"
-          >
-            <Keyboard size={14} /> Raccourcis
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Progress bar */}
       <div className="mb-8 h-1.5 overflow-hidden rounded-full bg-neutral-100">

@@ -19,6 +19,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import { toast } from '../../components/ui/Toast';
 import { useAuthStore } from '../../stores/auth-store';
 import AgendaWidget from '../../components/calendar/AgendaWidget';
+import PageHeader from '../../components/ui/PageHeader';
 
 interface MandatRecruteur {
   id: string;
@@ -134,6 +135,10 @@ export default function MonEspacePage() {
 
   return (
     <motion.div className="font-['Plus_Jakarta_Sans']" variants={sectionStagger} initial="hidden" animate="show">
+      <PageHeader
+        title="Mon espace"
+        breadcrumbs={[{ label: 'Mon espace' }]}
+      />
       {/* Header: Avatar + User info */}
       <motion.div className="mb-6 flex items-center gap-5" variants={sectionItem}>
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#7C5CFC] to-[#A78BFA] text-[22px] font-bold text-white shadow-lg">

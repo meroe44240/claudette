@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -11,6 +11,8 @@ import Select from '../../components/ui/Select';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { toast } from '../../components/ui/Toast';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
+import { useAutosave } from '../../hooks/useAutosave';
 
 const statutOptions = [
   { value: '', label: 'Sélectionner...' },
@@ -80,6 +82,23 @@ export default function MandatNewPage() {
   const [form, setForm] = useState<FormData>(initialForm);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
+  const isDirty = useMemo(
+    () => Object.keys(initialForm).some((key) => form[key as keyof FormData] !== initialForm[key as keyof FormData]),
+    [form],
+  );
+  const { unsavedChangesModal } = useUnsavedChanges(isDirty);
+
+  // Autosave draft
+  const { restoredData, clearDraft } = useAutosave<FormData>('draft-mandat-new', form);
+
+  useEffect(() => {
+    if (restoredData) {
+      setForm(restoredData);
+      toast('success', 'Brouillon restauré');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Inline creation modals
   const [showNewEntreprise, setShowNewEntreprise] = useState(false);
   const [newEntrepriseNom, setNewEntrepriseNom] = useState('');
@@ -148,6 +167,7 @@ export default function MandatNewPage() {
     mutationFn: (payload: Record<string, unknown>) =>
       api.post<{ id: string }>('/mandats', payload),
     onSuccess: (created) => {
+      clearDraft();
       toast('success', 'Mandat créé');
       navigate(`/mandats/${created.id}`);
     },
@@ -414,6 +434,7 @@ export default function MandatNewPage() {
           </div>
         </div>
       </Modal>
+      {unsavedChangesModal}
     </div>
   );
 }

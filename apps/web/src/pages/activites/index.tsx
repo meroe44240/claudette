@@ -12,6 +12,7 @@ import Button from '../../components/ui/Button';
 import Select from '../../components/ui/Select';
 import Input, { Textarea } from '../../components/ui/Input';
 import { toast } from '../../components/ui/Toast';
+import PageHeader from '../../components/ui/PageHeader';
 
 const typeIcons: Record<string, React.ReactNode> = {
   APPEL: <Phone size={16} />,
@@ -271,26 +272,28 @@ export default function ActivitesPage() {
 
   return (
     <div className="font-['Plus_Jakarta_Sans']">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-[28px] font-bold text-neutral-900">Activités</h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setBookmarkedOnly(!bookmarkedOnly)}
-            className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-              bookmarkedOnly
-                ? 'bg-amber-50 text-amber-600'
-                : 'text-neutral-500 hover:bg-neutral-50'
-            }`}
-          >
-            {bookmarkedOnly ? <Star size={16} fill="currentColor" /> : <StarOff size={16} />}
-            Bookmarks
-          </button>
-          <Button variant="primary" onClick={() => setCreateModalOpen(true)}>
-            <Plus size={16} /> Nouvelle activité
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Activités"
+        breadcrumbs={[{ label: 'Activités' }]}
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setBookmarkedOnly(!bookmarkedOnly)}
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+                bookmarkedOnly
+                  ? 'bg-amber-50 text-amber-600'
+                  : 'text-neutral-500 hover:bg-neutral-50'
+              }`}
+            >
+              {bookmarkedOnly ? <Star size={16} fill="currentColor" /> : <StarOff size={16} />}
+              Bookmarks
+            </button>
+            <Button variant="primary" onClick={() => setCreateModalOpen(true)}>
+              <Plus size={16} /> Nouvelle activité
+            </Button>
+          </div>
+        }
+      />
 
       {/* Pill-style tabs */}
       <div className="mb-6 flex items-center gap-1">

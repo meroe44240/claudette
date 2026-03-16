@@ -19,6 +19,7 @@ import Modal from '../../components/ui/Modal';
 import Input, { Textarea } from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import { toast } from '../../components/ui/Toast';
+import PageHeader from '../../components/ui/PageHeader';
 
 interface Tache {
   id: string;
@@ -177,13 +178,15 @@ export default function TachesPage() {
 
   return (
     <div className="font-['Plus_Jakarta_Sans']">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-[28px] font-bold text-neutral-900">Tâches</h1>
-        <Button variant="primary" onClick={() => setShowCreateModal(true)}>
-          <Plus size={16} /> Nouvelle tâche
-        </Button>
-      </div>
+      <PageHeader
+        title="Tâches"
+        breadcrumbs={[{ label: 'Tâches' }]}
+        actions={
+          <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+            <Plus size={16} /> Nouvelle tâche
+          </Button>
+        }
+      />
 
       {/* Pill-style tabs */}
       <div className="mb-6 flex items-center gap-1">

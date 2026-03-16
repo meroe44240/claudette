@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useMutation } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -10,6 +10,8 @@ import Input, { Textarea } from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Button from '../../components/ui/Button';
 import { toast } from '../../components/ui/Toast';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
+import { useAutosave } from '../../hooks/useAutosave';
 
 const tailleOptions = [
   { value: '', label: 'Sélectionner...' },
@@ -43,6 +45,23 @@ export default function EntrepriseNewPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState<FormData>(initialForm);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
+
+  const isDirty = useMemo(
+    () => Object.keys(initialForm).some((key) => form[key as keyof FormData] !== initialForm[key as keyof FormData]),
+    [form],
+  );
+  const { unsavedChangesModal } = useUnsavedChanges(isDirty);
+
+  // Autosave draft
+  const { restoredData, clearDraft } = useAutosave<FormData>('draft-entreprise-new', form);
+
+  useEffect(() => {
+    if (restoredData) {
+      setForm(restoredData);
+      toast('success', 'Brouillon restauré');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Duplicate detection by name
   const [duplicateMatch, setDuplicateMatch] = useState<{ id: string; nom: string } | null>(null);
@@ -85,6 +104,7 @@ export default function EntrepriseNewPage() {
     mutationFn: (payload: Record<string, unknown>) =>
       api.post<{ id: string }>('/entreprises', payload),
     onSuccess: (created) => {
+      clearDraft();
       toast('success', 'Entreprise créée');
       navigate(`/entreprises/${created.id}`);
     },
@@ -227,6 +247,7 @@ export default function EntrepriseNewPage() {
         </Card>
         </motion.div>
       </form>
+      {unsavedChangesModal}
     </div>
   );
 }

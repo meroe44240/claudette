@@ -34,6 +34,7 @@ export async function login(input: LoginInput) {
       prenom: user.prenom,
       role: user.role,
       mustChangePassword: user.mustChangePassword,
+      onboardingCompleted: user.onboardingCompleted,
     },
   };
 }

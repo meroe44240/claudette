@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../lib/api-client';
+import PageHeader from '../../components/ui/PageHeader';
 
 // ─── TYPES ──────────────────────────────────────────
 
@@ -147,16 +148,12 @@ export default function SequencesPage() {
   // ── RENDER ─────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[24px] font-bold text-neutral-900">Séquences</h1>
-          <p className="mt-1 text-[14px] text-neutral-500">
-            Workflows multicanal — email, appel, WhatsApp
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {sequences.length === 0 && (
+      <PageHeader
+        title="Séquences"
+        subtitle="Workflows multicanal — email, appel, WhatsApp"
+        breadcrumbs={[{ label: 'Séquences' }]}
+        actions={
+          sequences.length === 0 ? (
             <button
               onClick={() => seedMutation.mutate()}
               disabled={seedMutation.isPending}
@@ -165,9 +162,9 @@ export default function SequencesPage() {
               <Zap size={14} />
               {seedMutation.isPending ? 'Création...' : 'Créer les templates par défaut'}
             </button>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       {/* Tabs */}
       <div className="flex items-center gap-1 rounded-lg bg-neutral-100 p-1 w-fit">

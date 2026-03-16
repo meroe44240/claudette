@@ -11,6 +11,7 @@ import {
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { api } from '../../lib/api-client';
+import PageHeader from '../../components/ui/PageHeader';
 
 // ─── TYPES ──────────────────────────────────────────
 
@@ -828,30 +829,34 @@ export default function SdrPage() {
   return (
     <div className="flex-1 overflow-y-auto bg-[#F8F8FA]">
       <div className="mx-auto max-w-6xl px-6 py-6">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          {view !== 'dashboard' && (
-            <button
-              onClick={() => {
-                if (view === 'dialer' && dialerContact) {
-                  if (!confirm('Quitter la session d\'appels ? Vous pourrez la reprendre plus tard.')) return;
-                }
-                setView('dashboard');
-                setUploadResult(null);
-                setDialerContact(null);
-                setDialerStats(null);
-              }}
-              className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-neutral-500 hover:bg-neutral-100 transition-colors"
-            >
-              <ChevronLeft size={16} />
-              Retour
-            </button>
-          )}
-          <div className="flex items-center gap-2">
-            <Crosshair size={20} className="text-brand-500" />
-            <h1 className="text-xl font-bold text-neutral-800">{viewTitle[view]}</h1>
-          </div>
-        </div>
+        <PageHeader
+          title={
+            <span className="flex items-center gap-2">
+              <Crosshair size={20} className="text-brand-500" />
+              {viewTitle[view]}
+            </span>
+          }
+          breadcrumbs={[{ label: 'SDR' }]}
+          actions={
+            view !== 'dashboard' ? (
+              <button
+                onClick={() => {
+                  if (view === 'dialer' && dialerContact) {
+                    if (!confirm('Quitter la session d\'appels ? Vous pourrez la reprendre plus tard.')) return;
+                  }
+                  setView('dashboard');
+                  setUploadResult(null);
+                  setDialerContact(null);
+                  setDialerStats(null);
+                }}
+                className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-neutral-500 hover:bg-neutral-100 transition-colors"
+              >
+                <ChevronLeft size={16} />
+                Retour
+              </button>
+            ) : undefined
+          }
+        />
 
         {/* Content */}
         <AnimatePresence mode="wait">
