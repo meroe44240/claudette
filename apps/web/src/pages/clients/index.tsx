@@ -2,38 +2,29 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { LayoutGrid, List, Plus, Search, Building2, Mail, Send, Download } from 'lucide-react';
-import { api } from '../../lib/api-client';
-import { downloadCSV } from '../../lib/export';
+import { Plus, Search, LayoutGrid, List, Mail, Phone, ArrowRightLeft, Download, UserCheck, MoreHorizontal, Building2 } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { useListNavigation } from '../../hooks/useListNavigation';
 import { usePrefetch } from '../../hooks/usePrefetch';
 import { toast } from '../../components/ui/Toast';
+import { api } from '../../lib/api-client';
+import { downloadCSV } from '../../lib/export';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
-import Avatar from '../../components/ui/Avatar';
 import Pagination from '../../components/ui/Pagination';
 import EmptyState from '../../components/ui/EmptyState';
 import Skeleton, { SkeletonCard } from '../../components/ui/Skeleton';
+import Avatar from '../../components/ui/Avatar';
 import FilterBar from '../../components/ui/FilterBar';
 import type { FilterConfig } from '../../components/ui/FilterBar';
 import SelectionBar from '../../components/ui/SelectionBar';
 import type { SelectionAction } from '../../components/ui/SelectionBar';
-import SortableHeader, { toggleSort, applySortToData } from '../../components/ui/SortableHeader';
+import SortableHeader, { toggleSort } from '../../components/ui/SortableHeader';
 import type { SortConfig } from '../../components/ui/SortableHeader';
 
-type RoleContact = 'HIRING_MANAGER' | 'DRH' | 'PROCUREMENT' | 'CEO' | 'AUTRE';
-type StatutClient =
-  | 'LEAD'
-  | 'PREMIER_CONTACT'
-  | 'BESOIN_QUALIFIE'
-  | 'PROPOSITION_ENVOYEE'
-  | 'MANDAT_SIGNE'
-  | 'RECURRENT'
-  | 'INACTIF';
-
+// ── Interfaces ────────────────────────────────────────────────
 interface Client {
   id: string;
   nom: string;
@@ -41,12 +32,22 @@ interface Client {
   email: string | null;
   telephone: string | null;
   poste: string | null;
-  roleContact: RoleContact | null;
-  statutClient: StatutClient;
-  entreprise: { id: string; nom: string; localisation?: string | null; secteur?: string | null };
-  mandats?: { id: string; statut: string }[];
+  roleContact: string | null;
+  typeClient: string | null;
+  computedType: string | null;
+  statutClient: string;
+  entreprise: {
+    id: string;
+    nom: string;
+    secteur?: string | null;
+    localisation?: string | null;
+    logoUrl?: string | null;
+    siteWeb?: string | null;
+  } | null;
+  mandatsActifs: number;
+  revenueCumule: number;
+  lastActivityAt: string | null;
   assignedTo?: { id: string; nom: string; prenom: string | null } | null;
-  lastActivity?: string | null;
 }
 
 interface PaginatedResponse {
@@ -59,7 +60,46 @@ interface PaginatedResponse {
   };
 }
 
-const roleLabels: Record<RoleContact, string> = {
+// ── Helper functions ──────────────────────────────────────────
+function formatRevenue(amount: number): string {
+  if (amount === 0) return '\u2014';
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(amount);
+}
+
+function formatRelativeDate(date: string | null): string {
+  if (!date) return 'Jamais';
+  const diff = Date.now() - new Date(date).getTime();
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return "Aujourd'hui";
+  if (days === 1) return 'Hier';
+  if (days < 7) return `il y a ${days}j`;
+  if (days < 30) return `il y a ${Math.floor(days / 7)} sem`;
+  if (days < 365) return `il y a ${Math.floor(days / 30)} mois`;
+  return `il y a ${Math.floor(days / 365)} an(s)`;
+}
+
+// ── Label & variant maps ──────────────────────────────────────
+const STATUT_LABELS: Record<string, string> = {
+  LEAD: 'Lead',
+  PREMIER_CONTACT: 'Premier contact',
+  BESOIN_QUALIFIE: 'Besoin qualifi\u00e9',
+  PROPOSITION_ENVOYEE: 'Proposition',
+  MANDAT_SIGNE: 'Mandat sign\u00e9',
+  RECURRENT: 'R\u00e9current',
+  INACTIF: 'Inactif',
+};
+
+const STATUT_BADGE_VARIANT: Record<string, string> = {
+  LEAD: 'default',
+  PREMIER_CONTACT: 'info',
+  BESOIN_QUALIFIE: 'warning',
+  PROPOSITION_ENVOYEE: 'warning',
+  MANDAT_SIGNE: 'success',
+  RECURRENT: 'offre',
+  INACTIF: 'error',
+};
+
+const ROLE_LABELS: Record<string, string> = {
   HIRING_MANAGER: 'Hiring Manager',
   DRH: 'DRH',
   PROCUREMENT: 'Procurement',
@@ -67,41 +107,31 @@ const roleLabels: Record<RoleContact, string> = {
   AUTRE: 'Autre',
 };
 
-const statutLabels: Record<StatutClient, string> = {
-  LEAD: 'Lead',
-  PREMIER_CONTACT: 'Premier contact',
-  BESOIN_QUALIFIE: 'Besoin qualifié',
-  PROPOSITION_ENVOYEE: 'Proposition envoyée',
-  MANDAT_SIGNE: 'Mandat signé',
-  RECURRENT: 'Récurrent',
-  INACTIF: 'Inactif',
+const ROLE_BADGE_VARIANT: Record<string, string> = {
+  HIRING_MANAGER: 'info',
+  DRH: 'primary',
+  PROCUREMENT: 'warning',
+  CEO: 'error',
+  AUTRE: 'default',
 };
 
-const statutVariant: Record<StatutClient, 'default' | 'info' | 'warning' | 'success' | 'error' | 'primary' | 'teal' | 'indigo'> = {
-  LEAD: 'warning',
-  PREMIER_CONTACT: 'info',
-  BESOIN_QUALIFIE: 'teal',
-  PROPOSITION_ENVOYEE: 'primary',
-  MANDAT_SIGNE: 'success',
-  RECURRENT: 'indigo',
-  INACTIF: 'error',
+const TYPE_LABELS: Record<string, string> = {
+  INBOUND: '\ud83d\udce9 Inbound',
+  OUTBOUND: '\ud83c\udfaf Outbound',
+  RESEAU: '\ud83e\udd1d R\u00e9seau',
+  CLIENT_ACTIF: '\u2705 Client actif',
+  RECURRENT: '\u2b50 R\u00e9current',
 };
 
-// ── Avatar helpers ──────────────────────────────────────────────
-const AVATAR_BG = ['#7C5CFC','#10B981','#F59E0B','#3B82F6','#EC4899','#14B8A6','#8B5CF6','#EF4444'];
+const TYPE_BADGE_VARIANT: Record<string, string> = {
+  INBOUND: 'success',
+  OUTBOUND: 'info',
+  RESEAU: 'primary',
+  CLIENT_ACTIF: 'default',
+  RECURRENT: 'warning',
+};
 
-function getAvatarColorIndex(name: string): number {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return Math.abs(hash) % AVATAR_BG.length;
-}
-
-function getInitials(prenom: string | null, nom: string): string {
-  const p = prenom?.charAt(0)?.toUpperCase() || '';
-  const n = nom.charAt(0).toUpperCase();
-  return p + n || n;
-}
-
+// ── Animation variants ────────────────────────────────────────
 const listStagger = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.04 } },
@@ -111,72 +141,57 @@ const listItem = {
   show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 300, damping: 24 } },
 };
 
+// ── View type ─────────────────────────────────────────────────
 type ViewMode = 'grid' | 'table';
 
-// ── Filter config ─────────────────────────────────────────────
-const SECTOR_OPTIONS = [
-  { value: 'SaaS', label: 'SaaS / Tech' },
-  { value: 'Hospitality', label: 'Hospitality' },
-  { value: 'Finance', label: 'Finance' },
-  { value: 'Cybersecurity', label: 'Cybersecurity' },
-  { value: 'FinTech', label: 'FinTech' },
-  { value: 'Supply Chain', label: 'Supply Chain' },
-  { value: 'IT Services', label: 'IT Services' },
-  { value: 'AI', label: 'AI / Deep Tech' },
-  { value: 'Industrie', label: 'Industrie' },
-  { value: 'Autre', label: 'Autre' },
+// ── Filter options ────────────────────────────────────────────
+const TYPE_OPTIONS = [
+  { value: 'INBOUND', label: '\ud83d\udce9 Inbound' },
+  { value: 'OUTBOUND', label: '\ud83c\udfaf Outbound' },
+  { value: 'RESEAU', label: '\ud83e\udd1d R\u00e9seau' },
+  { value: 'CLIENT_ACTIF', label: '\u2705 Client actif' },
+  { value: 'RECURRENT', label: '\u2b50 R\u00e9current' },
 ];
 
-const STATUS_OPTIONS: { value: StatutClient; label: string }[] = [
+const STATUT_OPTIONS = [
   { value: 'LEAD', label: 'Lead' },
   { value: 'PREMIER_CONTACT', label: 'Premier contact' },
-  { value: 'BESOIN_QUALIFIE', label: 'Besoin qualifié' },
-  { value: 'PROPOSITION_ENVOYEE', label: 'Proposition envoyée' },
-  { value: 'MANDAT_SIGNE', label: 'Mandat signé' },
-  { value: 'RECURRENT', label: 'Récurrent' },
+  { value: 'BESOIN_QUALIFIE', label: 'Besoin qualifi\u00e9' },
+  { value: 'PROPOSITION_ENVOYEE', label: 'Proposition' },
+  { value: 'MANDAT_SIGNE', label: 'Mandat sign\u00e9' },
+  { value: 'RECURRENT', label: 'R\u00e9current' },
   { value: 'INACTIF', label: 'Inactif' },
 ];
 
 const ROLE_OPTIONS = [
-  { value: 'DRH', label: 'DRH' },
-  { value: 'CEO', label: 'CEO' },
   { value: 'HIRING_MANAGER', label: 'Hiring Manager' },
+  { value: 'DRH', label: 'DRH' },
   { value: 'PROCUREMENT', label: 'Procurement' },
-  { value: 'VP_SALES', label: 'VP Sales' },
-  { value: 'CRO', label: 'CRO' },
-  { value: 'HEAD_OF_TALENT', label: 'Head of Talent' },
+  { value: 'CEO', label: 'CEO' },
   { value: 'AUTRE', label: 'Autre' },
-];
-
-const LAST_ACTIVITY_OPTIONS = [
-  { value: '7', label: 'Moins de 7j' },
-  { value: '30', label: '7-30j' },
-  { value: '90', label: '30-90j' },
-  { value: '90+', label: 'Plus de 90j' },
-  { value: 'never', label: 'Jamais' },
 ];
 
 // ── Selection actions ─────────────────────────────────────────
 const SELECTION_ACTIONS: SelectionAction[] = [
+  { key: 'statut', label: 'Changer statut', icon: ArrowRightLeft, variant: 'secondary' },
+  { key: 'assign', label: 'Assigner \u00e0', icon: UserCheck, variant: 'secondary' },
   { key: 'email', label: 'Email groupe', icon: Mail, variant: 'primary' },
-  { key: 'relance', label: 'Relance', icon: Send, variant: 'secondary' },
-  { key: 'export', label: 'Exporter CSV', icon: Download, variant: 'ghost' },
+  { key: 'export', label: 'Exporter', icon: Download, variant: 'ghost' },
 ];
 
-// ── Helper: parse filter values from URL ──────────────────────
+// ── URL helpers ───────────────────────────────────────────────
 function parseFiltersFromURL(params: URLSearchParams): Record<string, any> {
   const result: Record<string, any> = {};
-  const multiKeys = ['sector', 'status', 'city', 'role'];
+  const multiKeys = ['typeClient', 'statutClient', 'role', 'city'];
   for (const key of multiKeys) {
     const val = params.get(key);
     if (val) result[key] = val.split(',');
   }
-  const singleKeys = ['assigned_to', 'last_activity'];
+  const singleKeys = ['assigned_to'];
   for (const key of singleKeys) {
     const val = params.get(key);
     if (val) result[key] = val;
   }
-  if (params.get('has_active_mandate') === 'true') result.has_active_mandate = true;
   return result;
 }
 
@@ -184,22 +199,22 @@ function serializeFiltersToURL(values: Record<string, any>): Record<string, stri
   const result: Record<string, string> = {};
   for (const [key, val] of Object.entries(values)) {
     if (Array.isArray(val) && val.length > 0) result[key] = val.join(',');
-    else if (val === true) result[key] = 'true';
     else if (typeof val === 'string' && val) result[key] = val;
   }
   return result;
 }
 
+// ── Main component ────────────────────────────────────────────
 export default function ClientsPage() {
   usePageTitle('Clients');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [view, setView] = useState<ViewMode>('grid');
+  const [view, setView] = useState<ViewMode>('table');
   const [searchParams, setSearchParams] = useSearchParams();
   const entrepriseId = searchParams.get('entrepriseId') || undefined;
   const navigate = useNavigate();
   const { prefetchOnHover, cancelPrefetch } = usePrefetch();
-  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'revenueCumule', direction: 'desc' });
 
   const handleSort = useCallback((key: string) => {
     setSortConfig((prev) => toggleSort(prev, key));
@@ -234,7 +249,7 @@ export default function ClientsPage() {
     setPage(1);
   }, []);
 
-  // ── Selection state ───────────────────────────────────────────
+  // ── Selection state ─────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const toggleSelect = useCallback((id: string) => {
@@ -245,99 +260,106 @@ export default function ClientsPage() {
     });
   }, []);
 
-  // ── Data fetching ─────────────────────────────────────────────
+  // ── Data fetching ───────────────────────────────────────────
   const { data, isLoading } = useQuery({
-    queryKey: ['clients', page, search, entrepriseId, filterValues],
+    queryKey: ['clients', page, search, entrepriseId, filterValues, sortConfig],
     queryFn: () => {
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('perPage', '20');
       if (search) params.set('search', search);
       if (entrepriseId) params.set('entrepriseId', entrepriseId);
-      // Pass filter values as query params
-      if (filterValues.sector?.length) params.set('sector', filterValues.sector.join(','));
-      if (filterValues.status?.length) params.set('statutClient', filterValues.status.join(','));
-      if (filterValues.city?.length) params.set('city', filterValues.city.join(','));
+      if (filterValues.typeClient?.length) params.set('typeClient', filterValues.typeClient.join(','));
+      if (filterValues.statutClient?.length) params.set('statutClient', filterValues.statutClient.join(','));
       if (filterValues.role?.length) params.set('role', filterValues.role.join(','));
+      if (filterValues.city?.length) params.set('city', filterValues.city.join(','));
       if (filterValues.assigned_to) params.set('assignedToId', filterValues.assigned_to);
+      if (sortConfig) {
+        params.set('sortBy', sortConfig.key);
+        params.set('sortDir', sortConfig.direction);
+      }
       return api.get<PaginatedResponse>(`/clients?${params.toString()}`);
     },
   });
 
-  // ── Dynamic filter options (cities from data) ─────────────────
+  const total = data?.meta?.total ?? 0;
+
+  // ── Fetch team members for "Assigne a" filter ─────────────
+  const { data: teamUsers } = useQuery({
+    queryKey: ['settings', 'team'],
+    queryFn: () => api.get<{ id: string; nom: string; prenom: string | null }[]>('/settings/team'),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const userOptions = useMemo(() =>
+    (teamUsers || []).map((u) => ({
+      value: u.id,
+      label: `${u.prenom || ''} ${u.nom}`.trim(),
+    })),
+  [teamUsers]);
+
+  // ── Dynamic city options from data ──────────────────────────
   const dynamicCityOptions = useMemo(() => {
     if (!data?.data) return [];
     const cities = new Set<string>();
     data.data.forEach((c) => {
-      if (c.entreprise.localisation) cities.add(c.entreprise.localisation);
+      if (c.entreprise?.localisation) cities.add(c.entreprise.localisation);
     });
     return Array.from(cities).sort().map((city) => ({ value: city, label: city }));
   }, [data?.data]);
 
-  // ── Build filter config ───────────────────────────────────────
+  // ── Filter config ───────────────────────────────────────────
   const filterConfigs: FilterConfig[] = useMemo(() => [
-    { key: 'sector', label: 'Secteur', type: 'multi-select', options: SECTOR_OPTIONS },
-    { key: 'status', label: 'Statut', type: 'multi-select', options: STATUS_OPTIONS },
+    { key: 'typeClient', label: 'Type', type: 'multi-select', options: TYPE_OPTIONS },
+    { key: 'statutClient', label: 'Statut', type: 'multi-select', options: STATUT_OPTIONS },
+    { key: 'role', label: 'R\u00f4le', type: 'multi-select', options: ROLE_OPTIONS },
     { key: 'city', label: 'Ville', type: 'multi-select', options: dynamicCityOptions },
-    { key: 'role', label: 'Role', type: 'multi-select', options: ROLE_OPTIONS },
-    { key: 'assigned_to', label: 'Assigné à', type: 'single-select', options: [] },
-    { key: 'last_activity', label: 'Dernière activité', type: 'single-select', options: LAST_ACTIVITY_OPTIONS },
-    { key: 'has_active_mandate', label: 'Mandat actif', type: 'toggle' },
-  ], [dynamicCityOptions]);
+    { key: 'assigned_to', label: 'Assign\u00e9 \u00e0', type: 'single-select', options: userOptions },
+  ], [dynamicCityOptions, userOptions]);
 
-  // ── Sorting (server handles filtering, client handles sort of current page) ──
+  // ── Data (server-side sorting) ──────────────────────────────
   const allClients = data?.data ?? [];
+  const sortedClients = allClients; // sorting is server-side
 
+  const { focusedIndex } = useListNavigation(sortedClients.length, {
+    onSelect: (index) => navigate(`/clients/${sortedClients[index].id}`),
+  });
+
+  // ── Selection actions handler ───────────────────────────────
   const handleSelectionAction = useCallback((key: string) => {
     const ids = Array.from(selectedIds);
+    const selected = allClients.filter((c) => ids.includes(c.id));
 
     switch (key) {
       case 'export': {
         downloadCSV('clients', ids)
-          .then(() => toast('success', `${ids.length} client(s) exporté(s)`))
+          .then(() => toast('success', `${ids.length} client(s) export\u00e9(s)`))
           .catch(() => toast('error', "Erreur lors de l'export"));
         break;
       }
       case 'email': {
-        const selected = allClients.filter((c) => ids.includes(c.id));
         const emails = selected
           .map((c) => c.email)
           .filter((e): e is string => !!e);
         if (emails.length === 0) {
-          toast('error', "Aucun client sélectionné n'a d'email");
+          toast('error', "Aucun client s\u00e9lectionn\u00e9 n'a d'email");
           break;
         }
         const mailto = `mailto:?bcc=${emails.join(',')}`;
         window.open(mailto, '_blank');
-        toast('success', `Email groupé ouvert pour ${emails.length} client(s)`);
+        toast('success', `Email group\u00e9 ouvert pour ${emails.length} client(s)`);
         break;
       }
-      case 'relance':
-        toast('info', `Relance groupée pour ${ids.length} client(s) — bientôt disponible`);
+      case 'statut':
+        toast('info', `Changement de statut group\u00e9 pour ${selected.length} client(s) \u2014 bient\u00f4t disponible`);
+        break;
+      case 'assign':
+        toast('info', `Assignation group\u00e9e pour ${selected.length} client(s) \u2014 bient\u00f4t disponible`);
         break;
       default:
         break;
     }
   }, [selectedIds, allClients]);
-
-  const sortedClients = useMemo(
-    () => applySortToData(allClients, sortConfig, (row, key) => {
-      switch (key) {
-        case 'nom': return `${row.prenom || ''} ${row.nom}`.trim();
-        case 'entreprise': return row.entreprise.nom;
-        case 'role': return row.roleContact ? roleLabels[row.roleContact] : null;
-        case 'statut': return statutLabels[row.statutClient];
-        default: return null;
-      }
-    }),
-    [allClients, sortConfig],
-  );
-
-  const total = data?.meta?.total ?? 0;
-
-  const { focusedIndex, setFocusedIndex } = useListNavigation(sortedClients.length, {
-    onSelect: (index) => navigate(`/clients/${sortedClients[index].id}`),
-  });
 
   const allSelected = sortedClients.length > 0 && sortedClients.every((c) => selectedIds.has(c.id));
 
@@ -349,8 +371,9 @@ export default function ClientsPage() {
     }
   }, [allSelected, sortedClients]);
 
-  // ── Table columns ─────────────────────────────────────────────
+  // ── Table columns (12 columns) ──────────────────────────────
   const columns = [
+    // 1. Checkbox
     {
       key: 'checkbox',
       header: (
@@ -372,163 +395,292 @@ export default function ClientsPage() {
       ),
       className: 'w-10',
     },
+    // 2. Client (Avatar + name)
     {
       key: 'nom',
-      header: (<SortableHeader label="Nom complet" sortKey="nom" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
+      header: (<SortableHeader label="Client" sortKey="nom" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
+      render: (r: Client) => (
+        <div className="flex items-center gap-3">
+          <Avatar nom={r.nom} prenom={r.prenom} size="sm" />
+          <span className="font-medium">
+            {r.prenom} {r.nom}
+          </span>
+        </div>
+      ),
+      className: 'min-w-[180px]',
+    },
+    // 3. Entreprise (logo + name)
+    {
+      key: 'entreprise',
+      header: 'Entreprise',
+      render: (r: Client) => r.entreprise ? (
+        <span
+          className="inline-flex items-center gap-2 text-accent hover:underline cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/entreprises/${r.entreprise!.id}`);
+          }}
+        >
+          {r.entreprise.logoUrl ? (
+            <img src={r.entreprise.logoUrl} alt="" className="h-4 w-4 rounded object-contain flex-shrink-0" />
+          ) : (
+            <Building2 size={14} className="text-neutral-400 flex-shrink-0" />
+          )}
+          <span className="truncate">{r.entreprise.nom}</span>
+        </span>
+      ) : '\u2014',
+      className: 'min-w-[140px]',
+    },
+    // 4. Role
+    {
+      key: 'role',
+      header: 'R\u00f4le',
+      render: (r: Client) =>
+        r.roleContact ? (
+          <Badge variant={(ROLE_BADGE_VARIANT[r.roleContact] || 'default') as any}>
+            {ROLE_LABELS[r.roleContact] || r.roleContact}
+          </Badge>
+        ) : '\u2014',
+      className: 'w-32',
+    },
+    // 5. Type (computedType)
+    {
+      key: 'type',
+      header: 'Type',
       render: (r: Client) => {
-        const idx = getAvatarColorIndex(r.nom);
+        const t = r.computedType || r.typeClient;
+        if (!t) return '\u2014';
         return (
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white"
-              style={{ backgroundColor: AVATAR_BG[idx] }}
-            >
-              {getInitials(r.prenom, r.nom)}
-            </div>
-            <span className="font-medium">
-              {r.prenom} {r.nom}
-            </span>
-          </div>
+          <Badge variant={(TYPE_BADGE_VARIANT[t] || 'default') as any}>
+            {TYPE_LABELS[t] || t}
+          </Badge>
         );
       },
+      className: 'w-36',
     },
+    // 6. Email
     {
       key: 'email',
       header: 'Email',
-      render: (r: Client) => (
-        <span className="text-text-secondary truncate block max-w-[200px]" title={r.email || undefined}>{r.email || '—'}</span>
-      ),
-    },
-    {
-      key: 'poste',
-      header: 'Poste',
-      render: (r: Client) => (
-        <span className="truncate block max-w-[160px]" title={r.poste || undefined}>{r.poste || '—'}</span>
-      ),
-    },
-    {
-      key: 'entreprise',
-      header: (<SortableHeader label="Entreprise" sortKey="entreprise" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Client) => (
-        <span
-          className="text-accent hover:underline cursor-pointer"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/entreprises/${r.entreprise.id}`);
-          }}
+      render: (r: Client) => r.email ? (
+        <a
+          href={`mailto:${r.email}`}
+          className="inline-flex items-center gap-1.5 text-neutral-600 hover:text-violet-600 transition-colors truncate max-w-[180px]"
+          onClick={(e) => e.stopPropagation()}
+          title={r.email}
         >
-          {r.entreprise.nom}
-        </span>
-      ),
+          <Mail size={12} className="text-neutral-400 flex-shrink-0" />
+          <span className="truncate">{r.email}</span>
+        </a>
+      ) : '\u2014',
+      className: 'min-w-[180px]',
     },
+    // 7. Telephone
     {
-      key: 'role',
-      header: (<SortableHeader label="Role" sortKey="role" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Client) =>
-        r.roleContact ? <Badge variant="neutral">{roleLabels[r.roleContact]}</Badge> : '—',
+      key: 'telephone',
+      header: 'T\u00e9l\u00e9phone',
+      render: (r: Client) => r.telephone ? (
+        <a
+          href={`tel:${r.telephone}`}
+          className="inline-flex items-center gap-1.5 text-neutral-600 hover:text-violet-600 transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Phone size={12} className="text-neutral-400 flex-shrink-0" />
+          {r.telephone}
+        </a>
+      ) : '\u2014',
+      className: 'w-32',
     },
+    // 8. Statut
     {
       key: 'statut',
-      header: (<SortableHeader label="Statut" sortKey="statut" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
+      header: (<SortableHeader label="Statut" sortKey="statutClient" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
       render: (r: Client) => (
-        <Badge variant={statutVariant[r.statutClient]}>
-          {statutLabels[r.statutClient]}
+        <Badge variant={(STATUT_BADGE_VARIANT[r.statutClient] || 'default') as any}>
+          {STATUT_LABELS[r.statutClient] || r.statutClient}
         </Badge>
       ),
+      className: 'w-36',
     },
+    // 9. Mandats actifs
     {
-      key: 'assignedTo',
-      header: 'Prise en charge',
-      render: (r: Client) =>
-        r.assignedTo ? (
-          <div className="flex items-center gap-1.5">
-            <Avatar nom={r.assignedTo.nom} prenom={r.assignedTo.prenom} size="xs" />
-            <span className="text-xs truncate">{r.assignedTo.prenom?.[0]}. {r.assignedTo.nom}</span>
-          </div>
-        ) : (
-          <Badge variant="success" size="sm">Disponible</Badge>
-        ),
+      key: 'mandatsActifs',
+      header: (<SortableHeader label="Mandats" sortKey="mandatsActifs" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
+      render: (r: Client) => r.mandatsActifs > 0 ? (
+        <Badge variant="info">{r.mandatsActifs}</Badge>
+      ) : '\u2014',
+      className: 'w-20',
+    },
+    // 10. Revenue
+    {
+      key: 'revenueCumule',
+      header: (<SortableHeader label="Revenue" sortKey="revenueCumule" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
+      render: (r: Client) => (
+        <span className={r.revenueCumule > 0 ? 'font-semibold text-emerald-600' : 'text-neutral-400'}>
+          {formatRevenue(r.revenueCumule)}
+        </span>
+      ),
+      className: 'w-28',
+    },
+    // 11. Derniere interaction
+    {
+      key: 'lastActivityAt',
+      header: (<SortableHeader label="Interaction" sortKey="lastActivityAt" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
+      render: (r: Client) => (
+        <span className="text-neutral-500 text-xs">{formatRelativeDate(r.lastActivityAt)}</span>
+      ),
+      className: 'w-32',
+    },
+    // 12. Actions
+    {
+      key: 'actions',
+      header: '',
+      render: (r: Client) => (
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {r.telephone && (
+            <a
+              href={`tel:${r.telephone}`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
+              title={`Appeler ${r.telephone}`}
+            >
+              <Phone size={13} />
+            </a>
+          )}
+          {r.email && (
+            <a
+              href={`mailto:${r.email}`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
+              title={`Email ${r.email}`}
+            >
+              <Mail size={13} />
+            </a>
+          )}
+          {r.entreprise && (
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/entreprises/${r.entreprise!.id}`);
+              }}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-violet-50 hover:text-violet-600 transition-colors cursor-pointer"
+              title={`Voir ${r.entreprise.nom}`}
+            >
+              <Building2 size={13} />
+            </span>
+          )}
+        </div>
+      ),
+      className: 'w-10',
     },
   ];
 
-  // ── Grid card ─────────────────────────────────────────────────
+  // ── Card component for grid view ────────────────────────────
   function ClientCard({ client, index }: { client: Client; index: number }) {
     const fullName = `${client.prenom || ''} ${client.nom}`.trim();
-    const colorIdx = getAvatarColorIndex(client.nom);
     const isSelected = selectedIds.has(client.id);
-    const statutColor = {
-      LEAD: 'from-amber-400 to-orange-400',
-      PREMIER_CONTACT: 'from-blue-400 to-cyan-400',
-      BESOIN_QUALIFIE: 'from-teal-400 to-emerald-400',
-      PROPOSITION_ENVOYEE: 'from-[#7C5CFC] to-[#A78BFA]',
-      MANDAT_SIGNE: 'from-emerald-400 to-green-500',
-      RECURRENT: 'from-indigo-400 to-violet-400',
-      INACTIF: 'from-neutral-300 to-neutral-400',
-    }[client.statutClient] || 'from-neutral-300 to-neutral-400';
+    const t = client.computedType || client.typeClient;
 
     return (
       <div
         onClick={() => navigate(`/clients/${client.id}`)}
         onMouseEnter={() => prefetchOnHover(['client', client.id], `/clients/${client.id}`)}
         onMouseLeave={cancelPrefetch}
-        className={`group relative cursor-pointer rounded-2xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
+        className={`group relative cursor-pointer rounded-xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:border-[#7C5CFC]/30 ${
           isSelected ? 'border-[#7C5CFC] ring-2 ring-[#7C5CFC]/20 shadow-md' : 'border-neutral-100 shadow-sm'
         } ${focusedIndex === index ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}`}
       >
-        {/* Top accent bar — color based on status */}
-        <div className={`h-1 w-full bg-gradient-to-r ${statutColor}`} />
+        <div className="flex items-center gap-4 px-4 py-3">
+          {/* Checkbox */}
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => { e.stopPropagation(); toggleSelect(client.id); }}
+            onClick={(e) => e.stopPropagation()}
+            className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
+          />
 
-        <div className="p-5">
-          {/* Header: Checkbox + Avatar + Name */}
-          <div className="flex items-start gap-3">
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={(e) => { e.stopPropagation(); toggleSelect(client.id); }}
-              onClick={(e) => e.stopPropagation()}
-              className="mt-1 h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
-            />
-            <div
-              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white"
-              style={{ backgroundColor: AVATAR_BG[colorIdx] }}
-            >
-              {getInitials(client.prenom, client.nom)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-semibold text-neutral-900">{fullName}</p>
-              {client.poste && (
-                <p className="mt-0.5 truncate text-[13px] text-neutral-500">{client.poste}</p>
+          {/* Avatar */}
+          <Avatar nom={client.nom} prenom={client.prenom} size="md" />
+
+          {/* Name + Poste */}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[14px] font-semibold text-neutral-900">
+              {fullName}
+            </p>
+            {client.poste && (
+              <p className="mt-0.5 truncate text-[12px] font-medium text-[#7C5CFC]">
+                {client.poste}
+              </p>
+            )}
+          </div>
+
+          {/* Info columns */}
+          <div className="hidden lg:flex items-center gap-4 flex-shrink-0">
+            {/* Entreprise */}
+            <div className="w-[130px]">
+              {client.entreprise ? (
+                <div className="flex items-center gap-1.5 text-[12px] text-neutral-600">
+                  {client.entreprise.logoUrl ? (
+                    <img src={client.entreprise.logoUrl} alt="" className="h-3.5 w-3.5 rounded object-contain flex-shrink-0" />
+                  ) : (
+                    <Building2 size={12} className="flex-shrink-0 text-neutral-400" />
+                  )}
+                  <span className="truncate">{client.entreprise.nom}</span>
+                </div>
+              ) : (
+                <span className="text-[12px] text-neutral-300">{'\u2014'}</span>
               )}
             </div>
+
+            {/* Type */}
+            <div className="w-[100px]">
+              {t ? (
+                <Badge variant={(TYPE_BADGE_VARIANT[t] || 'default') as any} size="sm">
+                  {TYPE_LABELS[t] || t}
+                </Badge>
+              ) : (
+                <span className="text-[12px] text-neutral-300">{'\u2014'}</span>
+              )}
+            </div>
+
+            {/* Statut */}
+            <div className="w-[100px]">
+              <Badge variant={(STATUT_BADGE_VARIANT[client.statutClient] || 'default') as any} size="sm">
+                {STATUT_LABELS[client.statutClient] || client.statutClient}
+              </Badge>
+            </div>
           </div>
 
-          {/* Entreprise chip */}
-          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-neutral-50 px-2.5 py-1 text-[12px] font-medium text-neutral-600 border border-neutral-100">
-            <Building2 size={12} className="text-neutral-400" />
-            <span className="truncate max-w-[160px]">{client.entreprise.nom}</span>
+          {/* Revenue badge */}
+          <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
+            {client.revenueCumule > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 border border-emerald-100">
+                {formatRevenue(client.revenueCumule)}
+              </span>
+            )}
+            {client.mandatsActifs > 0 && (
+              <Badge variant="info" size="sm">{client.mandatsActifs}</Badge>
+            )}
           </div>
+        </div>
 
-          {/* Status + Role badges */}
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <Badge variant={statutVariant[client.statutClient]} size="sm">
-              {statutLabels[client.statutClient]}
+        {/* Mobile info row */}
+        <div className="lg:hidden px-4 pb-3 flex flex-wrap gap-2">
+          {client.entreprise && (
+            <div className="inline-flex items-center gap-1 text-[11px] text-neutral-500">
+              <Building2 size={10} className="text-neutral-400" />
+              {client.entreprise.nom}
+            </div>
+          )}
+          {t && (
+            <Badge variant={(TYPE_BADGE_VARIANT[t] || 'default') as any} size="sm">
+              {TYPE_LABELS[t] || t}
             </Badge>
-            {client.roleContact && (
-              <Badge variant="neutral" size="sm">{roleLabels[client.roleContact]}</Badge>
-            )}
-          </div>
-
-          {/* Owner indicator */}
-          <div className="mt-3 pt-3 border-t border-neutral-50 flex items-center gap-1.5">
-            {client.assignedTo ? (
-              <>
-                <Avatar nom={client.assignedTo.nom} prenom={client.assignedTo.prenom} size="xs" />
-                <span className="text-[12px] text-neutral-500 truncate">{client.assignedTo.prenom?.[0]}. {client.assignedTo.nom}</span>
-              </>
-            ) : (
-              <Badge variant="success" size="sm">Disponible</Badge>
-            )}
-          </div>
+          )}
+          <Badge variant={(STATUT_BADGE_VARIANT[client.statutClient] || 'default') as any} size="sm">
+            {STATUT_LABELS[client.statutClient] || client.statutClient}
+          </Badge>
         </div>
       </div>
     );
@@ -564,11 +716,8 @@ export default function ClientsPage() {
                 <List size={16} />
               </button>
             </div>
-            <Button variant="secondary" onClick={() => navigate('/clients/pipeline')}>
-              <LayoutGrid size={16} /> Pipeline
-            </Button>
             <Button onClick={() => navigate('/clients/new')}>
-              <Plus size={16} /> Ajouter
+              <Plus size={16} /> Nouveau client
             </Button>
           </div>
         }
@@ -606,9 +755,9 @@ export default function ClientsPage() {
       {/* Content */}
       {isLoading ? (
         view === 'grid' ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2">
             {Array.from({ length: 6 }).map((_, i) => (
-              <SkeletonCard key={i} />
+              <Skeleton key={i} className="h-14 w-full rounded-xl" />
             ))}
           </div>
         ) : (
@@ -617,7 +766,7 @@ export default function ClientsPage() {
       ) : !sortedClients.length ? (
         <EmptyState
           title="Aucun client"
-          description="Gérez vos contacts clients et suivez vos relations commerciales en ajoutant votre premier client."
+          description="G\u00e9rez vos contacts clients et suivez vos relations commerciales en ajoutant votre premier client."
           actionLabel="Ajouter un client"
           onAction={() => navigate('/clients/new')}
           icon={<Building2 size={48} strokeWidth={1} />}
@@ -625,7 +774,7 @@ export default function ClientsPage() {
       ) : (
         <>
           {view === 'grid' ? (
-            <motion.div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" variants={listStagger} initial="hidden" animate="show">
+            <motion.div className="grid grid-cols-1 gap-2" variants={listStagger} initial="hidden" animate="show">
               {sortedClients.map((c, index) => (
                 <motion.div key={c.id} variants={listItem}>
                   <ClientCard client={c} index={index} />

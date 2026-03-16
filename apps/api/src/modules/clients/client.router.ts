@@ -24,6 +24,9 @@ export default async function clientRouter(fastify: FastifyInstance) {
           city: { type: 'string', description: 'Comma-separated cities' },
           role: { type: 'string', description: 'Comma-separated roles' },
           assignedToId: { type: 'string' },
+          typeClient: { type: 'string', description: 'Single or comma-separated type values' },
+          sortBy: { type: 'string', description: 'Field to sort by' },
+          sortDir: { type: 'string', enum: ['asc', 'desc'], description: 'Sort direction' },
         },
       },
     },
@@ -39,6 +42,9 @@ export default async function clientRouter(fastify: FastifyInstance) {
         city?: string;
         role?: string;
         assignedToId?: string;
+        typeClient?: string;
+        sortBy?: string;
+        sortDir?: 'asc' | 'desc';
       };
       const pagination = parsePagination(query);
       const sectors = query.sector ? query.sector.split(',').map((s) => s.trim()) : undefined;
@@ -54,6 +60,9 @@ export default async function clientRouter(fastify: FastifyInstance) {
         cities,
         roles,
         query.assignedToId,
+        query.typeClient,
+        query.sortBy,
+        query.sortDir,
       );
     },
   });

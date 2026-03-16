@@ -33,6 +33,7 @@ type StatutClient =
   | 'MANDAT_SIGNE'
   | 'RECURRENT'
   | 'INACTIF';
+type TypeClient = 'INBOUND' | 'OUTBOUND' | 'RESEAU' | 'CLIENT_ACTIF' | 'RECURRENT';
 
 interface Mandat {
   id: string;
@@ -53,6 +54,8 @@ interface ClientDetail {
   roleContact: RoleContact | null;
   linkedinUrl: string | null;
   statutClient: StatutClient;
+  typeClient: TypeClient;
+  computedType?: TypeClient;
   notes: string | null;
   entreprise: {
     id: string;
@@ -84,6 +87,7 @@ interface EditForm {
   poste: string;
   roleContact: string;
   linkedinUrl: string;
+  typeClient: string;
   notes: string;
 }
 
@@ -124,6 +128,28 @@ const statutVariant: Record<StatutClient, 'default' | 'info' | 'warning' | 'succ
   INACTIF: 'error',
 };
 
+const typeClientLabels: Record<TypeClient, string> = {
+  INBOUND: '📩 Inbound',
+  OUTBOUND: '🎯 Outbound',
+  RESEAU: '🤝 Réseau',
+  CLIENT_ACTIF: '✅ Client actif',
+  RECURRENT: '⭐ Récurrent',
+};
+
+const typeClientVariant: Record<TypeClient, 'default' | 'info' | 'warning' | 'success' | 'error'> = {
+  INBOUND: 'success',
+  OUTBOUND: 'info',
+  RESEAU: 'default',
+  CLIENT_ACTIF: 'info',
+  RECURRENT: 'warning',
+};
+
+const typeClientEditOptions = [
+  { value: 'INBOUND', label: '📩 Inbound' },
+  { value: 'OUTBOUND', label: '🎯 Outbound' },
+  { value: 'RESEAU', label: '🤝 Réseau' },
+];
+
 const statutMandatVariant: Record<string, 'default' | 'info' | 'success' | 'error' | 'warning'> = {
   OUVERT: 'info',
   EN_COURS: 'warning',
@@ -156,6 +182,7 @@ function buildEditForm(client: ClientDetail): EditForm {
     poste: client.poste || '',
     roleContact: client.roleContact || '',
     linkedinUrl: client.linkedinUrl || '',
+    typeClient: client.typeClient || 'INBOUND',
     notes: client.notes || '',
   };
 }
@@ -323,6 +350,7 @@ export default function ClientDetailPage() {
     else payload.roleContact = null;
     if (editForm.linkedinUrl.trim()) payload.linkedinUrl = editForm.linkedinUrl.trim();
     else payload.linkedinUrl = null;
+    if (editForm.typeClient) payload.typeClient = editForm.typeClient;
     if (editForm.notes.trim()) payload.notes = editForm.notes.trim();
     else payload.notes = null;
 
@@ -515,6 +543,12 @@ export default function ClientDetailPage() {
                   onChange={(val) => setEditForm((prev) => prev ? { ...prev, roleContact: val } : prev)}
                 />
                 <Input label="LinkedIn" value={editForm.linkedinUrl} onChange={setField('linkedinUrl')} placeholder="https://linkedin.com/in/..." />
+                <Select
+                  label="Type client"
+                  options={typeClientEditOptions}
+                  value={editForm.typeClient}
+                  onChange={(val) => setEditForm((prev) => prev ? { ...prev, typeClient: val } : prev)}
+                />
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -669,6 +703,25 @@ export default function ClientDetailPage() {
                   <Badge variant={statutVariant[client.statutClient]}>
                     {statutLabels[client.statutClient]}
                   </Badge>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-text-tertiary">Type</dt>
+                <dd className="mt-1 flex items-center gap-2">
+                  {(() => {
+                    const displayType = client.computedType || client.typeClient;
+                    const isAutoType = displayType === 'CLIENT_ACTIF' || displayType === 'RECURRENT';
+                    return (
+                      <>
+                        <Badge variant={typeClientVariant[displayType]}>
+                          {typeClientLabels[displayType]}
+                        </Badge>
+                        {isAutoType && (
+                          <span className="text-[10px] text-text-tertiary italic">auto</span>
+                        )}
+                      </>
+                    );
+                  })()}
                 </dd>
               </div>
               <div>

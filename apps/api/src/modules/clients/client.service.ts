@@ -6,7 +6,8 @@ import {
   paginatedResult,
 } from '../../lib/pagination.js';
 import type { CreateClientInput, UpdateClientInput } from './client.schema.js';
-import type { StatutClient } from '@prisma/client';
+import { StageCandidature } from '@prisma/client';
+import type { StatutClient, TypeClient } from '@prisma/client';
 
 export async function list(
   params: PaginationParams,
@@ -17,17 +18,21 @@ export async function list(
   cities?: string[],
   roles?: string[],
   assignedToId?: string,
+  typeClient?: string,
+  sortBy?: string,
+  sortDir?: 'asc' | 'desc',
 ) {
-  const { skip, take } = paginationToSkipTake(params);
-
   const where: any = {};
   const AND: any[] = [];
 
   if (search) {
+    const normalizedSearch = search.replace(/[\s\-\.]/g, '');
     where.OR = [
       { nom: { contains: search, mode: 'insensitive' } },
       { prenom: { contains: search, mode: 'insensitive' } },
       { email: { contains: search, mode: 'insensitive' } },
+      { telephone: { contains: normalizedSearch, mode: 'insensitive' } },
+      { entreprise: { nom: { contains: search, mode: 'insensitive' } } },
     ];
   }
 
@@ -41,6 +46,15 @@ export async function list(
       where.statutClient = statuts[0];
     } else if (statuts.length > 1) {
       where.statutClient = { in: statuts };
+    }
+  }
+
+  if (typeClient) {
+    const types = typeClient.split(',').map((t) => t.trim()).filter(Boolean);
+    if (types.length === 1) {
+      where.typeClient = types[0];
+    } else if (types.length > 1) {
+      where.typeClient = { in: types };
     }
   }
 
@@ -72,22 +86,120 @@ export async function list(
     where.AND = AND;
   }
 
-  const [data, total] = await Promise.all([
-    prisma.client.findMany({
-      where,
-      skip,
-      take,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        entreprise: { select: { id: true, nom: true, secteur: true, localisation: true } },
-        assignedTo: { select: { id: true, nom: true, prenom: true } },
-        mandats: { select: { id: true, statut: true } },
-      },
-    }),
-    prisma.client.count({ where }),
-  ]);
+  // Determine if we sort by a computed field or a native Prisma field
+  const computedSortFields = ['revenueCumule', 'mandatsActifs', 'lastActivityAt'];
+  const isComputedSort = !sortBy || computedSortFields.includes(sortBy);
 
-  return paginatedResult(data, total, params);
+  const includeClause = {
+    entreprise: { select: { id: true, nom: true, secteur: true, localisation: true, logoUrl: true, siteWeb: true } },
+    assignedTo: { select: { id: true, nom: true, prenom: true } },
+    mandats: {
+      select: {
+        id: true,
+        statut: true,
+        feeMontantFacture: true,
+        feeStatut: true,
+        candidatures: {
+          select: { stage: true },
+          where: { stage: StageCandidature.PLACE },
+        },
+      },
+    },
+  };
+
+  let data: any[];
+  let total: number;
+
+  if (isComputedSort) {
+    // For computed sorts: fetch ALL matching records, enrich, sort in memory, then slice
+    [data, total] = await Promise.all([
+      prisma.client.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: includeClause,
+      }),
+      prisma.client.count({ where }),
+    ]);
+  } else {
+    // For native Prisma sorts: paginate at DB level
+    const { skip, take } = paginationToSkipTake(params);
+    const orderBy: any = {};
+    orderBy[sortBy!] = sortDir || 'asc';
+
+    [data, total] = await Promise.all([
+      prisma.client.findMany({
+        where,
+        skip,
+        take,
+        orderBy,
+        include: includeClause,
+      }),
+      prisma.client.count({ where }),
+    ]);
+  }
+
+  // ─── Post-query enrichment ────────────────────────────────
+
+  // Batch fetch last activity dates
+  const clientIds = data.map((c: any) => c.id);
+  const lastActivities: Array<{ entiteId: string; createdAt: Date }> = clientIds.length > 0
+    ? await prisma.$queryRawUnsafe(
+        `SELECT DISTINCT ON ("entiteId") "entiteId", "createdAt"
+         FROM activites
+         WHERE "entiteType" = 'CLIENT' AND "entiteId" = ANY($1::uuid[])
+         ORDER BY "entiteId", "createdAt" DESC`,
+        clientIds,
+      )
+    : [];
+  const lastActivityMap = new Map(lastActivities.map((a) => [a.entiteId, a.createdAt]));
+
+  const enrichedData = data.map((client: any) => {
+    const revenueCumule = client.mandats
+      .filter((m: any) => m.feeStatut === 'PAYE' && m.candidatures.length > 0)
+      .reduce((sum: number, m: any) => sum + (m.feeMontantFacture ?? 0), 0);
+
+    const mandatsActifs = client.mandats.filter((m: any) =>
+      ['OUVERT', 'EN_COURS'].includes(m.statut),
+    ).length;
+
+    // Computed type: auto overrides manual
+    let computedType = client.typeClient;
+    const totalMandats = client.mandats.length;
+    if (totalMandats >= 2) computedType = 'RECURRENT' as TypeClient;
+    else if (mandatsActifs >= 1) computedType = 'CLIENT_ACTIF' as TypeClient;
+
+    const lastActivityAt = lastActivityMap.get(client.id) ?? null;
+
+    // Strip raw mandats from response (we only need the computed fields)
+    const { mandats, ...rest } = client;
+    return {
+      ...rest,
+      revenueCumule,
+      mandatsActifs,
+      computedType,
+      lastActivityAt,
+    };
+  });
+
+  // ─── Sort and paginate (for computed sorts) ───────────────
+  if (isComputedSort) {
+    const actualSortBy = sortBy || 'revenueCumule';
+    const actualSortDir = sortDir || 'desc';
+    enrichedData.sort((a: any, b: any) => {
+      const aVal = a[actualSortBy] ?? 0;
+      const bVal = b[actualSortBy] ?? 0;
+      // Handle Date comparison for lastActivityAt
+      const aNum = aVal instanceof Date ? aVal.getTime() : (typeof aVal === 'number' ? aVal : 0);
+      const bNum = bVal instanceof Date ? bVal.getTime() : (typeof bVal === 'number' ? bVal : 0);
+      return actualSortDir === 'asc' ? aNum - bNum : bNum - aNum;
+    });
+
+    const { skip, take } = paginationToSkipTake(params);
+    const sliced = enrichedData.slice(skip, skip + take);
+    return paginatedResult(sliced, enrichedData.length, params);
+  }
+
+  return paginatedResult(enrichedData, total, params);
 }
 
 export async function getById(id: string) {

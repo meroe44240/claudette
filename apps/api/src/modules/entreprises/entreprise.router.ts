@@ -20,6 +20,9 @@ export default async function entrepriseRouter(fastify: FastifyInstance) {
           localisation: { type: 'string', description: 'Comma-separated cities' },
           taille: { type: 'string', enum: ['STARTUP', 'PME', 'ETI', 'GRAND_GROUPE'] },
           enriched: { type: 'string', enum: ['true', 'false'], description: 'Filter by Pappers enrichment status' },
+          sortBy: { type: 'string', description: 'Sort column (nom, createdAt, revenueCumule, mandatsActifs, placements...)' },
+          sortDir: { type: 'string', enum: ['asc', 'desc'], description: 'Sort direction' },
+          performance: { type: 'string', description: 'Comma-separated performance filters (revenue_positive, jamais_travaille)' },
         },
       },
     },
@@ -33,13 +36,26 @@ export default async function entrepriseRouter(fastify: FastifyInstance) {
         localisation?: string;
         taille?: string;
         enriched?: string;
+        sortBy?: string;
+        sortDir?: string;
+        performance?: string;
       };
       const pagination = parsePagination(query);
       const sectors = query.secteur ? query.secteur.split(',').map((s) => s.trim()) : undefined;
       const cities = query.localisation ? query.localisation.split(',').map((c) => c.trim()) : undefined;
       const enriched = query.enriched === 'true' ? true : query.enriched === 'false' ? false : undefined;
 
-      return entrepriseService.list(pagination, query.search, sectors, cities, query.taille, enriched);
+      return entrepriseService.list(
+        pagination,
+        query.search,
+        sectors,
+        cities,
+        query.taille,
+        enriched,
+        query.sortBy,
+        query.sortDir as 'asc' | 'desc' | undefined,
+        query.performance,
+      );
     },
   });
 

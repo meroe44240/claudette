@@ -25,6 +25,7 @@ export const createClientSchema = z.object({
     .optional(),
   notes: z.string().optional(),
   assignedToId: z.string().uuid().optional(),
+  typeClient: z.enum(['INBOUND', 'OUTBOUND', 'RESEAU', 'CLIENT_ACTIF', 'RECURRENT']).optional(),
 });
 
 export const updateClientSchema = createClientSchema.partial();

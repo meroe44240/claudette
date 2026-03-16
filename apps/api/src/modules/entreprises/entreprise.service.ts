@@ -5,6 +5,7 @@ import {
   paginationToSkipTake,
   paginatedResult,
 } from '../../lib/pagination.js';
+import { StageCandidature } from '@prisma/client';
 import type { CreateEntrepriseInput, UpdateEntrepriseInput } from './entreprise.schema.js';
 
 /**
@@ -46,9 +47,10 @@ export async function list(
   cities?: string[],
   taille?: string,
   enriched?: boolean,
+  sortBy?: string,
+  sortDir?: 'asc' | 'desc',
+  performance?: string,
 ) {
-  const { skip, take } = paginationToSkipTake(params);
-
   const where: any = {};
 
   if (search) {
@@ -83,20 +85,110 @@ export async function list(
     where.pappersEnrichedAt = null;
   }
 
+  // Determine if sort is on a computed field or a native Prisma field
+  const computedSortFields = ['revenueCumule', 'mandatsActifs', 'mandatsHistoriques', 'placements', 'dernierMandat'];
+  const isComputedSort = !sortBy || computedSortFields.includes(sortBy);
+
+  const nativeSortMap: Record<string, any> = {
+    nom: { nom: sortDir || 'asc' },
+    createdAt: { createdAt: sortDir || 'desc' },
+  };
+  const orderBy = (!isComputedSort && sortBy && nativeSortMap[sortBy])
+    ? nativeSortMap[sortBy]
+    : { createdAt: 'desc' };
+
+  const includeBlock = {
+    _count: { select: { clients: true, mandats: true } },
+    mandats: {
+      select: {
+        id: true,
+        statut: true,
+        feeMontantFacture: true,
+        feeStatut: true,
+        createdAt: true,
+        candidatures: {
+          select: { stage: true },
+        },
+      },
+    },
+  };
+
+  // For computed sorts: fetch ALL matching records (no skip/take) so we can sort in memory
+  // For native sorts: use DB-level pagination
+  const { skip, take } = paginationToSkipTake(params);
+
   const [data, total] = await Promise.all([
     prisma.entreprise.findMany({
       where,
-      skip,
-      take,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        _count: { select: { clients: true, mandats: true } },
-      },
+      ...(isComputedSort ? {} : { skip, take }),
+      orderBy,
+      include: includeBlock,
     }),
     prisma.entreprise.count({ where }),
   ]);
 
-  return paginatedResult(data, total, params);
+  // Post-query enrichment: compute derived fields from mandats
+  let enrichedData = data.map((ent) => {
+    const mandatsActifs = ent.mandats.filter((m) =>
+      ['OUVERT', 'EN_COURS'].includes(m.statut),
+    ).length;
+    const mandatsHistoriques = ent.mandats.length;
+    const placements = ent.mandats.reduce(
+      (sum, m) => sum + m.candidatures.filter((c) => c.stage === 'PLACE').length,
+      0,
+    );
+    const revenueCumule = ent.mandats
+      .filter((m) => m.feeStatut === 'PAYE')
+      .reduce((sum, m) => sum + (m.feeMontantFacture ?? 0), 0);
+    const dernierMandat = ent.mandats.length > 0
+      ? ent.mandats.reduce(
+          (latest, m) => (m.createdAt > latest ? m.createdAt : latest),
+          ent.mandats[0].createdAt,
+        )
+      : null;
+    const pappersEnriched = !!ent.pappersEnrichedAt;
+
+    // Strip raw mandats from response
+    const { mandats, ...rest } = ent;
+    return {
+      ...rest,
+      mandatsActifs,
+      mandatsHistoriques,
+      placements,
+      revenueCumule,
+      dernierMandat,
+      pappersEnriched,
+    };
+  });
+
+  // Performance filter (post-enrichment, before sorting)
+  if (performance) {
+    const perfFilters = performance.split(',').map((p) => p.trim());
+    if (perfFilters.includes('revenue_positive')) {
+      enrichedData = enrichedData.filter((e) => e.revenueCumule > 0);
+    }
+    if (perfFilters.includes('jamais_travaille')) {
+      enrichedData = enrichedData.filter((e) => e.mandatsHistoriques === 0);
+    }
+  }
+
+  // For computed sorts: sort in memory, then paginate via slice
+  if (isComputedSort) {
+    const actualSortBy = sortBy || 'revenueCumule';
+    const actualSortDir = sortDir || 'desc';
+    enrichedData.sort((a, b) => {
+      const aVal = (a as any)[actualSortBy] ?? 0;
+      const bVal = (b as any)[actualSortBy] ?? 0;
+      const aNum = aVal instanceof Date ? aVal.getTime() : (typeof aVal === 'number' ? aVal : 0);
+      const bNum = bVal instanceof Date ? bVal.getTime() : (typeof bVal === 'number' ? bVal : 0);
+      return actualSortDir === 'asc' ? aNum - bNum : bNum - aNum;
+    });
+
+    const sliced = enrichedData.slice(skip, skip + take);
+    return paginatedResult(sliced, enrichedData.length, params);
+  }
+
+  return paginatedResult(enrichedData, total, params);
 }
 
 export async function getById(id: string) {
@@ -275,7 +367,7 @@ export async function getStats(id: string) {
     where: {
       entrepriseId: id,
       candidatures: {
-        some: { stage: 'PLACE' },
+        some: { stage: StageCandidature.PLACE },
       },
       feeStatut: 'PAYE',
     },

@@ -32,6 +32,12 @@ const statutClientOptions = [
   { value: 'INACTIF', label: 'Inactif' },
 ];
 
+const typeClientOptions = [
+  { value: 'INBOUND', label: '📩 Inbound' },
+  { value: 'OUTBOUND', label: '🎯 Outbound' },
+  { value: 'RESEAU', label: '🤝 Réseau' },
+];
+
 interface Entreprise {
   id: string;
   nom: string;
@@ -52,6 +58,7 @@ interface FormData {
   linkedinUrl: string;
   entrepriseId: string;
   statutClient: string;
+  typeClient: string;
   notes: string;
 }
 
@@ -65,6 +72,7 @@ const initialForm: FormData = {
   linkedinUrl: '',
   entrepriseId: '',
   statutClient: 'LEAD',
+  typeClient: 'INBOUND',
   notes: '',
 };
 
@@ -181,6 +189,7 @@ export default function ClientNewPage() {
     if (form.roleContact) payload.roleContact = form.roleContact;
     if (form.linkedinUrl.trim()) payload.linkedinUrl = form.linkedinUrl.trim();
     if (form.statutClient) payload.statutClient = form.statutClient;
+    if (form.typeClient) payload.typeClient = form.typeClient;
     if (form.notes.trim()) payload.notes = form.notes.trim();
 
     mutation.mutate(payload);
@@ -270,6 +279,13 @@ export default function ClientNewPage() {
               value={form.statutClient}
               onChange={(val) => setForm((prev) => ({ ...prev, statutClient: val }))}
               placeholder="Sélectionner un statut"
+            />
+            <Select
+              label="Type client"
+              options={typeClientOptions}
+              value={form.typeClient}
+              onChange={(val) => setForm((prev) => ({ ...prev, typeClient: val }))}
+              placeholder="Sélectionner un type"
             />
 
             <div className="sm:col-span-2">

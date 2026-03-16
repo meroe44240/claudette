@@ -118,6 +118,7 @@ model Client {
   entrepriseId String       @db.Uuid
   entreprise   Entreprise   @relation(fields: [entrepriseId], references: [id])
   statutClient StatutClient @default(LEAD)
+  typeClient   TypeClient   @default(INBOUND)
   notes        String?      @db.Text
   createdById  String?      @db.Uuid
   createdBy    User?        @relation("ClientCreatedBy", fields: [createdById], references: [id])
@@ -148,6 +149,14 @@ enum StatutClient {
   MANDAT_SIGNE
   RECURRENT
   INACTIF
+}
+
+enum TypeClient {
+  INBOUND
+  OUTBOUND
+  RESEAU
+  CLIENT_ACTIF
+  RECURRENT
 }
 
 // ─── CANDIDATS ───────────────────────────────────────

@@ -2,39 +2,44 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Search, LayoutGrid, List, MapPin, Building, Download } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, Download, Building2, MapPin, Users, MoreHorizontal } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import { useListNavigation } from '../../hooks/useListNavigation';
 import { usePrefetch } from '../../hooks/usePrefetch';
-import { api } from '../../lib/api-client';
-import { downloadCSV } from '../../lib/export';
 import { toast } from '../../components/ui/Toast';
+import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Pagination from '../../components/ui/Pagination';
 import EmptyState from '../../components/ui/EmptyState';
-import Skeleton, { SkeletonCard } from '../../components/ui/Skeleton';
+import Skeleton from '../../components/ui/Skeleton';
 import FilterBar from '../../components/ui/FilterBar';
 import type { FilterConfig } from '../../components/ui/FilterBar';
 import SelectionBar from '../../components/ui/SelectionBar';
 import type { SelectionAction } from '../../components/ui/SelectionBar';
-import SortableHeader, { toggleSort, applySortToData } from '../../components/ui/SortableHeader';
+import SortableHeader, { toggleSort } from '../../components/ui/SortableHeader';
 import type { SortConfig } from '../../components/ui/SortableHeader';
 
-type TailleEntreprise = 'STARTUP' | 'PME' | 'ETI' | 'GRAND_GROUPE';
-
+// ── Interface ────────────────────────────────────────────────────
 interface Entreprise {
   id: string;
   nom: string;
   secteur: string | null;
   siteWeb: string | null;
-  taille: TailleEntreprise | null;
+  taille: string | null;
   localisation: string | null;
-  linkedinUrl: string | null;
   logoUrl: string | null;
+  effectif: string | null;
+  pappersEnriched: boolean;
+  libelleNAF: string | null;
+  adresseComplete: string | null;
   _count?: { clients: number; mandats: number };
+  mandatsActifs: number;
+  mandatsHistoriques: number;
+  revenueCumule: number;
+  placements: number;
+  dernierMandat: string | null;
 }
 
 interface PaginatedResponse {
@@ -47,20 +52,71 @@ interface PaginatedResponse {
   };
 }
 
-const tailleLabels: Record<TailleEntreprise, string> = {
+// ── Helpers ──────────────────────────────────────────────────────
+const TAILLE_LABELS: Record<string, string> = {
   STARTUP: 'Startup',
   PME: 'PME',
   ETI: 'ETI',
-  GRAND_GROUPE: 'Grand Groupe',
+  GRAND_GROUPE: 'Grand groupe',
 };
 
-const tailleVariant: Record<TailleEntreprise, 'primary' | 'neutral' | 'warning' | 'success'> = {
-  STARTUP: 'primary',
-  PME: 'neutral',
-  ETI: 'warning',
-  GRAND_GROUPE: 'success',
-};
+function formatRevenue(amount: number): string {
+  if (amount === 0) return '\u2014';
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(amount);
+}
 
+function formatRelativeDate(date: string | null): string {
+  if (!date) return '\u2014';
+  const diff = Date.now() - new Date(date).getTime();
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return "Aujourd'hui";
+  if (days === 1) return 'Hier';
+  if (days < 7) return `il y a ${days}j`;
+  if (days < 30) return `il y a ${Math.floor(days / 7)} sem`;
+  if (days < 365) return `il y a ${Math.floor(days / 30)} mois`;
+  return `il y a ${Math.floor(days / 365)} an(s)`;
+}
+
+function extractCity(localisation: string | null, adresseComplete: string | null): string {
+  if (localisation) return localisation;
+  if (!adresseComplete) return '\u2014';
+  // Try to extract city from full address (usually last meaningful part before postal code)
+  const parts = adresseComplete.split(',').map((p) => p.trim());
+  if (parts.length >= 2) return parts[parts.length - 1];
+  return adresseComplete;
+}
+
+function formatTaille(taille: string | null, effectif: string | null): string {
+  if (effectif) return effectif;
+  if (taille && TAILLE_LABELS[taille]) return TAILLE_LABELS[taille];
+  return '\u2014';
+}
+
+// ── Company logo ────────────────────────────────────────────────
+function CompanyLogo({ url, name, size = 32 }: { url?: string | null; name: string; size?: number }) {
+  const [imgError, setImgError] = useState(false);
+  if (url && !imgError) {
+    return (
+      <img
+        src={url}
+        alt={name}
+        className="rounded-md object-contain bg-neutral-50 border border-neutral-100"
+        style={{ width: size, height: size }}
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-md bg-neutral-100 flex items-center justify-center text-neutral-500 font-semibold"
+      style={{ width: size, height: size, fontSize: size * 0.4 }}
+    >
+      {name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+// ── Animations ──────────────────────────────────────────────────
 const listStagger = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.04 } },
@@ -70,89 +126,44 @@ const listItem = {
   show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 300, damping: 24 } },
 };
 
+// ── View type ───────────────────────────────────────────────────
 type ViewMode = 'grid' | 'table';
 
-function getLogoFromSiteWeb(siteWeb: string | null): string | null {
-  if (!siteWeb) return null;
-  try {
-    const hostname = new URL(siteWeb.startsWith('http') ? siteWeb : `https://${siteWeb}`).hostname;
-    if (!hostname || hostname === 'localhost') return null;
-    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
-  } catch {
-    return null;
-  }
-}
-
-function CompanyLogo({ src, siteWeb, name, size = 11 }: { src: string | null; siteWeb?: string | null; name: string; size?: number }) {
-  const [imgError, setImgError] = useState(false);
-  // Use logoUrl if available, otherwise auto-generate from siteWeb
-  const imgSrc = src || getLogoFromSiteWeb(siteWeb ?? null);
-  if (imgSrc && !imgError) {
-    return (
-      <img
-        src={imgSrc}
-        alt={name}
-        className="object-contain rounded"
-        style={{ height: size * 4, width: size * 4 }}
-        onError={() => setImgError(true)}
-      />
-    );
-  }
-  return <Building size={size < 11 ? 18 : 20} className="text-neutral-500" />;
-}
-
 // ── Filter options ──────────────────────────────────────────────
-const SECTOR_OPTIONS = [
-  { value: 'SaaS', label: 'SaaS / Tech' },
-  { value: 'Hospitality', label: 'Hospitality' },
-  { value: 'Finance', label: 'Finance' },
-  { value: 'Cybersecurity', label: 'Cybersecurity' },
-  { value: 'FinTech', label: 'FinTech' },
-  { value: 'Supply Chain', label: 'Supply Chain' },
-  { value: 'IT Services', label: 'IT Services' },
-  { value: 'AI', label: 'AI / Deep Tech' },
-  { value: 'Industrie', label: 'Industrie' },
-  { value: 'Autre', label: 'Autre' },
+const PERFORMANCE_OPTIONS = [
+  { value: 'revenue_positive', label: 'Revenue > 0' },
+  { value: 'jamais_travaille', label: 'Jamais travaille' },
 ];
 
 const TAILLE_OPTIONS = [
   { value: 'STARTUP', label: 'Startup' },
   { value: 'PME', label: 'PME' },
   { value: 'ETI', label: 'ETI' },
-  { value: 'GRAND_GROUPE', label: 'Grand Groupe' },
-];
-
-const MANDATS_COUNT_OPTIONS = [
-  { value: '0', label: '0' },
-  { value: '1-2', label: '1-2' },
-  { value: '3-5', label: '3-5' },
-  { value: '5+', label: '5+' },
-];
-
-const CLIENTS_COUNT_OPTIONS = [
-  { value: '0', label: '0' },
-  { value: '1-3', label: '1-3' },
-  { value: '4-10', label: '4-10' },
-  { value: '10+', label: '10+' },
+  { value: 'GRAND_GROUPE', label: 'Grand groupe' },
 ];
 
 // ── Selection actions ───────────────────────────────────────────
 const SELECTION_ACTIONS: SelectionAction[] = [
-  { key: 'export', label: 'Exporter CSV', icon: Download, variant: 'primary' },
+  { key: 'export', label: 'Exporter', icon: Download, variant: 'ghost' },
 ];
 
 // ── URL helpers ─────────────────────────────────────────────────
 function parseFiltersFromURL(params: URLSearchParams): Record<string, any> {
   const result: Record<string, any> = {};
-  const multiKeys = ['sector', 'city'];
+  const multiKeys = ['performance', 'secteur', 'city'];
   for (const key of multiKeys) {
     const val = params.get(key);
     if (val) result[key] = val.split(',');
   }
-  const singleKeys = ['taille', 'mandats_count', 'clients_count'];
+  const singleKeys = ['taille'];
   for (const key of singleKeys) {
     const val = params.get(key);
     if (val) result[key] = val;
+  }
+  const toggleKeys = ['enriched'];
+  for (const key of toggleKeys) {
+    const val = params.get(key);
+    if (val === 'true') result[key] = true;
   }
   return result;
 }
@@ -161,20 +172,22 @@ function serializeFiltersToURL(values: Record<string, any>): Record<string, stri
   const result: Record<string, string> = {};
   for (const [key, val] of Object.entries(values)) {
     if (Array.isArray(val) && val.length > 0) result[key] = val.join(',');
+    else if (typeof val === 'boolean' && val) result[key] = 'true';
     else if (typeof val === 'string' && val) result[key] = val;
   }
   return result;
 }
 
+// ── Main page ───────────────────────────────────────────────────
 export default function EntreprisesPage() {
   usePageTitle('Entreprises');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [view, setView] = useState<ViewMode>('grid');
+  const [view, setView] = useState<ViewMode>('table');
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { prefetchOnHover, cancelPrefetch } = usePrefetch();
-  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'revenueCumule', direction: 'desc' });
 
   const handleSort = useCallback((key: string) => {
     setSortConfig((prev) => toggleSort(prev, key));
@@ -218,33 +231,23 @@ export default function EntreprisesPage() {
     });
   }, []);
 
-  const handleSelectionAction = useCallback((key: string) => {
-    const ids = Array.from(selectedIds);
-
-    switch (key) {
-      case 'export': {
-        downloadCSV('entreprises', ids)
-          .then(() => toast('success', `${ids.length} entreprise(s) exportée(s)`))
-          .catch(() => toast('error', "Erreur lors de l'export"));
-        break;
-      }
-      default:
-        break;
-    }
-  }, [selectedIds]);
-
   // ── Data fetching ─────────────────────────────────────────────
   const { data, isLoading } = useQuery({
-    queryKey: ['entreprises', page, search, filterValues],
+    queryKey: ['entreprises', page, search, filterValues, sortConfig],
     queryFn: () => {
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('perPage', '20');
       if (search) params.set('search', search);
-      // Pass filter values as query params
-      if (filterValues.sector?.length) params.set('secteur', filterValues.sector.join(','));
+      if (filterValues.performance?.length) params.set('performance', filterValues.performance.join(','));
+      if (filterValues.secteur?.length) params.set('secteur', filterValues.secteur.join(','));
       if (filterValues.city?.length) params.set('localisation', filterValues.city.join(','));
       if (filterValues.taille) params.set('taille', filterValues.taille);
+      if (filterValues.enriched) params.set('enriched', 'true');
+      if (sortConfig) {
+        params.set('sortBy', sortConfig.key);
+        params.set('sortDir', sortConfig.direction);
+      }
       return api.get<PaginatedResponse>(`/entreprises?${params.toString()}`);
     },
   });
@@ -252,41 +255,37 @@ export default function EntreprisesPage() {
   const total = data?.meta?.total ?? 0;
 
   // ── Dynamic filter options ────────────────────────────────────
+  const dynamicSecteurOptions = useMemo(() => {
+    if (!data?.data) return [];
+    const sectors = new Set<string>();
+    data.data.forEach((e) => {
+      if (e.secteur) sectors.add(e.secteur);
+      if (e.libelleNAF) sectors.add(e.libelleNAF);
+    });
+    return Array.from(sectors).sort().map((s) => ({ value: s, label: s }));
+  }, [data?.data]);
+
   const dynamicCityOptions = useMemo(() => {
     if (!data?.data) return [];
     const cities = new Set<string>();
     data.data.forEach((e) => {
-      if (e.localisation) cities.add(e.localisation);
+      const city = extractCity(e.localisation, e.adresseComplete);
+      if (city && city !== '\u2014') cities.add(city);
     });
     return Array.from(cities).sort().map((city) => ({ value: city, label: city }));
   }, [data?.data]);
 
   const filterConfigs: FilterConfig[] = useMemo(() => [
-    { key: 'sector', label: 'Secteur', type: 'multi-select', options: SECTOR_OPTIONS },
+    { key: 'performance', label: 'Performance', type: 'multi-select', options: PERFORMANCE_OPTIONS },
+    { key: 'secteur', label: 'Secteur', type: 'multi-select', options: dynamicSecteurOptions },
     { key: 'city', label: 'Ville', type: 'multi-select', options: dynamicCityOptions },
     { key: 'taille', label: 'Taille', type: 'single-select', options: TAILLE_OPTIONS },
-    { key: 'mandats_count', label: 'Mandats', type: 'single-select', options: MANDATS_COUNT_OPTIONS },
-    { key: 'clients_count', label: 'Clients', type: 'single-select', options: CLIENTS_COUNT_OPTIONS },
-  ], [dynamicCityOptions]);
+    { key: 'enriched', label: 'Pappers', type: 'toggle' },
+  ], [dynamicSecteurOptions, dynamicCityOptions]);
 
-  // ── Sorting (server handles filtering, client handles sort of current page) ──
+  // ── Data (server-side sorting) ──
   const allEntreprises = data?.data ?? [];
-
-  const sortedEntreprises = useMemo(
-    () => applySortToData(allEntreprises, sortConfig, (row, key) => {
-      switch (key) {
-        case 'nom': return row.nom;
-        case 'secteur': return row.secteur;
-        case 'localisation': return row.localisation;
-        default: return null;
-      }
-    }),
-    [allEntreprises, sortConfig],
-  );
-
-  const { focusedIndex, setFocusedIndex } = useListNavigation(sortedEntreprises.length, {
-    onSelect: (index) => navigate(`/entreprises/${sortedEntreprises[index].id}`),
-  });
+  const sortedEntreprises = allEntreprises; // sorting is server-side
 
   const allSelected = sortedEntreprises.length > 0 && sortedEntreprises.every((e) => selectedIds.has(e.id));
 
@@ -298,8 +297,44 @@ export default function EntreprisesPage() {
     }
   }, [allSelected, sortedEntreprises]);
 
-  // ── Table columns ─────────────────────────────────────────────
+  const handleSelectionAction = useCallback((key: string) => {
+    const ids = Array.from(selectedIds);
+    const selected = allEntreprises.filter((e) => ids.includes(e.id));
+
+    switch (key) {
+      case 'export': {
+        const headers = ['Nom', 'Secteur', 'Localisation', 'Taille', 'Contacts', 'Mandats actifs', 'Mandats historiques', 'Revenue', 'Placements', 'Dernier mandat'];
+        const rows = selected.map((e) => [
+          e.nom,
+          e.secteur || e.libelleNAF || '',
+          extractCity(e.localisation, e.adresseComplete),
+          formatTaille(e.taille, e.effectif),
+          String(e._count?.clients || 0),
+          String(e.mandatsActifs),
+          String(e.mandatsHistoriques),
+          e.revenueCumule ? String(e.revenueCumule) : '0',
+          String(e.placements),
+          e.dernierMandat ? new Date(e.dernierMandat).toLocaleDateString('fr-FR') : '',
+        ]);
+        const csvContent = [headers, ...rows].map((r) => r.map((v) => `"${v.replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `entreprises-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('success', `${selected.length} entreprise(s) exportee(s)`);
+        break;
+      }
+      default:
+        break;
+    }
+  }, [selectedIds, allEntreprises]);
+
+  // ── Table columns (12 columns) ────────────────────────────────
   const columns = [
+    // 1. Checkbox
     {
       key: 'checkbox',
       header: (
@@ -321,118 +356,240 @@ export default function EntreprisesPage() {
       ),
       className: 'w-10',
     },
+    // 2. Entreprise (logo + nom + pappers badge)
     {
       key: 'nom',
-      header: (<SortableHeader label="Nom" sortKey="nom" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
+      header: (<SortableHeader label="Entreprise" sortKey="nom" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
       render: (r: Entreprise) => (
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-50 overflow-hidden">
-            <CompanyLogo src={r.logoUrl} siteWeb={r.siteWeb} name={r.nom} size={10} />
+        <div className="flex items-center gap-3 min-w-[200px]">
+          <CompanyLogo url={r.logoUrl} name={r.nom} size={32} />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1">
+              <span className="font-medium truncate">{r.nom}</span>
+              {r.pappersEnriched && (
+                <span className="ml-1.5 inline-flex items-center gap-0.5 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 border border-emerald-100 flex-shrink-0">
+                  &#10003; Pappers
+                </span>
+              )}
+            </div>
           </div>
-          <span className="font-medium">{r.nom}</span>
         </div>
       ),
+      className: 'min-w-[200px]',
     },
+    // 3. Secteur
     {
       key: 'secteur',
-      header: (<SortableHeader label="Secteur" sortKey="secteur" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Entreprise) => (
-        <span className="text-text-secondary">{r.secteur || '—'}</span>
-      ),
+      header: 'Secteur',
+      render: (r: Entreprise) => {
+        const label = r.secteur || r.libelleNAF;
+        return label ? <Badge>{label}</Badge> : <span className="text-neutral-300">{'\u2014'}</span>;
+      },
+      className: 'w-32',
     },
+    // 4. Ville
+    {
+      key: 'ville',
+      header: 'Ville',
+      render: (r: Entreprise) => {
+        const city = extractCity(r.localisation, r.adresseComplete);
+        return <span className="text-text-secondary text-sm">{city}</span>;
+      },
+      className: 'w-28',
+    },
+    // 5. Taille
     {
       key: 'taille',
       header: 'Taille',
-      render: (r: Entreprise) =>
-        r.taille ? <Badge variant={tailleVariant[r.taille]}>{tailleLabels[r.taille]}</Badge> : '—',
+      render: (r: Entreprise) => {
+        const label = formatTaille(r.taille, r.effectif);
+        return <span className="text-text-secondary text-sm">{label}</span>;
+      },
+      className: 'w-24',
     },
+    // 6. Contacts
     {
-      key: 'localisation',
-      header: (<SortableHeader label="Localisation" sortKey="localisation" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Entreprise) => r.localisation || '—',
-    },
-    {
-      key: 'clients',
-      header: 'Clients',
+      key: 'contacts',
+      header: 'Contacts',
       render: (r: Entreprise) => (
-        <Badge variant="info">{r._count?.clients || 0}</Badge>
+        <span className="text-sm tabular-nums">{r._count?.clients || 0}</span>
       ),
+      className: 'w-20',
     },
+    // 7. Mandats actifs
     {
-      key: 'mandats',
-      header: 'Mandats',
+      key: 'mandatsActifs',
+      header: (<SortableHeader label="Actifs" sortKey="mandatsActifs" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
       render: (r: Entreprise) => (
-        <Badge variant="info">{r._count?.mandats || 0}</Badge>
+        <span className={`text-sm tabular-nums ${r.mandatsActifs > 0 ? 'font-semibold text-violet-600' : ''}`}>
+          {r.mandatsActifs}
+        </span>
       ),
+      className: 'w-20',
+    },
+    // 8. Mandats historiques
+    {
+      key: 'mandatsHistoriques',
+      header: (<SortableHeader label="Historique" sortKey="mandatsHistoriques" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
+      render: (r: Entreprise) => (
+        <span className="text-sm tabular-nums">{r.mandatsHistoriques}</span>
+      ),
+      className: 'w-20',
+    },
+    // 9. Revenue
+    {
+      key: 'revenueCumule',
+      header: (<SortableHeader label="Revenue" sortKey="revenueCumule" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
+      render: (r: Entreprise) => (
+        <span className={`text-sm tabular-nums ${r.revenueCumule > 0 ? 'font-semibold text-emerald-600' : 'text-neutral-400'}`}>
+          {formatRevenue(r.revenueCumule)}
+        </span>
+      ),
+      className: 'w-28',
+    },
+    // 10. Placements
+    {
+      key: 'placements',
+      header: (<SortableHeader label="Placements" sortKey="placements" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
+      render: (r: Entreprise) => (
+        <span className={`text-sm tabular-nums ${r.placements > 0 ? 'font-semibold' : ''}`}>
+          {r.placements}
+        </span>
+      ),
+      className: 'w-20',
+    },
+    // 11. Dernier mandat
+    {
+      key: 'dernierMandat',
+      header: (<SortableHeader label="Dernier" sortKey="dernierMandat" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
+      render: (r: Entreprise) => (
+        <span className="text-sm text-neutral-500">{formatRelativeDate(r.dernierMandat)}</span>
+      ),
+      className: 'w-28',
+    },
+    // 12. Actions
+    {
+      key: 'actions',
+      header: '',
+      render: (r: Entreprise) => (
+        <div className="flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={(e) => { e.stopPropagation(); navigate(`/entreprises/${r.id}`); }}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
+            title="Plus d'options"
+          >
+            <MoreHorizontal size={14} />
+          </button>
+        </div>
+      ),
+      className: 'w-10',
     },
   ];
 
-  // ── Grid card ─────────────────────────────────────────────────
-  function EntrepriseCard({ entreprise, index }: { entreprise: Entreprise; index: number }) {
-    const clientCount = entreprise._count?.clients ?? 0;
-    const mandatCount = entreprise._count?.mandats ?? 0;
+  // ── Grid card (secondary view) ────────────────────────────────
+  function EntrepriseCard({ entreprise }: { entreprise: Entreprise }) {
     const isSelected = selectedIds.has(entreprise.id);
     return (
       <div
         onClick={() => navigate(`/entreprises/${entreprise.id}`)}
         onMouseEnter={() => prefetchOnHover(['entreprise', entreprise.id], `/entreprises/${entreprise.id}`)}
         onMouseLeave={cancelPrefetch}
-        className={`group relative cursor-pointer rounded-2xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 ${
+        className={`group relative cursor-pointer rounded-xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:border-[#7C5CFC]/30 ${
           isSelected ? 'border-[#7C5CFC] ring-2 ring-[#7C5CFC]/20 shadow-md' : 'border-neutral-100 shadow-sm'
-        } ${focusedIndex === index ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}`}
+        }`}
       >
-        {/* Top accent bar */}
-        <div className="h-1 w-full bg-gradient-to-r from-neutral-700 to-neutral-500" />
+        <div className="flex items-center gap-4 px-4 py-3">
+          {/* Checkbox */}
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => { e.stopPropagation(); toggleSelect(entreprise.id); }}
+            onClick={(e) => e.stopPropagation()}
+            className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
+          />
 
-        <div className="p-5">
-          {/* Header: Checkbox + Icon + Name */}
-          <div className="flex items-start gap-3">
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={(e) => { e.stopPropagation(); toggleSelect(entreprise.id); }}
-              onClick={(e) => e.stopPropagation()}
-              className="mt-1 h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
-            />
-            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-neutral-100 to-neutral-50 border border-neutral-100 overflow-hidden">
-              <CompanyLogo src={entreprise.logoUrl} siteWeb={entreprise.siteWeb} name={entreprise.nom} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[16px] font-semibold text-neutral-900">
-                {entreprise.nom}
-              </p>
-              {entreprise.secteur && (
-                <p className="mt-0.5 text-[13px] text-neutral-500 truncate">{entreprise.secteur}</p>
+          {/* Logo */}
+          <CompanyLogo url={entreprise.logoUrl} name={entreprise.nom} size={36} />
+
+          {/* Name + Secteur */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <p className="truncate text-[14px] font-semibold text-neutral-900">{entreprise.nom}</p>
+              {entreprise.pappersEnriched && (
+                <span className="inline-flex items-center gap-0.5 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 border border-emerald-100 flex-shrink-0">
+                  &#10003; Pappers
+                </span>
               )}
             </div>
+            {(entreprise.secteur || entreprise.libelleNAF) && (
+              <p className="mt-0.5 truncate text-[12px] text-neutral-500">{entreprise.secteur || entreprise.libelleNAF}</p>
+            )}
           </div>
 
-          {/* Stats chips */}
-          <div className="mt-4 flex items-center gap-3">
-            <div className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 border border-blue-100">
-              <span className="text-[14px] font-semibold text-blue-600">{clientCount}</span>
-              <span className="text-[11px] text-blue-500">client{clientCount > 1 ? 's' : ''}</span>
+          {/* Stats columns (desktop) */}
+          <div className="hidden lg:flex items-center gap-5 flex-shrink-0">
+            {/* Ville */}
+            <div className="w-[100px]">
+              {(entreprise.localisation || entreprise.adresseComplete) ? (
+                <div className="flex items-center gap-1.5 text-[12px] text-neutral-600">
+                  <MapPin size={12} className="flex-shrink-0 text-neutral-400" />
+                  <span className="truncate">{extractCity(entreprise.localisation, entreprise.adresseComplete)}</span>
+                </div>
+              ) : (
+                <span className="text-[12px] text-neutral-300">{'\u2014'}</span>
+              )}
             </div>
-            <div className="flex items-center gap-1.5 rounded-lg bg-violet-50 px-2.5 py-1.5 border border-violet-100">
-              <span className="text-[14px] font-semibold text-violet-600">{mandatCount}</span>
-              <span className="text-[11px] text-violet-500">mandat{mandatCount > 1 ? 's' : ''}</span>
-            </div>
-          </div>
 
-          {/* Location + Taille */}
-          <div className="mt-3 pt-3 border-t border-neutral-50 flex flex-wrap items-center gap-2">
-            {entreprise.localisation && (
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-50 px-2.5 py-1 text-[11px] font-medium text-neutral-600 border border-neutral-100">
-                <MapPin size={11} className="text-neutral-400" />
-                {entreprise.localisation}
+            {/* Contacts */}
+            <div className="w-[60px] text-center">
+              <div className="flex items-center gap-1 text-[12px] text-neutral-600">
+                <Users size={12} className="text-neutral-400" />
+                <span>{entreprise._count?.clients || 0}</span>
               </div>
-            )}
-            {entreprise.taille && (
-              <Badge variant={tailleVariant[entreprise.taille]} size="sm">
-                {tailleLabels[entreprise.taille]}
-              </Badge>
-            )}
+            </div>
+
+            {/* Mandats actifs */}
+            <div className="w-[50px] text-center">
+              {entreprise.mandatsActifs > 0 ? (
+                <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-600 border border-violet-100">
+                  {entreprise.mandatsActifs}
+                </span>
+              ) : (
+                <span className="text-[12px] text-neutral-300">0</span>
+              )}
+            </div>
+
+            {/* Revenue */}
+            <div className="w-[90px] text-right">
+              <span className={`text-[12px] tabular-nums ${entreprise.revenueCumule > 0 ? 'font-semibold text-emerald-600' : 'text-neutral-300'}`}>
+                {formatRevenue(entreprise.revenueCumule)}
+              </span>
+            </div>
           </div>
+        </div>
+
+        {/* Mobile info row */}
+        <div className="lg:hidden px-4 pb-3 flex flex-wrap gap-2">
+          {(entreprise.localisation || entreprise.adresseComplete) && (
+            <div className="inline-flex items-center gap-1 text-[11px] text-neutral-500">
+              <MapPin size={10} className="text-neutral-400" />
+              {extractCity(entreprise.localisation, entreprise.adresseComplete)}
+            </div>
+          )}
+          <div className="inline-flex items-center gap-1 text-[11px] text-neutral-500">
+            <Users size={10} className="text-neutral-400" />
+            {entreprise._count?.clients || 0} contact(s)
+          </div>
+          {entreprise.mandatsActifs > 0 && (
+            <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-600">
+              {entreprise.mandatsActifs} actif(s)
+            </span>
+          )}
+          {entreprise.revenueCumule > 0 && (
+            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600">
+              {formatRevenue(entreprise.revenueCumule)}
+            </span>
+          )}
         </div>
       </div>
     );
@@ -507,9 +664,9 @@ export default function EntreprisesPage() {
       {/* Content */}
       {isLoading ? (
         view === 'grid' ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2">
             {Array.from({ length: 6 }).map((_, i) => (
-              <SkeletonCard key={i} />
+              <Skeleton key={i} className="h-14 w-full rounded-xl" />
             ))}
           </div>
         ) : (
@@ -518,18 +675,18 @@ export default function EntreprisesPage() {
       ) : !sortedEntreprises.length ? (
         <EmptyState
           title="Aucune entreprise"
-          description="Centralisez les informations de vos entreprises clientes et prospects en ajoutant votre première entreprise."
+          description="Centralisez les informations de vos entreprises clientes et prospects en ajoutant votre premiere entreprise."
           actionLabel="Ajouter une entreprise"
           onAction={() => navigate('/entreprises/new')}
-          icon={<Building size={48} strokeWidth={1} />}
+          icon={<Building2 size={48} strokeWidth={1} />}
         />
       ) : (
         <>
           {view === 'grid' ? (
-            <motion.div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3" variants={listStagger} initial="hidden" animate="show">
-              {sortedEntreprises.map((e, index) => (
+            <motion.div className="grid grid-cols-1 gap-2" variants={listStagger} initial="hidden" animate="show">
+              {sortedEntreprises.map((e) => (
                 <motion.div key={e.id} variants={listItem}>
-                  <EntrepriseCard entreprise={e} index={index} />
+                  <EntrepriseCard entreprise={e} />
                 </motion.div>
               ))}
             </motion.div>
@@ -541,7 +698,11 @@ export default function EntreprisesPage() {
               onRowClick={(r) => navigate(`/entreprises/${r.id}`)}
               onRowMouseEnter={(r) => prefetchOnHover(['entreprise', r.id], `/entreprises/${r.id}`)}
               onRowMouseLeave={cancelPrefetch}
-              rowClassName={(_r, i) => focusedIndex === i ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}
+              rowClassName={(r: Entreprise) => {
+                if (r.revenueCumule > 20000) return 'bg-emerald-50/40';
+                if (r.revenueCumule === 0 && r.mandatsHistoriques === 0) return 'text-neutral-400';
+                return '';
+              }}
             />
           )}
           {data?.meta && (

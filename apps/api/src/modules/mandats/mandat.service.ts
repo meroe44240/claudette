@@ -12,6 +12,37 @@ function calculateFeeMontantEstime(salaireMin?: number | null, salaireMax?: numb
   return undefined;
 }
 
+/**
+ * Recalculate typeClient for a client based on their mandats.
+ * - 2+ mandats total → RECURRENT
+ * - 1+ active mandat (OUVERT/EN_COURS) → CLIENT_ACTIF
+ * - Otherwise → keep manual value (don't override)
+ */
+async function recalculateTypeClient(clientId: string) {
+  const mandats = await prisma.mandat.findMany({
+    where: { clientId },
+    select: { id: true, statut: true },
+  });
+
+  const total = mandats.length;
+  const activeCount = mandats.filter((m) => m.statut === 'OUVERT' || m.statut === 'EN_COURS').length;
+
+  let newType: string | null = null;
+  if (total >= 2) {
+    newType = 'RECURRENT';
+  } else if (activeCount >= 1) {
+    newType = 'CLIENT_ACTIF';
+  }
+
+  // Only update if we need to set an auto-type
+  if (newType) {
+    await prisma.client.update({
+      where: { id: clientId },
+      data: { typeClient: newType as any },
+    });
+  }
+}
+
 export async function list(
   params: PaginationParams,
   search?: string,
@@ -105,13 +136,18 @@ export async function create(data: CreateMandatInput, createdById: string) {
 
   const feeMontantEstime = calculateFeeMontantEstime(data.salaireMin, data.salaireMax, data.feePourcentage);
 
-  return prisma.mandat.create({
+  const mandat = await prisma.mandat.create({
     data: {
       ...data,
       feeMontantEstime,
       createdById,
     },
   });
+
+  // Recalculate client typeClient after mandat creation
+  await recalculateTypeClient(data.clientId);
+
+  return mandat;
 }
 
 export async function update(id: string, data: UpdateMandatInput) {
@@ -133,10 +169,17 @@ export async function update(id: string, data: UpdateMandatInput) {
     }
   }
 
-  return prisma.mandat.update({
+  const updated = await prisma.mandat.update({
     where: { id },
     data: updateData,
   });
+
+  // Recalculate client typeClient if mandat statut changed
+  if (data.statut !== undefined) {
+    await recalculateTypeClient(existing.clientId);
+  }
+
+  return updated;
 }
 
 export async function remove(id: string) {
