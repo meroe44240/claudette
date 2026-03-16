@@ -51,6 +51,8 @@ services:
       PRIMARY_LLM_PROVIDER: ${PRIMARY_LLM_PROVIDER:-gemini}
       ALLO_API_KEY: ${ALLO_API_KEY}
       ALLO_BASE_URL: ${ALLO_BASE_URL:-https://api.withallo.com}
+      PAPPERS_API_KEY: ${PAPPERS_API_KEY}
+      PAPPERS_BASE_URL: ${PAPPERS_BASE_URL:-https://api.pappers.fr/v2}
     expose:
       - "3001"
 
