@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Globe, MapPin, Linkedin, Users, FileText, Pencil, Trash2, Save, X, Building, Phone, Mail, ChevronDown, ChevronUp, Briefcase } from 'lucide-react';
 import { Link } from 'react-router';
 import { api } from '../../lib/api-client';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -141,6 +142,8 @@ export default function EntrepriseDetailPage() {
     queryFn: () => api.get<EntrepriseDetail>(`/entreprises/${id}`),
     enabled: !!id,
   });
+
+  usePageTitle(entreprise ? entreprise.nom : 'Entreprise');
 
   const { data: stats } = useQuery({
     queryKey: ['entreprise-stats', id],

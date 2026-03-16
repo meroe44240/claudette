@@ -17,6 +17,8 @@ import { format, isToday as isTodayFn, isPast, differenceInDays } from 'date-fns
 import { fr } from 'date-fns/locale';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
+import { usePageTitle } from '../../hooks/usePageTitle';
+import { formatTaskDue } from '../../lib/format-relative-date';
 import Skeleton from '../../components/ui/Skeleton';
 import EmailComposer from '../../components/email/EmailComposer';
 import { toast } from '../../components/ui/Toast';
@@ -327,6 +329,7 @@ function TogglePill({
 // ═════════════════════════════════════════════════════
 
 function RecruiterDashboard() {
+  usePageTitle('Dashboard');
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -977,11 +980,14 @@ function RecruiterDashboard() {
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {t.tacheDueDate && (
-                          <span className={`text-[10px] ${isOverdue ? 'text-danger-500 font-semibold' : 'text-neutral-400'}`}>
-                            {(() => {
-                              try { return format(new Date(t.tacheDueDate), 'dd/MM HH:mm'); } catch { return ''; }
-                            })()}
-                          </span>
+                          (() => {
+                            const due = formatTaskDue(t.tacheDueDate);
+                            return (
+                              <span className={`text-[10px] font-medium ${due.isOverdue ? 'text-danger-500 font-semibold' : due.isToday ? 'text-amber-500' : 'text-neutral-400'}`}>
+                                {due.text}
+                              </span>
+                            );
+                          })()
                         )}
                         {isSequenceTask && (
                           <span className="flex items-center gap-0.5 rounded-full bg-purple-50 px-1.5 py-0.5 text-[9px] font-semibold text-purple-600">

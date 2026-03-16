@@ -34,7 +34,7 @@ export default function Table<T>({ columns, data, onRowClick, keyExtractor }: Ta
               <tr
                 key={keyExtractor(row)}
                 onClick={() => onRowClick?.(row)}
-                className={`h-14 border-b border-neutral-100 last:border-0 ${onRowClick ? 'cursor-pointer hover:bg-primary-50/30' : ''}`}
+                className={`group h-14 border-b border-neutral-100 last:border-0 ${onRowClick ? 'cursor-pointer hover:bg-primary-50/30' : ''}`}
               >
                 {columns.map((col) => (
                   <td key={col.key} className={`px-5 py-3 ${col.className || ''}`}>

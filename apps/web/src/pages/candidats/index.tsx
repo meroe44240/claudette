@@ -2,7 +2,8 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Search, LayoutGrid, List, MapPin, Building2, Linkedin, Mail, Zap, ArrowRightLeft, Download, Users, Banknote, Clock, Phone } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, MapPin, Building2, Linkedin, Mail, Zap, ArrowRightLeft, Download, Users, Banknote, Clock, Phone, ExternalLink } from 'lucide-react';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
@@ -153,6 +154,7 @@ function serializeFiltersToURL(values: Record<string, any>): Record<string, stri
 }
 
 export default function CandidatsPage() {
+  usePageTitle('Candidats');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [view, setView] = useState<ViewMode>('grid');
@@ -424,6 +426,47 @@ export default function CandidatsPage() {
       render: (r: Candidat) => (
         <Badge variant="info">{r._count?.candidatures || 0}</Badge>
       ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (r: Candidat) => (
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {r.telephone && (
+            <a
+              href={`tel:${r.telephone}`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
+              title={`Appeler ${r.telephone}`}
+            >
+              <Phone size={13} />
+            </a>
+          )}
+          {r.email && (
+            <a
+              href={`mailto:${r.email}`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
+              title={`Email ${r.email}`}
+            >
+              <Mail size={13} />
+            </a>
+          )}
+          {r.linkedinUrl && (
+            <a
+              href={r.linkedinUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+              title="LinkedIn"
+            >
+              <Linkedin size={13} />
+            </a>
+          )}
+        </div>
+      ),
+      className: 'w-24',
     },
   ];
 

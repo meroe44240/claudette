@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Mail, Phone, Linkedin, Building2, Briefcase, Calendar, Send, Pencil, Trash2, Save, X, UserPlus, Bot, Link2, Check, CalendarPlus, Copy, ChevronDown } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -186,6 +187,8 @@ export default function ClientDetailPage() {
     queryFn: () => api.get<ClientDetail>(`/clients/${id}`),
     enabled: !!id,
   });
+
+  usePageTitle(client ? `${client.prenom || ''} ${client.nom}`.trim() : 'Client');
 
   const handleSendBookingEmail = useCallback(() => {
     if (!bookingSlug || !client) return;

@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Megaphone, Sparkles, Loader2, ChevronDown, ChevronUp, Plus, AlertTriangle, ClipboardList, MessageSquare, Target, Copy, Zap, Star, Search } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -542,6 +543,8 @@ export default function MandatDetailPage() {
     queryFn: () => api.get<MandatDetail>(`/mandats/${id}`),
     enabled: !!id,
   });
+
+  usePageTitle(mandat ? `${mandat.titrePoste} — ${mandat.entreprise.nom}` : 'Mandat');
 
   const updateMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>

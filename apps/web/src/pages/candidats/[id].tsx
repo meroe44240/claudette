@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,6 +8,7 @@ import {
   Upload, Copy, Check, Sparkles, ChevronDown, ChevronUp, Bot,
   Link2, CalendarPlus, Search, Plus, User,
 } from 'lucide-react';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
@@ -234,6 +235,8 @@ export default function CandidatDetailPage() {
     queryFn: () => api.get<{ data: { id: string; titrePoste: string; entreprise: { nom: string } }[]; meta: any }>('/mandats?statut=OUVERT&perPage=200'),
     staleTime: 60_000,
   });
+
+  usePageTitle(candidat ? `${candidat.prenom || ''} ${candidat.nom}`.trim() : 'Candidat');
 
   // Filter out mandats where candidat is already added
   const existingMandatIds = new Set(candidat?.candidatures.map((c) => c.mandat.id) || []);
@@ -571,10 +574,16 @@ export default function CandidatDetailPage() {
                 <Button variant="secondary" size="sm" onClick={handleStartEdit}>
                   <Pencil size={14} /> Modifier
                 </Button>
-                <Button variant="danger" size="sm" onClick={() => setShowDeleteModal(true)}>
+                <Button variant="danger" size="sm" onClick={() => setShowDeleteModal(true)} disabled={deleteMutation.isPending}>
                   <Trash2 size={14} /> Supprimer
                 </Button>
-                <Button variant="secondary" size="sm" onClick={() => { setEmailDefaults({ subject: '', body: '' }); setShowEmailComposer(true); }}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => { setEmailDefaults({ subject: '', body: '' }); setShowEmailComposer(true); }}
+                  disabled={!candidat.email}
+                  title={!candidat.email ? 'Aucun email renseigné — modifiez la fiche pour ajouter un email' : undefined}
+                >
                   <Send size={14} /> Envoyer un email
                 </Button>
                 <Button variant="secondary" size="sm" onClick={() => setShowScheduleMeeting(true)}>

@@ -24,6 +24,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, LayoutGrid, Search, UserPlus, Loader2, GripVertical, Zap, Phone, Mail, CheckCircle2, ListTodo, X } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
@@ -409,7 +410,9 @@ function DroppableColumn({ stage, items, isOver, children }: DroppableColumnProp
       />
       <div className="flex items-center gap-2 mb-3">
         <h3 className="text-sm font-semibold text-neutral-900">{label}</h3>
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-bold text-neutral-700 shadow-sm">
+        <span className={`flex h-6 min-w-[24px] items-center justify-center rounded-full px-1.5 text-xs font-bold shadow-sm ${
+          items.length > 0 ? 'bg-white text-neutral-700' : 'bg-neutral-100 text-neutral-400'
+        }`}>
           {items.length}
         </span>
       </div>
@@ -419,7 +422,14 @@ function DroppableColumn({ stage, items, isOver, children }: DroppableColumnProp
           isOver ? 'bg-primary-100/30' : ''
         }`}
       >
-        {children}
+        {items.length === 0 && !isOver ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="h-8 w-8 rounded-full bg-neutral-100 flex items-center justify-center mb-2">
+              <UserPlus size={14} className="text-neutral-300" />
+            </div>
+            <p className="text-[11px] text-neutral-400">Glissez un candidat ici</p>
+          </div>
+        ) : children}
       </div>
     </div>
   );
@@ -485,6 +495,8 @@ export default function MandatKanbanPage() {
     queryFn: () => api.get<MandatInfo>(`/mandats/${id}`),
     enabled: !!id,
   });
+
+  usePageTitle(mandat ? `Kanban — ${mandat.titrePoste}` : 'Kanban');
 
   // Fetch kanban data
   const { data: kanban, isLoading } = useQuery({

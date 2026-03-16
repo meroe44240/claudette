@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { LayoutGrid, List, Plus, Search, Building2, Users, Calendar, Columns3, Briefcase, Filter, X } from 'lucide-react';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
@@ -107,6 +108,7 @@ const listItem = {
 type ViewMode = 'grid' | 'table';
 
 export default function MandatsPage() {
+  usePageTitle('Mandats');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [view, setView] = useState<ViewMode>('table');

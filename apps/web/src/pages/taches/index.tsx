@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { api } from '../../lib/api-client';
+import { usePageTitle } from '../../hooks/usePageTitle';
+import { formatTaskDue } from '../../lib/format-relative-date';
 import Badge from '../../components/ui/Badge';
 import Pagination from '../../components/ui/Pagination';
 import EmptyState from '../../components/ui/EmptyState';
@@ -80,6 +82,7 @@ const listItem = {
 };
 
 export default function TachesPage() {
+  usePageTitle('Tâches');
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState('todo');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -327,20 +330,27 @@ export default function TachesPage() {
                   <div className="mt-2 flex flex-wrap items-center gap-3 text-[13px] text-neutral-500">
                     {/* Due date */}
                     {t.tacheDueDate && (
-                      <span
-                        className={`flex items-center gap-1 ${
-                          !t.tacheCompleted && isOverdue(t.tacheDueDate)
-                            ? 'font-semibold text-red-500'
-                            : ''
-                        }`}
-                      >
-                        {!t.tacheCompleted && isOverdue(t.tacheDueDate) ? (
-                          <AlertTriangle size={13} />
-                        ) : (
-                          <Calendar size={13} className="text-neutral-400" />
-                        )}
-                        {formatDate(t.tacheDueDate)}
-                      </span>
+                      (() => {
+                        const due = formatTaskDue(t.tacheDueDate);
+                        return (
+                          <span
+                            className={`flex items-center gap-1 ${
+                              due.isOverdue && !t.tacheCompleted
+                                ? 'font-semibold text-red-500'
+                                : due.isToday && !t.tacheCompleted
+                                  ? 'font-medium text-amber-500'
+                                  : ''
+                            }`}
+                          >
+                            {due.isOverdue && !t.tacheCompleted ? (
+                              <AlertTriangle size={13} />
+                            ) : (
+                              <Calendar size={13} className="text-neutral-400" />
+                            )}
+                            {due.text}
+                          </span>
+                        );
+                      })()
                     )}
                     {!t.tacheCompleted && t.tacheDueDate && (
                       <div className="relative inline-flex">
@@ -376,7 +386,8 @@ export default function TachesPage() {
                     {!isAdchase && (
                       <button
                         onClick={(e) => { e.stopPropagation(); if(confirm('Supprimer cette tâche ?')) deleteMutation.mutate(t.id); }}
-                        className="ml-2 rounded p-1 text-neutral-300 hover:bg-red-50 hover:text-red-500 transition-colors"
+                        disabled={deleteMutation.isPending}
+                        className="ml-2 rounded p-1 text-neutral-300 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-40"
                       >
                         <Trash2 size={14} />
                       </button>

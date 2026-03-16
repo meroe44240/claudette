@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Plus, Search, LayoutGrid, List, MapPin, Building, Download } from 'lucide-react';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
@@ -162,6 +163,7 @@ function serializeFiltersToURL(values: Record<string, any>): Record<string, stri
 }
 
 export default function EntreprisesPage() {
+  usePageTitle('Entreprises');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [view, setView] = useState<ViewMode>('grid');

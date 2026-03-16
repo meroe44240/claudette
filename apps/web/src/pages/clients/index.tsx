@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { LayoutGrid, List, Plus, Search, Building2, Mail, Send, Download } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
 import Table from '../../components/ui/Table';
@@ -186,6 +187,7 @@ function serializeFiltersToURL(values: Record<string, any>): Record<string, stri
 }
 
 export default function ClientsPage() {
+  usePageTitle('Clients');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [view, setView] = useState<ViewMode>('grid');
@@ -357,13 +359,15 @@ export default function ClientsPage() {
       key: 'email',
       header: 'Email',
       render: (r: Client) => (
-        <span className="text-text-secondary">{r.email || '—'}</span>
+        <span className="text-text-secondary truncate block max-w-[200px]" title={r.email || undefined}>{r.email || '—'}</span>
       ),
     },
     {
       key: 'poste',
       header: 'Poste',
-      render: (r: Client) => r.poste || '—',
+      render: (r: Client) => (
+        <span className="truncate block max-w-[160px]" title={r.poste || undefined}>{r.poste || '—'}</span>
+      ),
     },
     {
       key: 'entreprise',
