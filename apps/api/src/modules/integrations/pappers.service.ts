@@ -49,7 +49,7 @@ export interface PappersEntreprise {
 }
 
 export interface PappersSearchResult {
-  resultats_siren: PappersEntreprise[];
+  resultats: PappersEntreprise[];
   total: number;
   page: number;
   par_page: number;
@@ -208,8 +208,8 @@ export async function enrichEntreprise(entrepriseId: string): Promise<{
   if (!pappersData) {
     try {
       const searchResults = await searchByName(entreprise.nom);
-      if (searchResults.resultats_siren?.length > 0) {
-        pappersData = searchResults.resultats_siren[0];
+      if (searchResults.resultats?.length > 0) {
+        pappersData = searchResults.resultats[0];
         // Get full details
         if (pappersData.siren) {
           try {
