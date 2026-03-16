@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Globe, MapPin, Linkedin, Users, FileText, Pencil, Trash2, Save, X, Building, Phone, Mail, ChevronDown, ChevronUp, Briefcase } from 'lucide-react';
+import { ArrowLeft, Globe, MapPin, Linkedin, Users, FileText, Pencil, Trash2, Save, X, Building, Building2, Phone, Mail, ChevronDown, ChevronUp, Briefcase, ExternalLink, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
@@ -48,6 +48,20 @@ interface EntrepriseDetail {
   linkedinUrl: string | null;
   logoUrl: string | null;
   notes: string | null;
+  // Pappers fields
+  siren: string | null;
+  siret: string | null;
+  formeJuridique: string | null;
+  capitalSocial: number | null;
+  chiffreAffaires: number | null;
+  effectif: string | null;
+  dateCreation: string | null;
+  codeNAF: string | null;
+  libelleNAF: string | null;
+  adresseComplete: string | null;
+  pappersUrl: string | null;
+  pappersEnrichedAt: string | null;
+  pappersRawData: unknown | null;
   _count?: { clients: number; mandats: number };
   clients?: ClientContact[];
   mandats?: MandatInfo[];
@@ -110,6 +124,21 @@ function formatCurrency(value: number): string {
   return `${value}\u20ac`;
 }
 
+function formatEuro(value: number | null | undefined): string {
+  if (value == null) return '\u2014';
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
+}
+
+function formatDateFR(dateStr: string | null | undefined): string {
+  if (!dateStr) return '\u2014';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
 const detailStagger = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.06 } },
@@ -138,6 +167,7 @@ export default function EntrepriseDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [pappersOpen, setPappersOpen] = useState(true);
 
   const { data: entreprise, isLoading } = useQuery({
     queryKey: ['entreprise', id],
@@ -156,6 +186,7 @@ export default function EntrepriseDetailPage() {
       { key: 'taille', label: 'Taille', filled: !!entreprise.taille },
       { key: 'localisation', label: 'Localisation', filled: !!entreprise.localisation },
       { key: 'linkedinUrl', label: 'LinkedIn', filled: !!entreprise.linkedinUrl },
+      { key: 'siren', label: 'SIREN', filled: !!entreprise.siren },
     ];
   }, [entreprise]);
 
@@ -187,6 +218,17 @@ export default function EntrepriseDetailPage() {
     },
     onError: (error: any) => {
       toast('error', error.message || 'Erreur lors de la suppression');
+    },
+  });
+
+  const pappersEnrichMutation = useMutation({
+    mutationFn: () => api.post(`/integrations/pappers/enrich/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entreprise', id] });
+      toast('success', 'Données Pappers mises à jour');
+    },
+    onError: (error: any) => {
+      toast('error', error.message || 'Erreur lors de l\'enrichissement Pappers');
     },
   });
 
@@ -415,6 +457,108 @@ export default function EntrepriseDetailPage() {
               <p className="whitespace-pre-wrap text-sm text-text-secondary">{entreprise.notes}</p>
             ) : (
               <p className="text-sm text-text-secondary">Aucune note.</p>
+            )}
+          </Card>
+
+          {/* Données Pappers */}
+          <Card>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between"
+              onClick={() => setPappersOpen(!pappersOpen)}
+            >
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
+                <Building2 size={18} className="text-blue-500" />
+                Données Pappers
+              </h2>
+              <div className="flex items-center gap-2">
+                {entreprise.pappersEnrichedAt ? (
+                  <Badge variant="success" size="sm">Enrichi le {formatDateFR(entreprise.pappersEnrichedAt)}</Badge>
+                ) : (
+                  <Badge variant="warning" size="sm">Non enrichi</Badge>
+                )}
+                {pappersOpen ? <ChevronUp size={16} className="text-text-tertiary" /> : <ChevronDown size={16} className="text-text-tertiary" />}
+              </div>
+            </button>
+
+            {pappersOpen && (
+              <div className="mt-4">
+                {entreprise.pappersEnrichedAt ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="text-sm">
+                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">SIREN</dt>
+                      <dd className="font-medium text-text-primary">{entreprise.siren || '\u2014'}</dd>
+                    </div>
+                    <div className="text-sm">
+                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">SIRET</dt>
+                      <dd className="font-medium text-text-primary">{entreprise.siret || '\u2014'}</dd>
+                    </div>
+                    <div className="text-sm">
+                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Forme juridique</dt>
+                      <dd className="font-medium text-text-primary">{entreprise.formeJuridique || '\u2014'}</dd>
+                    </div>
+                    <div className="text-sm">
+                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Capital social</dt>
+                      <dd className="font-medium text-text-primary">{entreprise.capitalSocial != null ? formatEuro(entreprise.capitalSocial) : '\u2014'}</dd>
+                    </div>
+                    <div className="text-sm">
+                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Chiffre d'affaires</dt>
+                      <dd className="font-medium text-text-primary">{entreprise.chiffreAffaires != null ? formatEuro(entreprise.chiffreAffaires) : '\u2014'}</dd>
+                    </div>
+                    <div className="text-sm">
+                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Effectif</dt>
+                      <dd className="font-medium text-text-primary">{entreprise.effectif || '\u2014'}</dd>
+                    </div>
+                    <div className="text-sm">
+                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Date de création</dt>
+                      <dd className="font-medium text-text-primary">{formatDateFR(entreprise.dateCreation)}</dd>
+                    </div>
+                    <div className="text-sm">
+                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Code NAF</dt>
+                      <dd className="font-medium text-text-primary">
+                        {entreprise.codeNAF || '\u2014'}
+                        {entreprise.libelleNAF && <span className="text-text-secondary font-normal"> — {entreprise.libelleNAF}</span>}
+                      </dd>
+                    </div>
+                    <div className="text-sm sm:col-span-2">
+                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Adresse complète</dt>
+                      <dd className="font-medium text-text-primary">{entreprise.adresseComplete || '\u2014'}</dd>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-text-secondary">
+                    Aucune donnée Pappers. Cliquez sur le bouton ci-dessous pour enrichir cette fiche.
+                  </p>
+                )}
+
+                <div className="mt-4 flex items-center gap-3 border-t border-neutral-50 pt-4">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => pappersEnrichMutation.mutate()}
+                    loading={pappersEnrichMutation.isPending}
+                  >
+                    {pappersEnrichMutation.isPending ? (
+                      <>Enrichissement...</>
+                    ) : entreprise.pappersEnrichedAt ? (
+                      <><RefreshCw size={14} /> Rafraîchir via Pappers</>
+                    ) : (
+                      <><Building2 size={14} /> Enrichir via Pappers</>
+                    )}
+                  </Button>
+                  {entreprise.pappersUrl && (
+                    <a
+                      href={entreprise.pappersUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
+                    >
+                      <ExternalLink size={14} />
+                      Voir la fiche Pappers
+                    </a>
+                  )}
+                </div>
+              </div>
             )}
           </Card>
         </motion.div>

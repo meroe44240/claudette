@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Phone, Mail, Calendar, Link, Unlink, ExternalLink, Shield, RefreshCw, X, Check, MessageSquare, Send, Save } from 'lucide-react';
+import { Phone, Mail, Calendar, Link, Unlink, ExternalLink, Shield, RefreshCw, X, Check, MessageSquare, Send, Save, Building2 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
@@ -17,10 +17,17 @@ interface IntegrationStatus {
   webhookUrl?: string;
 }
 
+interface PappersStatus {
+  connected: boolean;
+  tokensUsed?: number;
+  tokensRemaining?: number;
+}
+
 interface IntegrationsData {
   gmail?: IntegrationStatus;
   calendar?: IntegrationStatus;
   allo?: IntegrationStatus;
+  pappers?: PappersStatus;
 }
 
 interface AuthUrlResponse {
@@ -557,6 +564,58 @@ export default function IntegrationsSettingsPage() {
               <Save size={14} />
               {saveSlackMutation.isPending ? 'Sauvegarde...' : 'Sauvegarder'}
             </Button>
+          </div>
+        </Card>
+
+        {/* Pappers Card */}
+        <Card>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
+                <Building2 size={18} className="text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-[18px] font-semibold text-neutral-900">Pappers</h3>
+                <p className="mt-0.5 text-[13px] text-neutral-500">
+                  Enrichissez vos entreprises avec les données légales et financières (SIREN, SIRET, capital, effectif...)
+                </p>
+              </div>
+            </div>
+            <Badge variant={integrations?.pappers?.connected ? 'success' : 'error'}>
+              {integrations?.pappers?.connected ? 'Connecté' : 'Non configuré'}
+            </Badge>
+          </div>
+
+          <div className="mt-4 space-y-3 text-sm">
+            {integrations?.pappers?.connected ? (
+              <>
+                <div className="flex items-center gap-2 text-neutral-500">
+                  <Shield size={14} className="text-neutral-300" />
+                  <span>
+                    Clé API : <span className="font-medium text-neutral-900">Configurée côté serveur</span>
+                  </span>
+                </div>
+                {integrations.pappers.tokensUsed != null && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="info" size="sm">
+                      {integrations.pappers.tokensUsed} jetons utilisés
+                    </Badge>
+                    {integrations.pappers.tokensRemaining != null && (
+                      <Badge variant="default" size="sm">
+                        {integrations.pappers.tokensRemaining} restants
+                      </Badge>
+                    )}
+                  </div>
+                )}
+                <div className="rounded-lg bg-neutral-50 p-2.5 text-xs text-neutral-500">
+                  L'auto-complétion Pappers est disponible lors de la création d'une entreprise.
+                </div>
+              </>
+            ) : (
+              <p className="text-neutral-300">
+                Ajoutez la variable <span className="font-mono text-neutral-400">PAPPERS_API_KEY</span> dans le fichier <span className="font-mono text-neutral-400">.env</span> du serveur pour activer Pappers.
+              </p>
+            )}
           </div>
         </Card>
       </div>

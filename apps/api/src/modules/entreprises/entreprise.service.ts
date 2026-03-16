@@ -31,12 +31,21 @@ function generateLogoUrl(siteWeb: string): string | null {
   return `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
 }
 
+export async function getPappersStats() {
+  const [total, enriched] = await Promise.all([
+    prisma.entreprise.count(),
+    prisma.entreprise.count({ where: { pappersEnrichedAt: { not: null } } }),
+  ]);
+  return { total, enriched, percentage: total > 0 ? Math.round((enriched / total) * 100) : 0 };
+}
+
 export async function list(
   params: PaginationParams,
   search?: string,
   sectors?: string[],
   cities?: string[],
   taille?: string,
+  enriched?: boolean,
 ) {
   const { skip, take } = paginationToSkipTake(params);
 
@@ -66,6 +75,12 @@ export async function list(
 
   if (taille) {
     where.taille = taille;
+  }
+
+  if (enriched === true) {
+    where.pappersEnrichedAt = { not: null };
+  } else if (enriched === false) {
+    where.pappersEnrichedAt = null;
   }
 
   const [data, total] = await Promise.all([

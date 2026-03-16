@@ -72,6 +72,20 @@ model Entreprise {
   linkedinUrl  String?           @db.VarChar(500)
   logoUrl      String?           @db.VarChar(1000)
   notes        String?           @db.Text
+  // Pappers (données légales françaises)
+  siren             String?           @db.VarChar(9)
+  siret             String?           @db.VarChar(14)
+  formeJuridique    String?           @db.VarChar(100)
+  capitalSocial     Float?
+  chiffreAffaires   Float?
+  effectif          String?           @db.VarChar(50)
+  dateCreation      String?           @db.VarChar(10)
+  codeNAF           String?           @db.VarChar(10)
+  libelleNAF        String?           @db.VarChar(255)
+  adresseComplete   String?           @db.VarChar(500)
+  pappersUrl        String?           @db.VarChar(500)
+  pappersEnrichedAt DateTime?         @db.Timestamptz()
+  pappersRawData    Json?
   createdById  String?           @db.Uuid
   createdBy    User?             @relation("EntrepriseCreatedBy", fields: [createdById], references: [id])
   createdAt    DateTime          @default(now()) @db.Timestamptz()

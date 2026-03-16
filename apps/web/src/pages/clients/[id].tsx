@@ -2,7 +2,8 @@ import { useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Mail, Phone, Linkedin, Building2, Briefcase, Calendar, Send, Pencil, Trash2, Save, X, UserPlus, Bot, Link2, Check, CalendarPlus, Copy, ChevronDown, User } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Linkedin, Building2, Briefcase, Calendar, Send, Pencil, Trash2, Save, X, UserPlus, Bot, Link2, Check, CalendarPlus, Copy, ChevronDown, User, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
 import { usePageTitle } from '../../hooks/usePageTitle';
@@ -58,6 +59,10 @@ interface ClientDetail {
     nom: string;
     secteur: string | null;
     localisation: string | null;
+    siren: string | null;
+    effectif: string | null;
+    chiffreAffaires: number | null;
+    pappersEnrichedAt: string | null;
   };
   assignedTo: {
     id: string;
@@ -127,6 +132,11 @@ const statutMandatVariant: Record<string, 'default' | 'info' | 'success' | 'erro
   ANNULE: 'error',
   CLOTURE: 'default',
 };
+
+function formatEuroCompact(value: number | null | undefined): string {
+  if (value == null) return '\u2014';
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
+}
 
 const detailStagger = {
   hidden: { opacity: 0 },
@@ -253,6 +263,17 @@ export default function ClientDetailPage() {
     },
     onError: (error: any) => {
       toast('error', error.message || 'Erreur lors de la prise en charge');
+    },
+  });
+
+  const pappersEnrichMutation = useMutation({
+    mutationFn: () => api.post(`/integrations/pappers/enrich/${client?.entreprise?.id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['client', id] });
+      toast('success', 'Données Pappers mises à jour');
+    },
+    onError: (error: any) => {
+      toast('error', error.message || 'Erreur lors de l\'enrichissement Pappers');
     },
   });
 
@@ -586,6 +607,59 @@ export default function ClientDetailPage() {
         {/* Sidebar */}
         <motion.div className="space-y-6" variants={detailItem}>
           <ProfileCompleteness fields={completenessFields} />
+
+          {/* Mini entreprise card */}
+          <Card>
+            <div className="flex items-center gap-2 mb-3">
+              <Building2 size={16} className="text-blue-500" />
+              <h2 className="text-sm font-semibold text-text-primary">Entreprise</h2>
+            </div>
+            <div className="space-y-2 text-sm">
+              <Link
+                to={`/entreprises/${client.entreprise.id}`}
+                className="font-medium text-accent hover:underline block"
+              >
+                {client.entreprise.nom}
+              </Link>
+              {client.entreprise.siren && (
+                <div className="flex items-center justify-between">
+                  <span className="text-text-tertiary">SIREN</span>
+                  <span className="font-medium text-text-primary">{client.entreprise.siren}</span>
+                </div>
+              )}
+              {client.entreprise.effectif && (
+                <div className="flex items-center justify-between">
+                  <span className="text-text-tertiary">Effectif</span>
+                  <span className="font-medium text-text-primary">{client.entreprise.effectif}</span>
+                </div>
+              )}
+              {client.entreprise.chiffreAffaires != null && (
+                <div className="flex items-center justify-between">
+                  <span className="text-text-tertiary">CA</span>
+                  <span className="font-medium text-text-primary">{formatEuroCompact(client.entreprise.chiffreAffaires)}</span>
+                </div>
+              )}
+              <div className="pt-1">
+                {client.entreprise.pappersEnrichedAt ? (
+                  <Badge variant="success" size="sm">Enrichi Pappers</Badge>
+                ) : (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline disabled:opacity-50"
+                    onClick={() => pappersEnrichMutation.mutate()}
+                    disabled={pappersEnrichMutation.isPending}
+                  >
+                    {pappersEnrichMutation.isPending ? (
+                      <><RefreshCw size={12} className="animate-spin" /> Enrichissement...</>
+                    ) : (
+                      <><Building2 size={12} /> Enrichir via Pappers</>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </Card>
+
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">Détails</h2>
             <dl className="space-y-3 text-sm">

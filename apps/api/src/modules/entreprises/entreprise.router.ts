@@ -19,6 +19,7 @@ export default async function entrepriseRouter(fastify: FastifyInstance) {
           secteur: { type: 'string', description: 'Comma-separated sectors' },
           localisation: { type: 'string', description: 'Comma-separated cities' },
           taille: { type: 'string', enum: ['STARTUP', 'PME', 'ETI', 'GRAND_GROUPE'] },
+          enriched: { type: 'string', enum: ['true', 'false'], description: 'Filter by Pappers enrichment status' },
         },
       },
     },
@@ -31,12 +32,14 @@ export default async function entrepriseRouter(fastify: FastifyInstance) {
         secteur?: string;
         localisation?: string;
         taille?: string;
+        enriched?: string;
       };
       const pagination = parsePagination(query);
       const sectors = query.secteur ? query.secteur.split(',').map((s) => s.trim()) : undefined;
       const cities = query.localisation ? query.localisation.split(',').map((c) => c.trim()) : undefined;
+      const enriched = query.enriched === 'true' ? true : query.enriched === 'false' ? false : undefined;
 
-      return entrepriseService.list(pagination, query.search, sectors, cities, query.taille);
+      return entrepriseService.list(pagination, query.search, sectors, cities, query.taille, enriched);
     },
   });
 
@@ -86,6 +89,18 @@ export default async function entrepriseRouter(fastify: FastifyInstance) {
       const { nom } = request.query as { nom?: string };
       if (!nom) return { exists: false };
       return entrepriseService.checkDuplicate(nom);
+    },
+  });
+
+  // GET /stats/pappers - Statistiques d'enrichissement Pappers
+  fastify.get('/stats/pappers', {
+    schema: {
+      description: 'Obtenir les statistiques d\'enrichissement Pappers des entreprises',
+      tags: ['Entreprises'],
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      return entrepriseService.getPappersStats();
     },
   });
 

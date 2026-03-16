@@ -358,6 +358,11 @@ function RecruiterDashboard() {
     queryFn: () => api.get<{ slug: string; isActive: boolean }>('/booking/settings'),
   });
 
+  const { data: pappersStats } = useQuery({
+    queryKey: ['entreprises', 'stats', 'pappers'],
+    queryFn: () => api.get<{ total: number; enriched: number; percentage: number }>('/entreprises/stats/pappers'),
+  });
+
   const structureKpis = spaData?.structureKpis;
 
   // ── DERIVED DATA ──────────────────────────────────
@@ -647,6 +652,33 @@ function RecruiterDashboard() {
             <div className="flex items-center gap-1">
               <span className="text-[11px] text-neutral-500">Pipe global</span>
               <span className="text-[12px] font-bold text-brand-500"><AnimatedCounter value={structureKpis.pipeStructure} formatFn={formatCurrency} /></span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PAPPERS ENRICHMENT KPI ── */}
+      {pappersStats && pappersStats.total > 0 && (
+        <div className="px-6 shrink-0 mt-1.5">
+          <div className="flex items-center gap-4 rounded-lg bg-neutral-50 border border-neutral-100 px-4 py-1.5">
+            <div className="flex items-center gap-1.5">
+              <Building2 size={12} className="text-brand-500" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Entreprises enrichies Pappers</span>
+            </div>
+            <div className="h-3 w-px bg-neutral-200" />
+            <div className="flex items-center gap-1">
+              <span className="text-[12px] font-bold text-brand-500"><AnimatedCounter value={pappersStats.enriched} /></span>
+              <span className="text-[11px] text-neutral-500">/ {pappersStats.total}</span>
+            </div>
+            <div className="h-3 w-px bg-neutral-200" />
+            <div className="flex items-center gap-1.5">
+              <div className="w-20 h-1.5 rounded-full bg-neutral-200 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-brand-500 transition-all duration-500"
+                  style={{ width: `${pappersStats.percentage}%` }}
+                />
+              </div>
+              <span className="text-[11px] font-semibold text-brand-500">{pappersStats.percentage}%</span>
             </div>
           </div>
         </div>

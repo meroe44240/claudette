@@ -8,6 +8,7 @@ import * as alloService from './allo.service.js';
 import * as gmailService from './gmail.service.js';
 import * as calendarService from './calendar.service.js';
 import * as emailAutoCreateService from './email-auto-create.service.js';
+import * as pappersService from './pappers.service.js';
 
 // ─── ZOD SCHEMAS ────────────────────────────────────
 
@@ -75,10 +76,14 @@ export default async function integrationRouter(fastify: FastifyInstance) {
       const gmail = configs.find(c => c.provider === 'gmail');
       const calendar = configs.find(c => c.provider === 'calendar');
       const allo = configs.find(c => c.provider === 'allo');
+      // Check Pappers status (server-side API key, not per-user)
+      const pappersStatus = await pappersService.checkStatus();
+
       return {
         gmail: { connected: !!gmail?.enabled, email: (gmail?.config as any)?.email || null },
         calendar: { connected: !!calendar?.enabled },
         allo: { connected: !!allo?.enabled, apiKeyConfigured: !!allo?.accessToken },
+        pappers: pappersStatus,
       };
     },
   });
@@ -571,6 +576,79 @@ export default async function integrationRouter(fastify: FastifyInstance) {
         ...result,
         message: `${result.candidats} candidats, ${result.clients} clients, ${result.entreprises} entreprises créés. ${result.activities} activités loggées.`,
       };
+    },
+  });
+
+  // ═══════════════════════════════════════════════════
+  // PAPPERS ROUTES (données légales entreprises)
+  // ═══════════════════════════════════════════════════
+
+  // GET /pappers/status - Check Pappers API key & token usage
+  fastify.get('/pappers/status', {
+    schema: {
+      description: 'Vérifier le statut de connexion Pappers et la consommation de jetons',
+      tags: ['Integrations - Pappers'],
+    },
+    preHandler: [authenticate],
+    handler: async () => {
+      return pappersService.checkStatus();
+    },
+  });
+
+  // GET /pappers/suggestions - Autocomplete company name
+  fastify.get('/pappers/suggestions', {
+    schema: {
+      description: 'Autocomplétion de nom d\'entreprise via Pappers',
+      tags: ['Integrations - Pappers'],
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { q } = request.query as { q?: string };
+      if (!q || q.length < 2) return { results: [] };
+      const results = await pappersService.suggestions(q);
+      return { results };
+    },
+  });
+
+  // GET /pappers/search - Search companies by name
+  fastify.get('/pappers/search', {
+    schema: {
+      description: 'Rechercher des entreprises par nom via Pappers',
+      tags: ['Integrations - Pappers'],
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { q, page } = request.query as { q?: string; page?: string };
+      if (!q) throw new AppError(400, 'Paramètre q requis');
+      return pappersService.searchByName(q, parseInt(page || '1', 10));
+    },
+  });
+
+  // GET /pappers/entreprise - Get company by SIREN or SIRET
+  fastify.get('/pappers/entreprise', {
+    schema: {
+      description: 'Obtenir la fiche complète d\'une entreprise par SIREN ou SIRET',
+      tags: ['Integrations - Pappers'],
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { siren, siret } = request.query as { siren?: string; siret?: string };
+      if (siren) return pappersService.getBySiren(siren);
+      if (siret) return pappersService.getBySiret(siret);
+      throw new AppError(400, 'Paramètre siren ou siret requis');
+    },
+  });
+
+  // POST /pappers/enrich/:entrepriseId - Enrich an existing company
+  fastify.post('/pappers/enrich/:entrepriseId', {
+    schema: {
+      description: 'Enrichir une entreprise existante avec les données Pappers',
+      tags: ['Integrations - Pappers'],
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { entrepriseId } = request.params as { entrepriseId: string };
+      return pappersService.enrichEntreprise(entrepriseId);
     },
   });
 }
