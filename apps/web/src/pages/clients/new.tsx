@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Building2, Plus, Check, Loader2 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
@@ -12,6 +12,7 @@ import Button from '../../components/ui/Button';
 import { toast } from '../../components/ui/Toast';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { useAutosave } from '../../hooks/useAutosave';
+import PappersAutocomplete, { type PappersSuggestionData } from '../../components/entreprises/PappersAutocomplete';
 
 const roleContactOptions = [
   { value: '', label: 'Sélectionner...' },
@@ -78,8 +79,13 @@ const initialForm: FormData = {
 
 export default function ClientNewPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [form, setForm] = useState<FormData>(initialForm);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
+
+  // Track Pappers-created entreprise for display
+  const [pappersEntreprise, setPappersEntreprise] = useState<{ nom: string; siren?: string } | null>(null);
+  const [creatingEntreprise, setCreatingEntreprise] = useState(false);
 
   const isDirty = useMemo(
     () => Object.keys(initialForm).some((key) => form[key as keyof FormData] !== initialForm[key as keyof FormData]),
@@ -145,6 +151,43 @@ export default function ClientNewPage() {
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
+  // Handle Pappers selection: auto-create entreprise then set entrepriseId
+  const handlePappersSelect = async (data: PappersSuggestionData) => {
+    setCreatingEntreprise(true);
+    if (errors.entrepriseId) setErrors((prev) => ({ ...prev, entrepriseId: undefined }));
+
+    try {
+      // Build payload for entreprise creation
+      const payload: Record<string, unknown> = { nom: data.nom };
+      if (data.siren) payload.siren = data.siren;
+      if (data.siret) payload.siret = data.siret;
+      if (data.formeJuridique) payload.formeJuridique = data.formeJuridique;
+      if (data.secteur) payload.secteur = data.secteur;
+      if (data.localisation) payload.localisation = data.localisation;
+      if (data.siteWeb) payload.siteWeb = data.siteWeb;
+      if (data.taille) payload.taille = data.taille;
+      if (data.codeNAF) payload.codeNAF = data.codeNAF;
+      if (data.libelleNAF) payload.libelleNAF = data.libelleNAF;
+      if (data.adresseComplete) payload.adresseComplete = data.adresseComplete;
+      if (data.effectif) payload.effectif = data.effectif;
+      if (data.capitalSocial) payload.capitalSocial = parseFloat(data.capitalSocial) || undefined;
+
+      const created = await api.post<{ id: string }>('/entreprises', payload);
+
+      setForm((prev) => ({ ...prev, entrepriseId: created.id }));
+      setPappersEntreprise({ nom: data.nom, siren: data.siren });
+      toast('success', `Entreprise "${data.nom}" créée via Pappers`);
+
+      // Refresh entreprises list
+      queryClient.invalidateQueries({ queryKey: ['entreprises'] });
+    } catch (err: any) {
+      // If duplicate, try to find the existing one
+      toast('error', err.message || 'Erreur lors de la création de l\'entreprise');
+    } finally {
+      setCreatingEntreprise(false);
+    }
+  };
+
   const mutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
       api.post<{ id: string }>('/clients', payload),
@@ -194,6 +237,13 @@ export default function ClientNewPage() {
 
     mutation.mutate(payload);
   };
+
+  // Selected entreprise name for display
+  const selectedEntrepriseName = useMemo(() => {
+    if (pappersEntreprise) return pappersEntreprise.nom;
+    const found = entrepriseOptions.find((e) => e.value === form.entrepriseId);
+    return found?.label || '';
+  }, [form.entrepriseId, entrepriseOptions, pappersEntreprise]);
 
   return (
     <div>
@@ -260,18 +310,68 @@ export default function ClientNewPage() {
               onChange={set('linkedinUrl')}
               placeholder="https://linkedin.com/in/..."
             />
-            <Select
-              label="Entreprise *"
-              options={entrepriseOptions}
-              value={form.entrepriseId}
-              onChange={(val) => {
-                setForm((prev) => ({ ...prev, entrepriseId: val }));
-                if (errors.entrepriseId) setErrors((prev) => ({ ...prev, entrepriseId: undefined }));
-              }}
-              placeholder="Sélectionner une entreprise"
-              searchable
-              error={errors.entrepriseId}
-            />
+
+            {/* Entreprise — Select existing OR create from Pappers */}
+            <div>
+              <Select
+                label="Entreprise *"
+                options={entrepriseOptions}
+                value={form.entrepriseId}
+                onChange={(val) => {
+                  setForm((prev) => ({ ...prev, entrepriseId: val }));
+                  setPappersEntreprise(null);
+                  if (errors.entrepriseId) setErrors((prev) => ({ ...prev, entrepriseId: undefined }));
+                }}
+                placeholder="Sélectionner une entreprise"
+                searchable
+                error={errors.entrepriseId}
+              />
+
+              {/* Pappers quick-create */}
+              {!form.entrepriseId && (
+                <div className="mt-2">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="flex-1 border-t border-neutral-200" />
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">ou créer via Pappers</span>
+                    <div className="flex-1 border-t border-neutral-200" />
+                  </div>
+                  <PappersAutocomplete onSelect={handlePappersSelect} />
+                  {creatingEntreprise && (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-600">
+                      <Loader2 size={12} className="animate-spin" />
+                      Création de l'entreprise en cours...
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Show Pappers-created entreprise badge */}
+              {pappersEntreprise && form.entrepriseId && (
+                <div className="mt-2 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                  <Check size={14} className="text-emerald-600 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm font-medium text-emerald-800">{pappersEntreprise.nom}</span>
+                    {pappersEntreprise.siren && (
+                      <span className="ml-2 text-xs font-mono text-emerald-600">{pappersEntreprise.siren}</span>
+                    )}
+                  </div>
+                  <span className="inline-flex items-center gap-0.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                    <Building2 size={10} />
+                    Pappers
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm((prev) => ({ ...prev, entrepriseId: '' }));
+                      setPappersEntreprise(null);
+                    }}
+                    className="text-xs text-emerald-600 hover:text-emerald-800 underline"
+                  >
+                    Changer
+                  </button>
+                </div>
+              )}
+            </div>
 
             <Select
               label="Statut client"
@@ -317,7 +417,7 @@ export default function ClientNewPage() {
             <Button type="button" variant="ghost" onClick={() => navigate('/clients')}>
               Annuler
             </Button>
-            <Button type="submit" disabled={mutation.isPending}>
+            <Button type="submit" disabled={mutation.isPending || creatingEntreprise}>
               {mutation.isPending ? 'Création...' : 'Créer'}
             </Button>
           </div>

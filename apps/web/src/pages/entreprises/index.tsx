@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Search, LayoutGrid, List, Download, Building2, MapPin, Users, MoreHorizontal } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, Download, Building2, MapPin, Users, MoreHorizontal, Sparkles } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { usePrefetch } from '../../hooks/usePrefetch';
 import { toast } from '../../components/ui/Toast';
@@ -144,6 +144,7 @@ const TAILLE_OPTIONS = [
 
 // ── Selection actions ───────────────────────────────────────────
 const SELECTION_ACTIONS: SelectionAction[] = [
+  { key: 'enrich', label: 'Enrichir Pappers', icon: Sparkles, variant: 'primary' },
   { key: 'export', label: 'Exporter', icon: Download, variant: 'ghost' },
 ];
 
@@ -187,6 +188,7 @@ export default function EntreprisesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { prefetchOnHover, cancelPrefetch } = usePrefetch();
+  const queryClient = useQueryClient();
   const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'revenueCumule', direction: 'desc' });
 
   const handleSort = useCallback((key: string) => {
@@ -297,11 +299,32 @@ export default function EntreprisesPage() {
     }
   }, [allSelected, sortedEntreprises]);
 
-  const handleSelectionAction = useCallback((key: string) => {
+  const [enriching, setEnriching] = useState(false);
+
+  const handleSelectionAction = useCallback(async (key: string) => {
     const ids = Array.from(selectedIds);
     const selected = allEntreprises.filter((e) => ids.includes(e.id));
 
     switch (key) {
+      case 'enrich': {
+        if (enriching) return;
+        setEnriching(true);
+        toast('success', `Enrichissement de ${ids.length} entreprise(s) en cours...`);
+        try {
+          const result = await api.post<{ enriched: number; failed: number }>('/entreprises/bulk-enrich', { ids });
+          toast('success', `${result.enriched} entreprise(s) enrichie(s) via Pappers`);
+          if (result.failed > 0) {
+            toast('error', `${result.failed} échec(s) d'enrichissement`);
+          }
+          queryClient.invalidateQueries({ queryKey: ['entreprises'] });
+          setSelectedIds(new Set());
+        } catch (err: any) {
+          toast('error', err.message || 'Erreur lors de l\'enrichissement');
+        } finally {
+          setEnriching(false);
+        }
+        break;
+      }
       case 'export': {
         const headers = ['Nom', 'Secteur', 'Localisation', 'Taille', 'Contacts', 'Mandats actifs', 'Mandats historiques', 'Revenue', 'Placements', 'Dernier mandat'];
         const rows = selected.map((e) => [

@@ -7,6 +7,7 @@ import {
 } from '../../lib/pagination.js';
 import { StageCandidature } from '@prisma/client';
 import type { CreateEntrepriseInput, UpdateEntrepriseInput } from './entreprise.schema.js';
+import { enrichEntreprise } from '../integrations/pappers.service.js';
 
 /**
  * Extract hostname from a website URL.
@@ -234,12 +235,26 @@ export async function create(data: CreateEntrepriseInput, createdById: string) {
     if (logo) data.logoUrl = logo;
   }
 
-  return prisma.entreprise.create({
+  // If SIREN is provided (from Pappers), mark as pre-enriched with creation data
+  const hasPappersData = !!(data.siren || data.siret || data.codeNAF);
+
+  const entreprise = await prisma.entreprise.create({
     data: {
       ...data,
       createdById,
+      // Mark as Pappers-enriched if Pappers data was provided at creation
+      ...(hasPappersData && { pappersEnrichedAt: new Date() }),
     },
   });
+
+  // Auto-enrich in background if SIREN was provided — gets full Pappers data
+  if (data.siren) {
+    enrichEntreprise(entreprise.id).catch((err) => {
+      console.warn(`[Pappers] Auto-enrichment failed for "${entreprise.nom}":`, err.message);
+    });
+  }
+
+  return entreprise;
 }
 
 export async function update(id: string, data: UpdateEntrepriseInput) {
@@ -388,6 +403,32 @@ export async function getStats(id: string) {
     nombrePlacements,
     feeMoyen,
   };
+}
+
+export async function bulkEnrich(ids: string[]): Promise<{ enriched: number; failed: number; results: { id: string; nom: string; success: boolean; fieldsUpdated?: string[]; error?: string }[] }> {
+  const results: { id: string; nom: string; success: boolean; fieldsUpdated?: string[]; error?: string }[] = [];
+  let enrichedCount = 0;
+  let failedCount = 0;
+
+  for (const id of ids) {
+    const ent = await prisma.entreprise.findUnique({ where: { id }, select: { id: true, nom: true } });
+    if (!ent) {
+      results.push({ id, nom: '?', success: false, error: 'Non trouvée' });
+      failedCount++;
+      continue;
+    }
+
+    try {
+      const result = await enrichEntreprise(id);
+      results.push({ id, nom: ent.nom, success: true, fieldsUpdated: result.fieldsUpdated });
+      enrichedCount++;
+    } catch (err: any) {
+      results.push({ id, nom: ent.nom, success: false, error: err.message || 'Erreur inconnue' });
+      failedCount++;
+    }
+  }
+
+  return { enriched: enrichedCount, failed: failedCount, results };
 }
 
 export async function backfillLogos() {

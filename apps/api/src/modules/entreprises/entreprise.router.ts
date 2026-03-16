@@ -76,6 +76,18 @@ export default async function entrepriseRouter(fastify: FastifyInstance) {
           linkedinUrl: { type: 'string' },
           logoUrl: { type: 'string' },
           notes: { type: 'string' },
+          // Pappers fields
+          siren: { type: 'string' },
+          siret: { type: 'string' },
+          formeJuridique: { type: 'string' },
+          capitalSocial: { type: 'number' },
+          chiffreAffaires: { type: 'number' },
+          effectif: { type: 'string' },
+          dateCreation: { type: 'string' },
+          codeNAF: { type: 'string' },
+          libelleNAF: { type: 'string' },
+          adresseComplete: { type: 'string' },
+          pappersUrl: { type: 'string' },
         },
       },
     },
@@ -163,6 +175,18 @@ export default async function entrepriseRouter(fastify: FastifyInstance) {
           linkedinUrl: { type: 'string' },
           logoUrl: { type: 'string' },
           notes: { type: 'string' },
+          // Pappers fields
+          siren: { type: 'string' },
+          siret: { type: 'string' },
+          formeJuridique: { type: 'string' },
+          capitalSocial: { type: 'number' },
+          chiffreAffaires: { type: 'number' },
+          effectif: { type: 'string' },
+          dateCreation: { type: 'string' },
+          codeNAF: { type: 'string' },
+          libelleNAF: { type: 'string' },
+          adresseComplete: { type: 'string' },
+          pappersUrl: { type: 'string' },
         },
       },
     },
@@ -192,6 +216,26 @@ export default async function entrepriseRouter(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
       await entrepriseService.remove(id);
       return { message: 'Entreprise supprimee' };
+    },
+  });
+
+  // POST /bulk-enrich - Enrichir plusieurs entreprises via Pappers
+  fastify.post('/bulk-enrich', {
+    schema: {
+      description: 'Enrichir plusieurs entreprises via Pappers en masse',
+      tags: ['Entreprises'],
+      body: {
+        type: 'object',
+        required: ['ids'],
+        properties: {
+          ids: { type: 'array', items: { type: 'string', format: 'uuid' }, maxItems: 50 },
+        },
+      },
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { ids } = request.body as { ids: string[] };
+      return entrepriseService.bulkEnrich(ids);
     },
   });
 

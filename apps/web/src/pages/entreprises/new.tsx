@@ -183,7 +183,7 @@ export default function EntrepriseNewPage() {
     if (form.libelleNAF.trim()) payload.libelleNAF = form.libelleNAF.trim();
     if (form.adresseComplete.trim()) payload.adresseComplete = form.adresseComplete.trim();
     if (form.effectif.trim()) payload.effectif = form.effectif.trim();
-    if (form.capitalSocial.trim()) payload.capitalSocial = form.capitalSocial.trim();
+    if (form.capitalSocial.trim()) payload.capitalSocial = parseFloat(form.capitalSocial) || undefined;
 
     mutation.mutate(payload);
   };
