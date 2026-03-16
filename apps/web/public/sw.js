@@ -1,4 +1,4 @@
-const CACHE_NAME = 'humanup-v1';
+const CACHE_NAME = 'humanup-v2';
 const STATIC_ASSETS = ['/'];
 
 // Install: cache static assets
@@ -19,16 +19,29 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch: cache-first for assets, network-first for API
+// Fetch: network-first for HTML, cache-first for hashed assets, network-first for API
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  const url = new URL(request.url);
+
   if (request.url.includes('/api/')) {
     // Network-first for API calls
     event.respondWith(
       fetch(request).catch(() => caches.match(request))
     );
+  } else if (url.pathname === '/' || url.pathname.endsWith('.html') || !url.pathname.includes('.')) {
+    // Network-first for HTML / navigation requests (prevents stale index.html)
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
   } else {
-    // Cache-first for static assets
+    // Cache-first for hashed static assets (JS/CSS with fingerprints)
     event.respondWith(
       caches.match(request).then((cached) => cached || fetch(request).then((response) => {
         const clone = response.clone();
