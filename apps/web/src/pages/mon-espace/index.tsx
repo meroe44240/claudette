@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
   Briefcase,
@@ -10,10 +10,16 @@ import {
   Users,
   ListChecks,
   CheckCircle2,
+  Mail,
+  Calendar,
+  Link,
+  Unlink,
+  ExternalLink,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
 import Skeleton from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import { toast } from '../../components/ui/Toast';
@@ -86,9 +92,63 @@ const sectionItem = {
   show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 260, damping: 24 } },
 };
 
+interface IntegrationStatus {
+  connected: boolean;
+  email?: string;
+  calendarName?: string;
+}
+
+interface IntegrationsData {
+  gmail?: IntegrationStatus;
+  calendar?: IntegrationStatus;
+}
+
 export default function MonEspacePage() {
   const user = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
   const [showOverdue, setShowOverdue] = useState(false);
+
+  // --- Integrations (Gmail / Calendar) ---
+  const { data: integrations, isLoading: loadingIntegrations } = useQuery({
+    queryKey: ['integrations', 'status'],
+    queryFn: () => api.get<IntegrationsData>('/integrations/status'),
+  });
+
+  const disconnectGmailMutation = useMutation({
+    mutationFn: () => api.post('/integrations/gmail/disconnect'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'status'] });
+      toast('success', 'Gmail déconnecté');
+    },
+    onError: () => toast('error', 'Erreur lors de la déconnexion'),
+  });
+
+  const disconnectCalendarMutation = useMutation({
+    mutationFn: () => api.post('/integrations/calendar/disconnect'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations', 'status'] });
+      toast('success', 'Google Calendar déconnecté');
+    },
+    onError: () => toast('error', 'Erreur lors de la déconnexion'),
+  });
+
+  const handleConnectGmail = async () => {
+    try {
+      const data = await api.get<{ url: string }>('/integrations/gmail/auth-url');
+      window.open(data.url, '_blank');
+    } catch {
+      toast('error', "Erreur lors de la récupération de l'URL d'authentification");
+    }
+  };
+
+  const handleConnectCalendar = async () => {
+    try {
+      const data = await api.get<{ url: string }>('/integrations/calendar/auth-url');
+      window.open(data.url, '_blank');
+    } catch {
+      toast('error', "Erreur lors de la récupération de l'URL d'authentification");
+    }
+  };
 
   const { data: dashboard, isLoading: loadingDashboard } = useQuery({
     queryKey: ['dashboard', 'recruteur'],
@@ -323,6 +383,104 @@ export default function MonEspacePage() {
       {/* Agenda */}
       <motion.section className="mb-8" variants={sectionItem}>
         <AgendaWidget />
+      </motion.section>
+
+      {/* Mes Intégrations */}
+      <motion.section className="mb-8" variants={sectionItem}>
+        <h2 className="mb-3 text-lg font-semibold text-neutral-900">Mes Intégrations</h2>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Gmail */}
+          <Card>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50">
+                  <Mail size={18} className="text-red-500" />
+                </div>
+                <div>
+                  <h3 className="text-[16px] font-semibold text-neutral-900">Gmail</h3>
+                  <p className="mt-0.5 text-[13px] text-neutral-500">
+                    Envoyez des emails depuis HumanUp
+                  </p>
+                </div>
+              </div>
+              <Badge variant={integrations?.gmail?.connected ? 'success' : 'default'}>
+                {integrations?.gmail?.connected ? 'Connecté' : 'Déconnecté'}
+              </Badge>
+            </div>
+            {integrations?.gmail?.connected && integrations.gmail.email && (
+              <div className="mt-3 flex items-center gap-2 text-sm text-neutral-500">
+                <Mail size={14} className="text-neutral-300" />
+                <span className="font-medium text-neutral-900">{integrations.gmail.email}</span>
+              </div>
+            )}
+            <div className="mt-4">
+              {integrations?.gmail?.connected ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => disconnectGmailMutation.mutate()}
+                  disabled={disconnectGmailMutation.isPending}
+                >
+                  <Unlink size={14} />
+                  {disconnectGmailMutation.isPending ? 'Déconnexion...' : 'Déconnecter'}
+                </Button>
+              ) : (
+                <Button size="sm" className="w-full" onClick={handleConnectGmail}>
+                  <Link size={14} />
+                  Connecter Gmail
+                  <ExternalLink size={12} />
+                </Button>
+              )}
+            </div>
+          </Card>
+
+          {/* Google Calendar */}
+          <Card>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
+                  <Calendar size={18} className="text-blue-500" />
+                </div>
+                <div>
+                  <h3 className="text-[16px] font-semibold text-neutral-900">Google Calendar</h3>
+                  <p className="mt-0.5 text-[13px] text-neutral-500">
+                    Synchronisez votre agenda
+                  </p>
+                </div>
+              </div>
+              <Badge variant={integrations?.calendar?.connected ? 'success' : 'default'}>
+                {integrations?.calendar?.connected ? 'Connecté' : 'Déconnecté'}
+              </Badge>
+            </div>
+            {integrations?.calendar?.connected && integrations.calendar.email && (
+              <div className="mt-3 flex items-center gap-2 text-sm text-neutral-500">
+                <Calendar size={14} className="text-neutral-300" />
+                <span className="font-medium text-neutral-900">{integrations.calendar.email}</span>
+              </div>
+            )}
+            <div className="mt-4">
+              {integrations?.calendar?.connected ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => disconnectCalendarMutation.mutate()}
+                  disabled={disconnectCalendarMutation.isPending}
+                >
+                  <Unlink size={14} />
+                  {disconnectCalendarMutation.isPending ? 'Déconnexion...' : 'Déconnecter'}
+                </Button>
+              ) : (
+                <Button size="sm" className="w-full" onClick={handleConnectCalendar}>
+                  <Link size={14} />
+                  Connecter Google Calendar
+                  <ExternalLink size={12} />
+                </Button>
+              )}
+            </div>
+          </Card>
+        </div>
       </motion.section>
     </motion.div>
   );
