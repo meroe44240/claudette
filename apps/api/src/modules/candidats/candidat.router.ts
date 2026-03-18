@@ -45,6 +45,14 @@ export default async function candidatRouter(fastify: FastifyInstance) {
       const salaireMax = query.salaireMax ? parseInt(query.salaireMax, 10) : undefined;
       const stages = query.stage ? (query.stage as string).split(',').map((s: string) => s.trim()) : undefined;
 
+      // Non-admin: auto-filter by own userId
+      let assignedToId: string | undefined;
+      if (request.userRole !== 'ADMIN') {
+        assignedToId = request.userId;
+      } else if (query.assignedToId && query.assignedToId !== 'all') {
+        assignedToId = query.assignedToId;
+      }
+
       return candidatService.list(
         params,
         query.search,
@@ -56,7 +64,7 @@ export default async function candidatRouter(fastify: FastifyInstance) {
         query.poste,
         query.entreprise,
         query.disponibilite,
-        query.assignedToId,
+        assignedToId,
         stages,
         query.dateAddedPeriod,
         query.sortBy,

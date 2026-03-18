@@ -51,6 +51,14 @@ export default async function clientRouter(fastify: FastifyInstance) {
       const cities = query.city ? query.city.split(',').map((c) => c.trim()) : undefined;
       const roles = query.role ? query.role.split(',').map((r) => r.trim()) : undefined;
 
+      // Non-admin: auto-filter by own userId
+      let assignedToId: string | undefined;
+      if (request.userRole !== 'ADMIN') {
+        assignedToId = request.userId;
+      } else if (query.assignedToId && query.assignedToId !== 'all') {
+        assignedToId = query.assignedToId;
+      }
+
       return clientService.list(
         pagination,
         query.search,
@@ -59,7 +67,7 @@ export default async function clientRouter(fastify: FastifyInstance) {
         sectors,
         cities,
         roles,
-        query.assignedToId,
+        assignedToId,
         query.typeClient,
         query.sortBy,
         query.sortDir,
