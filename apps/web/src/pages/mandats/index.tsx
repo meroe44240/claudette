@@ -7,6 +7,7 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 import { useListNavigation } from '../../hooks/useListNavigation';
 import { usePrefetch } from '../../hooks/usePrefetch';
 import { api } from '../../lib/api-client';
+import { useAuthStore } from '../../stores/auth-store';
 import { toast } from '../../components/ui/Toast';
 import { downloadCSV } from '../../lib/export';
 import PageHeader from '../../components/ui/PageHeader';
@@ -121,6 +122,8 @@ const SELECTION_ACTIONS: SelectionAction[] = [
 
 export default function MandatsPage() {
   usePageTitle('Mandats');
+  const currentUser = useAuthStore((s) => s.user);
+  const isAdmin = currentUser?.role === 'ADMIN';
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [view, setView] = useState<ViewMode>('table');
@@ -129,9 +132,17 @@ export default function MandatsPage() {
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [filterStatut, setFilterStatut] = useState<string>('');
   const [filterPriorite, setFilterPriorite] = useState<string>('');
+  const [filterConsultant, setFilterConsultant] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
 
-  const activeFilterCount = [filterStatut, filterPriorite].filter(Boolean).length;
+  // Load users for admin consultant filter
+  const { data: usersData } = useQuery({
+    queryKey: ['users-list'],
+    queryFn: () => api.get<{ id: string; nom: string; prenom: string | null }[]>('/settings/users'),
+    enabled: isAdmin,
+  });
+
+  const activeFilterCount = [filterStatut, filterPriorite, filterConsultant].filter(Boolean).length;
 
   // ── Selection state ───────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -149,7 +160,7 @@ export default function MandatsPage() {
   }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['mandats', page, search, filterStatut, filterPriorite],
+    queryKey: ['mandats', page, search, filterStatut, filterPriorite, filterConsultant],
     queryFn: () => {
       const params = new URLSearchParams();
       params.set('page', String(page));
@@ -157,6 +168,7 @@ export default function MandatsPage() {
       if (search) params.set('search', search);
       if (filterStatut) params.set('statut', filterStatut);
       if (filterPriorite) params.set('priorite', filterPriorite);
+      if (isAdmin && filterConsultant) params.set('assignedToId', filterConsultant);
       return api.get<PaginatedResponse>(`/mandats?${params.toString()}`);
     },
   });
@@ -521,6 +533,21 @@ export default function MandatsPage() {
                 <option value="URGENTE">Urgente</option>
               </select>
             </div>
+            {isAdmin && (
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Consultant</label>
+                <select
+                  value={filterConsultant}
+                  onChange={(e) => { setFilterConsultant(e.target.value); setPage(1); }}
+                  className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-xs outline-none focus:border-primary-400"
+                >
+                  <option value="">Tous</option>
+                  {usersData?.map((u) => (
+                    <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
       </div>

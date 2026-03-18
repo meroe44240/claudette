@@ -49,6 +49,7 @@ export async function list(
   statut?: string,
   priorite?: string,
   entrepriseId?: string,
+  assignedToId?: string,
 ) {
   const where: any = {};
 
@@ -70,6 +71,10 @@ export async function list(
 
   if (entrepriseId) {
     where.entrepriseId = entrepriseId;
+  }
+
+  if (assignedToId) {
+    where.assignedToId = assignedToId;
   }
 
   const { skip, take } = paginationToSkipTake(params);

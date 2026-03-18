@@ -19,6 +19,7 @@ export default async function mandatRouter(fastify: FastifyInstance) {
           statut: { type: 'string' },
           priorite: { type: 'string' },
           entrepriseId: { type: 'string' },
+          assignedToId: { type: 'string' },
         },
       },
     },
@@ -27,12 +28,22 @@ export default async function mandatRouter(fastify: FastifyInstance) {
       const query = request.query as any;
       const params = parsePagination(query);
 
+      // Non-admin users see only their own mandats by default
+      // Admins see all unless they explicitly filter by consultant
+      let assignedToId: string | undefined;
+      if (request.userRole !== 'ADMIN') {
+        assignedToId = request.userId;
+      } else if (query.assignedToId && query.assignedToId !== 'all') {
+        assignedToId = query.assignedToId;
+      }
+
       return mandatService.list(
         params,
         query.search,
         query.statut,
         query.priorite,
         query.entrepriseId,
+        assignedToId,
       );
     },
   });
