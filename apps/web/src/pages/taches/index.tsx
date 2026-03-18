@@ -20,6 +20,7 @@ import Input, { Textarea } from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import { toast } from '../../components/ui/Toast';
 import PageHeader from '../../components/ui/PageHeader';
+import { useAuthStore } from '../../stores/auth-store';
 
 interface Tache {
   id: string;
@@ -84,8 +85,11 @@ const listItem = {
 
 export default function TachesPage() {
   usePageTitle('Tâches');
+  const currentUser = useAuthStore((s) => s.user);
+  const isAdmin = currentUser?.role === 'ADMIN';
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState('todo');
+  const [viewAll, setViewAll] = useState(isAdmin); // Admins see all by default
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -102,9 +106,10 @@ export default function TachesPage() {
 
   const filters = new URLSearchParams({ page: String(page), perPage: '20' });
   if (activeTab !== 'all') filters.set('status', activeTab);
+  if (isAdmin && viewAll) filters.set('userId', 'all');
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['taches', page, activeTab],
+    queryKey: ['taches', page, activeTab, viewAll ? 'all' : 'mine'],
     queryFn: () => api.get<PaginatedResponse>(`/taches?${filters}`),
   });
 
@@ -189,31 +194,53 @@ export default function TachesPage() {
       />
 
       {/* Pill-style tabs */}
-      <div className="mb-6 flex items-center gap-1">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => { setActiveTab(tab.id); setPage(1); }}
-            className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
-              activeTab === tab.id
-                ? tab.id === 'overdue'
-                  ? 'bg-red-500 text-white shadow-sm'
-                  : 'bg-[#7C5CFC] text-white shadow-sm'
-                : 'bg-transparent text-neutral-500 hover:bg-neutral-50'
-            }`}
-          >
-            {tab.label}
-            {tab.count !== undefined && (
-              <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold leading-none ${
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => { setActiveTab(tab.id); setPage(1); }}
+              className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
                 activeTab === tab.id
-                  ? 'bg-white/20 text-white'
-                  : 'bg-neutral-100 text-neutral-600'
-              }`}>
-                {tab.count}
-              </span>
-            )}
-          </button>
-        ))}
+                  ? tab.id === 'overdue'
+                    ? 'bg-red-500 text-white shadow-sm'
+                    : 'bg-[#7C5CFC] text-white shadow-sm'
+                  : 'bg-transparent text-neutral-500 hover:bg-neutral-50'
+              }`}
+            >
+              {tab.label}
+              {tab.count !== undefined && (
+                <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold leading-none ${
+                  activeTab === tab.id
+                    ? 'bg-white/20 text-white'
+                    : 'bg-neutral-100 text-neutral-600'
+                }`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+        {isAdmin && (
+          <div className="flex items-center gap-1 rounded-lg border border-neutral-200 p-0.5">
+            <button
+              onClick={() => { setViewAll(false); setPage(1); }}
+              className={`rounded-md px-3 py-1 text-[13px] font-medium transition-all ${
+                !viewAll ? 'bg-[#7C5CFC] text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+            >
+              Mes tâches
+            </button>
+            <button
+              onClick={() => { setViewAll(true); setPage(1); }}
+              className={`rounded-md px-3 py-1 text-[13px] font-medium transition-all ${
+                viewAll ? 'bg-[#7C5CFC] text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+            >
+              Toutes
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Task list */}

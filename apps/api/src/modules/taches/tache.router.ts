@@ -41,7 +41,16 @@ export default async function tacheRouter(fastify: FastifyInstance) {
       const params = parsePagination(query);
       const status = query.status || 'all';
 
-      return tacheService.list(params, { status, userId: query.userId });
+      // Default: show only the current user's tasks
+      // Admins can pass userId=all to see everyone's tasks, or userId=<id> for a specific user
+      let userId: string | undefined = request.userId;
+      if (query.userId === 'all' && request.userRole === 'ADMIN') {
+        userId = undefined; // No filter — admin sees all
+      } else if (query.userId && query.userId !== 'all') {
+        userId = query.userId;
+      }
+
+      return tacheService.list(params, { status, userId });
     },
   });
 
