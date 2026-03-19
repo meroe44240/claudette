@@ -683,33 +683,40 @@ Rédige un email de prospection sharp pour présenter ce profil à un client.`,
     },
     preHandler: [authenticate],
     handler: async (request, reply) => {
-      const data = await request.file();
+      // Use request.parts() to reliably read all fields and the file
+      const parts = request.parts();
+      let candidatId: string | undefined;
+      let fileBuffer: Buffer | undefined;
+      let filename = 'cv.pdf';
+      let mimetype = 'application/pdf';
 
-      if (!data) {
+      for await (const part of parts) {
+        if (part.type === 'field' && part.fieldname === 'candidatId') {
+          candidatId = (part as any).value as string;
+        } else if (part.type === 'file') {
+          mimetype = part.mimetype;
+          filename = part.filename;
+          const chunks: Buffer[] = [];
+          for await (const chunk of part.file) {
+            chunks.push(chunk);
+          }
+          fileBuffer = Buffer.concat(chunks);
+        }
+      }
+
+      if (!candidatId) {
+        throw new ValidationError('Le champ candidatId est requis');
+      }
+
+      if (!fileBuffer || fileBuffer.length === 0) {
         throw new ValidationError('Aucun fichier envoyé');
       }
 
-      // Extract candidatId from form fields
-      const fields = data.fields as Record<string, any>;
-      const candidatIdField = fields.candidatId;
-
-      if (!candidatIdField?.value) {
-        throw new ValidationError('Le champ candidatId est requis');
-      }
-      const candidatId = candidatIdField.value as string;
-
       // Validate file type
       const allowedMimes = ['application/pdf'];
-      if (!allowedMimes.includes(data.mimetype)) {
+      if (!allowedMimes.includes(mimetype)) {
         throw new ValidationError('Format non supporté. Seuls les fichiers PDF sont acceptés.');
       }
-
-      // Read the file buffer
-      const chunks: Buffer[] = [];
-      for await (const chunk of data.file) {
-        chunks.push(chunk);
-      }
-      const fileBuffer = Buffer.concat(chunks);
 
       // Validate file size (10 MB max)
       const maxSize = 10 * 1024 * 1024;
@@ -718,7 +725,7 @@ Rédige un email de prospection sharp pour présenter ce profil à un client.`,
       }
 
       // Store the CV file on disk and update cvUrl
-      const doc = await documentService.upload('candidat', candidatId, fileBuffer, data.filename, data.mimetype);
+      const doc = await documentService.upload('candidat', candidatId, fileBuffer, filename, mimetype);
       await prisma.candidat.update({
         where: { id: candidatId },
         data: { cvUrl: doc.url },
@@ -726,7 +733,7 @@ Rédige un email de prospection sharp pour présenter ce profil à un client.`,
 
       const result = await cvParsingService.updateCandidatFromCv(
         fileBuffer,
-        data.filename,
+        filename,
         request.userId,
         candidatId,
       );
