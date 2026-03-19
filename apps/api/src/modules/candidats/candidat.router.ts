@@ -401,57 +401,6 @@ export default async function candidatRouter(fastify: FastifyInstance) {
     },
   });
 
-  // POST /:id/cv - Upload CV
-  fastify.post('/:id/cv', {
-    schema: {
-      description: 'Upload du CV du candidat',
-      tags: ['Candidats'],
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: { id: { type: 'string', format: 'uuid' } },
-      },
-    },
-    preHandler: [authenticate],
-    handler: async (request, reply) => {
-      const { id } = request.params as { id: string };
-      // Verify candidat exists
-      await candidatService.getById(id);
-
-      const file = await request.file();
-      if (!file) {
-        reply.status(400);
-        return { message: 'Aucun fichier fourni' };
-      }
-
-      const allowedMimes = [
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      ];
-      if (!allowedMimes.includes(file.mimetype)) {
-        reply.status(400);
-        return { message: 'Format non supporté. Formats acceptés: PDF, DOC, DOCX' };
-      }
-
-      const uploadDir = path.join(process.cwd(), 'uploads', 'cv', id);
-      await mkdir(uploadDir, { recursive: true });
-
-      const fileName = `${Date.now()}-${file.filename}`;
-      const filePath = path.join(uploadDir, fileName);
-      const buffer = await file.toBuffer();
-      await writeFile(filePath, buffer);
-
-      const cvUrl = `/uploads/cv/${id}/${fileName}`;
-      const updated = await prisma.candidat.update({
-        where: { id },
-        data: { cvUrl },
-      });
-
-      return { message: 'CV uploadé avec succès', cvUrl, candidat: updated };
-    },
-  });
-
   // POST /check-duplicate - Check for potential duplicates before creation
   fastify.post('/check-duplicate', {
     schema: {
