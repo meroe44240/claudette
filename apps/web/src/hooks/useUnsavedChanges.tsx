@@ -1,10 +1,7 @@
-import { useEffect, useCallback } from 'react';
-import { useBlocker } from 'react-router';
-import Modal from '../components/ui/Modal';
-import Button from '../components/ui/Button';
+import { useEffect } from 'react';
 
 export function useUnsavedChanges(isDirty: boolean) {
-  // Browser close / external navigation
+  // Browser close / tab close / external navigation warning
   useEffect(() => {
     if (!isDirty) return;
     const handler = (e: BeforeUnloadEvent) => {
@@ -15,42 +12,9 @@ export function useUnsavedChanges(isDirty: boolean) {
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  // In-app navigation blocking
-  const blocker = useBlocker(isDirty);
+  // Note: in-app navigation blocking (useBlocker) requires createBrowserRouter (data router).
+  // Since the app uses <BrowserRouter>, useBlocker is not available.
+  // The beforeunload handler above still protects against accidental tab/browser closes.
 
-  const handleStay = useCallback(() => {
-    if (blocker.state === 'blocked') {
-      blocker.reset?.();
-    }
-  }, [blocker]);
-
-  const handleLeave = useCallback(() => {
-    if (blocker.state === 'blocked') {
-      blocker.proceed?.();
-    }
-  }, [blocker]);
-
-  const unsavedChangesModal = blocker.state === 'blocked' ? (
-    <Modal
-      isOpen={true}
-      onClose={handleStay}
-      title="Modifications non enregistrées"
-    >
-      <div className="space-y-4">
-        <p className="text-sm text-neutral-600">
-          Voulez-vous quitter cette page ? Les modifications non enregistrées seront perdues.
-        </p>
-        <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={handleStay}>
-            Rester
-          </Button>
-          <Button variant="danger" onClick={handleLeave}>
-            Quitter
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  ) : null;
-
-  return { unsavedChangesModal };
+  return { unsavedChangesModal: null };
 }
