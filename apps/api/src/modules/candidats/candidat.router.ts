@@ -7,6 +7,7 @@ import * as activiteService from '../activites/activite.service.js';
 import prisma from '../../lib/db.js';
 import { authenticate, requireRole } from '../../middleware/auth.js';
 import { parsePagination } from '../../lib/pagination.js';
+import * as documentService from '../documents/document.service.js';
 
 export default async function candidatRouter(fastify: FastifyInstance) {
   // GET / - List candidats with filters
@@ -134,6 +135,58 @@ export default async function candidatRouter(fastify: FastifyInstance) {
       const candidat = await candidatService.create(input, request.userId);
       reply.status((candidat as any)._updated ? 200 : 201);
       return candidat;
+    },
+  });
+
+  // POST /:id/cv - Upload CV file (attach PDF without AI parsing)
+  fastify.post('/:id/cv', {
+    schema: {
+      description: 'Uploader un CV PDF sur la fiche candidat',
+      tags: ['Candidats'],
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const data = await request.file();
+      if (!data) throw new Error('Aucun fichier envoyé');
+
+      const allowedMimes = ['application/pdf'];
+      if (!allowedMimes.includes(data.mimetype)) {
+        return reply.status(400).send({ error: 'Seuls les fichiers PDF sont acceptés' });
+      }
+
+      const chunks: Buffer[] = [];
+      for await (const chunk of data.file) chunks.push(chunk);
+      const fileBuffer = Buffer.concat(chunks);
+
+      if (fileBuffer.length > 10 * 1024 * 1024) {
+        return reply.status(400).send({ error: 'Fichier trop volumineux (max 10 Mo)' });
+      }
+
+      const doc = await documentService.upload('candidat', id, fileBuffer, data.filename, data.mimetype);
+      await prisma.candidat.update({
+        where: { id },
+        data: { cvUrl: doc.url },
+      });
+
+      return { cvUrl: doc.url, filename: doc.originalName, size: doc.size };
+    },
+  });
+
+  // DELETE /:id/cv - Remove CV file
+  fastify.delete('/:id/cv', {
+    schema: {
+      description: 'Supprimer le CV du candidat',
+      tags: ['Candidats'],
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      await prisma.candidat.update({
+        where: { id },
+        data: { cvUrl: null },
+      });
+      return { success: true };
     },
   });
 

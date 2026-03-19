@@ -6,7 +6,7 @@ import {
   ArrowLeft, Mail, Phone, MapPin, Linkedin, Briefcase, Building2,
   Calendar, Send, Pencil, Trash2, Save, X, FileText, Loader2,
   Upload, Copy, Check, Sparkles, ChevronDown, ChevronUp, Bot,
-  Link2, CalendarPlus, Search, Plus, User,
+  Link2, CalendarPlus, Search, Plus, User, Download, Eye,
 } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
@@ -182,6 +182,34 @@ export default function CandidatDetailPage() {
   const [isDragging, setIsDragging] = useState(false);
   const cvFileInputRef = useRef<HTMLInputElement>(null);
 
+  const cvDirectInputRef = useRef<HTMLInputElement>(null);
+
+  // Direct CV upload mutation (just attach file, no AI parsing)
+  const cvDirectUploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(`/api/v1/candidats/${id}/cv`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `Erreur ${response.status}`);
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidat', id] });
+      toast('success', 'CV attaché avec succès !');
+    },
+    onError: (error: any) => {
+      toast('error', error.message || 'Erreur lors de l\'upload du CV');
+    },
+  });
+
   // Booking link state
   const [showBookingDropdown, setShowBookingDropdown] = useState(false);
   const [bookingCopiedField, setBookingCopiedField] = useState<string | null>(null);
@@ -340,8 +368,8 @@ export default function CandidatDetailPage() {
   const cvUploadMutation = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
-      formData.append('file', file);
       formData.append('candidatId', id!);
+      formData.append('file', file);
 
       const token = localStorage.getItem('accessToken');
       const response = await fetch('/api/v1/ai/update-from-cv', {
@@ -1152,6 +1180,88 @@ export default function CandidatDetailPage() {
 
         {/* Sidebar */}
         <motion.div className="space-y-6" variants={detailItem}>
+          {/* CV Section */}
+          <Card>
+            <h2 className="mb-3 text-lg font-semibold text-text-primary">CV</h2>
+            {candidat.cvUrl ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 rounded-lg border border-border bg-neutral-50 p-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50">
+                    <FileText size={20} className="text-red-500" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-text-primary">
+                      {candidat.cvUrl.split('/').pop()?.substring(9) || 'CV.pdf'}
+                    </p>
+                    <p className="text-xs text-text-secondary">PDF</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <a
+                    href={candidat.cvUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-neutral-50"
+                  >
+                    <Eye size={14} /> Voir
+                  </a>
+                  <a
+                    href={candidat.cvUrl}
+                    download
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-neutral-50"
+                  >
+                    <Download size={14} /> Télécharger
+                  </a>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => cvDirectInputRef.current?.click()}
+                  className="w-full text-center text-xs text-text-secondary hover:text-primary-500 transition-colors"
+                  disabled={cvDirectUploadMutation.isPending}
+                >
+                  {cvDirectUploadMutation.isPending ? 'Upload en cours...' : 'Remplacer le CV'}
+                </button>
+              </div>
+            ) : (
+              <div
+                onClick={() => cvDirectInputRef.current?.click()}
+                className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-neutral-200 bg-neutral-50/50 p-6 text-center transition-colors hover:border-primary-300 hover:bg-primary-50/30"
+              >
+                <Upload size={24} className="text-neutral-400" />
+                <p className="text-sm text-text-secondary">
+                  <span className="font-medium text-primary-500">Cliquez pour ajouter</span> un CV (PDF)
+                </p>
+                {cvDirectUploadMutation.isPending && (
+                  <div className="flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin text-primary-500" />
+                    <span className="text-xs text-primary-500">Upload en cours...</span>
+                  </div>
+                )}
+              </div>
+            )}
+            <input
+              ref={cvDirectInputRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  if (file.type !== 'application/pdf') {
+                    toast('error', 'Seuls les fichiers PDF sont acceptés');
+                    return;
+                  }
+                  if (file.size > 10 * 1024 * 1024) {
+                    toast('error', 'Fichier trop volumineux (max 10 Mo)');
+                    return;
+                  }
+                  cvDirectUploadMutation.mutate(file);
+                }
+                e.target.value = '';
+              }}
+            />
+          </Card>
+
           <ProfileCompleteness fields={completenessFields} />
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">Détails</h2>

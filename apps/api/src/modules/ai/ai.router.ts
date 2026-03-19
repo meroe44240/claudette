@@ -10,6 +10,7 @@ import * as prospectDetectionService from './prospect-detection.service.js';
 import { authenticate } from '../../middleware/auth.js';
 import { ValidationError } from '../../lib/errors.js';
 import prisma from '../../lib/db.js';
+import * as documentService from '../documents/document.service.js';
 import { callClaude } from '../../services/claudeAI.js';
 
 /** Convert AI errors to user-friendly 503 responses instead of generic 500 */
@@ -716,6 +717,13 @@ Rédige un email de prospection sharp pour présenter ce profil à un client.`,
         throw new ValidationError('Le fichier est trop volumineux. Taille maximale : 10 Mo.');
       }
 
+      // Store the CV file on disk and update cvUrl
+      const doc = await documentService.upload('candidat', candidatId, fileBuffer, data.filename, data.mimetype);
+      await prisma.candidat.update({
+        where: { id: candidatId },
+        data: { cvUrl: doc.url },
+      });
+
       const result = await cvParsingService.updateCandidatFromCv(
         fileBuffer,
         data.filename,
@@ -723,7 +731,7 @@ Rédige un email de prospection sharp pour présenter ce profil à un client.`,
         candidatId,
       );
 
-      return { data: result };
+      return { data: { ...result, cvUrl: doc.url } };
     },
   });
 
