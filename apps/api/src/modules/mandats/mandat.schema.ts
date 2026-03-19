@@ -15,12 +15,25 @@ export const createMandatSchema = z.object({
   assignedToId: z.string().uuid().optional(),
 });
 
-export const updateMandatSchema = createMandatSchema.partial().extend({
-  transcript: z.string().optional(),
-  ficheDePoste: z.string().optional(),
+export const updateMandatSchema = z.object({
+  titrePoste: z.string().min(1).optional(),
+  entrepriseId: z.string().uuid().optional(),
+  clientId: z.string().uuid().optional(),
+  description: z.string().nullable().optional(),
+  localisation: z.string().nullable().optional(),
+  salaireMin: z.number().int().positive().nullable().optional(),
+  salaireMax: z.number().int().positive().nullable().optional(),
+  feePourcentage: z.number().min(0).max(100).optional(),
+  statut: z.enum(['OUVERT', 'EN_COURS', 'GAGNE', 'PERDU', 'ANNULE', 'CLOTURE']).optional(),
+  priorite: z.enum(['BASSE', 'NORMALE', 'HAUTE', 'URGENTE']).optional(),
+  notes: z.string().nullable().optional(),
+  assignedToId: z.string().uuid().nullable().optional(),
+  transcript: z.string().nullable().optional(),
+  ficheDePoste: z.string().nullable().optional(),
   scorecard: z.any().optional(),
-  salaryRange: z.string().optional(),
+  salaryRange: z.string().nullable().optional(),
   pitchPoints: z.any().optional(),
+  typeContrat: z.string().nullable().optional(),
 });
 
 export const updateFeeSchema = z.object({
