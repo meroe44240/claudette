@@ -622,7 +622,7 @@ export default function MandatDetailPage() {
     setCandidatSearchLoading(true);
     const timeout = setTimeout(async () => {
       try {
-        const res = await api.get<{ data: any[] }>(`/candidats?search=${encodeURIComponent(candidatSearch)}&perPage=10`);
+        const res = await api.get<{ data: any[] }>(`/candidats?search=${encodeURIComponent(candidatSearch)}&perPage=10&scope=all`);
         const results = (res.data || []).filter((c: any) => !existingCandidatIds.has(c.id));
         setCandidatResults(results);
       } catch {

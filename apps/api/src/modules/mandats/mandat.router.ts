@@ -30,8 +30,11 @@ export default async function mandatRouter(fastify: FastifyInstance) {
 
       // Non-admin users see only their own mandats by default
       // Admins see all unless they explicitly filter by consultant
+      // scope=all bypasses isolation (for cross-recruiter actions like adding candidatures)
       let assignedToId: string | undefined;
-      if (request.userRole !== 'ADMIN') {
+      if (query.scope === 'all') {
+        // No isolation — allow seeing all mandats (e.g. for "ajouter au mandat" dropdown)
+      } else if (request.userRole !== 'ADMIN') {
         assignedToId = request.userId;
       } else if (query.assignedToId && query.assignedToId !== 'all') {
         assignedToId = query.assignedToId;

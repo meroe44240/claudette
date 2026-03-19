@@ -46,8 +46,11 @@ export default async function candidatRouter(fastify: FastifyInstance) {
       const stages = query.stage ? (query.stage as string).split(',').map((s: string) => s.trim()) : undefined;
 
       // Non-admin: auto-filter by own userId
+      // scope=all bypasses isolation (for cross-recruiter actions like adding candidatures)
       let assignedToId: string | undefined;
-      if (request.userRole !== 'ADMIN') {
+      if (query.scope === 'all') {
+        // No isolation — allow seeing all candidats (e.g. for "ajouter candidat" dropdown)
+      } else if (request.userRole !== 'ADMIN') {
         assignedToId = request.userId;
       } else if (query.assignedToId && query.assignedToId !== 'all') {
         assignedToId = query.assignedToId;

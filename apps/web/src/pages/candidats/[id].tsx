@@ -234,7 +234,7 @@ export default function CandidatDetailPage() {
   // Fetch open mandats for "Ajouter au mandat" — always loaded
   const { data: mandatsData } = useQuery({
     queryKey: ['mandats', 'open-for-add'],
-    queryFn: () => api.get<{ data: { id: string; titrePoste: string; entreprise: { nom: string } }[]; meta: any }>('/mandats?statut=OUVERT&perPage=200'),
+    queryFn: () => api.get<{ data: { id: string; titrePoste: string; entreprise: { nom: string } }[]; meta: any }>('/mandats?statut=OUVERT&perPage=200&scope=all'),
     staleTime: 60_000,
   });
 
