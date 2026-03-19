@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router';
+import { useNavigate, Link, useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Building2, Plus, Check, Loader2 } from 'lucide-react';
@@ -80,7 +80,11 @@ const initialForm: FormData = {
 export default function ClientNewPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<FormData>(initialForm);
+  const [searchParams] = useSearchParams();
+  const [form, setForm] = useState<FormData>(() => {
+    const entrepriseId = searchParams.get('entrepriseId') || '';
+    return { ...initialForm, entrepriseId };
+  });
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
   // Track Pappers-created entreprise for display

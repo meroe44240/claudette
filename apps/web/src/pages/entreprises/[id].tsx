@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Globe, MapPin, Linkedin, Users, FileText, Pencil, Trash2, Save, X, Building, Building2, Phone, Mail, ChevronDown, ChevronUp, Briefcase, ExternalLink, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Globe, MapPin, Linkedin, Users, FileText, Pencil, Trash2, Save, X, Building, Building2, Phone, Mail, ChevronDown, ChevronUp, Briefcase, ExternalLink, RefreshCw, Plus } from 'lucide-react';
 import { Link } from 'react-router';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
@@ -607,100 +607,116 @@ export default function EntrepriseDetailPage() {
       </motion.div>
 
       {/* Contacts section */}
-      {entreprise.clients && entreprise.clients.length > 0 && (
         <motion.div className="mt-6" variants={detailItem}>
           <Card>
             <div className="flex items-center justify-between mb-3">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
                 <Users size={18} className="text-violet-500" />
-                Contacts ({entreprise.clients.length})
+                Contacts ({entreprise.clients?.length || 0})
               </h2>
+              <Link to={`/clients/new?entrepriseId=${entreprise.id}`}>
+                <Button variant="secondary" size="sm">
+                  <Plus size={14} className="mr-1" />
+                  Nouveau contact
+                </Button>
+              </Link>
             </div>
-            <div className="divide-y divide-neutral-50">
-              {entreprise.clients.map((c) => (
-                <Link
-                  key={c.id}
-                  to={`/clients/${c.id}`}
-                  className="flex items-center gap-3 py-3 px-1 rounded-lg hover:bg-neutral-50 transition-colors group"
-                >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-600">
-                    {(c.prenom?.[0] || '').toUpperCase()}{(c.nom[0] || '').toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-neutral-900 group-hover:text-violet-600 transition-colors">
-                      {c.prenom} {c.nom}
-                    </p>
-                    {c.poste && <p className="text-xs text-neutral-500">{c.poste}</p>}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {c.telephone && (
-                      <a
-                        href={`tel:${c.telephone}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] text-emerald-600 hover:bg-emerald-100 transition-colors"
-                      >
-                        <Phone size={11} />
-                        {c.telephone}
-                      </a>
-                    )}
-                    {c.email && (
-                      <a
-                        href={`mailto:${c.email}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-[11px] text-blue-600 hover:bg-blue-100 transition-colors"
-                      >
-                        <Mail size={11} />
-                      </a>
-                    )}
-                  </div>
-                </Link>
-              ))}
-            </div>
+            {entreprise.clients && entreprise.clients.length > 0 ? (
+              <div className="divide-y divide-neutral-50">
+                {entreprise.clients.map((c) => (
+                  <Link
+                    key={c.id}
+                    to={`/clients/${c.id}`}
+                    className="flex items-center gap-3 py-3 px-1 rounded-lg hover:bg-neutral-50 transition-colors group"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-600">
+                      {(c.prenom?.[0] || '').toUpperCase()}{(c.nom[0] || '').toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-neutral-900 group-hover:text-violet-600 transition-colors">
+                        {c.prenom} {c.nom}
+                      </p>
+                      {c.poste && <p className="text-xs text-neutral-500">{c.poste}</p>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {c.telephone && (
+                        <a
+                          href={`tel:${c.telephone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] text-emerald-600 hover:bg-emerald-100 transition-colors"
+                        >
+                          <Phone size={11} />
+                          {c.telephone}
+                        </a>
+                      )}
+                      {c.email && (
+                        <a
+                          href={`mailto:${c.email}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-[11px] text-blue-600 hover:bg-blue-100 transition-colors"
+                        >
+                          <Mail size={11} />
+                        </a>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-400 py-2">Aucun contact pour le moment.</p>
+            )}
           </Card>
         </motion.div>
-      )}
 
       {/* Mandats section */}
-      {entreprise.mandats && entreprise.mandats.length > 0 && (
         <motion.div className="mt-6" variants={detailItem}>
           <Card>
             <div className="flex items-center justify-between mb-3">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
                 <Briefcase size={18} className="text-violet-500" />
-                Mandats ({entreprise.mandats.length})
+                Mandats ({entreprise.mandats?.length || 0})
               </h2>
+              <Link to={`/mandats/new?entrepriseId=${entreprise.id}`}>
+                <Button variant="secondary" size="sm">
+                  <Plus size={14} className="mr-1" />
+                  Nouveau mandat
+                </Button>
+              </Link>
             </div>
-            <div className="divide-y divide-neutral-50">
-              {entreprise.mandats.map((m) => (
-                <Link
-                  key={m.id}
-                  to={`/mandats/${m.id}`}
-                  className="flex items-center gap-3 py-3 px-1 rounded-lg hover:bg-neutral-50 transition-colors group"
-                >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50">
-                    <FileText size={16} className="text-blue-500" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-neutral-900 group-hover:text-violet-600 transition-colors">
-                      {m.titrePoste}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUT_COLORS[m.statut] || 'bg-neutral-100 text-neutral-500'}`}>
-                        {STATUT_LABELS[m.statut] || m.statut}
-                      </span>
-                      {m._count?.candidatures !== undefined && m._count.candidatures > 0 && (
-                        <span className="text-[11px] text-neutral-400">
-                          {m._count.candidatures} candidat{m._count.candidatures > 1 ? 's' : ''}
-                        </span>
-                      )}
+            {entreprise.mandats && entreprise.mandats.length > 0 ? (
+              <div className="divide-y divide-neutral-50">
+                {entreprise.mandats.map((m) => (
+                  <Link
+                    key={m.id}
+                    to={`/mandats/${m.id}`}
+                    className="flex items-center gap-3 py-3 px-1 rounded-lg hover:bg-neutral-50 transition-colors group"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50">
+                      <FileText size={16} className="text-blue-500" />
                     </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-neutral-900 group-hover:text-violet-600 transition-colors">
+                        {m.titrePoste}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUT_COLORS[m.statut] || 'bg-neutral-100 text-neutral-500'}`}>
+                          {STATUT_LABELS[m.statut] || m.statut}
+                        </span>
+                        {m._count?.candidatures !== undefined && m._count.candidatures > 0 && (
+                          <span className="text-[11px] text-neutral-400">
+                            {m._count.candidatures} candidat{m._count.candidatures > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-400 py-2">Aucun mandat pour le moment.</p>
+            )}
           </Card>
         </motion.div>
-      )}
 
       <div className="mt-8">
         <ActivityJournal entiteType="ENTREPRISE" entiteId={entreprise.id} />
