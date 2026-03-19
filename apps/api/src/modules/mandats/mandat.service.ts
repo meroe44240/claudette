@@ -146,6 +146,7 @@ export async function create(data: CreateMandatInput, createdById: string) {
       ...data,
       feeMontantEstime,
       createdById,
+      assignedToId: data.assignedToId ?? createdById,
     },
   });
 

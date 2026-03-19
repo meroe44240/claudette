@@ -216,6 +216,7 @@ export async function create(data: CreateCandidatInput, createdById: string) {
       ...prismaData,
       consentementDate: data.consentementRgpd ? new Date() : undefined,
       createdById,
+      assignedToId: prismaData.assignedToId ?? createdById,
     },
   });
 }

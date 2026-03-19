@@ -235,6 +235,7 @@ export async function create(data: CreateClientInput, createdById: string) {
     data: {
       ...data,
       createdById,
+      assignedToId: data.assignedToId ?? createdById,
     },
     include: {
       entreprise: { select: { id: true, nom: true } },
