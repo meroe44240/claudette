@@ -6,7 +6,7 @@ import {
   ChevronRight, ChevronLeft, Play, ArrowRight, Crosshair,
   PhoneOff, Voicemail, PhoneForwarded, UserX, RotateCcw,
   Trash2, BarChart3, Clock, Target, TrendingUp, AlertCircle,
-  Building2, Mail, Briefcase, MessageSquare, Loader2,
+  Building2, Mail, Briefcase, MessageSquare, Loader2, Pencil, Check, X,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -204,6 +204,31 @@ export default function SdrPage() {
     mutationFn: (id: string) => api.delete(`/sdr/lists/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sdr'] }),
   });
+
+  const updateNotesMutation = useMutation({
+    mutationFn: ({ contactId, notes }: { contactId: string; notes: string }) =>
+      api.put(`/sdr/contacts/${contactId}/notes`, { notes }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sdr-list'] }),
+  });
+
+  // Inline notes editing state
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteValue, setEditingNoteValue] = useState('');
+
+  const startEditNote = (contact: SdrContact) => {
+    setEditingNoteId(contact.id);
+    setEditingNoteValue(contact.notes || '');
+  };
+
+  const saveNote = (contactId: string) => {
+    updateNotesMutation.mutate({ contactId, notes: editingNoteValue });
+    setEditingNoteId(null);
+  };
+
+  const cancelEditNote = () => {
+    setEditingNoteId(null);
+    setEditingNoteValue('');
+  };
 
   // ─── FILE HANDLING ──────────────────────────────
 
@@ -624,8 +649,33 @@ export default function SdrPage() {
                   <td className="px-4 py-2.5 text-neutral-600">{c.phone || '—'}</td>
                   <td className="px-4 py-2.5 text-neutral-600">{c.company || '—'}</td>
                   <td className="px-4 py-2.5 text-neutral-500">{c.jobTitle || '—'}</td>
-                  <td className="px-4 py-2.5 text-neutral-400 text-xs max-w-[200px] truncate" title={c.notes || ''}>
-                    {c.notes || '—'}
+                  <td className="px-4 py-2.5 max-w-[250px]">
+                    {editingNoteId === c.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={editingNoteValue}
+                          onChange={(e) => setEditingNoteValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveNote(c.id);
+                            if (e.key === 'Escape') cancelEditNote();
+                          }}
+                          autoFocus
+                          className="w-full rounded border border-primary-300 px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-primary-100"
+                        />
+                        <button onClick={() => saveNote(c.id)} className="text-emerald-500 hover:text-emerald-600"><Check size={14} /></button>
+                        <button onClick={cancelEditNote} className="text-neutral-400 hover:text-neutral-600"><X size={14} /></button>
+                      </div>
+                    ) : (
+                      <div
+                        className="group flex items-center gap-1 cursor-pointer"
+                        onClick={() => startEditNote(c)}
+                        title={c.notes || 'Cliquez pour ajouter une note'}
+                      >
+                        <span className="text-neutral-400 text-xs truncate">{c.notes || '—'}</span>
+                        <Pencil size={12} className="text-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-2.5">
                     <CallResultBadge result={c.callResult} />
