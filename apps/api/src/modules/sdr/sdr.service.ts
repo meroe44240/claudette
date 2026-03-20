@@ -11,6 +11,7 @@ interface ParsedContact {
   phone?: string;
   company?: string;
   jobTitle?: string;
+  notes?: string;
   rawData: Record<string, string>;
 }
 
@@ -130,6 +131,9 @@ export async function uploadAndParse(
     );
   }
 
+  // Identify which column indices are mapped (known fields)
+  const mappedIndices = new Set(Object.keys(columnMap).map(Number));
+
   // Parse contacts from rows
   const parsed: ParsedContact[] = rows.map((row) => {
     const rawData: Record<string, string> = {};
@@ -143,9 +147,26 @@ export async function uploadAndParse(
         if ((field === 'email' || field === 'phone') && value.includes(',')) {
           value = value.split(',')[0]!.trim();
         }
+        // linkedinUrl is not a ParsedContact field — skip it (kept in rawData)
+        if (field === 'linkedinUrl') continue;
         (contact as any)[field] = value;
       }
     }
+
+    // Collect unmapped columns into notes (Localisation, Projets, Origine, etc.)
+    const extraParts: string[] = [];
+    headers.forEach((h, i) => {
+      if (!mappedIndices.has(i)) {
+        const val = row[i]?.trim();
+        if (val) {
+          extraParts.push(`${h}: ${val}`);
+        }
+      }
+    });
+    if (extraParts.length > 0) {
+      contact.notes = extraParts.join(' | ');
+    }
+
     return contact;
   });
 
@@ -202,6 +223,7 @@ export async function uploadAndParse(
       phone: trunc(c.phone, 100),
       company: trunc(c.company, 255),
       jobTitle: trunc(c.jobTitle, 255),
+      notes: c.notes || null,
       rawData: c.rawData,
       candidatId: c.email ? emailToCandidat.get(c.email.toLowerCase()) || null : null,
       companyId: c.company ? companyToId.get(c.company.toLowerCase()) || null : null,

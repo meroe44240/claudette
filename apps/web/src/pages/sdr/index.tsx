@@ -596,6 +596,7 @@ export default function SdrPage() {
                 <th className="px-4 py-3">Téléphone</th>
                 <th className="px-4 py-3">Entreprise</th>
                 <th className="px-4 py-3">Poste</th>
+                <th className="px-4 py-3">Notes</th>
                 <th className="px-4 py-3">Statut</th>
               </tr>
             </thead>
@@ -623,6 +624,9 @@ export default function SdrPage() {
                   <td className="px-4 py-2.5 text-neutral-600">{c.phone || '—'}</td>
                   <td className="px-4 py-2.5 text-neutral-600">{c.company || '—'}</td>
                   <td className="px-4 py-2.5 text-neutral-500">{c.jobTitle || '—'}</td>
+                  <td className="px-4 py-2.5 text-neutral-400 text-xs max-w-[200px] truncate" title={c.notes || ''}>
+                    {c.notes || '—'}
+                  </td>
                   <td className="px-4 py-2.5">
                     <CallResultBadge result={c.callResult} />
                   </td>
@@ -630,7 +634,7 @@ export default function SdrPage() {
               ))}
               {contacts.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-neutral-400">
+                  <td colSpan={9} className="px-4 py-8 text-center text-neutral-400">
                     Chargement des contacts...
                   </td>
                 </tr>
