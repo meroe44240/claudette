@@ -613,7 +613,7 @@ model SdrContact {
 
 model AdchaseCampaign {
   id                 String    @id @default(uuid()) @db.Uuid
-  candidatId         String    @db.Uuid
+  candidatId         String?   @db.Uuid
   anonymizedProfile  Json      @default("{}")  // { titre, points, ville, secteur, experience }
   anonymizedCvUrl    String?   @db.VarChar(500)
   emailSubject       String    @db.VarChar(500)

@@ -61,6 +61,7 @@ const COLUMN_ALIASES: Record<string, string> = {
   'surname': 'lastName',
   // Email
   'email': 'email',
+  'emails': 'email',               // Jarvi
   'email address': 'email',
   'e-mail': 'email',
   'mail': 'email',
@@ -68,8 +69,10 @@ const COLUMN_ALIASES: Record<string, string> = {
   // Phone
   'phone': 'phone',
   'telephone': 'phone',
+  'telephones': 'phone',           // Jarvi
   'tel': 'phone',
   'téléphone': 'phone',
+  'téléphones': 'phone',           // Jarvi
   'mobile': 'phone',
   'phone number': 'phone',
   // Company
@@ -84,10 +87,18 @@ const COLUMN_ALIASES: Record<string, string> = {
   'title': 'jobTitle',
   'job title': 'jobTitle',
   'job_title': 'jobTitle',
+  'intitulé de poste': 'jobTitle',  // Jarvi
+  'intitule de poste': 'jobTitle',  // Jarvi (sans accent)
   'position': 'jobTitle',
   'poste': 'jobTitle',
   'role': 'jobTitle',
   'fonction': 'jobTitle',
+  // LinkedIn (Jarvi)
+  'lien du profil linkedin': 'linkedinUrl',
+  'linkedin': 'linkedinUrl',
+  'linkedin url': 'linkedinUrl',
+  'profile url': 'linkedinUrl',
+  'url': 'linkedinUrl',
 };
 
 function mapColumns(headers: string[]): Record<number, string> {
@@ -126,8 +137,12 @@ export async function uploadAndParse(
 
     const contact: ParsedContact = { rawData };
     for (const [colIdx, field] of Object.entries(columnMap)) {
-      const value = row[Number(colIdx)]?.trim();
+      let value = row[Number(colIdx)]?.trim();
       if (value) {
+        // Jarvi exports multiple emails/phones separated by commas — take the first one
+        if ((field === 'email' || field === 'phone') && value.includes(',')) {
+          value = value.split(',')[0]!.trim();
+        }
         (contact as any)[field] = value;
       }
     }
@@ -268,6 +283,12 @@ export async function attributeContacts(listId: string, input: AttributionInput)
   const newCandidats: string[] = [];
   for (const contact of contacts) {
     if (!contact.candidatId && (contact.email || contact.phone)) {
+      // Try to extract linkedinUrl from rawData (Jarvi: "Lien du profil Linkedin")
+      const raw = contact.rawData as Record<string, string> | null;
+      const linkedinUrl = raw
+        ? (Object.entries(raw).find(([k]) => k.toLowerCase().includes('linkedin'))?.[1] || null)
+        : null;
+
       const candidat = await prisma.candidat.create({
         data: {
           nom: contact.lastName || 'Inconnu',
@@ -276,6 +297,7 @@ export async function attributeContacts(listId: string, input: AttributionInput)
           telephone: contact.phone || null,
           entrepriseActuelle: contact.company || null,
           posteActuel: contact.jobTitle || null,
+          linkedinUrl: linkedinUrl || null,
           source: 'SDR Import',
           createdById: assignedToId,
         },

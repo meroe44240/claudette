@@ -4,7 +4,7 @@ import * as adchaseService from './adchase.service.js';
 import { authenticate } from '../../middleware/auth.js';
 
 const createCampaignSchema = z.object({
-  candidatId: z.string().uuid(),
+  candidatId: z.string().uuid().optional().nullable(),
   anonymizedProfile: z.record(z.string(), z.unknown()).default({}),
   anonymizedCvUrl: z.string().optional(),
   emailSubject: z.string().min(1),

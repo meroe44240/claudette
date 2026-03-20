@@ -5,7 +5,7 @@ import { NotFoundError, ValidationError } from '../../lib/errors.js';
 // ─── TYPES ──────────────────────────────────────────
 
 export interface CreateCampaignInput {
-  candidatId: string;
+  candidatId?: string | null;
   anonymizedProfile: Record<string, unknown>;
   anonymizedCvUrl?: string;
   emailSubject: string;
@@ -27,9 +27,11 @@ export interface UpdateCampaignInput {
 // ─── CREATE CAMPAIGN ────────────────────────────────
 
 export async function createCampaign(data: CreateCampaignInput) {
-  // Verify candidat exists
-  const candidat = await prisma.candidat.findUnique({ where: { id: data.candidatId } });
-  if (!candidat) throw new NotFoundError('Candidat', data.candidatId);
+  // Verify candidat exists (if provided)
+  if (data.candidatId) {
+    const candidat = await prisma.candidat.findUnique({ where: { id: data.candidatId } });
+    if (!candidat) throw new NotFoundError('Candidat', data.candidatId);
+  }
 
   // Verify all client IDs exist
   if (data.prospectClientIds.length === 0) {
@@ -48,7 +50,7 @@ export async function createCampaign(data: CreateCampaignInput) {
   // Create campaign with prospects
   const campaign = await prisma.adchaseCampaign.create({
     data: {
-      candidatId: data.candidatId,
+      candidatId: (data.candidatId || null) as any,
       anonymizedProfile: data.anonymizedProfile as Prisma.InputJsonValue,
       anonymizedCvUrl: data.anonymizedCvUrl,
       emailSubject: data.emailSubject,
@@ -96,7 +98,7 @@ export async function getCampaigns(userId?: string) {
   };
 
   // Enrich with candidat names
-  const candidatIds = [...new Set(campaigns.map((c) => c.candidatId))];
+  const candidatIds = [...new Set(campaigns.map((c) => c.candidatId).filter(Boolean))] as string[];
   const candidats = await prisma.candidat.findMany({
     where: { id: { in: candidatIds } },
     select: { id: true, nom: true, prenom: true, posteActuel: true, localisation: true },
@@ -104,7 +106,7 @@ export async function getCampaigns(userId?: string) {
   const candidatMap = new Map(candidats.map((c) => [c.id, c]));
 
   const enrichCampaign = (c: typeof campaigns[0]) => {
-    const candidat = candidatMap.get(c.candidatId);
+    const candidat = c.candidatId ? candidatMap.get(c.candidatId) : null;
     const stats = {
       total: c.prospects.length,
       sent: c.prospects.filter((p) => p.emailStatus !== 'pending').length,
@@ -140,11 +142,13 @@ export async function getCampaignById(id: string) {
 
   if (!campaign) throw new NotFoundError('Campagne Adchase', id);
 
-  // Get candidat info
-  const candidat = await prisma.candidat.findUnique({
-    where: { id: campaign.candidatId },
-    select: { id: true, nom: true, prenom: true, posteActuel: true, entrepriseActuelle: true, localisation: true },
-  });
+  // Get candidat info (if linked)
+  const candidat = campaign.candidatId
+    ? await prisma.candidat.findUnique({
+        where: { id: campaign.candidatId },
+        select: { id: true, nom: true, prenom: true, posteActuel: true, entrepriseActuelle: true, localisation: true },
+      })
+    : null;
 
   // Get client details for each prospect
   const clientIds = campaign.prospects.map((p) => p.clientId);
@@ -226,12 +230,14 @@ export async function launchCampaign(id: string, userId: string) {
   });
   const clientMap = new Map(clients.map((c) => [c.id, c]));
 
-  // Get candidat name for logs
-  const candidat = await prisma.candidat.findUnique({
-    where: { id: campaign.candidatId },
-    select: { nom: true, prenom: true },
-  });
-  const candidatName = candidat ? `${candidat.prenom || ''} ${candidat.nom}`.trim() : 'Candidat';
+  // Get candidat name for logs (if linked)
+  const candidat = campaign.candidatId
+    ? await prisma.candidat.findUnique({
+        where: { id: campaign.candidatId },
+        select: { nom: true, prenom: true },
+      })
+    : null;
+  const candidatName = candidat ? `${candidat.prenom || ''} ${candidat.nom}`.trim() : 'Profil anonyme';
 
   // Tomorrow at 9am as default due date
   const tomorrow = new Date();
@@ -259,7 +265,7 @@ export async function launchCampaign(id: string, userId: string) {
         metadata: {
           adchaseCampaignId: campaign.id,
           adchaseProspectId: prospect.id,
-          candidatId: campaign.candidatId,
+          ...(campaign.candidatId ? { candidatId: campaign.candidatId } : {}),
           emailSubject: campaign.emailSubject,
           emailBody: campaign.emailBody,
         },

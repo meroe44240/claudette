@@ -55,7 +55,7 @@ interface Sequence {
 
 interface Campaign {
   id: string;
-  candidatId: string;
+  candidatId: string | null;
   anonymizedProfile: Record<string, unknown>;
   emailSubject: string;
   emailBody: string;
@@ -141,10 +141,14 @@ function StepSelectCandidat({
   selected,
   onSelect,
   onNext,
+  skipCandidat,
+  onSkipCandidat,
 }: {
   selected: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string | null) => void;
   onNext: () => void;
+  skipCandidat: boolean;
+  onSkipCandidat: (skip: boolean) => void;
 }) {
   const [search, setSearch] = useState('');
 
@@ -173,8 +177,39 @@ function StepSelectCandidat({
     <div className="mx-auto max-w-2xl space-y-4">
       <h2 className="text-lg font-semibold text-neutral-800">Choisir un candidat</h2>
       <p className="text-sm text-neutral-500">
-        Sélectionnez le candidat dont vous souhaitez pousser le profil anonymisé à des prospects.
+        Sélectionnez le candidat dont vous souhaitez pousser le profil anonymisé à des prospects,
+        ou continuez sans candidat pour un profil fictif.
       </p>
+
+      {/* Skip candidat option */}
+      <label
+        className={`flex cursor-pointer items-center gap-3 rounded-lg border-2 border-dashed px-4 py-3 transition-all ${
+          skipCandidat
+            ? 'border-primary-400 bg-primary-50'
+            : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50'
+        }`}
+      >
+        <input
+          type="radio"
+          name="candidat"
+          value="__skip__"
+          checked={skipCandidat}
+          onChange={() => {
+            onSkipCandidat(true);
+            onSelect(null);
+          }}
+          className="accent-primary-500"
+        />
+        <div className="flex-1">
+          <div className="font-medium text-neutral-800 text-sm flex items-center gap-2">
+            <FileText size={14} className="text-primary-500" />
+            Sans candidat (profil fictif / CV fake)
+          </div>
+          <div className="text-xs text-neutral-500">
+            Créez une adchase avec un profil rédigé manuellement, sans lier de fiche candidat.
+          </div>
+        </div>
+      </label>
 
       {/* Search */}
       <div className="relative">
@@ -201,7 +236,7 @@ function StepSelectCandidat({
             <label
               key={c.id}
               className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-all ${
-                selected === c.id
+                selected === c.id && !skipCandidat
                   ? 'bg-primary-50 ring-1 ring-primary-300'
                   : 'hover:bg-neutral-50'
               }`}
@@ -210,8 +245,11 @@ function StepSelectCandidat({
                 type="radio"
                 name="candidat"
                 value={c.id}
-                checked={selected === c.id}
-                onChange={() => onSelect(c.id)}
+                checked={selected === c.id && !skipCandidat}
+                onChange={() => {
+                  onSkipCandidat(false);
+                  onSelect(c.id);
+                }}
                 className="accent-primary-500"
               />
               <div className="flex-1 min-w-0">
@@ -245,7 +283,7 @@ function StepSelectCandidat({
       <div className="flex justify-end pt-2">
         <button
           onClick={onNext}
-          disabled={!selected}
+          disabled={!selected && !skipCandidat}
           className="flex items-center gap-2 rounded-lg bg-primary-500 px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Suivant <ArrowRight size={16} />
@@ -276,7 +314,7 @@ function StepPreparePitch({
   onBack,
   onNext,
 }: {
-  candidatId: string;
+  candidatId: string | null;
   profile: AnonymizedProfile;
   onProfileChange: (p: AnonymizedProfile) => void;
   emailSubject: string;
@@ -1042,7 +1080,7 @@ function StepConfirmSend({
   onSend,
   isSending,
 }: {
-  candidatId: string;
+  candidatId: string | null;
   profile: AnonymizedProfile;
   emailSubject: string;
   emailBody: string;
@@ -1065,7 +1103,7 @@ function StepConfirmSend({
 
   const candidatName = candidat
     ? `${candidat.prenom || ''} ${candidat.nom}`.trim()
-    : 'Candidat';
+    : candidatId ? 'Candidat' : 'Profil fictif';
 
   const personalizeMutation = useMutation({
     mutationFn: () =>
@@ -1337,6 +1375,7 @@ export default function AdchasePage() {
   // Wizard state
   const [step, setStep] = useState(0);
   const [selectedCandidatId, setSelectedCandidatId] = useState<string | null>(null);
+  const [skipCandidat, setSkipCandidat] = useState(false);
   const [profile, setProfile] = useState<AnonymizedProfile>({
     titre: '',
     points: [],
@@ -1361,7 +1400,7 @@ export default function AdchasePage() {
     mutationFn: async ({ scheduled, scheduledAt }: { scheduled: boolean; scheduledAt?: string }) => {
       // Create campaign
       const campaign = await api.post<{ id: string }>('/adchase', {
-        candidatId: selectedCandidatId,
+        candidatId: selectedCandidatId || null,
         anonymizedProfile: profile,
         emailSubject,
         emailBody,
@@ -1393,6 +1432,7 @@ export default function AdchasePage() {
   const resetWizard = () => {
     setStep(0);
     setSelectedCandidatId(null);
+    setSkipCandidat(false);
     setProfile({ titre: '', points: [], ville: '', secteur: '', experience: '' });
     setEmailSubject('');
     setEmailBody('');
@@ -1467,10 +1507,12 @@ export default function AdchasePage() {
                   selected={selectedCandidatId}
                   onSelect={setSelectedCandidatId}
                   onNext={() => setStep(1)}
+                  skipCandidat={skipCandidat}
+                  onSkipCandidat={setSkipCandidat}
                 />
               )}
 
-              {step === 1 && selectedCandidatId && (
+              {step === 1 && (selectedCandidatId || skipCandidat) && (
                 <StepPreparePitch
                   candidatId={selectedCandidatId}
                   profile={profile}
@@ -1498,7 +1540,7 @@ export default function AdchasePage() {
                 />
               )}
 
-              {step === 3 && selectedCandidatId && (
+              {step === 3 && (selectedCandidatId || skipCandidat) && (
                 <StepConfirmSend
                   candidatId={selectedCandidatId}
                   profile={profile}
