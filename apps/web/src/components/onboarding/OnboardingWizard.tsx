@@ -6,6 +6,7 @@ import Confetti from '../ui/Confetti';
 import Button from '../ui/Button';
 import { api } from '../../lib/api-client';
 import { toast } from '../ui/Toast';
+import { useAuthStore } from '../../stores/auth-store';
 
 interface OnboardingWizardProps {
   onComplete: () => void;
@@ -85,6 +86,13 @@ export default function OnboardingWizard({ onComplete }: OnboardingWizardProps) 
   const handleFinish = async () => {
     try {
       await api.post('/settings/onboarding-complete', {});
+      // Update auth store and localStorage so the modal doesn't reappear
+      const { user, setUser } = useAuthStore.getState();
+      if (user) {
+        const updated = { ...user, onboardingCompleted: true };
+        setUser(updated);
+        localStorage.setItem('user', JSON.stringify(updated));
+      }
     } catch {
       // Non-blocking
     }

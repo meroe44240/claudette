@@ -136,8 +136,8 @@ export default function SdrPage() {
   });
 
   const { data: users } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => api.get<{ data: any[] }>('/admin/users'),
+    queryKey: ['team-members'],
+    queryFn: () => api.get<any[]>('/settings/team'),
   });
 
   // ─── MUTATIONS ──────────────────────────────────
@@ -537,7 +537,7 @@ export default function SdrPage() {
   // ─── RENDER: ATTRIBUTION ──────────────────────
 
   const renderAttribution = () => {
-    const userList = (users as any)?.data || [];
+    const userList = Array.isArray(users) ? users : (users as any)?.data || [];
     const seqList = (sequences as any)?.data || [];
 
     return (

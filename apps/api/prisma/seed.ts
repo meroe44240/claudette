@@ -20,6 +20,20 @@ async function main() {
   // 1. CLEAN DATABASE (preserve IntegrationConfig / OAuth)
   // ═══════════════════════════════════════════════════════
   console.log('  Cleaning existing data...');
+  await prisma.bookingReminder.deleteMany();
+  await prisma.booking.deleteMany();
+  await prisma.bookingType.deleteMany();
+  await prisma.bookingSetting.deleteMany();
+  await prisma.jobApplication.deleteMany();
+  await prisma.jobPosting.deleteMany();
+  await prisma.aiPipelineSuggestion.deleteMany();
+  await prisma.aiCalendarSuggestion.deleteMany();
+  await prisma.aiProspectSearch.deleteMany();
+  await prisma.aiCallBrief.deleteMany();
+  await prisma.aiCallSummary.deleteMany();
+  await prisma.aiUsageLog.deleteMany();
+  await prisma.reminder.deleteMany();
+  await prisma.auditLog.deleteMany();
   await prisma.adchaseProspect.deleteMany();
   await prisma.adchaseCampaign.deleteMany();
   await prisma.sdrContact.deleteMany();
