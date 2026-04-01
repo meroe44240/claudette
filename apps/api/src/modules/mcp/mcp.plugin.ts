@@ -55,17 +55,22 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
   fastify.post('/', async (request, reply) => {
     const user = await authenticateMcpRequest(request);
 
+    // Require authentication — return 401 to trigger OAuth flow in Claude Desktop
+    if (!user) {
+      return reply.status(401).header('WWW-Authenticate', 'Bearer').send({
+        jsonrpc: '2.0',
+        error: { code: -32000, message: 'Authentication required' },
+        id: null,
+      });
+    }
+
     const sessionId = request.headers['mcp-session-id'] as string | undefined;
 
     if (sessionId && sessions.has(sessionId)) {
       // Existing session
       const { transport } = sessions.get(sessionId)!;
       reply.hijack();
-      if (user) {
-        await runWithMcpUser(user, () => transport.handleRequest(request.raw, reply.raw, request.body));
-      } else {
-        await transport.handleRequest(request.raw, reply.raw, request.body);
-      }
+      await runWithMcpUser(user, () => transport.handleRequest(request.raw, reply.raw, request.body));
       return;
     }
 
@@ -88,11 +93,7 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
       await mcpServer.connect(transport);
 
       reply.hijack();
-      if (user) {
-        await runWithMcpUser(user, () => transport.handleRequest(request.raw, reply.raw, request.body));
-      } else {
-        await transport.handleRequest(request.raw, reply.raw, request.body);
-      }
+      await runWithMcpUser(user, () => transport.handleRequest(request.raw, reply.raw, request.body));
       return;
     }
 
