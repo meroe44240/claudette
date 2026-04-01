@@ -44,15 +44,19 @@ export function registerTaskTools(server: McpServer) {
       tachePriority: z.string().optional().describe('HAUTE, NORMALE, BASSE'),
     },
     wrapTool('create_task', async (args, user) => {
-      const task = await tacheService.create({
+      const createData: any = {
         titre: args.titre as string,
-        contenu: args.contenu as string,
-        entiteType: (args.entiteType as string) || 'CANDIDAT',
-        entiteId: (args.entiteId as string) || '',
+        contenu: (args.contenu as string) || '',
         tacheDueDate: args.tacheDueDate as string | undefined,
         tachePriority: (args.tachePriority as any) || 'MOYENNE',
         userId: user.userId,
-      });
+      };
+      // Only include entity fields if both are provided
+      if (args.entiteType && args.entiteId) {
+        createData.entiteType = args.entiteType as string;
+        createData.entiteId = args.entiteId as string;
+      }
+      const task = await tacheService.create(createData);
       return { success: true, task_id: task.id, message: `Tache "${args.titre}" creee` };
     }),
   );

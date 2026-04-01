@@ -90,6 +90,9 @@ export function registerClientTools(server: McpServer) {
       statutClient: z.string().optional().describe('Statut : LEAD, PREMIER_CONTACT, BESOIN_QUALIFIE, etc.'),
     },
     wrapTool('create_client', async (args, user) => {
+      if (!args.entrepriseId) {
+        return { error: 'entrepriseId est requis. Cherche d\'abord l\'entreprise avec search_companies ou cree-la avec create_company.' };
+      }
       if (args.email) {
         const dup = await clientService.checkDuplicate(args.email as string);
         if (dup.exists && dup.match) return { warning: 'Doublon detecte', existing: { id: dup.match.id, name: `${dup.match.prenom} ${dup.match.nom}` } };
