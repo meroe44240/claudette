@@ -2,32 +2,30 @@ import type { FastifyInstance } from 'fastify';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { verifyAccessToken } from '../../lib/jwt.js';
-import prisma from '../../lib/db.js';
 import { runWithMcpUser } from './mcp.auth.js';
 import { registerAllTools } from './mcp.tools.js';
 import type { Role } from '@prisma/client';
 
-export default async function mcpPlugin(fastify: FastifyInstance) {
-  // Create the MCP server
-  const mcpServer = new McpServer({
+function createMcpServer(): McpServer {
+  const server = new McpServer({
     name: 'humanup-ats',
     version: '1.0.0',
   });
+  registerAllTools(server);
+  return server;
+}
 
-  // Register all tools
-  registerAllTools(mcpServer);
-
-  // Session tracking
-  const sessions = new Map<string, StreamableHTTPServerTransport>();
+export default async function mcpPlugin(fastify: FastifyInstance) {
+  // Session tracking: each session has its own transport + server
+  const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: McpServer }>();
 
   // Cleanup stale sessions every 5 minutes
   const cleanupInterval = setInterval(() => {
-    // StreamableHTTPServerTransport doesn't expose lastAccess, so we just limit total sessions
     if (sessions.size > 100) {
       const toDelete = Array.from(sessions.keys()).slice(0, sessions.size - 50);
       for (const key of toDelete) {
-        const transport = sessions.get(key);
-        transport?.close();
+        const session = sessions.get(key);
+        session?.transport.close();
         sessions.delete(key);
       }
     }
@@ -35,8 +33,8 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
 
   fastify.addHook('onClose', () => {
     clearInterval(cleanupInterval);
-    for (const transport of sessions.values()) {
-      transport.close();
+    for (const session of sessions.values()) {
+      session.transport.close();
     }
     sessions.clear();
   });
@@ -61,7 +59,7 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
 
     if (sessionId && sessions.has(sessionId)) {
       // Existing session
-      const transport = sessions.get(sessionId)!;
+      const { transport } = sessions.get(sessionId)!;
       reply.hijack();
       if (user) {
         await runWithMcpUser(user, () => transport.handleRequest(request.raw, reply.raw, request.body));
@@ -71,20 +69,22 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
       return;
     }
 
-    // New session — auth required for initialization
+    // New session
     if (!sessionId) {
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => `mcp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
         onsessioninitialized: (newSessionId) => {
-          sessions.set(newSessionId, transport);
+          sessions.set(newSessionId, { transport, server: mcpServer });
         },
       });
 
       transport.onclose = () => {
-        const sid = Array.from(sessions.entries()).find(([, t]) => t === transport)?.[0];
+        const sid = Array.from(sessions.entries()).find(([, s]) => s.transport === transport)?.[0];
         if (sid) sessions.delete(sid);
       };
 
+      // Each session gets its own McpServer instance
+      const mcpServer = createMcpServer();
       await mcpServer.connect(transport);
 
       reply.hijack();
@@ -110,7 +110,7 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
     if (!sessionId || !sessions.has(sessionId)) {
       return reply.status(400).send({ error: 'Invalid or missing session ID' });
     }
-    const transport = sessions.get(sessionId)!;
+    const { transport } = sessions.get(sessionId)!;
     reply.hijack();
     await transport.handleRequest(request.raw, reply.raw);
   });
@@ -119,7 +119,7 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
   fastify.delete('/', async (request, reply) => {
     const sessionId = request.headers['mcp-session-id'] as string | undefined;
     if (sessionId && sessions.has(sessionId)) {
-      const transport = sessions.get(sessionId)!;
+      const { transport } = sessions.get(sessionId)!;
       transport.close();
       sessions.delete(sessionId);
     }
