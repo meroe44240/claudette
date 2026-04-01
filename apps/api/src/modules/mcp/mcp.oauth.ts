@@ -4,7 +4,8 @@ import prisma from '../../lib/db.js';
 import { verifyPassword } from '../../lib/password.js';
 import { generateMcpAccessToken, generateMcpRefreshToken } from '../../lib/jwt.js';
 
-const API_URL = process.env.API_URL || 'http://localhost:3001';
+// In production behind Caddy, use the public URL for OAuth endpoints
+const API_URL = process.env.MCP_PUBLIC_URL || process.env.APP_URL?.replace(/\/$/, '') || process.env.API_URL || 'http://localhost:3001';
 
 function base64url(buf: Buffer): string {
   return buf.toString('base64url');
