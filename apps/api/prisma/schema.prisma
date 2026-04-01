@@ -50,6 +50,9 @@ model User {
   createdJobPostings   JobPosting[]    @relation("JobPostingCreatedBy")
   reviewedApplications JobApplication[] @relation("JobApplicationReviewedBy")
   onboardingCompleted  Boolean   @default(false)
+  mcpActionLogs        McpActionLog[]          @relation("McpActionLogUser")
+  recruiterObjectives  RecruiterObjective[]    @relation("RecruiterObjectiveUser")
+  aiPendingValidations AiPendingValidation[]   @relation("AiPendingValidationUser")
 
   @@map("users")
 }
@@ -994,4 +997,75 @@ model JobApplication {
   @@index([jobPostingId, status])
   @@index([email])
   @@map("job_applications")
+}
+
+// ─── MCP (Model Context Protocol) ────────────────────
+
+model McpActionLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  user       User     @relation("McpActionLogUser", fields: [userId], references: [id])
+  toolName   String   @db.VarChar(100)
+  level      String   @db.VarChar(20) // free, confirm, blocked
+  input      Json?
+  output     Json?
+  success    Boolean  @default(true)
+  error      String?  @db.Text
+  durationMs Int?
+  createdAt  DateTime @default(now()) @db.Timestamptz()
+
+  @@index([userId])
+  @@index([toolName])
+  @@index([createdAt])
+  @@map("mcp_action_logs")
+}
+
+model RecruiterObjective {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation("RecruiterObjectiveUser", fields: [userId], references: [id])
+  period    String   @db.VarChar(20) // daily, weekly, monthly, quarterly
+  metric    String   @db.VarChar(50) // calls, rdv, presentations, pushes, mandates_opened, placements, ca
+  target    Int
+  createdAt DateTime @default(now()) @db.Timestamptz()
+  updatedAt DateTime @updatedAt @db.Timestamptz()
+
+  @@unique([userId, period, metric])
+  @@map("recruiter_objectives")
+}
+
+model AiPendingValidation {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @db.Uuid
+  user              User      @relation("AiPendingValidationUser", fields: [userId], references: [id])
+  sourceType        String    @db.VarChar(20) // call, meeting, email
+  activiteId        String?   @db.Uuid
+  entiteType        String?   @db.VarChar(50)
+  entiteId          String?   @db.Uuid
+  analysisJson      Json
+  proposedUpdates   Json?
+  proposedTasks     Json?
+  status            String    @default("pending") @db.VarChar(20) // pending, validated, modified, dismissed
+  validatedAt       DateTime? @db.Timestamptz()
+  modificationsJson Json?
+  createdAt         DateTime  @default(now()) @db.Timestamptz()
+
+  @@index([userId, status])
+  @@map("ai_pending_validations")
+}
+
+model OAuthCode {
+  id                  String   @id @default(uuid()) @db.Uuid
+  code                String   @unique @db.VarChar(255)
+  userId              String   @db.Uuid
+  clientId            String   @db.VarChar(255)
+  redirectUri         String   @db.VarChar(1000)
+  codeChallenge       String?  @db.VarChar(255)
+  codeChallengeMethod String?  @db.VarChar(10)
+  expiresAt           DateTime @db.Timestamptz()
+  used                Boolean  @default(false)
+  createdAt           DateTime @default(now()) @db.Timestamptz()
+
+  @@index([code])
+  @@map("oauth_codes")
 }

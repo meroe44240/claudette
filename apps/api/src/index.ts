@@ -46,6 +46,8 @@ import statsRouter from './modules/stats/stats.router.js';
 import slackRouter from './modules/slack/slack.router.js';
 import bookingRouter, { bookingPublicRouter } from './modules/booking/booking.router.js';
 import jobRouter, { jobPublicRouter } from './modules/jobs/job.router.js';
+import mcpOAuthRouter from './modules/mcp/mcp.oauth.js';
+import mcpPlugin from './modules/mcp/mcp.plugin.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 
@@ -64,7 +66,9 @@ async function buildApp() {
         !origin ||
         origin === allowed ||
         origin.startsWith('chrome-extension://') ||
-        origin === 'http://localhost:5173'
+        origin === 'http://localhost:5173' ||
+        origin === 'https://claude.ai' ||
+        origin?.endsWith('.claude.ai')
       ) {
         cb(null, true);
       } else {
@@ -132,6 +136,10 @@ async function buildApp() {
 
   // Health check
   app.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
+
+  // MCP Server (OAuth + Streamable HTTP)
+  await app.register(mcpOAuthRouter);
+  await app.register(mcpPlugin, { prefix: '/mcp' });
 
   // API routes
   await app.register(authRouter, { prefix: '/api/v1/auth' });

@@ -1,4 +1,16 @@
 ats.propium.co {
+  handle /mcp {
+    reverse_proxy api:3001
+  }
+
+  handle /oauth/* {
+    reverse_proxy api:3001
+  }
+
+  handle /.well-known/oauth-authorization-server {
+    reverse_proxy api:3001
+  }
+
   handle /api/* {
     reverse_proxy api:3001
   }
