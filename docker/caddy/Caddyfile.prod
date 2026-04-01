@@ -11,6 +11,10 @@ ats.propium.co {
     reverse_proxy api:3001
   }
 
+  handle /.well-known/oauth-protected-resource {
+    reverse_proxy api:3001
+  }
+
   handle /api/* {
     reverse_proxy api:3001
   }

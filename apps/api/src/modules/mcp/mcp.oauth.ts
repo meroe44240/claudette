@@ -12,6 +12,16 @@ function base64url(buf: Buffer): string {
 }
 
 export default async function mcpOAuthRouter(fastify: FastifyInstance) {
+  // ─── Protected Resource Metadata (RFC 9728) ──────────
+  fastify.get('/.well-known/oauth-protected-resource', async (_req, reply) => {
+    return reply.send({
+      resource: API_URL,
+      authorization_servers: [API_URL],
+      bearer_methods_supported: ['header'],
+      scopes_supported: ['all'],
+    });
+  });
+
   // ─── OAuth Discovery ──────────────────────────────────
   fastify.get('/.well-known/oauth-authorization-server', async (_req, reply) => {
     return reply.send({
