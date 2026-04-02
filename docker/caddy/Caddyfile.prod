@@ -1,5 +1,5 @@
 ats.propium.co {
-  handle /mcp {
+  handle /mcp* {
     reverse_proxy api:3001
   }
 
