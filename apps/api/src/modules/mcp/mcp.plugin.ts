@@ -74,35 +74,25 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
       return;
     }
 
-    // New session
-    if (!sessionId) {
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => `mcp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-        onsessioninitialized: (newSessionId) => {
-          sessions.set(newSessionId, { transport, server: mcpServer });
-        },
-      });
-
-      transport.onclose = () => {
-        const sid = Array.from(sessions.entries()).find(([, s]) => s.transport === transport)?.[0];
-        if (sid) sessions.delete(sid);
-      };
-
-      // Each session gets its own McpServer instance
-      const mcpServer = createMcpServer();
-      await mcpServer.connect(transport);
-
-      reply.hijack();
-      await runWithMcpUser(user, () => transport.handleRequest(request.raw, reply.raw, request.body));
-      return;
-    }
-
-    // Session not found
-    return reply.status(400).send({
-      jsonrpc: '2.0',
-      error: { code: -32000, message: 'Session not found. Omit Mcp-Session-Id to start a new session.' },
-      id: null,
+    // New session (or stale session ID after server restart — create fresh session)
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => `mcp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+      onsessioninitialized: (newSessionId) => {
+        sessions.set(newSessionId, { transport, server: mcpServer });
+      },
     });
+
+    transport.onclose = () => {
+      const sid = Array.from(sessions.entries()).find(([, s]) => s.transport === transport)?.[0];
+      if (sid) sessions.delete(sid);
+    };
+
+    // Each session gets its own McpServer instance
+    const mcpServer = createMcpServer();
+    await mcpServer.connect(transport);
+
+    reply.hijack();
+    await runWithMcpUser(user, () => transport.handleRequest(request.raw, reply.raw, request.body));
   });
 
   // ─── GET /mcp — SSE stream for notifications ──────────
