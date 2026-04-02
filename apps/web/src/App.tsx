@@ -18,6 +18,7 @@ const PublicJobListPage = lazy(() => import('./pages/jobs/public-list'));
 const PublicJobDetailPage = lazy(() => import('./pages/jobs/public-detail'));
 const SpontaneousPage = lazy(() => import('./pages/jobs/spontaneous'));
 const JobConfirmationPage = lazy(() => import('./pages/jobs/confirmation'));
+const DocsMcpPage = lazy(() => import('./pages/docs/mcp'));
 
 // Protected pages
 const DashboardPage = lazy(() => import('./pages/dashboard/index'));
@@ -84,6 +85,7 @@ export default function App() {
         <Route path="/jobs/candidature-spontanee" element={<SpontaneousPage />} />
         <Route path="/jobs/confirmation" element={<JobConfirmationPage />} />
         <Route path="/jobs/:slug" element={<PublicJobDetailPage />} />
+        <Route path="/docs/mcp" element={<DocsMcpPage />} />
         <Route
           element={
             <ProtectedRoute>
