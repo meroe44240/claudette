@@ -64,11 +64,16 @@ export default async function pushRouter(fastify: FastifyInstance) {
 
     if (!body.status) return reply.status(400).send({ error: 'status requis' });
 
+    const validStatuses = ['ENVOYE', 'OUVERT', 'REPONDU', 'RDV_BOOK', 'CONVERTI_MANDAT', 'SANS_SUITE'];
+    if (!validStatuses.includes(body.status)) {
+      return reply.status(400).send({ error: `Statut invalide. Valeurs acceptees: ${validStatuses.join(', ')}` });
+    }
+
     try {
       const result = await pushService.updatePushStatus(id, body.status);
       return reply.send(result);
     } catch (err: any) {
-      if (err.code === 'P2025') {
+      if (err.code === 'P2025' || err.message === 'Push non trouve') {
         return reply.status(404).send({ error: 'Push introuvable' });
       }
       throw err;
