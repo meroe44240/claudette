@@ -455,6 +455,19 @@ async function runDriveTranscriptScan(): Promise<void> {
   }
 }
 
+// ─── PUSH CV AUTO-DETECT ──────────────────────────
+
+async function runPushDetect(): Promise<void> {
+  try {
+    const { detectAllPushes } = await import(
+      '../modules/pushes/push-detect.service.js'
+    );
+    await detectAllPushes();
+  } catch (error) {
+    console.error('[Cron] Error in Push CV detection:', error);
+  }
+}
+
 // ─── START / STOP ───────────────────────────────────
 
 export function startCronJobs(): void {
@@ -494,6 +507,10 @@ export function startCronJobs(): void {
   const alloSyncInterval = setInterval(runAlloSync, 10 * 60 * 1000);
   intervals.push(alloSyncInterval);
 
+  // Push CV auto-detect every 15 minutes
+  const pushDetectInterval = setInterval(runPushDetect, 15 * 60 * 1000);
+  intervals.push(pushDetectInterval);
+
   console.log('[Cron] Scheduled jobs started:');
   console.log('  - Slack daily report: checked every 60s (sends Mon-Fri at configured time, Europe/Paris)');
   console.log('  - Calendar AI analysis: every 30 minutes');
@@ -502,6 +519,7 @@ export function startCronJobs(): void {
   console.log('  - Email auto-create: every 15 minutes (perso → candidat, pro → client)');
   console.log('  - Drive transcript scan: every 15 minutes (new transcripts/CR)');
   console.log('  - Allo auto-sync: every 10 minutes (calls + transcripts)');
+  console.log('  - Push CV auto-detect: every 15 minutes (sent emails → push detection)');
 }
 
 export function stopCronJobs(): void {
