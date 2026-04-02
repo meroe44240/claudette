@@ -74,7 +74,16 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
       return;
     }
 
-    // New session (or stale session ID after server restart — create fresh session)
+    // Stale session ID after server restart — return 404 so client re-initializes
+    if (sessionId) {
+      return reply.status(404).send({
+        jsonrpc: '2.0',
+        error: { code: -32000, message: 'Session not found. Please reinitialize.' },
+        id: null,
+      });
+    }
+
+    // New session (no session ID)
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => `mcp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
       onsessioninitialized: (newSessionId) => {
@@ -99,7 +108,7 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
   fastify.get('/', async (request, reply) => {
     const sessionId = request.headers['mcp-session-id'] as string | undefined;
     if (!sessionId || !sessions.has(sessionId)) {
-      return reply.status(400).send({ error: 'Invalid or missing session ID' });
+      return reply.status(404).send({ error: 'Session not found or expired' });
     }
     const { transport } = sessions.get(sessionId)!;
     reply.hijack();
