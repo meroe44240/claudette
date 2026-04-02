@@ -53,6 +53,12 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   remove_candidate_from_mandate: { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   validate_call_analysis:        { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
+  // ═══ PUSHES ═══
+  list_pushes:                   { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  get_push_stats:                { level: 'free', roles: ['ADMIN'] },
+  create_push:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  update_push_status:            { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+
   // ═══ BLOCKED — destructif ═══
   delete_candidate:              { level: 'blocked', roles: [] },
   delete_client:                 { level: 'blocked', roles: [] },

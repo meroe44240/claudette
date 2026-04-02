@@ -53,6 +53,7 @@ model User {
   mcpActionLogs        McpActionLog[]          @relation("McpActionLogUser")
   recruiterObjectives  RecruiterObjective[]    @relation("RecruiterObjectiveUser")
   aiPendingValidations AiPendingValidation[]   @relation("AiPendingValidationUser")
+  pushes               Push[]                  @relation("PushRecruiter")
 
   @@map("users")
 }
@@ -205,6 +206,7 @@ model Candidat {
   bookings        Booking[]       @relation("BookingCandidat")
   jobApplications JobApplication[] @relation("JobApplicationCandidat")
   experiences     CandidatExperience[]
+  pushes          Push[]
 
   @@map("candidats")
 }
@@ -1052,6 +1054,56 @@ model AiPendingValidation {
 
   @@index([userId, status])
   @@map("ai_pending_validations")
+}
+
+// ─── PROSPECTS (Push CV) ────────────────────────────
+
+model Prospect {
+  id              String   @id @default(uuid()) @db.Uuid
+  companyName     String   @db.VarChar(255)
+  contactName     String?  @db.VarChar(255)
+  contactEmail    String?  @db.VarChar(255)
+  contactLinkedin String?  @db.VarChar(500)
+  sector          String?  @db.VarChar(100)
+  createdAt       DateTime @default(now()) @db.Timestamptz()
+  updatedAt       DateTime @updatedAt @db.Timestamptz()
+
+  pushes Push[]
+
+  @@map("prospects")
+}
+
+model Push {
+  id           String     @id @default(uuid()) @db.Uuid
+  candidatId   String     @db.Uuid
+  candidat     Candidat   @relation(fields: [candidatId], references: [id])
+  prospectId   String     @db.Uuid
+  prospect     Prospect   @relation(fields: [prospectId], references: [id])
+  recruiterId  String     @db.Uuid
+  recruiter    User       @relation("PushRecruiter", fields: [recruiterId], references: [id])
+  canal        PushCanal
+  status       PushStatus @default(ENVOYE)
+  message      String?    @db.Text
+  sentAt       DateTime   @default(now()) @db.Timestamptz()
+  updatedAt    DateTime   @updatedAt @db.Timestamptz()
+
+  @@index([recruiterId, sentAt])
+  @@index([status])
+  @@map("pushes")
+}
+
+enum PushCanal {
+  EMAIL
+  LINKEDIN
+}
+
+enum PushStatus {
+  ENVOYE
+  OUVERT
+  REPONDU
+  RDV_BOOK
+  CONVERTI_MANDAT
+  SANS_SUITE
 }
 
 model OAuthCode {

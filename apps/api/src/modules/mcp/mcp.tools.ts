@@ -14,6 +14,7 @@ import { registerStatsTools } from './tools/stats.js';
 import { registerAiTools } from './tools/ai.js';
 import { registerNoteTools } from './tools/notes.js';
 import { registerBlockedTools } from './tools/blocked.js';
+import { registerPushTools } from './tools/pushes.js';
 
 export type ToolHandler = (args: Record<string, unknown>) => Promise<{ content: Array<{ type: 'text'; text: string }> }>;
 
@@ -60,5 +61,6 @@ export function registerAllTools(server: McpServer) {
   registerStatsTools(server);
   registerAiTools(server);
   registerNoteTools(server);
+  registerPushTools(server);
   registerBlockedTools(server);
 }
