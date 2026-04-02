@@ -8,7 +8,7 @@ export default async function pushRouter(fastify: FastifyInstance) {
     preHandler: [authenticate],
   }, async (request, reply) => {
     const body = request.body as any;
-    const user = (request as any).user;
+    const userId = (request as any).userId as string;
 
     if (!body.candidate_id) return reply.status(400).send({ error: 'candidate_id requis' });
     if (!body.prospect?.company_name && !body.prospect?.id) return reply.status(400).send({ error: 'prospect.company_name ou prospect.id requis' });
@@ -25,7 +25,7 @@ export default async function pushRouter(fastify: FastifyInstance) {
       },
       canal: body.canal || 'EMAIL',
       message: body.message,
-      recruiterId: body.recruiter_id || user.sub,
+      recruiterId: body.recruiter_id || userId,
     });
 
     return reply.status(201).send(result);
@@ -36,10 +36,10 @@ export default async function pushRouter(fastify: FastifyInstance) {
     preHandler: [authenticate],
   }, async (request, reply) => {
     const query = request.query as any;
-    const user = (request as any).user;
+    const userId = (request as any).userId as string;
 
     const result = await pushService.listPushes({
-      recruiterId: query.recruiter_id || user.sub,
+      recruiterId: query.recruiter_id || userId,
       period: query.period,
       status: query.status,
       team: query.team === 'true',
