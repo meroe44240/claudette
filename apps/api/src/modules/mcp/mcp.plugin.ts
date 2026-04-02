@@ -3,8 +3,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { verifyAccessToken } from '../../lib/jwt.js';
 import { runWithMcpUser } from './mcp.auth.js';
-import { registerAllTools } from './mcp.tools.js';
+import { registerAllTools, getLastToolCallAt } from './mcp.tools.js';
 import type { Role } from '@prisma/client';
+
+const startedAt = Date.now();
 
 function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -50,6 +52,17 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
       return null;
     }
   }
+
+  // ─── GET /mcp/health — MCP health check ────────────────
+  fastify.get('/health', async (_request, reply) => {
+    return reply.send({
+      status: 'ok',
+      mcp_version: '1.0',
+      active_sessions: sessions.size,
+      uptime_seconds: Math.floor((Date.now() - startedAt) / 1000),
+      last_tool_call: getLastToolCallAt(),
+    });
+  });
 
   // ─── POST /mcp — Main JSON-RPC endpoint ───────────────
   fastify.post('/', async (request, reply) => {

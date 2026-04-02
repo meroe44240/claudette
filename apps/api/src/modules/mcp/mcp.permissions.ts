@@ -50,6 +50,7 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   add_note:                      { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   update_candidate:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   update_client:                 { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  update_company:                { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   remove_candidate_from_mandate: { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   validate_call_analysis:        { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
@@ -59,8 +60,10 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   create_push:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   update_push_status:            { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
+  // ═══ DELETE (avec confirmation) ═══
+  delete_candidate:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+
   // ═══ BLOCKED — destructif ═══
-  delete_candidate:              { level: 'blocked', roles: [] },
   delete_client:                 { level: 'blocked', roles: [] },
   delete_mandate:                { level: 'blocked', roles: [] },
   delete_company:                { level: 'blocked', roles: [] },

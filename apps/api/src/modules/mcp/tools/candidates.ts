@@ -121,12 +121,35 @@ export function registerCandidateTools(server: McpServer) {
       source: z.string().optional().describe('Source : linkedin, referral, jobboard, mcp_claude'),
       tags: z.array(z.string()).optional().describe('Tags/competences'),
       mandate_id: z.string().optional().describe('Ajouter directement a un mandat (optionnel)'),
+      stage: z.string().optional().describe('Etape initiale si mandate_id fourni : SOURCING, CONTACTE, ENTRETIEN_1, ENTRETIEN_CLIENT, OFFRE. Defaut: SOURCING'),
     },
     wrapTool('create_candidate', async (args, user) => {
-      // Check duplicates
+      // Check duplicates by email
       if (args.email) {
         const dup = await candidatService.checkDuplicate(args.email as string);
-        if (dup.exists && dup.match) return { warning: 'Doublon detecte', existing: { id: dup.match.id, name: `${dup.match.prenom} ${dup.match.nom}`, email: dup.match.email } };
+        if (dup.exists && dup.match) return {
+          error: 'duplicate_detected',
+          existing_candidate_id: dup.match.id,
+          existing_candidate_name: `${dup.match.prenom || ''} ${dup.match.nom}`.trim(),
+          message: 'Un candidat avec le meme email existe deja. Utilisez update_candidate pour le modifier.',
+        };
+      }
+
+      // Check duplicates by nom + prenom (case-insensitive)
+      if (args.nom && args.prenom) {
+        const existingByName = await prisma.candidat.findFirst({
+          where: {
+            nom: { equals: args.nom as string, mode: 'insensitive' },
+            prenom: { equals: args.prenom as string, mode: 'insensitive' },
+          },
+          select: { id: true, nom: true, prenom: true, email: true },
+        });
+        if (existingByName) return {
+          error: 'duplicate_detected',
+          existing_candidate_id: existingByName.id,
+          existing_candidate_name: `${existingByName.prenom || ''} ${existingByName.nom}`.trim(),
+          message: 'Un candidat avec le meme nom+prenom existe deja. Utilisez update_candidate pour le modifier.',
+        };
       }
 
       const candidate = await candidatService.create({
@@ -147,7 +170,7 @@ export function registerCandidateTools(server: McpServer) {
         await candidatureService.create({
           mandatId: args.mandate_id as string,
           candidatId: candidate.id,
-          stade: 'SOURCING',
+          stage: ((args.stage as string) || 'SOURCING') as any,
         } as any, user.userId);
       }
 
@@ -158,9 +181,13 @@ export function registerCandidateTools(server: McpServer) {
   // ─── update_candidate ─────────────────────────────────
   server.tool(
     'update_candidate',
-    "[CONFIRMATION REQUISE] Met a jour les informations d'un candidat : salaire souhaite, disponibilite, titre, entreprise, telephone, ville. Tu DOIS demander confirmation en montrant les changements.",
+    "[CONFIRMATION REQUISE] Met a jour les informations d'un candidat. Tu DOIS demander confirmation en montrant les changements.",
     {
       candidate_id: z.string().describe('UUID du candidat'),
+      nom: z.string().optional().describe('Nom de famille (correction)'),
+      prenom: z.string().optional().describe('Prenom (correction)'),
+      email: z.string().optional().describe('Email du candidat'),
+      linkedinUrl: z.string().optional().describe('URL du profil LinkedIn'),
       salaire: z.string().optional().describe('Ex: 80k fixe + variable'),
       disponibilite: z.string().optional().describe('immediate, 1_mois, 3_mois, en_poste'),
       posteActuel: z.string().optional().describe('Poste actuel'),
@@ -171,7 +198,7 @@ export function registerCandidateTools(server: McpServer) {
     },
     wrapTool('update_candidate', async (args) => {
       const updates: Record<string, unknown> = {};
-      for (const key of ['salaire', 'disponibilite', 'posteActuel', 'entrepriseActuelle', 'telephone', 'localisation', 'tags']) {
+      for (const key of ['nom', 'prenom', 'email', 'linkedinUrl', 'salaire', 'disponibilite', 'posteActuel', 'entrepriseActuelle', 'telephone', 'localisation', 'tags']) {
         if (args[key] !== undefined) updates[key] = args[key];
       }
       if (Object.keys(updates).length === 0) return { error: 'Aucune mise a jour fournie' };
@@ -223,6 +250,44 @@ export function registerCandidateTools(server: McpServer) {
           tags: c.tags,
         })),
       };
+    }),
+  );
+
+  // ─── delete_candidate ─────────────────────────────────
+  server.tool(
+    'delete_candidate',
+    "[CONFIRMATION REQUISE] Supprime un candidat. Impossible si le candidat a des candidatures actives. Tu DOIS demander confirmation.",
+    {
+      candidate_id: z.string().describe('UUID du candidat a supprimer'),
+    },
+    wrapTool('delete_candidate', async (args) => {
+      const candidatId = args.candidate_id as string;
+
+      // Check for active candidatures
+      const activeCandidatures = await prisma.candidature.findMany({
+        where: { candidatId, stage: { notIn: ['REFUSE'] } },
+        include: { mandat: { select: { titrePoste: true, entreprise: { select: { nom: true } } } } },
+      });
+
+      if (activeCandidatures.length > 0) {
+        return {
+          error: 'Impossible de supprimer ce candidat — il a des candidatures actives.',
+          active_mandates: activeCandidatures.map((ca: any) => ({
+            candidature_id: ca.id,
+            mandate: ca.mandat?.titrePoste,
+            company: ca.mandat?.entreprise?.nom,
+            stage: ca.stage,
+          })),
+          message: 'Retirez le candidat de ces mandats (move_candidate_stage → REFUSE) avant de supprimer.',
+        };
+      }
+
+      // Delete related data then the candidate
+      await prisma.candidature.deleteMany({ where: { candidatId } });
+      await prisma.activite.deleteMany({ where: { entiteType: 'CANDIDAT', entiteId: candidatId } });
+      await prisma.candidat.delete({ where: { id: candidatId } });
+
+      return { success: true, message: 'Candidat supprime.' };
     }),
   );
 }

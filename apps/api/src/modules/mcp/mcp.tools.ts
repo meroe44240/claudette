@@ -2,6 +2,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getMcpUser } from './mcp.auth.js';
 import { checkToolAccess, getToolPermission } from './mcp.permissions.js';
 import { logMcpAction } from './mcp.logging.js';
+// Track last tool call for health check
+let _lastToolCallAt: string | null = null;
+export function getLastToolCallAt() { return _lastToolCallAt; }
 
 import { registerCandidateTools } from './tools/candidates.js';
 import { registerClientTools } from './tools/clients.js';
@@ -40,6 +43,7 @@ export function wrapTool(toolName: string, handler: (args: Record<string, unknow
     try {
       const result = await handler(args, user);
       const durationMs = Date.now() - start;
+      _lastToolCallAt = new Date().toISOString();
       await logMcpAction({ userId: user.userId, toolName, level: access.level, input: args, output: result, success: true, durationMs });
       return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
     } catch (err: any) {

@@ -107,14 +107,19 @@ export function registerClientTools(server: McpServer) {
     "[CONFIRMATION REQUISE] Met a jour les informations d'un client. Tu DOIS demander confirmation.",
     {
       client_id: z.string().describe('UUID du client'),
-      titre: z.string().optional(),
-      telephone: z.string().optional(),
+      nom: z.string().optional().describe('Nom de famille (correction)'),
+      prenom: z.string().optional().describe('Prenom (correction)'),
+      email: z.string().optional().describe('Email'),
+      telephone: z.string().optional().describe('Telephone'),
+      titre: z.string().optional().describe('Titre/poste'),
+      linkedinUrl: z.string().optional().describe('URL LinkedIn'),
       statutClient: z.string().optional().describe('LEAD, PREMIER_CONTACT, BESOIN_QUALIFIE, PROPOSITION_ENVOYEE, MANDAT_SIGNE, RECURRENT, INACTIF'),
+      roleContact: z.string().optional().describe('HIRING_MANAGER, DRH, PROCUREMENT, CEO, AUTRE'),
       notes: z.string().optional(),
     },
     wrapTool('update_client', async (args) => {
       const updates: Record<string, unknown> = {};
-      for (const key of ['titre', 'telephone', 'statutClient', 'notes']) {
+      for (const key of ['nom', 'prenom', 'email', 'telephone', 'titre', 'linkedinUrl', 'statutClient', 'roleContact', 'notes']) {
         if (args[key] !== undefined) updates[key] = args[key];
       }
       const client = await clientService.update(args.client_id as string, updates as any);

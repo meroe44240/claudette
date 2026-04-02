@@ -96,4 +96,29 @@ export function registerCompanyTools(server: McpServer) {
       return { success: true, company_id: company.id, message: `Entreprise ${args.nom} creee` };
     }),
   );
+
+  server.tool(
+    'update_company',
+    "[CONFIRMATION REQUISE] Met a jour les informations d'une entreprise. Tu DOIS demander confirmation.",
+    {
+      company_id: z.string().describe("UUID de l'entreprise"),
+      nom: z.string().optional().describe("Nom de l'entreprise (correction)"),
+      secteur: z.string().optional().describe('Secteur'),
+      localisation: z.string().optional().describe('Ville'),
+      siteWeb: z.string().optional().describe('Site web'),
+      linkedinUrl: z.string().optional().describe('URL LinkedIn'),
+      taille: z.string().optional().describe('STARTUP, PME, ETI, GRAND_GROUPE'),
+      notes: z.string().optional().describe('Notes'),
+    },
+    wrapTool('update_company', async (args) => {
+      const updates: Record<string, unknown> = {};
+      for (const key of ['nom', 'secteur', 'localisation', 'siteWeb', 'linkedinUrl', 'taille', 'notes']) {
+        if (args[key] !== undefined) updates[key] = args[key];
+      }
+      if (Object.keys(updates).length === 0) return { error: 'Aucune mise a jour fournie' };
+
+      const company = await entrepriseService.update(args.company_id as string, updates as any);
+      return { success: true, message: `Entreprise ${company.nom} mise a jour`, fields_updated: Object.keys(updates) };
+    }),
+  );
 }

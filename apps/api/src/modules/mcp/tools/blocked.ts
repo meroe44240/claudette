@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { wrapTool } from '../mcp.tools.js';
 
 const BLOCKED_TOOLS = [
-  { name: 'delete_candidate', desc: 'Supprimer un candidat' },
   { name: 'delete_client', desc: 'Supprimer un client' },
   { name: 'delete_mandate', desc: 'Supprimer un mandat' },
   { name: 'delete_company', desc: 'Supprimer une entreprise' },

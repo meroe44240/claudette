@@ -74,6 +74,7 @@ export function registerMandateTools(server: McpServer) {
         fee_status: mandate.feeStatut,
         candidates: mandate.candidatures?.map((ca: any) => ({
           id: ca.candidat?.id,
+          candidature_id: ca.id,
           name: ca.candidat ? `${ca.candidat.prenom || ''} ${ca.candidat.nom}`.trim() : null,
           stage: ca.stade,
           title: ca.candidat?.posteActuel,
