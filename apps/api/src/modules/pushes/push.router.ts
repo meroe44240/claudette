@@ -13,22 +13,29 @@ export default async function pushRouter(fastify: FastifyInstance) {
     if (!body.candidate_id) return reply.status(400).send({ error: 'candidate_id requis' });
     if (!body.prospect?.company_name && !body.prospect?.id) return reply.status(400).send({ error: 'prospect.company_name ou prospect.id requis' });
 
-    const result = await pushService.createPush({
-      candidatId: body.candidate_id,
-      prospect: {
-        id: body.prospect.id,
-        companyName: body.prospect.company_name,
-        contactName: body.prospect.contact_name,
-        contactEmail: body.prospect.contact_email,
-        contactLinkedin: body.prospect.contact_linkedin,
-        sector: body.prospect.sector,
-      },
-      canal: body.canal || 'EMAIL',
-      message: body.message,
-      recruiterId: body.recruiter_id || userId,
-    });
+    try {
+      const result = await pushService.createPush({
+        candidatId: body.candidate_id,
+        prospect: {
+          id: body.prospect.id,
+          companyName: body.prospect.company_name,
+          contactName: body.prospect.contact_name,
+          contactEmail: body.prospect.contact_email,
+          contactLinkedin: body.prospect.contact_linkedin,
+          sector: body.prospect.sector,
+        },
+        canal: body.canal || 'EMAIL',
+        message: body.message,
+        recruiterId: body.recruiter_id || userId,
+      });
 
-    return reply.status(201).send(result);
+      return reply.status(201).send(result);
+    } catch (err: any) {
+      if (err.code === 'P2003') {
+        return reply.status(400).send({ error: 'Candidat ou recruteur introuvable' });
+      }
+      throw err;
+    }
   });
 
   // GET / — List pushes
@@ -57,8 +64,15 @@ export default async function pushRouter(fastify: FastifyInstance) {
 
     if (!body.status) return reply.status(400).send({ error: 'status requis' });
 
-    const result = await pushService.updatePushStatus(id, body.status);
-    return reply.send(result);
+    try {
+      const result = await pushService.updatePushStatus(id, body.status);
+      return reply.send(result);
+    } catch (err: any) {
+      if (err.code === 'P2025') {
+        return reply.status(404).send({ error: 'Push introuvable' });
+      }
+      throw err;
+    }
   });
 
   // GET /stats/team — Team push stats (admin)
