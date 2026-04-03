@@ -33,6 +33,9 @@ export async function list(userId?: string) {
     ...s,
     steps: s.steps as unknown as SequenceStep[],
     totalRuns: s._count.runs,
+    isSystem: (s as any).isSystem ?? false,
+    autoTrigger: (s as any).autoTrigger ?? false,
+    triggerEvent: (s as any).triggerEvent ?? null,
   }));
 }
 
@@ -201,25 +204,53 @@ export async function cancelRun(runId: string) {
 }
 
 export async function getActiveRuns() {
-  return prisma.sequenceRun.findMany({
+  const runs = await prisma.sequenceRun.findMany({
     where: { status: { in: ['running', 'paused_reply'] } },
     include: {
-      sequence: { select: { nom: true, targetType: true, persona: true } },
+      sequence: { select: { nom: true, targetType: true, persona: true, steps: true, isSystem: true } },
       stepLogs: { orderBy: { stepOrder: 'asc' } },
     },
     orderBy: { startedAt: 'desc' },
   });
+
+  return runs.map(run => {
+    const steps = run.sequence.steps as unknown as SequenceStep[];
+    const meta = (run.metadata ?? {}) as Record<string, string>;
+    const currentStepData = steps[run.currentStep];
+    return {
+      ...run,
+      contactName: meta.contactName || '',
+      companyName: meta.companyName || '',
+      totalSteps: steps.length,
+      currentStepChannel: currentStepData?.channel || null,
+      currentStepTitle: currentStepData?.task_title || null,
+      lastStepLog: run.stepLogs[run.stepLogs.length - 1] || null,
+    };
+  });
 }
 
 export async function getCompletedRuns() {
-  return prisma.sequenceRun.findMany({
+  const runs = await prisma.sequenceRun.findMany({
     where: { status: { in: ['completed', 'cancelled'] } },
     include: {
-      sequence: { select: { nom: true, targetType: true, persona: true } },
+      sequence: { select: { nom: true, targetType: true, persona: true, steps: true, isSystem: true } },
       stepLogs: { orderBy: { stepOrder: 'asc' } },
     },
     orderBy: { startedAt: 'desc' },
     take: 50,
+  });
+
+  return runs.map(run => {
+    const steps = run.sequence.steps as unknown as SequenceStep[];
+    const meta = (run.metadata ?? {}) as Record<string, string>;
+    const hasReply = run.stepLogs.some(l => l.status === 'reply_detected');
+    return {
+      ...run,
+      contactName: meta.contactName || '',
+      companyName: meta.companyName || '',
+      totalSteps: steps.length,
+      endReason: hasReply ? 'reply' : run.status === 'completed' ? 'cold' : 'cancelled',
+    };
   });
 }
 
@@ -299,8 +330,56 @@ export async function executeNextStep(runId: string) {
     return { status: 'completed' };
   }
 
+  // ── AI Research on-demand (for system sequences like Persistance Client) ──
+  const meta = (run.metadata ?? {}) as Record<string, string>;
+  let aiContent: Record<string, string> | null = null;
+
+  if (run.sequence.isSystem && meta.contactName && meta.companyName) {
+    try {
+      const { getOrRunResearch, generateStepContent } = await import('./sequence-research.service.js');
+      const research = await getOrRunResearch(run.id, meta.contactName, meta.companyName);
+
+      if (research) {
+        const generated = await generateStepContent(
+          run.id,
+          currentStep.channel,
+          currentStep.task_title,
+          meta.contactName,
+          meta.companyName,
+          meta.candidatName || '',
+          meta.userName || '',
+          meta.bookingLink || '',
+          research,
+        );
+        if (generated) {
+          aiContent = generated as Record<string, string>;
+        }
+      }
+    } catch (err) {
+      console.error(`[Sequence] AI research failed for run ${runId}, continuing without:`, err);
+    }
+  }
+
   // Create a TASK for this step — the recruiter will validate/execute it
   const taskTitle = resolveVariables(currentStep.task_title, run);
+
+  // Build enriched task content with AI research
+  let taskContenu = currentStep.instructions ? resolveVariables(currentStep.instructions, run) : '';
+  if (aiContent) {
+    if (aiContent.call_brief) {
+      taskContenu += `\n\n📋 BRIEF IA :\n${aiContent.call_brief}`;
+    }
+    if (aiContent.email_subject) {
+      taskContenu += `\n\n📧 SUJET SUGGÉRÉ :\n${aiContent.email_subject}`;
+    }
+    if (aiContent.email_body) {
+      taskContenu += `\n\n📧 EMAIL PRÉ-RÉDIGÉ :\n${aiContent.email_body}`;
+    }
+    if (aiContent.linkedin_message) {
+      taskContenu += `\n\n💬 MESSAGE LINKEDIN :\n${aiContent.linkedin_message}`;
+    }
+  }
+
   const task = await prisma.activite.create({
     data: {
       type: 'TACHE',
@@ -310,7 +389,7 @@ export async function executeNextStep(runId: string) {
       entiteId: run.targetId,
       userId: run.assignedToId,
       titre: taskTitle,
-      contenu: currentStep.instructions ? resolveVariables(currentStep.instructions, run) : undefined,
+      contenu: taskContenu || undefined,
       source: 'SYSTEME',
       tacheDueDate: new Date(),
       metadata: {
@@ -324,6 +403,8 @@ export async function executeNextStep(runId: string) {
           body: currentStep.template.body ? resolveVariables(currentStep.template.body, run) : undefined,
           whatsapp_message: currentStep.template.whatsapp_message ? resolveVariables(currentStep.template.whatsapp_message, run) : undefined,
         } : undefined,
+        aiGenerated: !!aiContent,
+        aiContent: aiContent || undefined,
         priority: 'HAUTE',
         isSequenceTask: true,
       },
@@ -502,6 +583,80 @@ function resolveVariables(template: string, run: any): string {
 }
 
 // ─── PROCESS DUE RUNS (cron) ────────────────────────
+
+// ─── SEQUENCE STATS ────────────────────────────────
+
+export async function getSequenceStats() {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const allRuns = await prisma.sequenceRun.findMany({
+    where: { startedAt: { gte: thirtyDaysAgo } },
+    include: {
+      stepLogs: { select: { channel: true, status: true, stepOrder: true } },
+    },
+  });
+
+  const totalRuns = allRuns.length;
+  const replied = allRuns.filter(r => r.stepLogs.some(l => l.status === 'reply_detected'));
+  const repliedCount = replied.length;
+  const tauxReponse = totalRuns > 0 ? Math.round((repliedCount / totalRuns) * 100) : 0;
+
+  // Average step of reply
+  const replySteps = replied.map(r => {
+    const replyLog = r.stepLogs.find(l => l.status === 'reply_detected');
+    return replyLog?.stepOrder ?? 0;
+  });
+  const avgReplyStep = replySteps.length > 0
+    ? Math.round((replySteps.reduce((a, b) => a + b, 0) / replySteps.length) * 10) / 10
+    : 0;
+
+  // Best/worst channel
+  const channelStats = new Map<string, { sent: number; replied: number }>();
+  for (const run of allRuns) {
+    for (const log of run.stepLogs) {
+      const ch = log.channel || 'unknown';
+      const stat = channelStats.get(ch) || { sent: 0, replied: 0 };
+      stat.sent++;
+      if (log.status === 'reply_detected' || log.status === 'validated') stat.replied++;
+      channelStats.set(ch, stat);
+    }
+  }
+
+  const channelResults = [...channelStats.entries()]
+    .filter(([, s]) => s.sent >= 3)
+    .map(([channel, s]) => ({
+      channel,
+      taux_reponse: Math.round((s.replied / s.sent) * 100),
+      total: s.sent,
+    }))
+    .sort((a, b) => b.taux_reponse - a.taux_reponse);
+
+  const coldCount = allRuns.filter(r => r.status === 'completed' && !r.stepLogs.some(l => l.status === 'reply_detected')).length;
+
+  // Average days to reply
+  const replyDays = replied.map(r => {
+    const replyLog = r.stepLogs.find(l => l.status === 'reply_detected');
+    if (!replyLog) return 0;
+    return Math.floor((new Date().getTime() - new Date(r.startedAt).getTime()) / (1000 * 86400));
+  });
+  const avgReplyDays = replyDays.length > 0
+    ? Math.round((replyDays.reduce((a, b) => a + b, 0) / replyDays.length) * 10) / 10
+    : 0;
+
+  return {
+    period: '30j',
+    total_runs: totalRuns,
+    taux_reponse: tauxReponse,
+    replied_count: repliedCount,
+    etape_moyenne_reponse: avgReplyStep,
+    meilleur_canal: channelResults[0] || null,
+    pire_canal: channelResults[channelResults.length - 1] || null,
+    channels: channelResults,
+    cold_count: coldCount,
+    temps_moyen_reponse_jours: avgReplyDays,
+  };
+}
 
 export async function processDueRuns() {
   const now = new Date();

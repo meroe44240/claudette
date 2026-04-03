@@ -122,6 +122,15 @@ export default async function sequenceRouter(fastify: FastifyInstance) {
     },
   });
 
+  // GET /runs/:id — Get run details
+  fastify.get('/runs/:id', {
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      return sequenceService.getRunDetails(id);
+    },
+  });
+
   // PUT /runs/:id/pause — Pause a run
   fastify.put('/runs/:id/pause', {
     preHandler: [authenticate],
@@ -164,6 +173,14 @@ export default async function sequenceRouter(fastify: FastifyInstance) {
     handler: async (request) => {
       const { email } = request.body as { email: string };
       return sequenceService.detectReply(email);
+    },
+  });
+
+  // GET /stats — Sequence stats
+  fastify.get('/stats', {
+    preHandler: [authenticate],
+    handler: async () => {
+      return sequenceService.getSequenceStats();
     },
   });
 
