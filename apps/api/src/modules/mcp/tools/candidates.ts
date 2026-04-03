@@ -46,13 +46,13 @@ export function registerCandidateTools(server: McpServer) {
           city: c.localisation,
           email: c.email,
           phone: c.telephone,
-          salary: c.salaire,
+          salary: c.salaireSouhaite,
           disponibilite: c.disponibilite,
           source: c.source,
           tags: c.tags,
           mandates: c.candidatures?.map((ca: any) => ({
             mandate_title: ca.mandat?.titrePoste,
-            stage: ca.stade,
+            stage: ca.stage,
           })),
         })),
       };
@@ -85,26 +85,26 @@ export function registerCandidateTools(server: McpServer) {
         email: candidate.email,
         phone: candidate.telephone,
         city: candidate.localisation,
-        salary: candidate.salaire,
+        salary: candidate.salaireSouhaite,
         experience_years: candidate.anneesExperience,
         availability: candidate.disponibilite,
         source: candidate.source,
         tags: candidate.tags,
         linkedin_url: candidate.linkedinUrl,
-        cv_text: candidate.cvText ? candidate.cvText.substring(0, 500) + '...' : null,
-        ai_pitch: candidate.aiPitchCourt,
-        ai_selling_points: candidate.aiPointsForts,
+        cv_text: candidate.cvTexte ? candidate.cvTexte.substring(0, 500) + '...' : null,
+        ai_pitch: candidate.aiPitchShort,
+        ai_selling_points: candidate.aiSellingPoints,
         experiences: candidate.experiences?.map((e: any) => ({
           title: e.titre,
           company: e.entreprise,
-          period: `${e.dateDebut || ''} - ${e.dateFin || 'present'}`,
-          description: e.description?.substring(0, 200),
+          period: `${e.anneeDebut || ''} - ${e.anneeFin || 'present'}`,
+          highlights: e.highlights,
         })),
         mandates: candidate.candidatures?.map((ca: any) => ({
           id: ca.mandatId,
           title: ca.mandat?.titrePoste,
           company: ca.mandat?.entreprise?.nom,
-          stage: ca.stade,
+          stage: ca.stage,
         })),
         created_at: candidate.createdAt,
       };
@@ -123,7 +123,7 @@ export function registerCandidateTools(server: McpServer) {
       posteActuel: z.string().optional().describe('Poste actuel'),
       entrepriseActuelle: z.string().optional().describe('Entreprise actuelle'),
       localisation: z.string().optional().describe('Ville'),
-      salaire: z.string().optional().describe('Salaire souhaite'),
+      salaire: z.string().optional().describe('Salaire souhaite (ex: 55000)'),
       source: z.string().optional().describe('Source : linkedin, referral, jobboard, mcp_claude'),
       tags: z.array(z.string()).optional().describe('Tags/competences'),
       mandate_id: z.string().optional().describe('Ajouter directement a un mandat (optionnel)'),
@@ -158,6 +158,8 @@ export function registerCandidateTools(server: McpServer) {
         };
       }
 
+      // Map 'salaire' → 'salaireSouhaite' (Int in Prisma)
+      const salaireParsed = args.salaire ? parseInt(String(args.salaire).replace(/[^\d]/g, ''), 10) || undefined : undefined;
       const candidate = await candidatService.create({
         nom: args.nom as string,
         prenom: args.prenom as string,
@@ -166,7 +168,7 @@ export function registerCandidateTools(server: McpServer) {
         posteActuel: args.posteActuel as string,
         entrepriseActuelle: args.entrepriseActuelle as string,
         localisation: args.localisation as string,
-        salaire: args.salaire as string,
+        salaireSouhaite: salaireParsed,
         source: (args.source as string) || 'mcp_claude',
         tags: args.tags as string[],
       } as any, user.userId);
@@ -194,7 +196,7 @@ export function registerCandidateTools(server: McpServer) {
       prenom: z.string().optional().describe('Prenom (correction)'),
       email: z.string().optional().describe('Email du candidat'),
       linkedinUrl: z.string().optional().describe('URL du profil LinkedIn'),
-      salaire: z.string().optional().describe('Ex: 80k fixe + variable'),
+      salaire: z.string().optional().describe('Salaire souhaite (ex: 55000)'),
       disponibilite: z.string().optional().describe('immediate, 1_mois, 3_mois, en_poste'),
       posteActuel: z.string().optional().describe('Poste actuel'),
       entrepriseActuelle: z.string().optional().describe('Entreprise actuelle'),
@@ -204,8 +206,13 @@ export function registerCandidateTools(server: McpServer) {
     },
     wrapTool('update_candidate', async (args) => {
       const updates: Record<string, unknown> = {};
-      for (const key of ['nom', 'prenom', 'email', 'linkedinUrl', 'salaire', 'disponibilite', 'posteActuel', 'entrepriseActuelle', 'telephone', 'localisation', 'tags']) {
+      for (const key of ['nom', 'prenom', 'email', 'linkedinUrl', 'disponibilite', 'posteActuel', 'entrepriseActuelle', 'telephone', 'localisation', 'tags']) {
         if (args[key] !== undefined) updates[key] = args[key];
+      }
+      // Map 'salaire' → 'salaireSouhaite' (Int in Prisma)
+      if (args.salaire !== undefined) {
+        const parsed = parseInt(String(args.salaire).replace(/[^\d]/g, ''), 10);
+        if (parsed) updates.salaireSouhaite = parsed;
       }
       if (Object.keys(updates).length === 0) return { error: 'Aucune mise a jour fournie' };
 
@@ -252,7 +259,7 @@ export function registerCandidateTools(server: McpServer) {
           title: c.posteActuel,
           company: c.entrepriseActuelle,
           city: c.localisation,
-          salary: c.salaire,
+          salary: c.salaireSouhaite,
           tags: c.tags,
         })),
       };

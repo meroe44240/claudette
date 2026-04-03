@@ -24,7 +24,7 @@ export function registerClientTools(server: McpServer) {
         clients: result.data.map((c: any) => ({
           id: c.id,
           name: `${c.prenom || ''} ${c.nom}`.trim(),
-          title: c.titre,
+          title: c.poste,
           email: c.email,
           phone: c.telephone,
           company: c.entreprise?.nom,
@@ -55,7 +55,7 @@ export function registerClientTools(server: McpServer) {
       return {
         id: client.id,
         name: `${client.prenom || ''} ${client.nom}`.trim(),
-        title: client.titre,
+        title: client.poste,
         email: client.email,
         phone: client.telephone,
         company: client.entreprise?.nom,
@@ -84,7 +84,7 @@ export function registerClientTools(server: McpServer) {
       prenom: z.string().optional().describe('Prenom'),
       email: z.string().optional().describe('Email'),
       telephone: z.string().optional().describe('Telephone'),
-      titre: z.string().optional().describe('Titre/poste'),
+      titre: z.string().optional().describe('Titre/poste du contact'),
       entrepriseId: z.string().optional().describe("UUID de l'entreprise"),
       roleContact: z.string().optional().describe('Role : HIRING_MANAGER, DRH, PROCUREMENT, CEO, AUTRE'),
       statutClient: z.string().optional().describe('Statut : LEAD, PREMIER_CONTACT, BESOIN_QUALIFIE, etc.'),
@@ -97,7 +97,10 @@ export function registerClientTools(server: McpServer) {
         const dup = await clientService.checkDuplicate(args.email as string);
         if (dup.exists && dup.match) return { warning: 'Doublon detecte', existing: { id: dup.match.id, name: `${dup.match.prenom} ${dup.match.nom}` } };
       }
-      const client = await clientService.create(args as any, user.userId);
+      // Map 'titre' → 'poste' (Prisma field name)
+      const { titre, ...rest } = args as any;
+      const createData = { ...rest, poste: titre };
+      const client = await clientService.create(createData, user.userId);
       return { success: true, client_id: client.id, message: `Client ${args.prenom || ''} ${args.nom} cree` };
     }),
   );
@@ -111,7 +114,7 @@ export function registerClientTools(server: McpServer) {
       prenom: z.string().optional().describe('Prenom (correction)'),
       email: z.string().optional().describe('Email'),
       telephone: z.string().optional().describe('Telephone'),
-      titre: z.string().optional().describe('Titre/poste'),
+      titre: z.string().optional().describe('Titre/poste du contact'),
       linkedinUrl: z.string().optional().describe('URL LinkedIn'),
       statutClient: z.string().optional().describe('LEAD, PREMIER_CONTACT, BESOIN_QUALIFIE, PROPOSITION_ENVOYEE, MANDAT_SIGNE, RECURRENT, INACTIF'),
       roleContact: z.string().optional().describe('HIRING_MANAGER, DRH, PROCUREMENT, CEO, AUTRE'),
@@ -119,9 +122,11 @@ export function registerClientTools(server: McpServer) {
     },
     wrapTool('update_client', async (args) => {
       const updates: Record<string, unknown> = {};
-      for (const key of ['nom', 'prenom', 'email', 'telephone', 'titre', 'linkedinUrl', 'statutClient', 'roleContact', 'notes']) {
+      for (const key of ['nom', 'prenom', 'email', 'telephone', 'linkedinUrl', 'statutClient', 'roleContact', 'notes']) {
         if (args[key] !== undefined) updates[key] = args[key];
       }
+      // Map 'titre' → 'poste' (Prisma field name)
+      if (args.titre !== undefined) updates.poste = args.titre;
       const client = await clientService.update(args.client_id as string, updates as any);
       return { success: true, message: `Client ${client.prenom || ''} ${client.nom} mis a jour` };
     }),
