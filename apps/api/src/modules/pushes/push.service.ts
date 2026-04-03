@@ -382,3 +382,288 @@ export async function getPushStatsForUsers(userIds: string[], startDate: Date) {
 
   return result;
 }
+
+// ─── PUSH HISTORY (paginated, rich) ────────────────
+
+export async function getPushHistory(filters: {
+  page?: number;
+  limit?: number;
+  recruiterId?: string;
+  status?: PushStatus;
+  canal?: PushCanal;
+  from?: string;
+  to?: string;
+  search?: string;
+}) {
+  const page = Math.max(1, filters.page || 1);
+  const limit = Math.min(100, Math.max(1, filters.limit || 25));
+  const skip = (page - 1) * limit;
+
+  const where: any = {};
+
+  if (filters.recruiterId) where.recruiterId = filters.recruiterId;
+  if (filters.status) where.status = filters.status;
+  if (filters.canal) where.canal = filters.canal;
+
+  if (filters.from || filters.to) {
+    where.sentAt = {};
+    if (filters.from) where.sentAt.gte = new Date(filters.from);
+    if (filters.to) where.sentAt.lte = new Date(filters.to);
+  }
+
+  if (filters.search) {
+    const s = filters.search;
+    where.OR = [
+      { candidat: { nom: { contains: s, mode: 'insensitive' } } },
+      { candidat: { prenom: { contains: s, mode: 'insensitive' } } },
+      { prospect: { companyName: { contains: s, mode: 'insensitive' } } },
+      { prospect: { contactName: { contains: s, mode: 'insensitive' } } },
+    ];
+  }
+
+  const [pushes, total] = await Promise.all([
+    prisma.push.findMany({
+      where,
+      orderBy: { sentAt: 'desc' },
+      skip,
+      take: limit,
+      include: {
+        candidat: { select: { nom: true, prenom: true, posteActuel: true } },
+        prospect: { select: { companyName: true, contactName: true, contactEmail: true } },
+        recruiter: { select: { nom: true, prenom: true } },
+      },
+    }),
+    prisma.push.count({ where }),
+  ]);
+
+  // Fetch sequence runs linked to these pushes
+  const pushIds = pushes.map(p => p.id);
+  const sequenceRuns = pushIds.length > 0
+    ? await prisma.sequenceRun.findMany({
+        where: { pushId: { in: pushIds } },
+        select: { id: true, pushId: true, status: true, currentStep: true },
+      })
+    : [];
+  const seqByPush = new Map(sequenceRuns.map(sr => [sr.pushId, sr]));
+
+  return {
+    pushes: pushes.map(p => ({
+      id: p.id,
+      candidat: {
+        nom: p.candidat.nom,
+        prenom: p.candidat.prenom,
+        posteActuel: p.candidat.posteActuel,
+      },
+      prospect: {
+        companyName: p.prospect.companyName,
+        contactName: p.prospect.contactName,
+        contactEmail: p.prospect.contactEmail,
+      },
+      recruiter: {
+        nom: p.recruiter.nom,
+        prenom: p.recruiter.prenom,
+      },
+      canal: p.canal,
+      status: p.status,
+      sentAt: p.sentAt,
+      message_preview: p.message ? p.message.substring(0, 100) : null,
+      sequence_run: seqByPush.get(p.id) ? {
+        id: seqByPush.get(p.id)!.id,
+        status: seqByPush.get(p.id)!.status,
+        currentStep: seqByPush.get(p.id)!.currentStep,
+      } : null,
+    })),
+    pagination: {
+      page,
+      limit,
+      total,
+      total_pages: Math.ceil(total / limit),
+    },
+  };
+}
+
+// ─── DASHBOARD STATS ───────────────────────────────
+
+export async function getDashboardStats(filters: {
+  period?: string;
+  recruiterId?: string;
+}) {
+  const period = filters.period || 'month';
+  let startDate: Date;
+  switch (period) {
+    case 'week': startDate = startOfWeek(); break;
+    case 'quarter': startDate = startOfQuarter(); break;
+    case 'month':
+    default: startDate = startOfMonth(); break;
+  }
+
+  const where: any = { sentAt: { gte: startDate } };
+  if (filters.recruiterId) where.recruiterId = filters.recruiterId;
+
+  const pushes = await prisma.push.findMany({
+    where,
+    include: {
+      recruiter: { select: { id: true, nom: true, prenom: true } },
+      prospect: { select: { id: true, companyName: true, contactName: true } },
+    },
+    orderBy: { sentAt: 'asc' },
+  });
+
+  // Totals
+  const totals = { sent: 0, opened: 0, responded: 0, rdv_booked: 0, converted: 0, sans_suite: 0 };
+  for (const p of pushes) {
+    totals.sent++;
+    if (p.status === 'OUVERT' || p.status === 'REPONDU' || p.status === 'RDV_BOOK' || p.status === 'CONVERTI_MANDAT') totals.opened++;
+    if (p.status === 'REPONDU' || p.status === 'RDV_BOOK' || p.status === 'CONVERTI_MANDAT') totals.responded++;
+    if (p.status === 'RDV_BOOK' || p.status === 'CONVERTI_MANDAT') totals.rdv_booked++;
+    if (p.status === 'CONVERTI_MANDAT') totals.converted++;
+    if (p.status === 'SANS_SUITE') totals.sans_suite++;
+  }
+
+  // Conversion funnel
+  const conversion_funnel = {
+    opened_pct: totals.sent > 0 ? Math.round((totals.opened / totals.sent) * 100) : 0,
+    responded_pct: totals.sent > 0 ? Math.round((totals.responded / totals.sent) * 100) : 0,
+    rdv_booked_pct: totals.sent > 0 ? Math.round((totals.rdv_booked / totals.sent) * 100) : 0,
+    converted_pct: totals.sent > 0 ? Math.round((totals.converted / totals.sent) * 100) : 0,
+  };
+
+  // By canal
+  const by_canal: Record<string, number> = {};
+  for (const p of pushes) {
+    by_canal[p.canal] = (by_canal[p.canal] || 0) + 1;
+  }
+
+  // By recruiter
+  const recruiterMap = new Map<string, { id: string; name: string; sent: number; responded: number; converted: number }>();
+  for (const p of pushes) {
+    const rName = `${p.recruiter.prenom || ''} ${p.recruiter.nom}`.trim();
+    const r = recruiterMap.get(p.recruiterId) || { id: p.recruiterId, name: rName, sent: 0, responded: 0, converted: 0 };
+    r.sent++;
+    if (['REPONDU', 'RDV_BOOK', 'CONVERTI_MANDAT'].includes(p.status)) r.responded++;
+    if (p.status === 'CONVERTI_MANDAT') r.converted++;
+    recruiterMap.set(p.recruiterId, r);
+  }
+
+  // Timeline (pushes per day)
+  const timelineMap = new Map<string, number>();
+  for (const p of pushes) {
+    const day = p.sentAt.toISOString().slice(0, 10);
+    timelineMap.set(day, (timelineMap.get(day) || 0) + 1);
+  }
+  const timeline = [...timelineMap.entries()]
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // Top prospects by response rate
+  const prospectMap = new Map<string, { id: string; name: string; company: string; total: number; responded: number }>();
+  for (const p of pushes) {
+    const key = p.prospect.id;
+    const pr = prospectMap.get(key) || {
+      id: p.prospect.id,
+      name: p.prospect.contactName || '',
+      company: p.prospect.companyName,
+      total: 0,
+      responded: 0,
+    };
+    pr.total++;
+    if (['REPONDU', 'RDV_BOOK', 'CONVERTI_MANDAT'].includes(p.status)) pr.responded++;
+    prospectMap.set(key, pr);
+  }
+  const top_prospects = [...prospectMap.values()]
+    .filter(p => p.total >= 1)
+    .map(p => ({ ...p, response_rate: Math.round((p.responded / p.total) * 100) }))
+    .sort((a, b) => b.response_rate - a.response_rate || b.responded - a.responded)
+    .slice(0, 5);
+
+  // Average response time: from ENVOYE sentAt to updatedAt for REPONDU pushes
+  // We approximate by looking at pushes that have REPONDU+ status
+  const respondedPushes = pushes.filter(p => ['REPONDU', 'RDV_BOOK', 'CONVERTI_MANDAT'].includes(p.status));
+  let avg_response_time_hours: number | null = null;
+  if (respondedPushes.length > 0) {
+    const totalHours = respondedPushes.reduce((sum, p) => {
+      const diffMs = p.updatedAt.getTime() - p.sentAt.getTime();
+      return sum + diffMs / (1000 * 60 * 60);
+    }, 0);
+    avg_response_time_hours = Math.round((totalHours / respondedPushes.length) * 10) / 10;
+  }
+
+  return {
+    period,
+    start_date: startDate,
+    totals,
+    conversion_funnel,
+    by_canal,
+    by_recruiter: [...recruiterMap.values()],
+    timeline,
+    top_prospects,
+    avg_response_time_hours,
+  };
+}
+
+// ─── EXPORT PUSH HISTORY AS CSV ────────────────────
+
+export async function exportPushesCSV(filters: {
+  recruiterId?: string;
+  status?: PushStatus;
+  canal?: PushCanal;
+  from?: string;
+  to?: string;
+  search?: string;
+}): Promise<string> {
+  const where: any = {};
+
+  if (filters.recruiterId) where.recruiterId = filters.recruiterId;
+  if (filters.status) where.status = filters.status;
+  if (filters.canal) where.canal = filters.canal;
+
+  if (filters.from || filters.to) {
+    where.sentAt = {};
+    if (filters.from) where.sentAt.gte = new Date(filters.from);
+    if (filters.to) where.sentAt.lte = new Date(filters.to);
+  }
+
+  if (filters.search) {
+    const s = filters.search;
+    where.OR = [
+      { candidat: { nom: { contains: s, mode: 'insensitive' } } },
+      { candidat: { prenom: { contains: s, mode: 'insensitive' } } },
+      { prospect: { companyName: { contains: s, mode: 'insensitive' } } },
+      { prospect: { contactName: { contains: s, mode: 'insensitive' } } },
+    ];
+  }
+
+  const pushes = await prisma.push.findMany({
+    where,
+    orderBy: { sentAt: 'desc' },
+    include: {
+      candidat: { select: { nom: true, prenom: true, posteActuel: true } },
+      prospect: { select: { companyName: true, contactName: true, contactEmail: true } },
+      recruiter: { select: { nom: true, prenom: true } },
+    },
+  });
+
+  const escapeCSV = (val: string | null | undefined) => {
+    if (!val) return '';
+    if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+      return `"${val.replace(/"/g, '""')}"`;
+    }
+    return val;
+  };
+
+  const header = 'Date,Candidat,Poste Actuel,Entreprise Prospect,Contact,Email Contact,Recruteur,Canal,Statut,Message';
+  const rows = pushes.map(p => [
+    p.sentAt.toISOString().slice(0, 10),
+    escapeCSV(`${p.candidat.prenom || ''} ${p.candidat.nom}`.trim()),
+    escapeCSV(p.candidat.posteActuel),
+    escapeCSV(p.prospect.companyName),
+    escapeCSV(p.prospect.contactName),
+    escapeCSV(p.prospect.contactEmail),
+    escapeCSV(`${p.recruiter.prenom || ''} ${p.recruiter.nom}`.trim()),
+    p.canal,
+    p.status,
+    escapeCSV(p.message ? p.message.substring(0, 200).replace(/\n/g, ' ') : ''),
+  ].join(','));
+
+  return [header, ...rows].join('\n');
+}

@@ -1,6 +1,19 @@
 import { FastifyInstance } from 'fastify';
 import { authenticate } from '../../middleware/auth.js';
+import prisma from '../../lib/db.js';
 import * as pushService from './push.service.js';
+
+// Admin middleware — only ADMIN users can access
+async function requireAdmin(request: any, reply: any) {
+  const user = await prisma.user.findUnique({
+    where: { id: request.userId },
+    select: { role: true },
+  });
+  if (!user || user.role !== 'ADMIN') {
+    reply.status(403);
+    return reply.send({ error: 'Accès réservé aux administrateurs' });
+  }
+}
 
 export default async function pushRouter(fastify: FastifyInstance) {
   // POST / — Create a push
@@ -87,5 +100,60 @@ export default async function pushRouter(fastify: FastifyInstance) {
     const query = request.query as any;
     const result = await pushService.getTeamPushStats(query.period || 'this_month');
     return reply.send(result);
+  });
+
+  // GET /history — Full push history with rich data (paginated)
+  fastify.get('/history', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const query = request.query as any;
+
+    const result = await pushService.getPushHistory({
+      page: query.page ? parseInt(query.page, 10) : undefined,
+      limit: query.limit ? parseInt(query.limit, 10) : undefined,
+      recruiterId: query.recruiter_id,
+      status: query.status,
+      canal: query.canal,
+      from: query.from,
+      to: query.to,
+      search: query.search,
+    });
+
+    return reply.send(result);
+  });
+
+  // GET /stats/dashboard — Rich dashboard stats
+  fastify.get('/stats/dashboard', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const query = request.query as any;
+
+    const result = await pushService.getDashboardStats({
+      period: query.period,
+      recruiterId: query.recruiter_id,
+    });
+
+    return reply.send(result);
+  });
+
+  // GET /export — CSV export of push history (admin only)
+  fastify.get('/export', {
+    preHandler: [authenticate, requireAdmin],
+  }, async (request, reply) => {
+    const query = request.query as any;
+
+    const csv = await pushService.exportPushesCSV({
+      recruiterId: query.recruiter_id,
+      status: query.status,
+      canal: query.canal,
+      from: query.from,
+      to: query.to,
+      search: query.search,
+    });
+
+    return reply
+      .header('Content-Type', 'text/csv; charset=utf-8')
+      .header('Content-Disposition', 'attachment; filename="pushes-export.csv"')
+      .send(csv);
   });
 }

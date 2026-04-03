@@ -375,7 +375,7 @@ export async function scanProspects(
     creditsAvailable = -1;
   }
 
-  return {
+  const scanResult: ScanResult = {
     candidate,
     profile,
     prospects: indexed,
@@ -389,6 +389,43 @@ export async function scanProspects(
     },
     credits_available: creditsAvailable,
   };
+
+  // Log activity for scan
+  try {
+    await prisma.activite.create({
+      data: {
+        type: 'NOTE',
+        entiteType: 'CANDIDAT',
+        entiteId: candidateId,
+        userId,
+        titre: `🔍 Auto-Push Scan — ${scanResult.summary.total_found} prospects trouvés`,
+        contenu: [
+          `Scan Auto-Push pour ${candidate.name}`,
+          `Résultats : ${scanResult.summary.total_found} prospects trouvés`,
+          `- ${internalCount} prospect(s) interne(s)`,
+          `- ${webCount} prospect(s) web`,
+          `- ${alreadyHaveEmail} avec email, ${needEnrich} à enrichir`,
+          `Secteurs ciblés : ${profile.sectors.join(', ') || 'non définis'}`,
+          `Zones géo : ${profile.geo.join(', ') || 'non définies'}`,
+          `Crédits FullEnrich disponibles : ${creditsAvailable}`,
+        ].join('\n'),
+        source: 'AGENT_IA',
+        metadata: {
+          action: 'auto_push_scan',
+          total_found: scanResult.summary.total_found,
+          internal_count: internalCount,
+          web_count: webCount,
+          sectors: profile.sectors,
+          locations: profile.geo,
+          credits_available: creditsAvailable,
+        },
+      },
+    });
+  } catch (err) {
+    console.error('[AutoPush] Failed to create scan activity:', err);
+  }
+
+  return scanResult;
 }
 
 // ═══════════════════════════════════════════════════
@@ -398,6 +435,7 @@ export async function scanProspects(
 export async function enrichSelectedProspects(
   candidateId: string,
   prospects: ProspectProposal[],
+  userId?: string,
 ): Promise<EnrichResult> {
   const candidate = await getCandidateData(candidateId);
   if (!candidate) throw new Error('Candidat non trouve');
@@ -472,13 +510,48 @@ export async function enrichSelectedProspects(
     creditsRemaining = -1;
   }
 
-  return {
+  const enrichResult: EnrichResult = {
     prospects,
     credits_used: creditsUsed,
     credits_remaining: creditsRemaining,
     enriched_count: creditsUsed,
     email_found_count: emailFoundCount,
   };
+
+  // Log activity for enrichment
+  if (userId) {
+    try {
+      await prisma.activite.create({
+        data: {
+          type: 'NOTE',
+          entiteType: 'CANDIDAT',
+          entiteId: candidateId,
+          userId,
+          titre: `💳 Auto-Push Enrichissement — ${creditsUsed} crédit(s) utilisé(s), ${emailFoundCount} email(s) trouvé(s)`,
+          contenu: [
+            `Enrichissement Auto-Push pour ${candidate!.name}`,
+            `Crédits utilisés : ${creditsUsed}`,
+            `Emails trouvés : ${emailFoundCount}/${creditsUsed}`,
+            `Crédits restants : ${creditsRemaining}`,
+            `Prospects enrichis :`,
+            ...prospects.map(p => `- ${p.contact_name || 'N/A'} @ ${p.company_name} → ${p.contact_email || 'email non trouvé'}`),
+          ].join('\n'),
+          source: 'AGENT_IA',
+          metadata: {
+            action: 'auto_push_enrich',
+            credits_used: creditsUsed,
+            email_found_count: emailFoundCount,
+            enriched_count: creditsUsed,
+            credits_remaining: creditsRemaining,
+          },
+        },
+      });
+    } catch (err) {
+      console.error('[AutoPush] Failed to create enrich activity:', err);
+    }
+  }
+
+  return enrichResult;
 }
 
 async function generateMessages(
@@ -589,6 +662,38 @@ export async function executeAutoPush(
     } catch (error: any) {
       console.error(`[AutoPush] Push failed for ${prospect.company_name}:`, error.message);
     }
+  }
+
+  // Log activity for execution
+  try {
+    await prisma.activite.create({
+      data: {
+        type: 'NOTE',
+        entiteType: 'CANDIDAT',
+        entiteId: candidateId,
+        userId,
+        titre: `🚀 Auto-Push Exécuté — ${results.pushes_created} push(es), ${results.sequences_started} séquence(s)`,
+        contenu: [
+          `Auto-Push exécuté pour le candidat ${candidateId}`,
+          `${results.pushes_created} push(es) créé(s)`,
+          `${results.sequences_started} séquence(s) Persistance Client lancée(s)`,
+          `${results.prospects_created} nouveau(x) prospect(s) créé(s)`,
+          ``,
+          `Détails :`,
+          ...results.details.map(d => `- ${d.company} (${d.contact}) → ${d.email || 'pas d\'email'}${d.sequence_run_id ? ' + séquence' : ''}`),
+        ].join('\n'),
+        source: 'AGENT_IA',
+        metadata: {
+          action: 'auto_push_execute',
+          pushes_created: results.pushes_created,
+          sequences_started: results.sequences_started,
+          prospects_created: results.prospects_created,
+          details: results.details,
+        },
+      },
+    });
+  } catch (err) {
+    console.error('[AutoPush] Failed to create execute activity:', err);
   }
 
   return results;

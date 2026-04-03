@@ -144,6 +144,7 @@ Retourne les prospects enrichis avec messages pour validation finale avant envoi
       const result = await enrichSelectedProspects(
         args.candidate_id as string,
         prospects,
+        _user.userId,
       );
 
       return {

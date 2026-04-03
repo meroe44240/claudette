@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { NavLink } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Building2, Briefcase, FileText, ClipboardList, Bell, Upload, Settings, User, ListChecks, BookOpen, Zap, Crosshair, Send, ChevronDown, ChevronsLeft, BarChart3, Megaphone, Mail } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Briefcase, FileText, ClipboardList, Bell, Upload, Settings, User, ListChecks, BookOpen, Zap, Crosshair, Send, ChevronDown, ChevronsLeft, BarChart3, Megaphone, Mail, Rocket, Terminal } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 import { api } from '../../lib/api-client';
 
@@ -39,6 +39,7 @@ const navSections: NavSection[] = [
     items: [
       { to: '/mandats', icon: FileText, label: 'Mandats' },
       { to: '/sequences', icon: Zap, label: 'Séquences' },
+      { to: '/pushes', icon: Rocket, label: 'Push CV' },
     ],
   },
   {
@@ -65,6 +66,7 @@ const navSections: NavSection[] = [
 
 const adminItems: NavItem[] = [
   { to: '/settings', icon: Settings, label: 'Paramètres' },
+  { to: '/mcp-logs', icon: Terminal, label: 'Logs MCP' },
 ];
 
 // Keyboard shortcut hints shown next to nav items
