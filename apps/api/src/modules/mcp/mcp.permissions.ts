@@ -60,6 +60,11 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   create_push:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   update_push_status:            { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
+  // ═══ ENRICHISSEMENT ═══
+  enrich_contact:                { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  search_people_external:        { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  get_enrich_credits:            { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+
   // ═══ DELETE (avec confirmation) ═══
   delete_candidate:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
