@@ -519,11 +519,14 @@ model Sequence {
   persona     String?        @db.VarChar(255)  // "Candidat passif Tech", "DRH Grand Groupe", etc.
   targetType  String         @db.VarChar(50)   // "candidate" | "client"
   steps       Json           @default("[]")    // Array de SequenceStep (channel-based)
-  stopOnReply Boolean        @default(true)    // Pause sequence if contact replies
-  isActive    Boolean        @default(true)
-  createdById String?        @db.Uuid
-  createdBy   User?          @relation("SequenceCreatedBy", fields: [createdById], references: [id])
-  runs        SequenceRun[]
+  stopOnReply  Boolean        @default(true)    // Pause sequence if contact replies
+  isActive     Boolean        @default(true)
+  isSystem     Boolean        @default(false)   // Template systeme non supprimable
+  autoTrigger  Boolean        @default(false)   // Declenchement auto sur evenement
+  triggerEvent String?        @db.VarChar(100)   // Ex: push_cv_created
+  createdById  String?        @db.Uuid
+  createdBy    User?          @relation("SequenceCreatedBy", fields: [createdById], references: [id])
+  runs         SequenceRun[]
   createdAt   DateTime       @default(now()) @db.Timestamptz()
   updatedAt   DateTime       @updatedAt @db.Timestamptz()
 
@@ -538,12 +541,14 @@ model SequenceRun {
   targetId     String              @db.Uuid
   mandatId     String?             @db.Uuid
   assignedToId String?             @db.Uuid   // Recruiter running the sequence
+  pushId       String?             @db.Uuid   // Push CV qui a declenche la sequence
   currentStep  Int                 @default(0)
   status       String              @default("running") @db.VarChar(20) // running, paused_reply, completed, cancelled
   startedAt    DateTime            @default(now()) @db.Timestamptz()
   nextActionAt DateTime?           @db.Timestamptz()
   metadata     Json                @default("{}")
   stepLogs     SequenceStepLog[]
+  dailyResearch SequenceDailyResearch[]
   createdAt    DateTime            @default(now()) @db.Timestamptz()
   updatedAt    DateTime            @updatedAt @db.Timestamptz()
 
@@ -566,6 +571,19 @@ model SequenceStepLog {
   createdAt          DateTime    @default(now()) @db.Timestamptz()
 
   @@map("sequence_step_logs")
+}
+
+model SequenceDailyResearch {
+  id            String      @id @default(uuid()) @db.Uuid
+  sequenceRunId String      @db.Uuid
+  sequenceRun   SequenceRun @relation(fields: [sequenceRunId], references: [id], onDelete: Cascade)
+  researchDate  DateTime    @db.Date
+  researchData  Json        @default("{}")   // job_postings, company_news, linkedin_posts, best_signal, suggested_angle
+  generatedContent Json?                     // Contenu pre-redige pour la tache du jour
+  createdAt     DateTime    @default(now()) @db.Timestamptz()
+
+  @@unique([sequenceRunId, researchDate])
+  @@map("sequence_daily_research")
 }
 
 // ─── SDR MANAGER (LISTES DE PROSPECTION) ────────────

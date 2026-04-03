@@ -149,10 +149,29 @@ export async function createPush(data: {
   const label = `${push.prospect.contactName || push.prospect.companyName} — ${candidatName}`;
   const tasks = await createFollowupTasks(push.id, data.recruiterId, label);
 
+  // Auto-trigger Persistance Client sequence after push
+  let sequenceRun = null;
+  try {
+    const { triggerPersistenceSequence } = await import('../sequences/sequence.service.js');
+    sequenceRun = await triggerPersistenceSequence({
+      pushId: push.id,
+      prospectId: prospect.id,
+      prospectName: prospect.contactName || prospect.companyName,
+      prospectCompany: prospect.companyName,
+      prospectEmail: prospect.contactEmail || undefined,
+      candidatName,
+      recruiterId: data.recruiterId,
+    });
+  } catch (err) {
+    console.error('[Push] Error auto-triggering persistence sequence:', err);
+  }
+
   return {
     push_id: push.id,
     prospect_id: prospect.id,
     tasks_created: tasks.length,
+    sequence_started: !!sequenceRun,
+    sequence_run_id: sequenceRun?.id,
   };
 }
 

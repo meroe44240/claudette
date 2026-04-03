@@ -223,6 +223,61 @@ export async function getCompletedRuns() {
   });
 }
 
+// ─── RUN DETAILS (for MCP get_sequence_details) ─────
+
+export async function getRunDetails(runId: string) {
+  const run = await prisma.sequenceRun.findUnique({
+    where: { id: runId },
+    include: {
+      sequence: true,
+      stepLogs: { orderBy: { stepOrder: 'asc' } },
+      dailyResearch: { orderBy: { researchDate: 'desc' }, take: 1 },
+    },
+  });
+
+  if (!run) throw new NotFoundError('SequenceRun', runId);
+
+  const steps = run.sequence.steps as unknown as SequenceStep[];
+  const meta = (run.metadata ?? {}) as Record<string, string>;
+  const startDate = new Date(run.startedAt);
+
+  const stepsDetail = steps.map((step, i) => {
+    const log = run.stepLogs.find(l => l.stepOrder === i);
+    const scheduledDate = new Date(startDate);
+    scheduledDate.setDate(scheduledDate.getDate() + step.delay_days);
+
+    return {
+      order: i + 1,
+      total: steps.length,
+      channel: step.channel,
+      title: resolveVariables(step.task_title, run),
+      instructions: step.instructions ? resolveVariables(step.instructions, run) : undefined,
+      scheduled_date: scheduledDate.toISOString().substring(0, 10),
+      delay_days: step.delay_days,
+      status: i < run.currentStep ? (log?.status || 'done') :
+              i === run.currentStep ? 'current' : 'upcoming',
+      executed_at: log?.executedAt,
+      result: log?.result,
+      task_id: log?.taskId,
+    };
+  });
+
+  return {
+    run_id: run.id,
+    sequence_name: run.sequence.nom,
+    contact_name: meta.contactName || '',
+    company_name: meta.companyName || '',
+    status: run.status,
+    current_step: run.currentStep + 1,
+    total_steps: steps.length,
+    started_at: run.startedAt,
+    next_action_at: run.nextActionAt,
+    push_id: run.pushId,
+    steps: stepsDetail,
+    latest_research: run.dailyResearch[0]?.researchData || null,
+  };
+}
+
 // ─── STEP EXECUTION ─────────────────────────────────
 
 export async function executeNextStep(runId: string) {
@@ -307,6 +362,13 @@ export async function executeNextStep(runId: string) {
       where: { id: runId },
       data: { status: 'completed', currentStep: nextStepIndex },
     });
+
+    // Auto-handle cold prospect when sequence completes
+    try {
+      await handleColdProspect(runId);
+    } catch (err) {
+      console.error(`[Sequence] Error handling cold prospect for run ${runId}:`, err);
+    }
   }
 
   return { status: 'task_created', stepOrder: run.currentStep, taskId: task.id };
@@ -472,7 +534,17 @@ export async function seedDefaultSequences(userId: string) {
   await prisma.sequenceRun.deleteMany();
   await prisma.sequence.deleteMany();
 
-  const defaults = [
+  const defaults: Array<{
+    nom: string;
+    description: string;
+    persona: string;
+    targetType: string;
+    stopOnReply: boolean;
+    steps: any[];
+    isSystem?: boolean;
+    autoTrigger?: boolean;
+    triggerEvent?: string;
+  }> = [
     // 1. Candidat passif — Tech/SaaS
     {
       nom: 'Candidat passif — Tech/SaaS',
@@ -551,6 +623,32 @@ export async function seedDefaultSequences(userId: string) {
     ],
   });
 
+  // 6. Persistance Client v4 — 10 étapes, 28 jours (SYSTÈME)
+  const persistanceSteps: SequenceStep[] = [
+    { order: 0, delay_days: 1, delay_hours: 0, channel: 'call', action: 'call', template: {}, task_title: '📞 Rappeler {{first_name}} ({{company_name}}) — 2/10', instructions: 'Brief IA : signal du jour + angle de relance + rappel du profil poussé hier. Lire le brief, appeler, loguer le résultat.' },
+    { order: 1, delay_days: 3, delay_hours: 0, channel: 'whatsapp', action: 'message', template: { whatsapp_message: '{{first_name}}, j\'ai vu {{ai_signal}}. Avez-vous eu le temps de regarder le profil que je vous ai envoyé ? Dispo pour un call rapide ? {{booking_link}}' }, task_title: '💬 LinkedIn {{first_name}} ({{company_name}}) — 3/10', instructions: 'L\'IA a identifié les posts récents à liker/commenter. Message pré-rédigé basé sur un VRAI signal (offre, post, actu). Si aucun signal : message basé sur le contexte entreprise. Copier le message, aller sur LinkedIn, envoyer, cocher fait.' },
+    { order: 2, delay_days: 5, delay_hours: 0, channel: 'email', action: 'send', template: { subject: 'Un profil {{mandate_title}} pour {{company_name}}', body: 'Bonjour {{first_name}},\n\nSuite à notre échange, je souhaitais vous partager quelques éléments concrets sur le profil que je vous ai transmis :\n\n{{ai_profile_highlights}}\n\nCe profil correspond bien à {{ai_company_context}}.\n\nSeriez-vous disponible pour un échange de 30 minutes ?\n{{booking_link}}\n\nCordialement,\n{{user_name}}' }, task_title: '📧 Email profil à {{first_name}} ({{company_name}}) — 4/10', instructions: 'Email pré-rédigé avec : faits réels du CV (expériences, chiffres) + lien avec actu entreprise + booking link 30min. Lire, ajuster, VALIDER avant envoi.' },
+    { order: 3, delay_days: 8, delay_hours: 0, channel: 'call', action: 'call', template: { whatsapp_message: '{{first_name}}, j\'ai essayé de vous joindre. Voici un lien pour bloquer un créneau si c\'est plus simple : {{booking_link}}' }, task_title: '📞 Appeler {{first_name}} ({{company_name}}) — 5/10', instructions: 'Brief pré-call mis à jour par l\'IA. Si call sans réponse : SMS pré-rédigé avec booking link à VALIDER avant envoi.' },
+    { order: 4, delay_days: 10, delay_hours: 0, channel: 'email', action: 'send', template: { subject: '{{ai_insight_subject}}', body: 'Bonjour {{first_name}},\n\n{{ai_insight_content}}\n\nJ\'ai pensé que cela pourrait vous intéresser dans le cadre de vos projets chez {{company_name}}.\n\nBonne lecture,\n{{user_name}}' }, task_title: '📧 Email insight {{first_name}} ({{company_name}}) — 6/10', instructions: 'L\'IA a trouvé une info utile cette nuit : étude sectorielle, benchmark salaires, article pertinent. On PARTAGE, on ne demande RIEN. Le prospect reçoit de la valeur gratuite. VALIDER avant envoi.' },
+    { order: 5, delay_days: 14, delay_hours: 0, channel: 'whatsapp', action: 'message', template: { whatsapp_message: '{{first_name}}, {{ai_linkedin_signal_message}}' }, task_title: '💬 LinkedIn signal {{first_name}} ({{company_name}}) — 7/10', instructions: 'L\'IA cherche un signal frais. SI trouvé : message qui réagit au signal. SI aucun signal : REPORTER AUTOMATIQUEMENT de 2 jours. Pas de message LinkedIn sans raison.' },
+    { order: 6, delay_days: 16, delay_hours: 0, channel: 'call', action: 'call', template: {}, task_title: '📞 Appeler {{first_name}} ({{company_name}}) — 8/10', instructions: 'Brief IA frais : historique des tentatives, dernier signal, angle recommandé. Dernière tentative d\'appel avant la phase email finale.' },
+    { order: 7, delay_days: 20, delay_hours: 0, channel: 'email', action: 'send', template: { subject: 'Comment nous avons placé un {{ai_case_study_role}} en {{ai_case_study_duration}}', body: 'Bonjour {{first_name}},\n\n{{ai_case_study_content}}\n\nSi vous avez des projets de recrutement similaires, je serais ravi d\'en discuter.\n\n{{booking_link}}\n\nCordialement,\n{{user_name}}' }, task_title: '📧 Email case study {{first_name}} ({{company_name}}) — 9/10', instructions: 'Case study basé sur un placement RÉEL de l\'ATS, même secteur, chiffres réels anonymisés. Si aucun placement dans le secteur : stats générales HumanUp. VALIDER avant envoi.' },
+    { order: 8, delay_days: 23, delay_hours: 0, channel: 'call', action: 'call', template: { whatsapp_message: '{{first_name}}, dernier message de ma part. Si le timing est bon : {{booking_link}} — sinon, pas de souci. {{user_name}}' }, task_title: '📱 Dernier contact {{first_name}} ({{company_name}}) — 10/10', instructions: 'SMS honnête : "dernier message", booking link. VALIDER avant envoi. Puis appeler.' },
+    { order: 9, delay_days: 28, delay_hours: 0, channel: 'email', action: 'send', template: { subject: 'Je ne vous dérangerai plus — {{first_name}}', body: 'Bonjour {{first_name}},\n\nJe comprends que le timing n\'est pas idéal. Deux options :\n\n1. On planifie un échange dans quelques semaines/mois quand vos projets se concrétiseront : {{booking_link_mandate}}\n2. Je ne vous contacte plus\n\nDans les deux cas, je reste dans votre réseau.\n\nBelle continuation,\n{{user_name}}' }, task_title: '📧 Breakup {{first_name}} ({{company_name}}) — clôture', instructions: 'Email breakup : respectueux, porte ouverte, 2 options. VALIDER avant envoi. Après envoi → passage automatique en Cold.' },
+  ];
+
+  defaults.push({
+    nom: 'Persistance Client',
+    description: 'Séquence automatique après push CV. 10 tentatives sur 28 jours. Call + LinkedIn + Email + SMS. Recherche IA quotidienne. Chaque action validée par le recruteur.',
+    persona: 'Prospect Push CV',
+    targetType: 'client',
+    stopOnReply: true,
+    isSystem: true,
+    autoTrigger: true,
+    triggerEvent: 'push_cv',
+    steps: persistanceSteps as any[],
+  });
+
   for (const seq of defaults) {
     await prisma.sequence.create({
       data: {
@@ -561,9 +659,145 @@ export async function seedDefaultSequences(userId: string) {
         stopOnReply: seq.stopOnReply,
         steps: seq.steps as any,
         createdById: userId,
+        isSystem: seq.isSystem ?? false,
+        autoTrigger: seq.autoTrigger ?? false,
+        triggerEvent: seq.triggerEvent ?? null,
       },
     });
   }
 
   return { seeded: true, count: defaults.length };
+}
+
+// ─── COLD MANAGEMENT ──────────────────────────────────
+// After 10 steps exhausted: create recontact task at 3 months (1 month if email was opened)
+
+export async function handleColdProspect(runId: string) {
+  const run = await prisma.sequenceRun.findUnique({
+    where: { id: runId },
+    include: {
+      sequence: true,
+      stepLogs: { orderBy: { stepOrder: 'asc' } },
+    },
+  });
+
+  if (!run || run.status !== 'completed') return null;
+
+  // Check if any email was opened (for shorter recontact delay)
+  const hadEmailOpened = run.stepLogs.some(
+    (log) => log.channel === 'email' && (log.result as any)?.opened === true,
+  );
+
+  // Recontact delay: 1 month if email opened, 3 months otherwise
+  const recontactDays = hadEmailOpened ? 30 : 90;
+  const recontactDate = new Date();
+  recontactDate.setDate(recontactDate.getDate() + recontactDays);
+
+  const meta = (run.metadata ?? {}) as Record<string, string>;
+  const contactLabel = meta.contactName || 'Prospect';
+  const companyLabel = meta.companyName || '';
+
+  // Create recontact task
+  await prisma.activite.create({
+    data: {
+      type: 'TACHE',
+      isTache: true,
+      tacheCompleted: false,
+      entiteType: 'CLIENT',
+      entiteId: run.targetId,
+      userId: run.assignedToId || '',
+      titre: `🔄 Recontacter ${contactLabel}${companyLabel ? ` (${companyLabel})` : ''} — COLD`,
+      contenu: `Séquence "${run.sequence.nom}" terminée (${run.stepLogs.length} étapes). Aucune réponse. ${hadEmailOpened ? 'Email ouvert — prospect potentiellement intéressé.' : 'Aucun signe d\'intérêt.'} Recontact planifié à ${recontactDate.toLocaleDateString('fr-FR')}.`,
+      source: 'SYSTEME',
+      tacheDueDate: recontactDate,
+      metadata: {
+        priority: hadEmailOpened ? 'HAUTE' : 'MOYENNE',
+        isColdRecontact: true,
+        sequenceRunId: run.id,
+        emailOpened: hadEmailOpened,
+      },
+    },
+  });
+
+  // Create notification
+  if (run.assignedToId) {
+    await prisma.notification.create({
+      data: {
+        userId: run.assignedToId,
+        type: 'SYSTEME',
+        titre: `${contactLabel} passe en COLD — recontact prévu le ${recontactDate.toLocaleDateString('fr-FR')}`,
+        contenu: `La séquence "${run.sequence.nom}" est terminée sans réponse. ${hadEmailOpened ? 'L\'email a été ouvert — recontact dans 1 mois.' : 'Recontact planifié dans 3 mois.'}`,
+        entiteType: 'CLIENT',
+        entiteId: run.targetId,
+      },
+    });
+  }
+
+  return { cold: true, recontactDate, hadEmailOpened, recontactDays };
+}
+
+// ─── AUTO-TRIGGER PERSISTENCE SEQUENCE AFTER PUSH ─────
+
+export async function triggerPersistenceSequence(data: {
+  pushId: string;
+  prospectId: string;
+  prospectName: string;
+  prospectCompany: string;
+  prospectEmail?: string;
+  candidatName: string;
+  recruiterId: string;
+}) {
+  // Find the Persistance Client system sequence
+  const persistenceSeq = await prisma.sequence.findFirst({
+    where: {
+      isSystem: true,
+      autoTrigger: true,
+      triggerEvent: 'push_cv',
+      isActive: true,
+    },
+  });
+
+  if (!persistenceSeq) {
+    console.log('[Sequence] No active Persistance Client template found, skipping auto-trigger');
+    return null;
+  }
+
+  // Check if a sequence is already running for this prospect
+  const existingRun = await prisma.sequenceRun.findFirst({
+    where: {
+      targetType: 'client',
+      targetId: data.prospectId,
+      status: { in: ['running', 'paused_reply'] },
+    },
+  });
+
+  if (existingRun) {
+    console.log(`[Sequence] Sequence already active for prospect ${data.prospectId}, skipping`);
+    return null;
+  }
+
+  // Start the persistence run
+  const run = await startRun({
+    sequenceId: persistenceSeq.id,
+    targetType: 'client',
+    targetId: data.prospectId,
+    assignedToId: data.recruiterId,
+    metadata: {
+      contactName: data.prospectName,
+      companyName: data.prospectCompany,
+      contactEmail: data.prospectEmail || '',
+      candidatName: data.candidatName,
+      pushId: data.pushId,
+      userName: '',  // Will be resolved from user context
+    },
+  });
+
+  // Update the run with pushId
+  await prisma.sequenceRun.update({
+    where: { id: run.id },
+    data: { pushId: data.pushId },
+  });
+
+  console.log(`[Sequence] Persistance Client sequence started for ${data.prospectName} (${data.prospectCompany}) — run ${run.id}`);
+  return run;
 }

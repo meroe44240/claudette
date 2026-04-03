@@ -8,7 +8,7 @@ export function registerPushTools(server: McpServer) {
   // ─── create_push ──────────────────────────────────────
   server.tool(
     'create_push',
-    "[CONFIRMATION REQUISE] Cree un push CV vers un prospect. Appeler quand le recruteur dit 'pushe le CV de X a Y' ou 'envoie le profil de X a la societe Z'. Tu DOIS demander confirmation en montrant le candidat, le prospect et le message.",
+    "[CONFIRMATION REQUISE] Cree un push CV vers un prospect et lance automatiquement la sequence Persistance Client (10 relances sur 28 jours). Appeler quand le recruteur dit 'pushe le CV de X a Y' ou 'envoie le profil de X a la societe Z'. Tu DOIS demander confirmation en montrant le candidat, le prospect et le message.",
     {
       candidate_id: z.string().describe('UUID du candidat'),
       prospect_company: z.string().describe("Nom de l'entreprise prospect"),

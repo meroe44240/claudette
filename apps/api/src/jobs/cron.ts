@@ -468,6 +468,22 @@ async function runPushDetect(): Promise<void> {
   }
 }
 
+// ─── SEQUENCE DUE RUNS ────────────────────────────
+
+async function runSequenceDueSteps(): Promise<void> {
+  try {
+    const { processDueRuns } = await import(
+      '../modules/sequences/sequence.service.js'
+    );
+    const results = await processDueRuns();
+    if (results.length > 0) {
+      console.log(`[Cron] Sequence due runs: ${results.length} step(s) processed`);
+    }
+  } catch (error) {
+    console.error('[Cron] Error in Sequence due runs:', error);
+  }
+}
+
 // ─── START / STOP ───────────────────────────────────
 
 export function startCronJobs(): void {
@@ -511,6 +527,10 @@ export function startCronJobs(): void {
   const pushDetectInterval = setInterval(runPushDetect, 15 * 60 * 1000);
   intervals.push(pushDetectInterval);
 
+  // Sequence due steps every 5 minutes
+  const sequenceDueInterval = setInterval(runSequenceDueSteps, 5 * 60 * 1000);
+  intervals.push(sequenceDueInterval);
+
   console.log('[Cron] Scheduled jobs started:');
   console.log('  - Slack daily report: checked every 60s (sends Mon-Fri at configured time, Europe/Paris)');
   console.log('  - Calendar AI analysis: every 30 minutes');
@@ -520,6 +540,7 @@ export function startCronJobs(): void {
   console.log('  - Drive transcript scan: every 15 minutes (new transcripts/CR)');
   console.log('  - Allo auto-sync: every 10 minutes (calls + transcripts)');
   console.log('  - Push CV auto-detect: every 15 minutes (sent emails → push detection)');
+  console.log('  - Sequence due steps: every 5 minutes (execute next steps for due runs)');
 }
 
 export function stopCronJobs(): void {

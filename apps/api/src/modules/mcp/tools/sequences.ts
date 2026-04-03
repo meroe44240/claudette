@@ -56,4 +56,16 @@ export function registerSequenceTools(server: McpServer) {
       return { success: true, message: 'Sequence mise en pause' };
     }),
   );
+
+  server.tool(
+    'get_sequence_details',
+    "Recupere le detail complet d'une sequence run : etapes passees avec resultats, etape actuelle avec contenu pre-genere, etapes futures avec dates prevues. Utilise pour voir ou en est une sequence de persistance client.",
+    {
+      run_id: z.string().describe('UUID du run de sequence'),
+    },
+    wrapTool('get_sequence_details', async (args) => {
+      const run = await sequenceService.getRunDetails(args.run_id as string);
+      return run;
+    }),
+  );
 }
