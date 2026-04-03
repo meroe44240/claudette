@@ -343,6 +343,50 @@ export async function processGmailWebhook(payload: GmailWebhookPayload) {
   const senderEmail = emailFrom.match(/<([^>]+)>/)?.[1] || emailFrom;
   const senderMatch = await matchEmail(senderEmail);
 
+  // ─── Push CV reply detection ─────────────────────
+  // Check if this email is a reply to a push CV (by matching sender email to prospect)
+  let pushMatched = false;
+  if (senderEmail) {
+    const matchingPush = await prisma.push.findFirst({
+      where: {
+        recruiterId: userId,
+        status: 'ENVOYE',
+        canal: 'EMAIL',
+        prospect: { contactEmail: { equals: senderEmail, mode: 'insensitive' } },
+        sentAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }, // last 30 days
+      },
+      orderBy: { sentAt: 'desc' },
+      include: {
+        candidat: { select: { nom: true, prenom: true } },
+        prospect: { select: { companyName: true, contactName: true } },
+      },
+    });
+
+    if (matchingPush) {
+      // Auto-update push status to REPONDU
+      await prisma.push.update({
+        where: { id: matchingPush.id },
+        data: { status: 'REPONDU' },
+      });
+
+      // Create follow-up task
+      const label = `${matchingPush.prospect.contactName || matchingPush.prospect.companyName} — ${matchingPush.candidat.prenom || ''} ${matchingPush.candidat.nom}`.trim();
+      await prisma.activite.create({
+        data: {
+          type: 'TACHE', isTache: true, tacheCompleted: false,
+          titre: `Qualifier le besoin — appel a booker — ${label}`,
+          userId,
+          source: 'AGENT_IA',
+          tacheDueDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          metadata: { priority: 'HAUTE', pushId: matchingPush.id },
+        },
+      });
+
+      pushMatched = true;
+      console.log(`[Gmail Webhook] Push ${matchingPush.id} auto-updated to REPONDU (reply from ${senderEmail})`);
+    }
+  }
+
   const activite = await prisma.activite.create({
     data: {
       type: 'EMAIL',
@@ -360,6 +404,7 @@ export async function processGmailWebhook(payload: GmailWebhookPayload) {
         gmailMessageId,
         from: emailFrom,
         matched: !!senderMatch,
+        pushMatched,
       },
     },
   });
@@ -368,11 +413,13 @@ export async function processGmailWebhook(payload: GmailWebhookPayload) {
   await notificationService.create({
     userId,
     type: 'EMAIL_RECU',
-    titre: 'Nouvel email reçu',
-    contenu: `Un nouvel email a été détecté pour ${emailAddress}`,
+    titre: pushMatched ? 'Reponse push CV detectee !' : 'Nouvel email reçu',
+    contenu: pushMatched
+      ? `Le prospect ${senderEmail} a repondu a votre push CV !`
+      : `Un nouvel email a été détecté pour ${emailAddress}`,
   });
 
-  return { processed: true, activiteId: activite.id };
+  return { processed: true, activiteId: activite.id, pushMatched };
 }
 
 // ─── SEND EMAIL ─────────────────────────────────────
@@ -491,6 +538,8 @@ export async function sendEmail(userId: string, params: SendEmailParams) {
   return {
     success: true,
     activiteId: activite.id,
+    gmailMessageId: result.id || null,
+    gmailThreadId: result.threadId || null,
     message: `Email envoyé à ${contactName}`,
   };
 }

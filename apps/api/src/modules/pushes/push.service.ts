@@ -123,6 +123,8 @@ export async function createPush(data: {
   canal: PushCanal;
   message?: string;
   recruiterId: string;
+  gmailThreadId?: string;
+  gmailMessageId?: string;
 }) {
   const prospect = await upsertProspect(data.prospect);
 
@@ -133,6 +135,9 @@ export async function createPush(data: {
       recruiterId: data.recruiterId,
       canal: data.canal,
       message: data.message,
+      gmailThreadId: data.gmailThreadId,
+      gmailMessageId: data.gmailMessageId,
+      gmailSentAt: data.gmailThreadId ? new Date() : undefined,
     },
     include: {
       candidat: { select: { nom: true, prenom: true } },
@@ -212,6 +217,8 @@ export async function listPushes(filters: {
       canal: p.canal,
       status: p.status,
       sent_at: p.sentAt,
+      gmail_sent_at: p.gmailSentAt,
+      gmail_thread_id: p.gmailThreadId,
     })),
     stats: {
       total: pushes.length,

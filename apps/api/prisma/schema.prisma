@@ -1081,14 +1081,18 @@ model Push {
   prospect     Prospect   @relation(fields: [prospectId], references: [id])
   recruiterId  String     @db.Uuid
   recruiter    User       @relation("PushRecruiter", fields: [recruiterId], references: [id])
-  canal        PushCanal
-  status       PushStatus @default(ENVOYE)
-  message      String?    @db.Text
-  sentAt       DateTime   @default(now()) @db.Timestamptz()
-  updatedAt    DateTime   @updatedAt @db.Timestamptz()
+  canal           PushCanal
+  status          PushStatus @default(ENVOYE)
+  message         String?    @db.Text
+  sentAt          DateTime   @default(now()) @db.Timestamptz()
+  gmailSentAt     DateTime?  @db.Timestamptz()
+  gmailThreadId   String?    @db.VarChar(100)
+  gmailMessageId  String?    @db.VarChar(100)
+  updatedAt       DateTime   @updatedAt @db.Timestamptz()
 
   @@index([recruiterId, sentAt])
   @@index([status])
+  @@index([gmailThreadId])
   @@map("pushes")
 }
 

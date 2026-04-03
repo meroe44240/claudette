@@ -56,6 +56,7 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
 
   // ═══ PUSHES ═══
   list_pushes:                   { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  get_push_gmail_status:         { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_push_stats:                { level: 'free', roles: ['ADMIN'] },
   create_push:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   update_push_status:            { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },

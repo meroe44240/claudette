@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { wrapTool } from '../mcp.tools.js';
 import * as pushService from '../../pushes/push.service.js';
+import prisma from '../../../lib/db.js';
 
 export function registerPushTools(server: McpServer) {
   // ─── create_push ──────────────────────────────────────
@@ -77,6 +78,39 @@ export function registerPushTools(server: McpServer) {
         message: result.tasks_created.length > 0
           ? `Statut mis a jour: ${result.status}. Taches creees: ${result.tasks_created.join(', ')}`
           : `Statut mis a jour: ${result.status}`,
+      };
+    }),
+  );
+
+  // ─── get_push_gmail_status ─────────────────────────────
+  server.tool(
+    'get_push_gmail_status',
+    "Verifie si l'email d'un push a bien ete envoye depuis Gmail et retourne le timestamp reel d'envoi et le thread Gmail.",
+    {
+      push_id: z.string().describe('UUID du push'),
+    },
+    wrapTool('get_push_gmail_status', async (args) => {
+      const push = await prisma.push.findUnique({
+        where: { id: args.push_id as string },
+        include: {
+          candidat: { select: { nom: true, prenom: true } },
+          prospect: { select: { companyName: true, contactName: true, contactEmail: true } },
+        },
+      });
+      if (!push) return { error: 'Push non trouve' };
+
+      return {
+        push_id: push.id,
+        candidat: `${push.candidat.prenom || ''} ${push.candidat.nom}`.trim(),
+        prospect: push.prospect.contactName || push.prospect.companyName,
+        prospect_email: push.prospect.contactEmail,
+        canal: push.canal,
+        status: push.status,
+        created_at: push.sentAt,
+        gmail_sent_at: push.gmailSentAt,
+        gmail_thread_id: push.gmailThreadId,
+        gmail_message_id: push.gmailMessageId,
+        email_confirmed: !!push.gmailSentAt,
       };
     }),
   );
