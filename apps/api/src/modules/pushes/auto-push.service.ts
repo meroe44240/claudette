@@ -1,14 +1,20 @@
 /**
- * Auto-Push Service — "Full Auto" push flow
+ * Auto-Push Service — "Full Auto" push flow (3-step)
  *
- * Given a candidate, this service:
- * 1. Profiles the candidate (sector, target role, geo)
- * 2. Searches internal cold/lead clients matching the profile
- * 3. If not enough → detects prospects via AI web search
- * 4. Enriches contacts via FullEnrich (email)
- * 5. Generates personalized messages per prospect
- * 6. Returns a proposal for the recruiter to validate
- * 7. On validation → multi-push with auto sequence trigger
+ * STEP 1: SCAN (0 credits)
+ *   - Profile candidate via AI (or use recruiter-provided criteria)
+ *   - Search internal cold/lead clients matching
+ *   - Detect web prospects via AI search
+ *   → Returns prospect list for recruiter to pick from
+ *
+ * STEP 2: ENRICH (X credits — recruiter approves)
+ *   - Enrich ONLY selected prospects via FullEnrich
+ *   - Generate personalized messages
+ *   → Returns enriched prospects with messages for final validation
+ *
+ * STEP 3: EXECUTE (0 credits)
+ *   - Multi-push to validated prospects
+ *   - Auto-trigger Persistance Client sequence per push
  */
 
 import prisma from '../../lib/db.js';
@@ -40,7 +46,8 @@ export interface CandidateProfile {
 }
 
 export interface ProspectProposal {
-  source: 'internal' | 'web_detection' | 'external_search';
+  index: number;
+  source: 'internal' | 'web_detection';
   company_name: string;
   company_sector?: string;
   company_city?: string;
@@ -52,32 +59,49 @@ export interface ProspectProposal {
   approach_angle?: string;
   relevance_score?: number;
   suggested_message?: string;
-  // Internal prospect fields
+  needs_enrich: boolean;
+  enrich_cost: number; // 0 if already has email, 1 otherwise
   client_id?: string;
   company_id?: string;
 }
 
-export interface AutoPushProposal {
+export interface ScanResult {
   candidate: AutoPushCandidate;
   profile: CandidateProfile;
   prospects: ProspectProposal[];
-  credits_needed: number;
+  summary: {
+    total_found: number;
+    internal_count: number;
+    web_count: number;
+    already_have_email: number;
+    need_enrich: number;
+    enrich_cost_total: number;
+  };
   credits_available: number;
 }
 
-export interface AutoPushExecuteResult {
+export interface EnrichResult {
+  prospects: ProspectProposal[];
+  credits_used: number;
+  credits_remaining: number;
+  enriched_count: number;
+  email_found_count: number;
+}
+
+export interface ExecuteResult {
   pushes_created: number;
   sequences_started: number;
   prospects_created: number;
   details: Array<{
     company: string;
     contact: string;
+    email: string | null;
     push_id: string;
     sequence_run_id?: string;
   }>;
 }
 
-// ─── 1. GET CANDIDATE DATA ─────────────────────────
+// ─── HELPERS ────────────────────────────────────────
 
 async function getCandidateData(candidateId: string): Promise<AutoPushCandidate | null> {
   const c = await prisma.candidat.findUnique({
@@ -105,18 +129,18 @@ async function getCandidateData(candidateId: string): Promise<AutoPushCandidate 
   };
 }
 
-// ─── 2. PROFILE CANDIDATE VIA AI ───────────────────
+async function profileCandidate(
+  candidate: AutoPushCandidate,
+  overrides: { sectors?: string[]; locations?: string[]; company_sizes?: string[]; target_roles?: string[] },
+): Promise<CandidateProfile> {
+  let profile: CandidateProfile;
 
-async function profileCandidate(candidate: AutoPushCandidate): Promise<CandidateProfile> {
-  if (!isAiConfigured()) {
-    return defaultProfile(candidate);
-  }
-
-  try {
-    const result = await callClaudeWithWebSearch({
-      feature: 'auto_push_profiling',
-      userId: 'system',
-      systemPrompt: `Tu es un expert en recrutement. Analyse le profil candidat et determine quels types d'entreprises pourraient avoir besoin de ce profil.
+  if (isAiConfigured()) {
+    try {
+      const result = await callClaudeWithWebSearch({
+        feature: 'auto_push_profiling',
+        userId: 'system',
+        systemPrompt: `Tu es un expert en recrutement. Analyse le profil candidat et determine quels types d'entreprises pourraient avoir besoin de ce profil.
 
 Reponds UNIQUEMENT en JSON valide :
 {
@@ -128,7 +152,7 @@ Reponds UNIQUEMENT en JSON valide :
   "seniority": "senior|mid|junior|executive",
   "pitch_summary": "Resume en 2 phrases de pourquoi ce candidat est top"
 }`,
-      userPrompt: `Profil candidat :
+        userPrompt: `Profil candidat :
 - Nom : ${candidate.name}
 - Poste actuel : ${candidate.title || 'Non renseigne'}
 - Entreprise : ${candidate.company || 'Non renseignee'}
@@ -137,18 +161,29 @@ Reponds UNIQUEMENT en JSON valide :
 - Experience : ${candidate.experience_years ? candidate.experience_years + ' ans' : 'Non renseignee'}
 
 Analyse ce profil et determine les secteurs, roles cibles, et taille d'entreprises ideales.`,
-      maxTokens: 1000,
-    });
+        maxTokens: 1000,
+      });
 
-    const jsonMatch = result.rawText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]) as CandidateProfile;
+      const jsonMatch = result.rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        profile = JSON.parse(jsonMatch[0]) as CandidateProfile;
+      } else {
+        profile = defaultProfile(candidate);
+      }
+    } catch {
+      profile = defaultProfile(candidate);
     }
-  } catch (error) {
-    console.error('[AutoPush] Profiling error:', error);
+  } else {
+    profile = defaultProfile(candidate);
   }
 
-  return defaultProfile(candidate);
+  // Apply recruiter overrides
+  if (overrides.sectors?.length) profile.sectors = overrides.sectors;
+  if (overrides.locations?.length) profile.geo = overrides.locations;
+  if (overrides.company_sizes?.length) profile.company_size = overrides.company_sizes;
+  if (overrides.target_roles?.length) profile.target_roles = overrides.target_roles;
+
+  return profile;
 }
 
 function defaultProfile(candidate: AutoPushCandidate): CandidateProfile {
@@ -163,42 +198,41 @@ function defaultProfile(candidate: AutoPushCandidate): CandidateProfile {
   };
 }
 
-// ─── 3. SEARCH INTERNAL COLD CLIENTS ───────────────
-
 async function searchInternalProspects(
   profile: CandidateProfile,
-  limit: number = 10,
-): Promise<ProspectProposal[]> {
-  // Search clients with status LEAD or INACTIF, matching sector/tags
+  limit: number,
+): Promise<Omit<ProspectProposal, 'index'>[]> {
   const where: any = {
     statutClient: { in: ['LEAD', 'INACTIF', 'PREMIER_CONTACT'] },
   };
 
-  // Build OR conditions for matching
   const orConditions: any[] = [];
 
-  if (profile.sectors.length > 0) {
-    for (const sector of profile.sectors) {
-      orConditions.push({
-        entreprise: {
-          OR: [
-            { secteur: { contains: sector, mode: 'insensitive' } },
-            { nom: { contains: sector, mode: 'insensitive' } },
-          ],
-        },
-      });
-    }
+  for (const sector of profile.sectors) {
+    orConditions.push({
+      entreprise: {
+        OR: [
+          { secteur: { contains: sector, mode: 'insensitive' } },
+          { nom: { contains: sector, mode: 'insensitive' } },
+        ],
+      },
+    });
   }
 
-  if (profile.key_skills.length > 0) {
-    for (const skill of profile.key_skills.slice(0, 3)) {
-      orConditions.push({
-        OR: [
-          { notes: { contains: skill, mode: 'insensitive' } },
-          { entreprise: { secteur: { contains: skill, mode: 'insensitive' } } },
-        ],
-      });
-    }
+  for (const skill of profile.key_skills.slice(0, 3)) {
+    orConditions.push({
+      OR: [
+        { notes: { contains: skill, mode: 'insensitive' } },
+        { entreprise: { secteur: { contains: skill, mode: 'insensitive' } } },
+      ],
+    });
+  }
+
+  // Also search by target roles in notes
+  for (const role of profile.target_roles.slice(0, 2)) {
+    orConditions.push({
+      notes: { contains: role, mode: 'insensitive' },
+    });
   }
 
   if (orConditions.length > 0) {
@@ -216,29 +250,32 @@ async function searchInternalProspects(
     orderBy: { updatedAt: 'desc' },
   });
 
-  return clients.map(c => ({
-    source: 'internal' as const,
-    company_name: c.entreprise?.nom || 'Inconnu',
-    company_sector: c.entreprise?.secteur || undefined,
-    company_city: c.entreprise?.localisation || undefined,
-    contact_name: `${c.prenom || ''} ${c.nom}`.trim(),
-    contact_email: c.email || undefined,
-    contact_title: c.poste || undefined,
-    client_id: c.id,
-    company_id: c.entreprise?.id || undefined,
-    relevance_score: 7,
-    signal: `Client ${c.statutClient} dans la base`,
-  }));
+  return clients.map(c => {
+    const hasEmail = !!c.email;
+    return {
+      source: 'internal' as const,
+      company_name: c.entreprise?.nom || 'Inconnu',
+      company_sector: c.entreprise?.secteur || undefined,
+      company_city: c.entreprise?.localisation || undefined,
+      contact_name: `${c.prenom || ''} ${c.nom}`.trim(),
+      contact_email: c.email || undefined,
+      contact_title: c.poste || undefined,
+      client_id: c.id,
+      company_id: c.entreprise?.id || undefined,
+      relevance_score: 7,
+      signal: `Client ${c.statutClient} dans la base`,
+      needs_enrich: !hasEmail,
+      enrich_cost: hasEmail ? 0 : 1,
+    };
+  });
 }
-
-// ─── 4. DETECT PROSPECTS VIA AI WEB SEARCH ─────────
 
 async function detectWebProspects(
   candidateId: string,
   userId: string,
   profile: CandidateProfile,
-  limit: number = 5,
-): Promise<ProspectProposal[]> {
+  limit: number,
+): Promise<Omit<ProspectProposal, 'index'>[]> {
   try {
     const result = await detectProspects(candidateId, userId, {
       sectors: profile.sectors,
@@ -256,7 +293,8 @@ async function detectWebProspects(
       approach_angle: p.approach_angle,
       relevance_score: p.relevance_score,
       contact_name: p.suggested_contacts?.[0]?.title || undefined,
-      linkedin_url: undefined,
+      needs_enrich: true,
+      enrich_cost: 1,
     }));
   } catch (error) {
     console.error('[AutoPush] Web prospect detection error:', error);
@@ -264,19 +302,112 @@ async function detectWebProspects(
   }
 }
 
-// ─── 5. ENRICH CONTACTS ────────────────────────────
+// ═══════════════════════════════════════════════════
+// STEP 1: SCAN — Find prospects (0 credits)
+// ═══════════════════════════════════════════════════
 
-async function enrichProspects(
+export async function scanProspects(
+  candidateId: string,
+  userId: string,
+  options: {
+    max_prospects?: number;
+    include_internal?: boolean;
+    include_web?: boolean;
+    // Recruiter-provided search criteria (override AI)
+    sectors?: string[];
+    locations?: string[];
+    company_sizes?: string[];
+    target_roles?: string[];
+  } = {},
+): Promise<ScanResult> {
+  const maxProspects = options.max_prospects || 10;
+  const includeInternal = options.include_internal !== false;
+  const includeWeb = options.include_web !== false;
+
+  // 1. Get candidate
+  const candidate = await getCandidateData(candidateId);
+  if (!candidate) throw new Error('Candidat non trouve');
+
+  // 2. Profile candidate (AI + recruiter overrides)
+  const profile = await profileCandidate(candidate, {
+    sectors: options.sectors,
+    locations: options.locations,
+    company_sizes: options.company_sizes,
+    target_roles: options.target_roles,
+  });
+
+  // 3. Search internal cold clients
+  let allProspects: Omit<ProspectProposal, 'index'>[] = [];
+  let internalCount = 0;
+  let webCount = 0;
+
+  if (includeInternal) {
+    const internal = await searchInternalProspects(profile, Math.ceil(maxProspects * 0.6));
+    allProspects.push(...internal);
+    internalCount = internal.length;
+    console.log(`[AutoPush] ${internal.length} internal prospects found`);
+  }
+
+  // 4. If not enough, detect via web
+  if (includeWeb && allProspects.length < maxProspects) {
+    const needed = maxProspects - allProspects.length;
+    const webProspects = await detectWebProspects(candidateId, userId, profile, needed);
+    allProspects.push(...webProspects);
+    webCount = webProspects.length;
+    console.log(`[AutoPush] ${webProspects.length} web prospects found`);
+  }
+
+  // Cap & index
+  const indexed: ProspectProposal[] = allProspects
+    .slice(0, maxProspects)
+    .map((p, i) => ({ ...p, index: i + 1 }));
+
+  // Compute summary
+  const alreadyHaveEmail = indexed.filter(p => !p.needs_enrich).length;
+  const needEnrich = indexed.filter(p => p.needs_enrich).length;
+
+  // Get credits balance
+  let creditsAvailable = 0;
+  try {
+    const { getCredits } = await import('../integrations/fullenrich.service.js');
+    creditsAvailable = await getCredits();
+  } catch {
+    creditsAvailable = -1;
+  }
+
+  return {
+    candidate,
+    profile,
+    prospects: indexed,
+    summary: {
+      total_found: indexed.length,
+      internal_count: internalCount,
+      web_count: webCount,
+      already_have_email: alreadyHaveEmail,
+      need_enrich: needEnrich,
+      enrich_cost_total: needEnrich, // 1 credit per contact
+    },
+    credits_available: creditsAvailable,
+  };
+}
+
+// ═══════════════════════════════════════════════════
+// STEP 2: ENRICH — Enrich selected prospects (costs credits)
+// ═══════════════════════════════════════════════════
+
+export async function enrichSelectedProspects(
+  candidateId: string,
   prospects: ProspectProposal[],
-): Promise<ProspectProposal[]> {
-  const enriched: ProspectProposal[] = [];
+): Promise<EnrichResult> {
+  const candidate = await getCandidateData(candidateId);
+  if (!candidate) throw new Error('Candidat non trouve');
+
+  let creditsUsed = 0;
+  let emailFoundCount = 0;
 
   for (const prospect of prospects) {
     // Skip if already has email
-    if (prospect.contact_email) {
-      enriched.push(prospect);
-      continue;
-    }
+    if (prospect.contact_email) continue;
 
     // Try to enrich if we have name + company
     if (prospect.contact_name && prospect.company_name) {
@@ -293,39 +424,71 @@ async function enrichProspects(
             linkedin_url: prospect.linkedin_url || undefined,
           }, ['email']);
 
+          creditsUsed++;
+
           if (result?.contact_info?.most_probable_work_email?.email) {
             prospect.contact_email = result.contact_info.most_probable_work_email.email;
+            emailFoundCount++;
           } else if (result?.contact_info?.most_probable_personal_email?.email) {
             prospect.contact_email = result.contact_info.most_probable_personal_email.email;
+            emailFoundCount++;
           }
 
           if (result?.profile?.employment?.current?.title) {
             prospect.contact_title = result.profile.employment.current.title;
           }
+          if (result?.profile?.full_name) {
+            prospect.contact_name = result.profile.full_name;
+          }
+
+          prospect.needs_enrich = false;
+          prospect.enrich_cost = 0;
         }
       } catch (error) {
         console.error(`[AutoPush] Enrich failed for ${prospect.contact_name}:`, error);
       }
     }
-
-    enriched.push(prospect);
   }
 
-  return enriched;
-}
+  // Generate personalized messages for all prospects
+  if (isAiConfigured()) {
+    const profile = await profileCandidate(candidate, {});
+    await generateMessages(candidate, profile, prospects);
+  } else {
+    // Fallback messages
+    for (const p of prospects) {
+      if (!p.suggested_message) {
+        p.suggested_message = `Bonjour${p.contact_name ? ' ' + p.contact_name.split(' ')[0] : ''},\n\nJe me permets de vous contacter car je pense avoir un profil qui pourrait vous interesser : ${candidate.name}, ${candidate.title || 'profil qualifie'}.\n\nSeriez-vous disponible pour un echange rapide ?`;
+      }
+    }
+  }
 
-// ─── 6. GENERATE PERSONALIZED MESSAGES ─────────────
+  // Get remaining credits
+  let creditsRemaining = 0;
+  try {
+    const { getCredits } = await import('../integrations/fullenrich.service.js');
+    creditsRemaining = await getCredits();
+  } catch {
+    creditsRemaining = -1;
+  }
+
+  return {
+    prospects,
+    credits_used: creditsUsed,
+    credits_remaining: creditsRemaining,
+    enriched_count: creditsUsed,
+    email_found_count: emailFoundCount,
+  };
+}
 
 async function generateMessages(
   candidate: AutoPushCandidate,
   profile: CandidateProfile,
   prospects: ProspectProposal[],
-): Promise<ProspectProposal[]> {
-  if (!isAiConfigured()) return prospects;
-
+): Promise<void> {
   try {
     const prospectList = prospects.map((p, i) =>
-      `${i + 1}. ${p.contact_name || 'DRH'} chez ${p.company_name} (${p.company_sector || 'secteur inconnu'}) — Signal: ${p.signal || 'aucun'}`
+      `${i + 1}. ${p.contact_name || 'DRH'} chez ${p.company_name} (${p.company_sector || 'secteur inconnu'}) — Signal: ${p.signal || 'aucun'}${p.approach_angle ? ' — Angle: ' + p.approach_angle : ''}`
     ).join('\n');
 
     const result = await callClaudeWithWebSearch({
@@ -359,105 +522,24 @@ Genere un message de push CV personnalise pour CHAQUE prospect.`,
       const parsed = JSON.parse(jsonMatch[0]);
       const messages: string[] = parsed.messages || [];
       prospects.forEach((p, i) => {
-        if (messages[i]) {
-          p.suggested_message = messages[i];
-        }
+        if (messages[i]) p.suggested_message = messages[i];
       });
     }
   } catch (error) {
     console.error('[AutoPush] Message generation error:', error);
   }
 
-  // Fallback messages for prospects without one
+  // Fallback for any missing
   for (const p of prospects) {
     if (!p.suggested_message) {
       p.suggested_message = `Bonjour${p.contact_name ? ' ' + p.contact_name.split(' ')[0] : ''},\n\nJe me permets de vous contacter car je pense avoir un profil qui pourrait vous interesser : ${candidate.name}, ${candidate.title || 'profil qualifie'}.\n\n${profile.pitch_summary}\n\nSeriez-vous disponible pour un echange rapide ?`;
     }
   }
-
-  return prospects;
 }
 
-// ─── MAIN: PREPARE PROPOSAL ────────────────────────
-
-export async function prepareAutoPush(
-  candidateId: string,
-  userId: string,
-  options: {
-    max_prospects?: number;
-    include_internal?: boolean;
-    include_web?: boolean;
-    enrich_contacts?: boolean;
-    sectors?: string[];
-    locations?: string[];
-  } = {},
-): Promise<AutoPushProposal> {
-  const maxProspects = options.max_prospects || 8;
-  const includeInternal = options.include_internal !== false;
-  const includeWeb = options.include_web !== false;
-  const enrichContacts = options.enrich_contacts !== false;
-
-  // 1. Get candidate
-  const candidate = await getCandidateData(candidateId);
-  if (!candidate) throw new Error('Candidat non trouve');
-
-  // 2. Profile candidate
-  const profile = await profileCandidate(candidate);
-
-  // Override with user-specified sectors/locations
-  if (options.sectors?.length) profile.sectors = options.sectors;
-  if (options.locations?.length) profile.geo = options.locations;
-
-  // 3. Search internal cold clients
-  let allProspects: ProspectProposal[] = [];
-
-  if (includeInternal) {
-    const internal = await searchInternalProspects(profile, Math.ceil(maxProspects / 2));
-    allProspects.push(...internal);
-    console.log(`[AutoPush] ${internal.length} internal prospects found`);
-  }
-
-  // 4. If not enough, detect via web
-  if (includeWeb && allProspects.length < maxProspects) {
-    const needed = maxProspects - allProspects.length;
-    const webProspects = await detectWebProspects(candidateId, userId, profile, needed);
-    allProspects.push(...webProspects);
-    console.log(`[AutoPush] ${webProspects.length} web prospects found`);
-  }
-
-  // Cap at max
-  allProspects = allProspects.slice(0, maxProspects);
-
-  // 5. Enrich contacts (find emails)
-  let creditsNeeded = 0;
-  if (enrichContacts) {
-    const needsEnrich = allProspects.filter(p => !p.contact_email && p.contact_name).length;
-    creditsNeeded = needsEnrich; // 1 credit per email enrichment
-    allProspects = await enrichProspects(allProspects);
-  }
-
-  // 6. Generate personalized messages
-  allProspects = await generateMessages(candidate, profile, allProspects);
-
-  // Get credits
-  let creditsAvailable = 0;
-  try {
-    const { getCredits } = await import('../integrations/fullenrich.service.js');
-    creditsAvailable = await getCredits();
-  } catch {
-    creditsAvailable = -1; // Unknown
-  }
-
-  return {
-    candidate,
-    profile,
-    prospects: allProspects,
-    credits_needed: creditsNeeded,
-    credits_available: creditsAvailable,
-  };
-}
-
-// ─── MAIN: EXECUTE PUSHES ──────────────────────────
+// ═══════════════════════════════════════════════════
+// STEP 3: EXECUTE — Send pushes (0 credits)
+// ═══════════════════════════════════════════════════
 
 export async function executeAutoPush(
   candidateId: string,
@@ -470,8 +552,8 @@ export async function executeAutoPush(
     client_id?: string;
     canal?: 'EMAIL' | 'LINKEDIN';
   }>,
-): Promise<AutoPushExecuteResult> {
-  const results: AutoPushExecuteResult = {
+): Promise<ExecuteResult> {
+  const results: ExecuteResult = {
     pushes_created: 0,
     sequences_started: 0,
     prospects_created: 0,
@@ -500,6 +582,7 @@ export async function executeAutoPush(
       results.details.push({
         company: prospect.company_name,
         contact: prospect.contact_name || 'N/A',
+        email: prospect.contact_email || null,
         push_id: pushResult.push_id,
         sequence_run_id: pushResult.sequence_run_id || undefined,
       });

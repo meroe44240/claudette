@@ -61,8 +61,9 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   create_push:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   update_push_status:            { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
-  // ═══ AUTO-PUSH ═══
-  auto_push_prepare:             { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  // ═══ AUTO-PUSH (3-step flow) ═══
+  auto_push_scan:                { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  auto_push_enrich:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   auto_push_execute:             { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
   // ═══ ENRICHISSEMENT ═══
