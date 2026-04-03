@@ -58,7 +58,8 @@ export interface EnrichResult {
  * Start a bulk enrichment (1 or more contacts).
  * Returns the enrichment_id to poll.
  */
-export async function startEnrichment(contacts: EnrichInput[]): Promise<string> {
+export async function startEnrichment(contacts: EnrichInput[], enrichFields?: string[]): Promise<string> {
+  const fields = enrichFields || ['contact.emails', 'contact.phones', 'contact.personal_emails'];
   const res = await fetch(`${BASE_URL}/contact/enrich/bulk`, {
     method: 'POST',
     headers: headers(),
@@ -66,7 +67,7 @@ export async function startEnrichment(contacts: EnrichInput[]): Promise<string> 
       name: `MCP enrichment ${new Date().toISOString()}`,
       data: contacts.map((c) => ({
         ...c,
-        enrich_fields: ['contact.emails', 'contact.phones', 'contact.personal_emails'],
+        enrich_fields: fields,
       })),
     }),
   });
@@ -110,8 +111,8 @@ export async function getEnrichmentResults(enrichmentId: string, maxRetries = 10
 /**
  * Enrich a single contact and wait for results.
  */
-export async function enrichContact(input: EnrichInput): Promise<EnrichResult | null> {
-  const enrichmentId = await startEnrichment([input]);
+export async function enrichContact(input: EnrichInput, enrichFields?: string[]): Promise<EnrichResult | null> {
+  const enrichmentId = await startEnrichment([input], enrichFields);
   const results = await getEnrichmentResults(enrichmentId);
   return results[0] || null;
 }

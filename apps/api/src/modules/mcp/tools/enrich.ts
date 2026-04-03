@@ -8,8 +8,9 @@ export function registerEnrichTools(server: McpServer) {
   // ─── enrich_contact ───────────────────────────────
   server.tool(
     'enrich_contact',
-    "[CONFIRMATION REQUISE] Enrichit un candidat ou client via FullEnrich : trouve email pro, email perso, telephone, profil LinkedIn. Fournir un LinkedIn OU nom+prenom+entreprise. Peut mettre a jour la fiche automatiquement. Coute des credits FullEnrich.",
+    "[CONFIRMATION REQUISE] Enrichit un candidat ou client via FullEnrich. IMPORTANT : tu DOIS d'abord demander au recruteur s'il veut recuperer un EMAIL, un NUMERO DE TELEPHONE, ou LES DEUX avant d'appeler cet outil. Couts : email = 1 credit, telephone = 10 credits, les deux = 11 credits.",
     {
+      enrich_type: z.enum(['email', 'phone', 'both']).describe("Que chercher : 'email' (1 credit), 'phone' (10 credits), ou 'both' (11 credits). Tu DOIS demander au recruteur avant de choisir."),
       candidate_id: z.string().optional().describe("UUID du candidat a enrichir (remplit auto nom/prenom/entreprise depuis la fiche)"),
       client_id: z.string().optional().describe("UUID du client a enrichir"),
       linkedin_url: z.string().optional().describe('URL LinkedIn du contact (methode la plus fiable)'),
@@ -65,8 +66,18 @@ export function registerEnrichTools(server: McpServer) {
         return { error: "Pas assez d'informations. Fournir un URL LinkedIn OU nom+prenom+entreprise." };
       }
 
+      // Build enrich_fields based on enrich_type
+      const enrichType = args.enrich_type as string;
+      const enrichFields: string[] = [];
+      if (enrichType === 'email' || enrichType === 'both') {
+        enrichFields.push('contact.emails', 'contact.personal_emails');
+      }
+      if (enrichType === 'phone' || enrichType === 'both') {
+        enrichFields.push('contact.phones');
+      }
+
       // Run enrichment
-      const result = await fullenrich.enrichContact(input);
+      const result = await fullenrich.enrichContact(input, enrichFields);
       if (!result) return { error: "Aucun resultat d'enrichissement" };
 
       const ci = result.contact_info;
