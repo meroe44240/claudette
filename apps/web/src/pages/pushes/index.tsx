@@ -61,10 +61,10 @@ interface DashboardStats {
 // ─── CONSTANTS ──────────────────────────────────────────
 
 const STATUS_CONFIG: Record<PushStatus, { label: string; bg: string; text: string; dot: string }> = {
-  ENVOYE:          { label: 'Envoy\u00e9',        bg: 'bg-blue-50 dark:bg-blue-900/30',    text: 'text-blue-700 dark:text-blue-300',    dot: 'bg-blue-500' },
+  ENVOYE:          { label: 'Envoyé',        bg: 'bg-blue-50 dark:bg-blue-900/30',    text: 'text-blue-700 dark:text-blue-300',    dot: 'bg-blue-500' },
   OUVERT:          { label: 'Ouvert',          bg: 'bg-yellow-50 dark:bg-yellow-900/30', text: 'text-yellow-700 dark:text-yellow-300', dot: 'bg-yellow-500' },
-  REPONDU:         { label: 'R\u00e9pondu',       bg: 'bg-green-50 dark:bg-green-900/30',   text: 'text-green-700 dark:text-green-300',   dot: 'bg-green-500' },
-  RDV_BOOK:        { label: 'RDV book\u00e9',     bg: 'bg-purple-50 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-300', dot: 'bg-purple-500' },
+  REPONDU:         { label: 'Répondu',       bg: 'bg-green-50 dark:bg-green-900/30',   text: 'text-green-700 dark:text-green-300',   dot: 'bg-green-500' },
+  RDV_BOOK:        { label: 'RDV booké',     bg: 'bg-purple-50 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-300', dot: 'bg-purple-500' },
   CONVERTI_MANDAT: { label: 'Converti',        bg: 'bg-emerald-50 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-600' },
   SANS_SUITE:      { label: 'Sans suite',      bg: 'bg-gray-50 dark:bg-gray-800',       text: 'text-gray-500 dark:text-gray-400',     dot: 'bg-gray-400' },
 };
@@ -77,10 +77,10 @@ const CANAL_OPTIONS: { value: PushCanal | ''; label: string }[] = [
 
 const STATUS_OPTIONS: { value: PushStatus | ''; label: string }[] = [
   { value: '', label: 'Tous les statuts' },
-  { value: 'ENVOYE', label: 'Envoy\u00e9' },
+  { value: 'ENVOYE', label: 'Envoyé' },
   { value: 'OUVERT', label: 'Ouvert' },
-  { value: 'REPONDU', label: 'R\u00e9pondu' },
-  { value: 'RDV_BOOK', label: 'RDV book\u00e9' },
+  { value: 'REPONDU', label: 'Répondu' },
+  { value: 'RDV_BOOK', label: 'RDV booké' },
   { value: 'CONVERTI_MANDAT', label: 'Converti' },
   { value: 'SANS_SUITE', label: 'Sans suite' },
 ];
@@ -197,7 +197,7 @@ export default function PushCVDashboard() {
             Push CV
           </span>
         }
-        subtitle="Historique et statistiques des push CV envoy\u00e9s aux prospects"
+        subtitle="Historique et statistiques des push CV envoyés aux prospects"
         breadcrumbs={[
           { label: 'Accueil', href: '/' },
           { label: 'Push CV' },
@@ -239,21 +239,21 @@ export default function PushCVDashboard() {
         transition={{ delay: 0.05 }}
       >
         <StatCard
-          label="Total envoy\u00e9s"
+          label="Total envoyés"
           value={stats?.totals.envoyes ?? 0}
           icon={<Send size={20} />}
           color="blue"
           loading={loadingStats}
         />
         <StatCard
-          label="R\u00e9ponses"
+          label="Réponses"
           value={stats?.totals.reponses ?? 0}
           icon={<MessageSquare size={20} />}
           color="green"
           loading={loadingStats}
         />
         <StatCard
-          label="RDV book\u00e9s"
+          label="RDV bookés"
           value={stats?.totals.rdv_bookes ?? 0}
           icon={<Calendar size={20} />}
           color="purple"
@@ -411,7 +411,7 @@ export default function PushCVDashboard() {
               ) : pushes.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-neutral-400">
-                    Aucun push trouv\u00e9
+                    Aucun push trouvé
                   </td>
                 </tr>
               ) : (
@@ -468,7 +468,7 @@ export default function PushCVDashboard() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 dark:border-neutral-700">
             <span className="text-xs text-neutral-500 dark:text-neutral-400">
-              Page {history?.page ?? 1} sur {totalPages} ({history?.total ?? 0} r\u00e9sultats)
+              Page {history?.page ?? 1} sur {totalPages} ({history?.total ?? 0} résultats)
             </span>
             <div className="flex items-center gap-1">
               <button
@@ -476,7 +476,7 @@ export default function PushCVDashboard() {
                 disabled={page <= 1}
                 className="px-3 py-1.5 text-xs font-medium rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-gray-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                Pr\u00e9c\u00e9dent
+                Précédent
               </button>
               {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
                 const start = Math.max(1, Math.min(page - 2, totalPages - 4));
