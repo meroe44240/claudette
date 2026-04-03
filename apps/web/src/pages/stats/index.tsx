@@ -1076,10 +1076,10 @@ export default function StatsPage() {
   // Fetch push stats
   const { data: pushStats } = useQuery({
     queryKey: ['push-stats', period],
-    queryFn: async () => {
-      const res = await api.get<{ data: { totals: { envoyes: number; reponses: number; rdv_bookes: number; taux_conversion: number }; conversion_funnel: { stage: string; count: number; percentage: number }[] } }>(`/pushes/stats/dashboard?period=${period}`);
-      return res.data;
-    },
+    queryFn: () => api.get<{
+      totals: { sent: number; opened: number; responded: number; rdv_booked: number; converted: number; sans_suite: number };
+      conversion_funnel: { opened_pct: number; responded_pct: number; rdv_booked_pct: number; converted_pct: number };
+    }>(`/pushes/stats/dashboard?period=${period}`),
   });
 
   // Selected user name (for header)
@@ -1297,10 +1297,10 @@ export default function StatsPage() {
               <SectionTitle>Push CV</SectionTitle>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 {[
-                  { label: 'Total envoyés', value: pushStats.totals.envoyes, color: COLORS.activityBlue },
-                  { label: 'Réponses', value: pushStats.totals.reponses, color: COLORS.commercialTeal },
-                  { label: 'RDV bookés', value: pushStats.totals.rdv_bookes, color: COLORS.pipelineViolet },
-                  { label: 'Taux conversion', value: `${pushStats.totals.taux_conversion}%`, color: COLORS.revenueGreen },
+                  { label: 'Total envoyés', value: pushStats.totals.sent, color: COLORS.activityBlue },
+                  { label: 'Réponses', value: pushStats.totals.responded, color: COLORS.commercialTeal },
+                  { label: 'RDV bookés', value: pushStats.totals.rdv_booked, color: COLORS.pipelineViolet },
+                  { label: 'Taux conversion', value: pushStats.totals.sent > 0 ? `${Math.round((pushStats.totals.converted / pushStats.totals.sent) * 100)}%` : '0%', color: COLORS.revenueGreen },
                 ].map((item, i) => (
                   <motion.div key={item.label} variants={fadeUp} custom={i}>
                     <Card>
@@ -1316,24 +1316,29 @@ export default function StatsPage() {
                 ))}
               </div>
 
-              {pushStats.conversion_funnel && pushStats.conversion_funnel.length > 0 && (
+              {pushStats.conversion_funnel && (
                 <motion.div variants={fadeUp} custom={4}>
                   <Card>
                     <h3 className="text-[13px] font-semibold text-neutral-700 mb-4">Funnel de conversion</h3>
                     <div className="space-y-3">
-                      {pushStats.conversion_funnel.map((step) => (
-                        <div key={step.stage}>
+                      {[
+                        { label: 'Ouverts', count: pushStats.totals.opened, pct: pushStats.conversion_funnel.opened_pct },
+                        { label: 'Répondus', count: pushStats.totals.responded, pct: pushStats.conversion_funnel.responded_pct },
+                        { label: 'RDV bookés', count: pushStats.totals.rdv_booked, pct: pushStats.conversion_funnel.rdv_booked_pct },
+                        { label: 'Convertis', count: pushStats.totals.converted, pct: pushStats.conversion_funnel.converted_pct },
+                      ].map((step) => (
+                        <div key={step.label}>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[12px] font-medium text-neutral-600">{step.stage}</span>
+                            <span className="text-[12px] font-medium text-neutral-600">{step.label}</span>
                             <span className="text-[12px] font-semibold text-neutral-800">
-                              {step.count} ({step.percentage}%)
+                              {step.count} ({step.pct}%)
                             </span>
                           </div>
                           <div className="h-2 rounded-full bg-neutral-100 overflow-hidden">
                             <div
                               className="h-full rounded-full transition-all duration-500"
                               style={{
-                                width: `${step.percentage}%`,
+                                width: `${Math.max(step.pct, 2)}%`,
                                 backgroundColor: COLORS.pipelineViolet,
                               }}
                             />

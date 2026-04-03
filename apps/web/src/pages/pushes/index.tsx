@@ -20,57 +20,61 @@ type Period = 'week' | 'month' | 'quarter';
 
 interface PushRecord {
   id: string;
-  createdAt: string;
-  candidat: { id: string; prenom: string; nom: string } | null;
-  prospect: { id: string; nom: string; prenom: string | null; entreprise?: string } | null;
-  entreprise: { id: string; nom: string } | null;
-  contactEmail: string | null;
+  sentAt: string;
+  candidat: { nom: string; prenom: string | null; posteActuel: string | null };
+  prospect: { companyName: string; contactName: string | null; contactEmail: string | null };
+  recruiter: { nom: string; prenom: string | null };
   canal: PushCanal;
-  statut: PushStatus;
-  message: string | null;
+  status: PushStatus;
+  message_preview: string | null;
 }
 
 interface PushHistoryResponse {
-  data: PushRecord[];
-  total: number;
-  page: number;
-  limit: number;
-  pages: number;
+  pushes: PushRecord[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    total_pages: number;
+  };
 }
 
 interface PushDetail {
   id: string;
-  candidat: { id: string; nom: string; prenom: string; posteActuel: string; email: string; telephone: string } | null;
-  prospect: { id: string; companyName: string; contactName: string; contactEmail: string; contactLinkedin: string; sector: string } | null;
-  recruiter: { id: string; nom: string; prenom: string } | null;
+  candidat: { id: string; nom: string; prenom: string | null; posteActuel: string | null; email: string | null; telephone: string | null };
+  prospect: { id: string; companyName: string; contactName: string | null; contactEmail: string | null; contactLinkedin: string | null; sector: string | null };
+  recruiter: { id: string; nom: string; prenom: string | null };
   canal: PushCanal;
   status: PushStatus;
   message: string | null;
-  sentAt: string | null;
+  sentAt: string;
   gmailSentAt: string | null;
+  gmailThreadId: string | null;
+  gmailMessageId: string | null;
   sequenceRun: { id: string; status: string; currentStep: number; startedAt: string } | null;
-  activities: { id: string; type: string; description: string; createdAt: string }[];
+  activities: { id: string; type: string; titre: string | null; isTache: boolean; tacheCompleted: boolean; tacheDueDate: string | null; source: string; createdAt: string }[];
   createdAt: string;
-}
-
-interface FunnelStep {
-  stage: string;
-  count: number;
-  percentage: number;
 }
 
 interface DashboardStats {
   totals: {
-    envoyes: number;
-    reponses: number;
-    rdv_bookes: number;
-    taux_conversion: number;
+    sent: number;
+    opened: number;
+    responded: number;
+    rdv_booked: number;
+    converted: number;
+    sans_suite: number;
   };
-  conversion_funnel: FunnelStep[];
-  by_canal: { canal: string; count: number }[];
-  by_recruiter: { id: string; nom: string; count: number }[];
+  conversion_funnel: {
+    opened_pct: number;
+    responded_pct: number;
+    rdv_booked_pct: number;
+    converted_pct: number;
+  };
+  by_canal: Record<string, number>;
+  by_recruiter: { id: string; name: string; sent: number; responded: number; converted: number }[];
   timeline: { date: string; count: number }[];
-  top_prospects: { nom: string; entreprise: string; pushes: number }[];
+  top_prospects: { id: string; name: string; company: string; total: number; responded: number; response_rate: number }[];
   avg_response_time_hours: number | null;
 }
 
@@ -217,8 +221,8 @@ export default function PushCVDashboard() {
   };
 
   // ── Derived
-  const pushes = history?.data ?? [];
-  const totalPages = history?.pages ?? 1;
+  const pushes = history?.pushes ?? [];
+  const totalPages = history?.pagination?.total_pages ?? 1;
 
   // ────────────────────────────────────────────────────────
   //  RENDER
@@ -276,28 +280,28 @@ export default function PushCVDashboard() {
       >
         <StatCard
           label="Total envoyés"
-          value={stats?.totals.envoyes ?? 0}
+          value={stats?.totals.sent ?? 0}
           icon={<Send size={20} />}
           color="blue"
           loading={loadingStats}
         />
         <StatCard
           label="Réponses"
-          value={stats?.totals.reponses ?? 0}
+          value={stats?.totals.responded ?? 0}
           icon={<MessageSquare size={20} />}
           color="green"
           loading={loadingStats}
         />
         <StatCard
           label="RDV bookés"
-          value={stats?.totals.rdv_bookes ?? 0}
+          value={stats?.totals.rdv_booked ?? 0}
           icon={<Calendar size={20} />}
           color="purple"
           loading={loadingStats}
         />
         <StatCard
           label="Taux conversion"
-          value={stats?.totals.taux_conversion != null ? `${stats.totals.taux_conversion.toFixed(1)}%` : '0%'}
+          value={stats?.totals.sent ? `${((stats.totals.converted / stats.totals.sent) * 100).toFixed(1)}%` : '0%'}
           icon={<TrendingUp size={20} />}
           color="emerald"
           loading={loadingStats}
@@ -305,7 +309,7 @@ export default function PushCVDashboard() {
       </motion.div>
 
       {/* ── CONVERSION FUNNEL ────────────────────────────── */}
-      {stats?.conversion_funnel && stats.conversion_funnel.length > 0 && (
+      {stats?.conversion_funnel && stats.totals.sent > 0 && (
         <motion.div
           className="mb-8 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-gray-800 shadow-sm p-6"
           initial={{ opacity: 0, y: 16 }}
@@ -317,37 +321,36 @@ export default function PushCVDashboard() {
             Funnel de conversion
           </h3>
           <div className="flex items-end gap-2">
-            {stats.conversion_funnel.map((step, i) => {
-              const maxCount = stats.conversion_funnel[0]?.count || 1;
-              const widthPct = Math.max((step.count / maxCount) * 100, 8);
-              return (
-                <div key={step.stage} className="flex-1 flex flex-col items-center gap-2">
-                  <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">{step.count}</span>
-                  <div className="w-full flex justify-center">
-                    <motion.div
-                      className="rounded-t-md"
-                      style={{
-                        backgroundColor: FUNNEL_COLORS[i] ?? '#6B7280',
-                        width: `${widthPct}%`,
-                        minWidth: 24,
-                      }}
-                      initial={{ height: 0 }}
-                      animate={{ height: 80 + (4 - i) * 16 }}
-                      transition={{ delay: 0.15 + i * 0.05, type: 'spring', stiffness: 200, damping: 20 }}
-                    />
-                  </div>
-                  <div className="text-center">
-                    <span className="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400">
-                      {STATUS_CONFIG[step.stage as PushStatus]?.label ?? step.stage}
-                    </span>
-                    <span className="block text-[10px] text-neutral-400">{step.percentage.toFixed(1)}%</span>
-                  </div>
-                  {i < stats.conversion_funnel.length - 1 && (
-                    <ArrowRight size={12} className="text-neutral-300 absolute" style={{ display: 'none' }} />
-                  )}
+            {[
+              { label: 'Envoyés', count: stats.totals.sent, pct: 100 },
+              { label: 'Ouverts', count: stats.totals.opened, pct: stats.conversion_funnel.opened_pct },
+              { label: 'Répondus', count: stats.totals.responded, pct: stats.conversion_funnel.responded_pct },
+              { label: 'RDV bookés', count: stats.totals.rdv_booked, pct: stats.conversion_funnel.rdv_booked_pct },
+              { label: 'Convertis', count: stats.totals.converted, pct: stats.conversion_funnel.converted_pct },
+            ].map((step, i) => (
+              <div key={step.label} className="flex-1 flex flex-col items-center gap-2">
+                <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">{step.count}</span>
+                <div className="w-full flex justify-center">
+                  <motion.div
+                    className="rounded-t-md"
+                    style={{
+                      backgroundColor: FUNNEL_COLORS[i] ?? '#6B7280',
+                      width: `${Math.max(step.pct, 8)}%`,
+                      minWidth: 24,
+                    }}
+                    initial={{ height: 0 }}
+                    animate={{ height: 80 + (4 - i) * 16 }}
+                    transition={{ delay: 0.15 + i * 0.05, type: 'spring', stiffness: 200, damping: 20 }}
+                  />
                 </div>
-              );
-            })}
+                <div className="text-center">
+                  <span className="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400">
+                    {step.label}
+                  </span>
+                  <span className="block text-[10px] text-neutral-400">{step.pct}%</span>
+                </div>
+              </div>
+            ))}
           </div>
         </motion.div>
       )}
@@ -461,23 +464,23 @@ export default function PushCVDashboard() {
                     onClick={() => setSelectedPushId(push.id)}
                   >
                     <td className="px-4 py-3 text-neutral-600 dark:text-neutral-300 whitespace-nowrap">
-                      {format(new Date(push.createdAt), 'dd MMM yyyy', { locale: fr })}
+                      {format(new Date(push.sentAt), 'dd MMM yyyy', { locale: fr })}
                     </td>
                     <td className="px-4 py-3 font-medium text-neutral-800 dark:text-neutral-200">
-                      {push.candidat ? `${push.candidat.prenom} ${push.candidat.nom}` : '-'}
+                      {push.candidat ? `${push.candidat.prenom ?? ''} ${push.candidat.nom}`.trim() : '-'}
                     </td>
                     <td className="px-4 py-3 text-neutral-600 dark:text-neutral-300">
                       <div>
-                        {push.prospect ? `${push.prospect.prenom ?? ''} ${push.prospect.nom}`.trim() : '-'}
+                        {push.prospect?.contactName ?? '-'}
                       </div>
-                      {(push.entreprise?.nom || push.prospect?.entreprise) && (
+                      {push.prospect?.companyName && (
                         <div className="text-xs text-neutral-400">
-                          {push.entreprise?.nom ?? push.prospect?.entreprise}
+                          {push.prospect.companyName}
                         </div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-neutral-500 dark:text-neutral-400 text-xs">
-                      {push.contactEmail ?? '-'}
+                      {push.prospect?.contactEmail ?? '-'}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1 text-xs font-medium ${
@@ -489,10 +492,10 @@ export default function PushCVDashboard() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={push.statut} />
+                      <StatusBadge status={push.status} />
                     </td>
                     <td className="px-4 py-3 text-neutral-500 dark:text-neutral-400 max-w-[200px] truncate text-xs">
-                      {push.message ? (push.message.length > 60 ? push.message.slice(0, 60) + '...' : push.message) : '-'}
+                      {push.message_preview ?? '-'}
                     </td>
                   </motion.tr>
                 ))
@@ -505,7 +508,7 @@ export default function PushCVDashboard() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100 dark:border-neutral-700">
             <span className="text-xs text-neutral-500 dark:text-neutral-400">
-              Page {history?.page ?? 1} sur {totalPages} ({history?.total ?? 0} résultats)
+              Page {history?.pagination?.page ?? 1} sur {totalPages} ({history?.pagination?.total ?? 0} résultats)
             </span>
             <div className="flex items-center gap-1">
               <button
@@ -778,7 +781,7 @@ export default function PushCVDashboard() {
                                 </span>
                               </div>
                               <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                                {act.description}
+                                {act.titre ?? act.type}
                               </p>
                             </div>
                           ))}
