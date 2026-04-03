@@ -42,6 +42,7 @@ export async function upsertProspect(data: {
   contactEmail?: string;
   contactLinkedin?: string;
   sector?: string;
+  recruiterId?: string;
 }) {
   // If id provided, return existing
   if (data.id) {
@@ -62,8 +63,8 @@ export async function upsertProspect(data: {
     if (existing) return existing;
   }
 
-  // Create new
-  return prisma.prospect.create({
+  // Create new prospect
+  const prospect = await prisma.prospect.create({
     data: {
       companyName: data.companyName,
       contactName: data.contactName,
@@ -72,6 +73,83 @@ export async function upsertProspect(data: {
       sector: data.sector,
     },
   });
+
+  // ── Also sync to CRM: create Entreprise + Client if they don't exist ──
+  try {
+    await syncProspectToCRM(data, data.recruiterId);
+  } catch (err) {
+    console.error('[Push] CRM sync error (non-blocking):', err);
+  }
+
+  return prospect;
+}
+
+/**
+ * Sync a prospect to the CRM by creating/finding Entreprise + Client.
+ * Non-blocking — errors here don't prevent the push from being created.
+ */
+async function syncProspectToCRM(
+  data: { companyName: string; contactName?: string; contactEmail?: string; contactLinkedin?: string; sector?: string },
+  recruiterId?: string,
+) {
+  if (!data.companyName) return;
+
+  // 1. Find or create Entreprise
+  let entreprise = await prisma.entreprise.findFirst({
+    where: { nom: { equals: data.companyName, mode: 'insensitive' } },
+  });
+
+  if (!entreprise) {
+    entreprise = await prisma.entreprise.create({
+      data: {
+        nom: data.companyName,
+        secteur: data.sector || null,
+        createdById: recruiterId || null,
+      },
+    });
+    console.log(`[Push→CRM] Entreprise creee: ${entreprise.nom} (${entreprise.id})`);
+  }
+
+  // 2. Find or create Client (contact) if we have a name
+  if (data.contactName) {
+    const nameParts = data.contactName.split(' ');
+    const prenom = nameParts[0] || '';
+    const nom = nameParts.slice(1).join(' ') || data.contactName;
+
+    // Check if client already exists (by email or name+entreprise)
+    let existingClient = null;
+    if (data.contactEmail) {
+      existingClient = await prisma.client.findFirst({
+        where: { email: data.contactEmail },
+      });
+    }
+    if (!existingClient) {
+      existingClient = await prisma.client.findFirst({
+        where: {
+          nom: { equals: nom, mode: 'insensitive' },
+          prenom: { equals: prenom, mode: 'insensitive' },
+          entrepriseId: entreprise.id,
+        },
+      });
+    }
+
+    if (!existingClient) {
+      const client = await prisma.client.create({
+        data: {
+          nom,
+          prenom,
+          email: data.contactEmail || null,
+          linkedinUrl: data.contactLinkedin || null,
+          entrepriseId: entreprise.id,
+          statutClient: 'LEAD',
+          typeClient: 'OUTBOUND',
+          createdById: recruiterId || null,
+          assignedToId: recruiterId || null,
+        },
+      });
+      console.log(`[Push→CRM] Client cree: ${prenom} ${nom} @ ${entreprise.nom} (${client.id})`);
+    }
+  }
 }
 
 // ─── CREATE FOLLOW-UP TASKS ────────────────────────
@@ -126,7 +204,7 @@ export async function createPush(data: {
   gmailThreadId?: string;
   gmailMessageId?: string;
 }) {
-  const prospect = await upsertProspect(data.prospect);
+  const prospect = await upsertProspect({ ...data.prospect, recruiterId: data.recruiterId });
 
   const push = await prisma.push.create({
     data: {
