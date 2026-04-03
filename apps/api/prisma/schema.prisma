@@ -1103,9 +1103,9 @@ model Push {
   status          PushStatus @default(ENVOYE)
   message         String?    @db.Text
   sentAt          DateTime   @default(now()) @db.Timestamptz()
-  gmailSentAt     DateTime?  @db.Timestamptz()
-  gmailThreadId   String?    @db.VarChar(100)
-  gmailMessageId  String?    @db.VarChar(100)
+  gmailSentAt     DateTime?  @map("gmail_sent_at") @db.Timestamptz()
+  gmailThreadId   String?    @map("gmail_thread_id") @db.VarChar(100)
+  gmailMessageId  String?    @map("gmail_message_id") @db.VarChar(100)
   updatedAt       DateTime   @updatedAt @db.Timestamptz()
 
   @@index([recruiterId, sentAt])
