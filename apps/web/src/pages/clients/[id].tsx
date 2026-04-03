@@ -2,8 +2,10 @@ import { useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Mail, Phone, Linkedin, Building2, Briefcase, Calendar, Send, Pencil, Trash2, Save, X, UserPlus, Bot, Link2, Check, CalendarPlus, Copy, ChevronDown, User, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Linkedin, Building2, Briefcase, Calendar, Send, Pencil, Trash2, Save, X, UserPlus, Bot, Link2, Check, CalendarPlus, Copy, ChevronDown, User, RefreshCw, Rocket } from 'lucide-react';
 import { Link } from 'react-router';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
 import { usePageTitle } from '../../hooks/usePageTitle';
@@ -34,6 +36,16 @@ type StatutClient =
   | 'RECURRENT'
   | 'INACTIF';
 type TypeClient = 'INBOUND' | 'OUTBOUND' | 'RESEAU' | 'CLIENT_ACTIF' | 'RECURRENT';
+
+interface PushCV {
+  id: string;
+  candidat: { id: string; nom: string; prenom: string; posteActuel: string };
+  prospect: { companyName: string; contactName: string };
+  recruiter: string;
+  canal: string;
+  status: string;
+  sentAt: string;
+}
 
 interface Mandat {
   id: string;
@@ -228,6 +240,12 @@ export default function ClientDetailPage() {
   });
 
   usePageTitle(client ? `${client.prenom || ''} ${client.nom}`.trim() : 'Client');
+
+  const { data: pushes } = useQuery({
+    queryKey: ['pushes-client', client?.id],
+    queryFn: () => api.get<PushCV[]>(`/pushes/by-client-email/${encodeURIComponent(client!.email!)}`),
+    enabled: !!client?.email,
+  });
 
   const completenessFields = useMemo(() => {
     if (!client) return [];
@@ -778,6 +796,58 @@ export default function ClientDetailPage() {
           </Card>
         </motion.div>
       </motion.div>
+
+      {/* Push CV reçus */}
+      <div className="mt-8">
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <Rocket className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Push CV reçus</h3>
+          </div>
+          {pushes && pushes.length > 0 ? (
+            <div className="divide-y divide-border">
+              {pushes.map((push) => {
+                const statusColors: Record<string, string> = {
+                  ENVOYE: 'bg-blue-100 text-blue-800',
+                  OUVERT: 'bg-yellow-100 text-yellow-800',
+                  REPONDU: 'bg-green-100 text-green-800',
+                  RDV_BOOK: 'bg-purple-100 text-purple-800',
+                  CONVERTI_MANDAT: 'bg-emerald-100 text-emerald-800',
+                  SANS_SUITE: 'bg-gray-100 text-gray-800',
+                };
+                return (
+                  <div key={push.id} className="flex items-center justify-between py-3">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <p className="text-sm font-medium">
+                          {push.candidat.prenom} {push.candidat.nom}
+                          {push.candidat.posteActuel && (
+                            <span className="text-text-secondary font-normal"> — {push.candidat.posteActuel}</span>
+                          )}
+                        </p>
+                        <p className="text-xs text-text-secondary">{push.prospect.companyName}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700">
+                        {push.canal}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[push.status] || 'bg-gray-100 text-gray-800'}`}>
+                        {push.status}
+                      </span>
+                      <span className="text-xs text-text-secondary">
+                        {format(new Date(push.sentAt), 'dd MMM yyyy', { locale: fr })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-text-secondary">Aucun push CV reçu</p>
+          )}
+        </Card>
+      </div>
 
       <div className="mt-8">
         <ActivityJournal entiteType="CLIENT" entiteId={client.id} />

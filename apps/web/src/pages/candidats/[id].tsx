@@ -6,7 +6,7 @@ import {
   ArrowLeft, Mail, Phone, MapPin, Linkedin, Briefcase, Building2,
   Calendar, Send, Pencil, Trash2, Save, X, FileText, Loader2,
   Upload, Copy, Check, Sparkles, ChevronDown, ChevronUp, Bot,
-  Link2, CalendarPlus, Search, Plus, User, Download, Eye,
+  Link2, CalendarPlus, Search, Plus, User, Download, Eye, Rocket,
 } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
@@ -264,6 +264,12 @@ export default function CandidatDetailPage() {
     queryKey: ['mandats', 'open-for-add'],
     queryFn: () => api.get<{ data: { id: string; titrePoste: string; entreprise: { nom: string } }[]; meta: any }>('/mandats?statut=OUVERT&perPage=200&scope=all'),
     staleTime: 60_000,
+  });
+
+  const { data: pushes, isLoading: pushesLoading } = useQuery({
+    queryKey: ['pushes-candidat', candidat?.id],
+    queryFn: () => api.get<any[]>(`/pushes/by-candidat/${candidat!.id}`),
+    enabled: !!candidat?.id,
   });
 
   usePageTitle(candidat ? `${candidat.prenom || ''} ${candidat.nom}`.trim() : 'Candidat');
@@ -1497,6 +1503,59 @@ export default function CandidatDetailPage() {
           )}
         </motion.div>
       </motion.div>
+
+      {/* Push CV Section */}
+      <div className="mt-8">
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <Rocket size={18} className="text-indigo-500" />
+            <h3 className="font-semibold text-base">Push CV</h3>
+          </div>
+          {pushesLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 size={20} className="animate-spin text-text-tertiary" />
+            </div>
+          ) : !pushes || pushes.length === 0 ? (
+            <p className="text-sm text-text-tertiary py-4 text-center">Aucun push CV envoyé</p>
+          ) : (
+            <div className="divide-y divide-neutral-100">
+              {pushes.map((push: { id: string; prospect: { companyName: string; contactName: string; contactEmail: string }; recruiter: string; canal: string; status: string; sentAt: string; message: string | null }) => {
+                const statusColors: Record<string, string> = {
+                  ENVOYE: 'bg-blue-100 text-blue-700',
+                  OUVERT: 'bg-yellow-100 text-yellow-700',
+                  REPONDU: 'bg-green-100 text-green-700',
+                  RDV_BOOK: 'bg-purple-100 text-purple-700',
+                  CONVERTI_MANDAT: 'bg-emerald-100 text-emerald-700',
+                  SANS_SUITE: 'bg-neutral-100 text-neutral-500',
+                };
+                const canalColors: Record<string, string> = {
+                  EMAIL: 'bg-blue-50 text-blue-600',
+                  LINKEDIN: 'bg-sky-50 text-sky-600',
+                  TELEPHONE: 'bg-green-50 text-green-600',
+                };
+                return (
+                  <div key={push.id} className="flex items-center gap-3 py-2.5 text-sm">
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium text-text-primary">{push.prospect.companyName}</span>
+                      <span className="text-text-tertiary mx-1.5">·</span>
+                      <span className="text-text-secondary">{push.prospect.contactName}</span>
+                    </div>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${canalColors[push.canal] || 'bg-neutral-100 text-neutral-600'}`}>
+                      {push.canal}
+                    </span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[push.status] || 'bg-neutral-100 text-neutral-500'}`}>
+                      {push.status.replace(/_/g, ' ')}
+                    </span>
+                    <span className="text-xs text-text-tertiary whitespace-nowrap">
+                      {new Date(push.sentAt).toLocaleDateString('fr-FR')}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
 
       <div className="mt-8">
         <ActivityJournal entiteType="CANDIDAT" entiteId={candidat.id} />

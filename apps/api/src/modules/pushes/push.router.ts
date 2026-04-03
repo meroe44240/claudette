@@ -68,6 +68,92 @@ export default async function pushRouter(fastify: FastifyInstance) {
     return reply.send(result);
   });
 
+  // ── Static path routes BEFORE parametric /:id ──
+
+  // GET /history — Full push history with rich data (paginated)
+  fastify.get('/history', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const query = request.query as any;
+
+    const result = await pushService.getPushHistory({
+      page: query.page ? parseInt(query.page, 10) : undefined,
+      limit: query.limit ? parseInt(query.limit, 10) : undefined,
+      recruiterId: query.recruiter_id,
+      status: query.status,
+      canal: query.canal,
+      from: query.from,
+      to: query.to,
+      search: query.search,
+    });
+
+    return reply.send(result);
+  });
+
+  // GET /export — CSV export of push history (admin only)
+  fastify.get('/export', {
+    preHandler: [authenticate, requireAdmin],
+  }, async (request, reply) => {
+    const query = request.query as any;
+
+    const csv = await pushService.exportPushesCSV({
+      recruiterId: query.recruiter_id,
+      status: query.status,
+      canal: query.canal,
+      from: query.from,
+      to: query.to,
+      search: query.search,
+    });
+
+    return reply
+      .header('Content-Type', 'text/csv; charset=utf-8')
+      .header('Content-Disposition', 'attachment; filename="pushes-export.csv"')
+      .send(csv);
+  });
+
+  // GET /stats/team — Team push stats (admin)
+  fastify.get('/stats/team', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const query = request.query as any;
+    const result = await pushService.getTeamPushStats(query.period || 'this_month');
+    return reply.send(result);
+  });
+
+  // GET /stats/dashboard — Rich dashboard stats
+  fastify.get('/stats/dashboard', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const query = request.query as any;
+
+    const result = await pushService.getDashboardStats({
+      period: query.period,
+      recruiterId: query.recruiter_id,
+    });
+
+    return reply.send(result);
+  });
+
+  // GET /by-candidat/:candidatId — Pushes for a candidate
+  fastify.get('/by-candidat/:candidatId', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const { candidatId } = request.params as any;
+    const result = await pushService.getPushesByCandidatId(candidatId);
+    return reply.send(result);
+  });
+
+  // GET /by-client-email/:email — Pushes for a client (by email)
+  fastify.get('/by-client-email/:email', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const { email } = request.params as any;
+    const result = await pushService.getPushesByClientEmail(email);
+    return reply.send(result);
+  });
+
+  // ── Parametric routes LAST ──
+
   // PATCH /:id — Update push status
   fastify.patch('/:id', {
     preHandler: [authenticate],
@@ -93,67 +179,13 @@ export default async function pushRouter(fastify: FastifyInstance) {
     }
   });
 
-  // GET /stats/team — Team push stats (admin)
-  fastify.get('/stats/team', {
+  // GET /:id — Get single push detail
+  fastify.get('/:id', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    const query = request.query as any;
-    const result = await pushService.getTeamPushStats(query.period || 'this_month');
+    const { id } = request.params as any;
+    const result = await pushService.getPushById(id);
+    if (!result) return reply.status(404).send({ error: 'Push introuvable' });
     return reply.send(result);
-  });
-
-  // GET /history — Full push history with rich data (paginated)
-  fastify.get('/history', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
-    const query = request.query as any;
-
-    const result = await pushService.getPushHistory({
-      page: query.page ? parseInt(query.page, 10) : undefined,
-      limit: query.limit ? parseInt(query.limit, 10) : undefined,
-      recruiterId: query.recruiter_id,
-      status: query.status,
-      canal: query.canal,
-      from: query.from,
-      to: query.to,
-      search: query.search,
-    });
-
-    return reply.send(result);
-  });
-
-  // GET /stats/dashboard — Rich dashboard stats
-  fastify.get('/stats/dashboard', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
-    const query = request.query as any;
-
-    const result = await pushService.getDashboardStats({
-      period: query.period,
-      recruiterId: query.recruiter_id,
-    });
-
-    return reply.send(result);
-  });
-
-  // GET /export — CSV export of push history (admin only)
-  fastify.get('/export', {
-    preHandler: [authenticate, requireAdmin],
-  }, async (request, reply) => {
-    const query = request.query as any;
-
-    const csv = await pushService.exportPushesCSV({
-      recruiterId: query.recruiter_id,
-      status: query.status,
-      canal: query.canal,
-      from: query.from,
-      to: query.to,
-      search: query.search,
-    });
-
-    return reply
-      .header('Content-Type', 'text/csv; charset=utf-8')
-      .header('Content-Disposition', 'attachment; filename="pushes-export.csv"')
-      .send(csv);
   });
 }

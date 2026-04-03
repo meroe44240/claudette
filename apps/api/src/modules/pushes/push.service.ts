@@ -386,6 +386,150 @@ export async function updatePushStatus(pushId: string, newStatus: PushStatus) {
   };
 }
 
+// ─── GET PUSH BY ID ────────────────────────────────
+
+export async function getPushById(pushId: string) {
+  const push = await prisma.push.findUnique({
+    where: { id: pushId },
+    include: {
+      candidat: { select: { id: true, nom: true, prenom: true, posteActuel: true, email: true, telephone: true } },
+      prospect: { select: { id: true, companyName: true, contactName: true, contactEmail: true, contactLinkedin: true, sector: true } },
+      recruiter: { select: { id: true, nom: true, prenom: true } },
+    },
+  });
+
+  if (!push) return null;
+
+  // Fetch sequence run linked to this push
+  const sequenceRun = await prisma.sequenceRun.findFirst({
+    where: { pushId: push.id },
+    select: { id: true, status: true, currentStep: true, startedAt: true },
+  });
+
+  // Fetch activities linked to this push (via metadata)
+  const activities = await prisma.activite.findMany({
+    where: {
+      metadata: { path: ['pushId'], equals: pushId },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: {
+      id: true,
+      type: true,
+      titre: true,
+      isTache: true,
+      tacheCompleted: true,
+      tacheDueDate: true,
+      source: true,
+      createdAt: true,
+    },
+  });
+
+  return {
+    id: push.id,
+    candidat: {
+      id: push.candidat.id,
+      nom: push.candidat.nom,
+      prenom: push.candidat.prenom,
+      posteActuel: push.candidat.posteActuel,
+      email: push.candidat.email,
+      telephone: push.candidat.telephone,
+    },
+    prospect: {
+      id: push.prospect.id,
+      companyName: push.prospect.companyName,
+      contactName: push.prospect.contactName,
+      contactEmail: push.prospect.contactEmail,
+      contactLinkedin: push.prospect.contactLinkedin,
+      sector: push.prospect.sector,
+    },
+    recruiter: {
+      id: push.recruiter.id,
+      nom: push.recruiter.nom,
+      prenom: push.recruiter.prenom,
+    },
+    canal: push.canal,
+    status: push.status,
+    message: push.message,
+    sentAt: push.sentAt,
+    gmailSentAt: push.gmailSentAt,
+    gmailThreadId: push.gmailThreadId,
+    gmailMessageId: push.gmailMessageId,
+    sequenceRun: sequenceRun ? {
+      id: sequenceRun.id,
+      status: sequenceRun.status,
+      currentStep: sequenceRun.currentStep,
+      startedAt: sequenceRun.startedAt,
+    } : null,
+    activities,
+    createdAt: push.sentAt,
+  };
+}
+
+// ─── GET PUSHES BY CANDIDATE ──────────────────────
+
+export async function getPushesByCandidatId(candidatId: string) {
+  const pushes = await prisma.push.findMany({
+    where: { candidatId },
+    orderBy: { sentAt: 'desc' },
+    include: {
+      prospect: { select: { companyName: true, contactName: true, contactEmail: true } },
+      recruiter: { select: { nom: true, prenom: true } },
+    },
+  });
+
+  return pushes.map(p => ({
+    id: p.id,
+    prospect: {
+      companyName: p.prospect.companyName,
+      contactName: p.prospect.contactName,
+      contactEmail: p.prospect.contactEmail,
+    },
+    recruiter: `${p.recruiter.prenom || ''} ${p.recruiter.nom}`.trim(),
+    canal: p.canal,
+    status: p.status,
+    sentAt: p.sentAt,
+    message: p.message ? p.message.substring(0, 120) : null,
+  }));
+}
+
+// ─── GET PUSHES BY PROSPECT/CLIENT ────────────────
+
+export async function getPushesByClientEmail(email: string) {
+  if (!email) return [];
+
+  // Find prospects matching this email
+  const pushes = await prisma.push.findMany({
+    where: {
+      prospect: { contactEmail: email },
+    },
+    orderBy: { sentAt: 'desc' },
+    include: {
+      candidat: { select: { id: true, nom: true, prenom: true, posteActuel: true } },
+      prospect: { select: { companyName: true, contactName: true } },
+      recruiter: { select: { nom: true, prenom: true } },
+    },
+  });
+
+  return pushes.map(p => ({
+    id: p.id,
+    candidat: {
+      id: p.candidat.id,
+      nom: p.candidat.nom,
+      prenom: p.candidat.prenom,
+      posteActuel: p.candidat.posteActuel,
+    },
+    prospect: {
+      companyName: p.prospect.companyName,
+      contactName: p.prospect.contactName,
+    },
+    recruiter: `${p.recruiter.prenom || ''} ${p.recruiter.nom}`.trim(),
+    canal: p.canal,
+    status: p.status,
+    sentAt: p.sentAt,
+  }));
+}
+
 // ─── TEAM STATS ─────────────────────────────────────
 
 export async function getTeamPushStats(period: string = 'this_month') {

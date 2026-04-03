@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send, Search, Filter, Download, TrendingUp, Eye,
-  MessageSquare, Calendar, ArrowRight,
+  MessageSquare, Calendar, ArrowRight, X,
+  User, Building2, Mail, Phone, Linkedin, Clock, Activity,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -35,6 +36,21 @@ interface PushHistoryResponse {
   page: number;
   limit: number;
   pages: number;
+}
+
+interface PushDetail {
+  id: string;
+  candidat: { id: string; nom: string; prenom: string; posteActuel: string; email: string; telephone: string } | null;
+  prospect: { id: string; companyName: string; contactName: string; contactEmail: string; contactLinkedin: string; sector: string } | null;
+  recruiter: { id: string; nom: string; prenom: string } | null;
+  canal: PushCanal;
+  status: PushStatus;
+  message: string | null;
+  sentAt: string | null;
+  gmailSentAt: string | null;
+  sequenceRun: { id: string; status: string; currentStep: number; startedAt: string } | null;
+  activities: { id: string; type: string; description: string; createdAt: string }[];
+  createdAt: string;
 }
 
 interface FunnelStep {
@@ -160,6 +176,26 @@ export default function PushCVDashboard() {
   const { data: stats, isLoading: loadingStats } = useQuery({
     queryKey: ['pushes-stats', statsParams],
     queryFn: () => api.get<DashboardStats>(`/pushes/stats/dashboard?${statsParams}`),
+  });
+
+  // ── Slide-over state
+  const [selectedPushId, setSelectedPushId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const { data: pushDetail, isLoading: loadingDetail } = useQuery({
+    queryKey: ['push-detail', selectedPushId],
+    queryFn: () => api.get<PushDetail>(`/pushes/${selectedPushId}`),
+    enabled: !!selectedPushId,
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: PushStatus }) =>
+      api.patch(`/pushes/${id}`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['push-detail', selectedPushId] });
+      queryClient.invalidateQueries({ queryKey: ['pushes-history'] });
+      queryClient.invalidateQueries({ queryKey: ['pushes-stats'] });
+    },
   });
 
   // ── Export CSV
@@ -422,6 +458,7 @@ export default function PushCVDashboard() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.02 }}
+                    onClick={() => setSelectedPushId(push.id)}
                   >
                     <td className="px-4 py-3 text-neutral-600 dark:text-neutral-300 whitespace-nowrap">
                       {format(new Date(push.createdAt), 'dd MMM yyyy', { locale: fr })}
@@ -507,6 +544,258 @@ export default function PushCVDashboard() {
           </div>
         )}
       </motion.div>
+
+      {/* ── SLIDE-OVER PANEL ─────────────────────────────── */}
+      <AnimatePresence>
+        {selectedPushId && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              className="fixed inset-0 bg-black/40 z-40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedPushId(null)}
+            />
+            {/* Panel */}
+            <motion.div
+              className="fixed top-0 right-0 h-full w-full max-w-lg z-50 bg-white dark:bg-gray-900 shadow-2xl border-l border-neutral-200 dark:border-neutral-700 flex flex-col"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 dark:border-neutral-700">
+                <h2 className="text-lg font-semibold text-neutral-800 dark:text-neutral-100">
+                  Détail du push
+                </h2>
+                <button
+                  onClick={() => setSelectedPushId(null)}
+                  className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-gray-800 text-neutral-500 dark:text-neutral-400 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+                {loadingDetail ? (
+                  <div className="flex items-center justify-center py-20">
+                    <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : pushDetail ? (
+                  <>
+                    {/* Status */}
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide mb-2">
+                        Statut
+                      </label>
+                      <select
+                        value={pushDetail.status}
+                        onChange={(e) =>
+                          statusMutation.mutate({ id: pushDetail.id, status: e.target.value as PushStatus })
+                        }
+                        disabled={statusMutation.isPending}
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-gray-800 text-neutral-700 dark:text-neutral-300 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500 appearance-none cursor-pointer transition-colors disabled:opacity-50"
+                      >
+                        {STATUS_OPTIONS.filter((o) => o.value !== '').map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Candidat */}
+                    {pushDetail.candidat && (
+                      <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+                        <h3 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                          <User size={14} />
+                          Candidat
+                        </h3>
+                        <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                          {pushDetail.candidat.prenom} {pushDetail.candidat.nom}
+                        </p>
+                        {pushDetail.candidat.posteActuel && (
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                            {pushDetail.candidat.posteActuel}
+                          </p>
+                        )}
+                        <div className="mt-2 space-y-1">
+                          {pushDetail.candidat.email && (
+                            <p className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
+                              <Mail size={12} /> {pushDetail.candidat.email}
+                            </p>
+                          )}
+                          {pushDetail.candidat.telephone && (
+                            <p className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
+                              <Phone size={12} /> {pushDetail.candidat.telephone}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Prospect / Entreprise */}
+                    {pushDetail.prospect && (
+                      <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+                        <h3 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                          <Building2 size={14} />
+                          Prospect / Entreprise
+                        </h3>
+                        <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                          {pushDetail.prospect.contactName}
+                        </p>
+                        {pushDetail.prospect.companyName && (
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                            {pushDetail.prospect.companyName}
+                            {pushDetail.prospect.sector && ` - ${pushDetail.prospect.sector}`}
+                          </p>
+                        )}
+                        <div className="mt-2 space-y-1">
+                          {pushDetail.prospect.contactEmail && (
+                            <p className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
+                              <Mail size={12} /> {pushDetail.prospect.contactEmail}
+                            </p>
+                          )}
+                          {pushDetail.prospect.contactLinkedin && (
+                            <a
+                              href={pushDetail.prospect.contactLinkedin}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-500 hover:text-blue-600 flex items-center gap-1.5"
+                            >
+                              <Linkedin size={12} /> Profil LinkedIn
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recruteur + Canal + Dates */}
+                    <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 space-y-3">
+                      {pushDetail.recruiter && (
+                        <div>
+                          <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Recruteur :</span>
+                          <span className="ml-2 text-sm text-neutral-800 dark:text-neutral-200">
+                            {pushDetail.recruiter.prenom} {pushDetail.recruiter.nom}
+                          </span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Canal :</span>
+                        <span className={`ml-2 text-sm font-medium ${
+                          pushDetail.canal === 'EMAIL' ? 'text-blue-600 dark:text-blue-400' : 'text-sky-600 dark:text-sky-400'
+                        }`}>
+                          {pushDetail.canal === 'EMAIL' ? 'Email' : 'LinkedIn'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Créé le :</span>
+                        <span className="ml-2 text-sm text-neutral-800 dark:text-neutral-200">
+                          {format(new Date(pushDetail.createdAt), 'dd MMM yyyy HH:mm', { locale: fr })}
+                        </span>
+                      </div>
+                      {pushDetail.sentAt && (
+                        <div>
+                          <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Envoyé le :</span>
+                          <span className="ml-2 text-sm text-neutral-800 dark:text-neutral-200">
+                            {format(new Date(pushDetail.sentAt), 'dd MMM yyyy HH:mm', { locale: fr })}
+                          </span>
+                        </div>
+                      )}
+                      {pushDetail.gmailSentAt && (
+                        <div>
+                          <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Gmail envoyé :</span>
+                          <span className="ml-2 text-sm text-neutral-800 dark:text-neutral-200">
+                            {format(new Date(pushDetail.gmailSentAt), 'dd MMM yyyy HH:mm', { locale: fr })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Message */}
+                    {pushDetail.message && (
+                      <div>
+                        <h3 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                          <MessageSquare size={14} />
+                          Message
+                        </h3>
+                        <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-gray-800 p-4 text-sm text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
+                          {pushDetail.message}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sequence Run */}
+                    {pushDetail.sequenceRun && (
+                      <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+                        <h3 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                          <Activity size={14} />
+                          Séquence
+                        </h3>
+                        <div className="space-y-2">
+                          <div>
+                            <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Statut :</span>
+                            <span className="ml-2 text-sm text-neutral-800 dark:text-neutral-200">
+                              {pushDetail.sequenceRun.status}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Étape :</span>
+                            <span className="ml-2 text-sm text-neutral-800 dark:text-neutral-200">
+                              {pushDetail.sequenceRun.currentStep}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Démarré le :</span>
+                            <span className="ml-2 text-sm text-neutral-800 dark:text-neutral-200">
+                              {format(new Date(pushDetail.sequenceRun.startedAt), 'dd MMM yyyy HH:mm', { locale: fr })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Activities */}
+                    {pushDetail.activities && pushDetail.activities.length > 0 && (
+                      <div>
+                        <h3 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                          <Clock size={14} />
+                          Activités ({pushDetail.activities.length})
+                        </h3>
+                        <div className="space-y-2">
+                          {pushDetail.activities.map((act) => (
+                            <div
+                              key={act.id}
+                              className="rounded-lg border border-neutral-100 dark:border-neutral-700/50 bg-neutral-50/50 dark:bg-gray-800/50 p-3"
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+                                  {act.type}
+                                </span>
+                                <span className="text-[11px] text-neutral-400">
+                                  {format(new Date(act.createdAt), 'dd MMM yyyy HH:mm', { locale: fr })}
+                                </span>
+                              </div>
+                              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {act.description}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center py-12 text-neutral-400">
+                    Push introuvable
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

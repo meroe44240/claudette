@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
   Download, Trophy, AlertTriangle, ChevronDown,
-  TrendingUp, TrendingDown,
+  TrendingUp, TrendingDown, Rocket,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../lib/api-client';
@@ -1073,6 +1073,15 @@ export default function StatsPage() {
     enabled: !!selectedUserId,
   });
 
+  // Fetch push stats
+  const { data: pushStats } = useQuery({
+    queryKey: ['push-stats', period],
+    queryFn: async () => {
+      const res = await api.get<{ data: { totals: { envoyes: number; reponses: number; rdv_bookes: number; taux_conversion: number }; conversion_funnel: { stage: string; count: number; percentage: number }[] } }>(`/pushes/stats/dashboard?period=${period}`);
+      return res.data;
+    },
+  });
+
   // Selected user name (for header)
   const displayUser = useMemo(() => {
     if (!isAdmin || selectedUserId === user?.id) {
@@ -1282,7 +1291,63 @@ export default function StatsPage() {
             </div>
           </section>
 
-          {/* ────── SECTION 6: TEAM COMPARISON (ADMIN) ────── */}
+          {/* ────── SECTION 6: PUSH CV ────── */}
+          {pushStats && (
+            <section>
+              <SectionTitle>Push CV</SectionTitle>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                {[
+                  { label: 'Total envoyés', value: pushStats.totals.envoyes, color: COLORS.activityBlue },
+                  { label: 'Réponses', value: pushStats.totals.reponses, color: COLORS.commercialTeal },
+                  { label: 'RDV bookés', value: pushStats.totals.rdv_bookes, color: COLORS.pipelineViolet },
+                  { label: 'Taux conversion', value: `${pushStats.totals.taux_conversion}%`, color: COLORS.revenueGreen },
+                ].map((item, i) => (
+                  <motion.div key={item.label} variants={fadeUp} custom={i}>
+                    <Card>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Rocket size={14} style={{ color: item.color }} />
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                          {item.label}
+                        </span>
+                      </div>
+                      <p className="text-2xl font-bold text-neutral-900">{item.value}</p>
+                    </Card>
+                  </motion.div>
+                ))}
+              </div>
+
+              {pushStats.conversion_funnel && pushStats.conversion_funnel.length > 0 && (
+                <motion.div variants={fadeUp} custom={4}>
+                  <Card>
+                    <h3 className="text-[13px] font-semibold text-neutral-700 mb-4">Funnel de conversion</h3>
+                    <div className="space-y-3">
+                      {pushStats.conversion_funnel.map((step) => (
+                        <div key={step.stage}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[12px] font-medium text-neutral-600">{step.stage}</span>
+                            <span className="text-[12px] font-semibold text-neutral-800">
+                              {step.count} ({step.percentage}%)
+                            </span>
+                          </div>
+                          <div className="h-2 rounded-full bg-neutral-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${step.percentage}%`,
+                                backgroundColor: COLORS.pipelineViolet,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                </motion.div>
+              )}
+            </section>
+          )}
+
+          {/* ────── SECTION 7: TEAM COMPARISON (ADMIN) ────── */}
           {isAdmin && stats.teamComparison && stats.teamComparison.length > 0 && (
             <section>
               <SectionTitle>Comparaison équipe</SectionTitle>
