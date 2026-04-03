@@ -9,18 +9,23 @@ export function registerCandidateTools(server: McpServer) {
   // ─── search_candidates ────────────────────────────────
   server.tool(
     'search_candidates',
-    "Recherche des candidats dans l'ATS par nom, email, titre, entreprise, competences, ville, ou mandat. Utiliser quand le recruteur cherche un candidat ou veut une liste.",
+    "Recherche des candidats dans l'ATS par nom, email, poste, entreprise, tags, ville ou disponibilite. Utiliser pour retrouver un candidat, verifier les doublons avant creation, ou lister par critere.",
     {
-      query: z.string().describe('Recherche libre : nom, email, titre, ou mot-cle'),
-      city: z.string().optional().describe('Filtrer par ville'),
+      query: z.string().optional().describe('Recherche full-text : nom, prenom, email, poste, entreprise'),
+      city: z.string().optional().describe('Filtrer par ville (ex: Paris, Lyon)'),
       source: z.string().optional().describe('Filtrer par source : linkedin, referral, jobboard, extension'),
-      tags: z.array(z.string()).optional().describe('Filtrer par tags/competences'),
-      limit: z.number().optional().default(10).describe('Nombre max de resultats (defaut 10)'),
+      tags: z.array(z.string()).optional().describe('Filtrer par tags/competences (ex: ["CSM", "SaaS"])'),
+      disponibilite: z.string().optional().describe('Filtrer par disponibilite : immediate, 1_mois, 3_mois, en_poste'),
+      limit: z.number().optional().default(10).describe('Nombre max de resultats (defaut 10, max 50)'),
+      offset: z.number().optional().default(0).describe('Offset pour pagination (defaut 0)'),
     },
     wrapTool('search_candidates', async (args, user) => {
+      const limit = Math.min((args.limit as number) || 10, 50);
+      const offset = (args.offset as number) || 0;
+      const page = Math.floor(offset / limit) + 1;
       const result = await candidatService.list(
-        { page: 1, perPage: (args.limit as number) || 10 },
-        args.query as string,
+        { page, perPage: limit },
+        args.query as string | undefined,
         args.city as string | undefined,        // localisation
         args.source as string | undefined,       // source
         args.tags as string[] | undefined,       // tags
@@ -28,7 +33,7 @@ export function registerCandidateTools(server: McpServer) {
         undefined,                               // salaireMax
         undefined,                               // poste
         undefined,                               // entreprise
-        undefined,                               // disponibilite
+        args.disponibilite as string | undefined, // disponibilite
         user.userRole !== 'ADMIN' ? user.userId : undefined, // assignedToId
       );
       return {
@@ -42,6 +47,7 @@ export function registerCandidateTools(server: McpServer) {
           email: c.email,
           phone: c.telephone,
           salary: c.salaire,
+          disponibilite: c.disponibilite,
           source: c.source,
           tags: c.tags,
           mandates: c.candidatures?.map((ca: any) => ({
