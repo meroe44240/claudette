@@ -20,7 +20,7 @@ export function registerMandateTools(server: McpServer) {
         args.status as string | undefined,
         undefined,
         undefined,
-        user.userRole !== 'ADMIN' ? user.userId : undefined,
+        undefined, // assignedToId — tous les recruteurs voient tous les mandats
       );
       return {
         total: result.meta.total,

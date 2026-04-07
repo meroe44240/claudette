@@ -34,7 +34,7 @@ export function registerCandidateTools(server: McpServer) {
         undefined,                               // poste
         undefined,                               // entreprise
         args.disponibilite as string | undefined, // disponibilite
-        user.userRole !== 'ADMIN' ? user.userId : undefined, // assignedToId
+        undefined, // assignedToId — tous les recruteurs voient toute la base candidats
       );
       return {
         total: result.meta.total,
@@ -247,7 +247,7 @@ export function registerCandidateTools(server: McpServer) {
         searchTerms,
         args.city as string || mandate.localisation || undefined,
         undefined, undefined, undefined, undefined, undefined, undefined, undefined,
-        user.userRole !== 'ADMIN' ? user.userId : undefined,
+        undefined, // assignedToId — tous les recruteurs voient toute la base
       );
 
       const filtered = results.data.filter((c: any) => !existingIds.includes(c.id));
