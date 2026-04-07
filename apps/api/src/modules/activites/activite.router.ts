@@ -3,6 +3,7 @@ import { createActiviteSchema, updateActiviteSchema } from './activite.schema.js
 import * as activiteService from './activite.service.js';
 import { authenticate } from '../../middleware/auth.js';
 import { parsePagination } from '../../lib/pagination.js';
+import prisma from '../../lib/db.js';
 
 export default async function activiteRouter(fastify: FastifyInstance) {
   // GET / - List activites with filters
@@ -36,6 +37,14 @@ export default async function activiteRouter(fastify: FastifyInstance) {
       if (query.source) filters.source = query.source;
       if (query.bookmarked !== undefined) filters.bookmarked = query.bookmarked === 'true';
       if (query.search) filters.search = query.search;
+
+      // Non-admins only see their own activities when browsing globally (no entiteId)
+      if (!query.entiteId) {
+        const user = await prisma.user.findUnique({ where: { id: request.userId }, select: { role: true } });
+        if (user?.role !== 'ADMIN') {
+          filters.userId = request.userId;
+        }
+      }
 
       return activiteService.list(params, filters);
     },
