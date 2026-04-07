@@ -251,7 +251,7 @@ export async function uploadAndParse(
       const rawJson = c.rawData ? JSON.stringify(c.rawData) : '{}';
       await tx.$executeRawUnsafe(
         `INSERT INTO sdr_contacts (id, "sdrListId", "firstName", "lastName", email, phone, company, "jobTitle", notes, "rawData", "candidatId", "companyId", "callResult", "orderInList")
-         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13)`,
+         VALUES (gen_random_uuid(), $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::uuid, $11::uuid, $12, $13)`,
         newList.id,
         c.firstName,
         c.lastName,
