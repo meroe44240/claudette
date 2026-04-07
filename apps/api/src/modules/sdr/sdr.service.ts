@@ -213,18 +213,34 @@ export async function uploadAndParse(
     return val.length > max ? val.substring(0, max) : val;
   };
 
+  // Helper: sanitize strings for PostgreSQL (remove null bytes and invalid escape sequences)
+  const sanitize = (val: string): string => {
+    return val
+      .replace(/\x00/g, '')           // Remove null bytes
+      .replace(/\\x[0-9a-fA-F]{0,1}(?![0-9a-fA-F])/g, '') // Fix broken hex escapes
+      .replace(/\\u[0-9a-fA-F]{0,3}(?![0-9a-fA-F])/g, ''); // Fix broken unicode escapes
+  };
+
+  const sanitizeRawData = (raw: Record<string, string>): Record<string, string> => {
+    const clean: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      clean[sanitize(k)] = sanitize(v);
+    }
+    return clean;
+  };
+
   // Create SDR contacts
   await prisma.sdrContact.createMany({
     data: parsed.map((c, i) => ({
       sdrListId: list.id,
-      firstName: trunc(c.firstName, 255),
-      lastName: trunc(c.lastName, 255),
-      email: trunc(c.email, 255),
-      phone: trunc(c.phone, 100),
-      company: trunc(c.company, 255),
-      jobTitle: trunc(c.jobTitle, 255),
-      notes: c.notes || null,
-      rawData: c.rawData,
+      firstName: trunc(c.firstName ? sanitize(c.firstName) : undefined, 255),
+      lastName: trunc(c.lastName ? sanitize(c.lastName) : undefined, 255),
+      email: trunc(c.email ? sanitize(c.email) : undefined, 255),
+      phone: trunc(c.phone ? sanitize(c.phone) : undefined, 100),
+      company: trunc(c.company ? sanitize(c.company) : undefined, 255),
+      jobTitle: trunc(c.jobTitle ? sanitize(c.jobTitle) : undefined, 255),
+      notes: c.notes ? sanitize(c.notes) : null,
+      rawData: c.rawData ? sanitizeRawData(c.rawData) : undefined,
       candidatId: c.email ? emailToCandidat.get(c.email.toLowerCase()) || null : null,
       companyId: c.company ? companyToId.get(c.company.toLowerCase()) || null : null,
       callResult: 'pending',
