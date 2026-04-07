@@ -245,13 +245,27 @@ export async function uploadAndParse(
       },
     });
 
-    // Insert contacts in batches of 50 to avoid huge query strings
-    const BATCH_SIZE = 50;
-    for (let i = 0; i < contactData.length; i += BATCH_SIZE) {
-      const batch = contactData.slice(i, i + BATCH_SIZE);
-      await tx.sdrContact.createMany({
-        data: batch.map((c) => ({ ...c, sdrListId: newList.id })),
-      });
+    // Insert contacts one-by-one to avoid JSONB serialization issues with createMany
+    for (const c of contactData) {
+      // Use $executeRawUnsafe with parameterized JSON to bypass Prisma's JSONB serialization
+      const rawJson = c.rawData ? JSON.stringify(c.rawData) : '{}';
+      await tx.$executeRawUnsafe(
+        `INSERT INTO sdr_contacts (id, "sdrListId", "firstName", "lastName", email, phone, company, "jobTitle", notes, "rawData", "candidatId", "companyId", "callResult", "orderInList")
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13)`,
+        newList.id,
+        c.firstName,
+        c.lastName,
+        c.email,
+        c.phone,
+        c.company,
+        c.jobTitle,
+        c.notes,
+        rawJson,
+        c.candidatId,
+        c.companyId,
+        c.callResult,
+        c.orderInList,
+      );
     }
 
     return newList;
