@@ -199,7 +199,7 @@ export async function uploadAndParse(
   const companyToId = new Map(existingCompanies.map((c) => [c.nom.toLowerCase(), c.id]));
 
   // Helper: truncate string to max length to avoid DB VarChar overflow
-  const trunc = (val: string | undefined, max: number): string | null => {
+  const trunc = (val: string | undefined | null, max: number): string | null => {
     if (!val) return null;
     return val.length > max ? val.substring(0, max) : val;
   };
@@ -314,12 +314,12 @@ export async function uploadAndParse(
       const headcountRange = getRaw(raw, ['Company headcount range', 'headcount range']);
       const newCompany = await prisma.entreprise.create({
         data: {
-          nom: sanitize(c.company),
-          secteur: getRaw(raw, ['Company industry', 'industry']) || null,
-          siteWeb: getRaw(raw, ['Company Domain', 'domain']) || null,
-          linkedinUrl: getRaw(raw, ['Company Linkedin URL', 'Company LinkedIn']) || null,
-          localisation: getRaw(raw, ['Company headquarters', 'headquarters location']) || null,
-          effectif: headcountRange || getRaw(raw, ['Company headcount', 'headcount']) || null,
+          nom: trunc(sanitize(c.company), 255)!,
+          secteur: trunc(getRaw(raw, ['Company industry', 'industry']), 100),
+          siteWeb: trunc(getRaw(raw, ['Company Domain', 'domain']), 500),
+          linkedinUrl: trunc(getRaw(raw, ['Company Linkedin URL', 'Company LinkedIn']), 500),
+          localisation: trunc(getRaw(raw, ['Company headquarters', 'headquarters location']), 255),
+          effectif: trunc(headcountRange || getRaw(raw, ['Company headcount', 'headcount']), 50),
           notes: getRaw(raw, ['Company Description', 'description']) || null,
           taille: mapTaille(headcountRange),
           createdById: userId,
@@ -364,11 +364,11 @@ export async function uploadAndParse(
 
         await prisma.client.create({
           data: {
-            nom: clientNom,
-            prenom: clientPrenom,
-            telephone: c.phone ? sanitize(c.phone) : null,
-            poste: c.jobTitle ? sanitize(c.jobTitle) : null,
-            linkedinUrl: linkedinUrl ? sanitize(linkedinUrl) : null,
+            nom: trunc(clientNom, 255)!,
+            prenom: trunc(clientPrenom, 255),
+            telephone: trunc(c.phone ? sanitize(c.phone) : null, 50),
+            poste: trunc(c.jobTitle ? sanitize(c.jobTitle) : null, 255),
+            linkedinUrl: trunc(linkedinUrl ? sanitize(linkedinUrl) : null, 500),
             entrepriseId,
             statutClient: 'LEAD',
             typeClient: 'OUTBOUND',
