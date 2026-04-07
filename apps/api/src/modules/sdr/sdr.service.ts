@@ -190,35 +190,17 @@ export async function uploadAndParse(
     : [];
   const companyToId = new Map(existingCompanies.map((c) => [c.nom.toLowerCase(), c.id]));
 
-  // Create the SDR list
-  const list = await prisma.sdrList.create({
-    data: {
-      name: listName,
-      fileName,
-      totalContacts: parsed.length,
-      processedContacts: 0,
-      status: 'imported',
-      createdById: userId,
-      metadata: {
-        headers,
-        columnMap,
-        importedAt: new Date().toISOString(),
-      },
-    },
-  });
-
   // Helper: truncate string to max length to avoid DB VarChar overflow
   const trunc = (val: string | undefined, max: number): string | null => {
     if (!val) return null;
     return val.length > max ? val.substring(0, max) : val;
   };
 
-  // Helper: sanitize strings for PostgreSQL (remove null bytes and invalid escape sequences)
+  // Helper: sanitize strings for PostgreSQL JSON
+  // PostgreSQL interprets \x as hex escape in JSONB — remove all backslashes from CSV data
   const sanitize = (val: string): string => {
-    return val
-      .replace(/\x00/g, '')           // Remove null bytes
-      .replace(/\\x[0-9a-fA-F]{0,1}(?![0-9a-fA-F])/g, '') // Fix broken hex escapes
-      .replace(/\\u[0-9a-fA-F]{0,3}(?![0-9a-fA-F])/g, ''); // Fix broken unicode escapes
+    // eslint-disable-next-line no-control-regex
+    return val.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(/\\/g, '');
   };
 
   const sanitizeRawData = (raw: Record<string, string>): Record<string, string> => {
@@ -229,23 +211,50 @@ export async function uploadAndParse(
     return clean;
   };
 
-  // Create SDR contacts
-  await prisma.sdrContact.createMany({
-    data: parsed.map((c, i) => ({
-      sdrListId: list.id,
-      firstName: trunc(c.firstName ? sanitize(c.firstName) : undefined, 255),
-      lastName: trunc(c.lastName ? sanitize(c.lastName) : undefined, 255),
-      email: trunc(c.email ? sanitize(c.email) : undefined, 255),
-      phone: trunc(c.phone ? sanitize(c.phone) : undefined, 100),
-      company: trunc(c.company ? sanitize(c.company) : undefined, 255),
-      jobTitle: trunc(c.jobTitle ? sanitize(c.jobTitle) : undefined, 255),
-      notes: c.notes ? sanitize(c.notes) : null,
-      rawData: c.rawData ? sanitizeRawData(c.rawData) : undefined,
-      candidatId: c.email ? emailToCandidat.get(c.email.toLowerCase()) || null : null,
-      companyId: c.company ? companyToId.get(c.company.toLowerCase()) || null : null,
-      callResult: 'pending',
-      orderInList: i + 1,
-    })),
+  // Build contact data
+  const contactData = parsed.map((c, i) => ({
+    firstName: trunc(c.firstName ? sanitize(c.firstName) : undefined, 255),
+    lastName: trunc(c.lastName ? sanitize(c.lastName) : undefined, 255),
+    email: trunc(c.email ? sanitize(c.email) : undefined, 255),
+    phone: trunc(c.phone ? sanitize(c.phone) : undefined, 100),
+    company: trunc(c.company ? sanitize(c.company) : undefined, 255),
+    jobTitle: trunc(c.jobTitle ? sanitize(c.jobTitle) : undefined, 255),
+    notes: c.notes ? sanitize(c.notes) : null,
+    rawData: c.rawData ? sanitizeRawData(c.rawData) : undefined,
+    candidatId: c.email ? emailToCandidat.get(c.email.toLowerCase()) || null : null,
+    companyId: c.company ? companyToId.get(c.company.toLowerCase()) || null : null,
+    callResult: 'pending' as const,
+    orderInList: i + 1,
+  }));
+
+  // Create list + contacts in a transaction to avoid orphan lists
+  const list = await prisma.$transaction(async (tx) => {
+    const newList = await tx.sdrList.create({
+      data: {
+        name: listName,
+        fileName,
+        totalContacts: parsed.length,
+        processedContacts: 0,
+        status: 'imported',
+        createdById: userId,
+        metadata: {
+          headers,
+          columnMap,
+          importedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    // Insert contacts in batches of 50 to avoid huge query strings
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < contactData.length; i += BATCH_SIZE) {
+      const batch = contactData.slice(i, i + BATCH_SIZE);
+      await tx.sdrContact.createMany({
+        data: batch.map((c) => ({ ...c, sdrListId: newList.id })),
+      });
+    }
+
+    return newList;
   });
 
   const existingCandidatCount = parsed.filter((c) => c.email && emailToCandidat.has(c.email.toLowerCase())).length;
