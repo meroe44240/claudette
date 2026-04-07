@@ -76,6 +76,9 @@ const COLUMN_ALIASES: Record<string, string> = {
   'téléphones': 'phone',           // Jarvi
   'mobile': 'phone',
   'phone number': 'phone',
+  'most probable phone number': 'phone',  // Evaboot / PhantomBuster
+  'valid phone numbers': 'phone',
+  'all phone numbers': 'phone',
   // Company
   'company': 'company',
   'entreprise': 'company',
@@ -94,10 +97,11 @@ const COLUMN_ALIASES: Record<string, string> = {
   'poste': 'jobTitle',
   'role': 'jobTitle',
   'fonction': 'jobTitle',
-  // LinkedIn (Jarvi)
+  // LinkedIn (Jarvi / Evaboot)
   'lien du profil linkedin': 'linkedinUrl',
   'linkedin': 'linkedinUrl',
   'linkedin url': 'linkedinUrl',
+  'linkedin profile url': 'linkedinUrl',  // Evaboot / PhantomBuster
   'profile url': 'linkedinUrl',
   'url': 'linkedinUrl',
 };
