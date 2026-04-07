@@ -196,11 +196,16 @@ export async function uploadAndParse(
     return val.length > max ? val.substring(0, max) : val;
   };
 
-  // Helper: sanitize strings for PostgreSQL JSON
-  // PostgreSQL interprets \x as hex escape in JSONB — remove all backslashes from CSV data
+  // Helper: sanitize strings for PostgreSQL JSONB
+  // 1. Remove control characters
+  // 2. Remove lone surrogates (chars outside BMP like mathematical bold cause \ud835 in JSON which Prisma can't handle)
+  // 3. Remove backslashes
   const sanitize = (val: string): string => {
-    // eslint-disable-next-line no-control-regex
-    return val.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(/\\/g, '');
+    return val
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')    // control chars
+      .replace(/[^\x20-\x7E\xA0-\uFFFF]/gu, '')         // strip everything outside BMP (incl. math bold, emojis, etc.)
+      .replace(/\\/g, '');                                // backslashes
   };
 
   const sanitizeRawData = (raw: Record<string, string>): Record<string, string> => {
@@ -245,27 +250,14 @@ export async function uploadAndParse(
       },
     });
 
-    // Insert contacts one-by-one to avoid JSONB serialization issues with createMany
-    for (const c of contactData) {
-      // Use $executeRawUnsafe with parameterized JSON to bypass Prisma's JSONB serialization
-      const rawJson = c.rawData ? JSON.stringify(c.rawData) : '{}';
-      await tx.$executeRawUnsafe(
-        `INSERT INTO sdr_contacts (id, "sdrListId", "firstName", "lastName", email, phone, company, "jobTitle", notes, "rawData", "candidatId", "companyId", "callResult", "orderInList")
-         VALUES (gen_random_uuid(), $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::uuid, $11::uuid, $12, $13)`,
-        newList.id,
-        c.firstName,
-        c.lastName,
-        c.email,
-        c.phone,
-        c.company,
-        c.jobTitle,
-        c.notes,
-        rawJson,
-        c.candidatId,
-        c.companyId,
-        c.callResult,
-        c.orderInList,
-      );
+    // Insert contacts in batches using createMany
+    // Surrogate pairs and control chars are already stripped by sanitize()
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < contactData.length; i += BATCH_SIZE) {
+      const batch = contactData.slice(i, i + BATCH_SIZE);
+      await tx.sdrContact.createMany({
+        data: batch.map((c) => ({ ...c, sdrListId: newList.id })),
+      });
     }
 
     return newList;
