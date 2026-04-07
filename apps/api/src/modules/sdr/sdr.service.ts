@@ -28,6 +28,8 @@ interface UploadResult {
     existingCandidats: number;
     existingCompanies: number;
     newContacts: number;
+    newCompaniesCreated: number;
+    newClientsCreated: number;
   };
 }
 
@@ -153,6 +155,8 @@ export async function uploadAndParse(
         }
         // linkedinUrl is not a ParsedContact field — skip it (kept in rawData)
         if (field === 'linkedinUrl') continue;
+        // Don't overwrite if already set (first column with value wins)
+        if ((contact as any)[field]) continue;
         (contact as any)[field] = value;
       }
     }
@@ -269,6 +273,113 @@ export async function uploadAndParse(
 
   const existingCandidatCount = parsed.filter((c) => c.email && emailToCandidat.has(c.email.toLowerCase())).length;
 
+  // ─── Auto-create Entreprise + Client at upload time ───
+  let newCompaniesCreated = 0;
+  let newClientsCreated = 0;
+
+  // Helper to get value from rawData by partial key match
+  const getRaw = (raw: Record<string, string> | undefined, keys: string[]): string | null => {
+    if (!raw) return null;
+    for (const key of keys) {
+      const match = Object.entries(raw).find(([k]) => k.toLowerCase().includes(key.toLowerCase()));
+      if (match?.[1]) return sanitize(match[1]);
+    }
+    return null;
+  };
+
+  // Map headcount range to TailleEntreprise enum
+  const mapTaille = (range: string | null): 'STARTUP' | 'PME' | 'ETI' | 'GRAND_GROUPE' | null => {
+    if (!range) return null;
+    const lower = range.toLowerCase();
+    if (lower.includes('1-10') || lower.includes('11-50')) return 'STARTUP';
+    if (lower.includes('51-200') || lower.includes('201-500')) return 'PME';
+    if (lower.includes('501-1000') || lower.includes('1001-5000')) return 'ETI';
+    if (lower.includes('5001') || lower.includes('10001') || lower.includes('10000')) return 'GRAND_GROUPE';
+    return null;
+  };
+
+  // Group contacts by company to avoid duplicate creation
+  const companiesProcessed = new Map<string, string>(); // companyName.lower → entrepriseId
+
+  for (const c of parsed) {
+    if (!c.company) continue;
+    const companyKey = c.company.toLowerCase();
+
+    // Skip if we already processed this company in this import
+    let entrepriseId = companiesProcessed.get(companyKey) || companyToId.get(companyKey) || null;
+
+    if (!entrepriseId) {
+      // Create new Entreprise with enriched data from rawData
+      const raw = c.rawData;
+      const headcountRange = getRaw(raw, ['Company headcount range', 'headcount range']);
+      const newCompany = await prisma.entreprise.create({
+        data: {
+          nom: sanitize(c.company),
+          secteur: getRaw(raw, ['Company industry', 'industry']) || null,
+          siteWeb: getRaw(raw, ['Company Domain', 'domain']) || null,
+          linkedinUrl: getRaw(raw, ['Company Linkedin URL', 'Company LinkedIn']) || null,
+          localisation: getRaw(raw, ['Company headquarters', 'headquarters location']) || null,
+          effectif: headcountRange || getRaw(raw, ['Company headcount', 'headcount']) || null,
+          notes: getRaw(raw, ['Company Description', 'description']) || null,
+          taille: mapTaille(headcountRange),
+          createdById: userId,
+        },
+      });
+      entrepriseId = newCompany.id;
+      newCompaniesCreated++;
+      companiesProcessed.set(companyKey, entrepriseId);
+
+      // Update sdr_contact with companyId
+      await prisma.sdrContact.updateMany({
+        where: { sdrListId: list.id, company: { equals: c.company, mode: 'insensitive' } },
+        data: { companyId: entrepriseId },
+      });
+    } else {
+      companiesProcessed.set(companyKey, entrepriseId);
+    }
+
+    // Create Client if not already existing for this entreprise
+    if (entrepriseId && (c.firstName || c.lastName)) {
+      const clientNom = sanitize(c.lastName || c.firstName || 'Inconnu');
+      const clientPrenom = c.firstName ? sanitize(c.firstName) : null;
+
+      // Check duplicate by nom+prenom in same entreprise
+      const existingClient = await prisma.client.findFirst({
+        where: {
+          nom: { equals: clientNom, mode: 'insensitive' },
+          ...(clientPrenom ? { prenom: { equals: clientPrenom, mode: 'insensitive' } } : {}),
+          entrepriseId,
+        },
+      });
+
+      if (!existingClient) {
+        // Extract LinkedIn URL from rawData (personal, not company)
+        const raw = c.rawData;
+        const linkedinUrl = raw
+          ? (Object.entries(raw).find(([k]) => {
+              const kl = k.toLowerCase();
+              return kl.includes('linkedin') && !kl.includes('company');
+            })?.[1] || null)
+          : null;
+
+        await prisma.client.create({
+          data: {
+            nom: clientNom,
+            prenom: clientPrenom,
+            telephone: c.phone ? sanitize(c.phone) : null,
+            poste: c.jobTitle ? sanitize(c.jobTitle) : null,
+            linkedinUrl: linkedinUrl ? sanitize(linkedinUrl) : null,
+            entrepriseId,
+            statutClient: 'LEAD',
+            typeClient: 'OUTBOUND',
+            createdById: userId,
+          },
+        });
+        newClientsCreated++;
+      }
+    }
+  }
+
   return {
     listId: list.id,
     listName: list.name,
@@ -282,6 +393,8 @@ export async function uploadAndParse(
       existingCandidats: existingCandidatCount,
       existingCompanies: existingCompanies.length,
       newContacts: parsed.length - existingCandidatCount,
+      newCompaniesCreated,
+      newClientsCreated,
     },
   };
 }
