@@ -303,6 +303,8 @@ export async function attributeContacts(listId: string, input: AttributionInput)
 
   // For contacts without candidatId, create candidat records
   const newCandidats: string[] = [];
+  let newClientsCreated = 0;
+  let newCompaniesCreated = 0;
   for (const contact of contacts) {
     if (!contact.candidatId && (contact.email || contact.phone)) {
       // Try to extract linkedinUrl from rawData (Jarvi: "Lien du profil Linkedin")
@@ -331,27 +333,106 @@ export async function attributeContacts(listId: string, input: AttributionInput)
       newCandidats.push(candidat.id);
     }
 
-    // Create company if needed
+    // Create company if needed + enrich with CSV data
+    let entrepriseId: string | null = null;
     if (!contact.companyId && contact.company) {
       const existing = await prisma.entreprise.findFirst({
         where: { nom: { equals: contact.company, mode: 'insensitive' } },
       });
       if (existing) {
+        entrepriseId = existing.id;
         await prisma.sdrContact.update({
           where: { id: contact.id },
           data: { companyId: existing.id },
         });
       } else {
+        // Extract enriched company data from rawData
+        const raw = contact.rawData as Record<string, string> | null;
+        const getRaw = (keys: string[]) => {
+          if (!raw) return null;
+          for (const key of keys) {
+            const match = Object.entries(raw).find(([k]) => k.toLowerCase().includes(key.toLowerCase()));
+            if (match?.[1]) return match[1];
+          }
+          return null;
+        };
+
+        // Map headcount range to TailleEntreprise enum
+        const headcountRange = getRaw(['headcount range', 'Company headcount range']);
+        let taille: 'STARTUP' | 'PME' | 'ETI' | 'GRAND_GROUPE' | undefined;
+        if (headcountRange) {
+          const lower = headcountRange.toLowerCase();
+          if (lower.includes('1-10') || lower.includes('11-50')) taille = 'STARTUP';
+          else if (lower.includes('51-200') || lower.includes('201-500')) taille = 'PME';
+          else if (lower.includes('501-1000') || lower.includes('1001-5000')) taille = 'ETI';
+          else if (lower.includes('5001') || lower.includes('10001') || lower.includes('10000')) taille = 'GRAND_GROUPE';
+        }
+
         const newCompany = await prisma.entreprise.create({
           data: {
             nom: contact.company,
+            secteur: getRaw(['Company industry', 'industry']) || null,
+            siteWeb: getRaw(['Company Domain', 'domain']) || null,
+            linkedinUrl: getRaw(['Company Linkedin URL', 'Company LinkedIn']) || null,
+            localisation: getRaw(['Company headquarters', 'headquarters location']) || null,
+            effectif: getRaw(['Company headcount range', 'headcount range']) || getRaw(['Company headcount', 'headcount']) || null,
+            notes: getRaw(['Company Description', 'description']) || null,
+            taille: taille || null,
             createdById: assignedToId,
           },
         });
+        entrepriseId = newCompany.id;
+        newCompaniesCreated++;
         await prisma.sdrContact.update({
           where: { id: contact.id },
           data: { companyId: newCompany.id },
         });
+      }
+    } else if (contact.companyId) {
+      entrepriseId = contact.companyId;
+    }
+
+    // Auto-create Client if we have an entreprise
+    if (entrepriseId && (contact.email || contact.firstName || contact.lastName)) {
+      // Check if client already exists (by email or nom+prenom in same entreprise)
+      let existingClient = null;
+      if (contact.email) {
+        existingClient = await prisma.client.findFirst({
+          where: { email: { equals: contact.email, mode: 'insensitive' }, entrepriseId },
+        });
+      }
+      if (!existingClient && contact.lastName) {
+        existingClient = await prisma.client.findFirst({
+          where: {
+            nom: { equals: contact.lastName, mode: 'insensitive' },
+            ...(contact.firstName ? { prenom: { equals: contact.firstName, mode: 'insensitive' } } : {}),
+            entrepriseId,
+          },
+        });
+      }
+
+      if (!existingClient) {
+        const raw = contact.rawData as Record<string, string> | null;
+        const linkedinUrl = raw
+          ? (Object.entries(raw).find(([k]) => k.toLowerCase().includes('linkedin') && !k.toLowerCase().includes('company'))?.[1] || null)
+          : null;
+
+        await prisma.client.create({
+          data: {
+            nom: contact.lastName || 'Inconnu',
+            prenom: contact.firstName || null,
+            email: contact.email || null,
+            telephone: contact.phone || null,
+            poste: contact.jobTitle || null,
+            linkedinUrl: linkedinUrl || null,
+            entrepriseId,
+            statutClient: 'LEAD',
+            typeClient: 'OUTBOUND',
+            createdById: assignedToId,
+            assignedToId,
+          },
+        });
+        newClientsCreated++;
       }
     }
   }
@@ -359,6 +440,8 @@ export async function attributeContacts(listId: string, input: AttributionInput)
   return {
     attributed: contacts.length,
     newCandidatsCreated: newCandidats.length,
+    newCompaniesCreated,
+    newClientsCreated,
     assignedToId,
     sequenceId: sequenceId || null,
   };
