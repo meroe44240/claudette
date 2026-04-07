@@ -165,7 +165,44 @@ function parseCSVLine(line: string, delimiter: string): string[] {
 
 export function parseCSV(buffer: Buffer, delimiter?: string): ParsedCSV {
   const content = buffer.toString('utf-8');
-  const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  const rawLines = content.split(/\r?\n/);
+
+  if (rawLines.length === 0 || rawLines.every((l) => l.trim() === '')) {
+    throw new ValidationError('Le fichier CSV est vide');
+  }
+
+  // Merge lines that are inside quoted fields (multiline CSV values).
+  // Track open/close quote state properly: a quote toggles "in quotes" state
+  // unless it's an escaped "" (which stays inside the quoted field).
+  const lines: string[] = [];
+  let pending = '';
+  let inQuotedField = false;
+  for (const raw of rawLines) {
+    if (pending && inQuotedField) {
+      // We're continuing a multiline quoted field
+      pending += '\n' + raw;
+    } else {
+      if (raw.trim() === '') continue;
+      pending = raw;
+    }
+    // Re-scan the current raw line to update quote state
+    for (let j = 0; j < raw.length; j++) {
+      if (raw[j] === '"') {
+        if (inQuotedField && j + 1 < raw.length && raw[j + 1] === '"') {
+          // Escaped "" inside quoted field — skip both
+          j++;
+          continue;
+        }
+        inQuotedField = !inQuotedField;
+      }
+    }
+    if (!inQuotedField) {
+      lines.push(pending);
+      pending = '';
+    }
+  }
+  // If there's a dangling line (unmatched quote), push it anyway
+  if (pending) lines.push(pending);
 
   if (lines.length === 0) {
     throw new ValidationError('Le fichier CSV est vide');
