@@ -1,6 +1,7 @@
 import prisma from '../../lib/db.js';
 import { NotFoundError, ValidationError } from '../../lib/errors.js';
 import { parseCSV } from '../import/import.service.js';
+import { pushContactToAllo } from '../integrations/allo.service.js';
 
 // ─── TYPES ──────────────────────────────────────────
 
@@ -376,6 +377,16 @@ export async function uploadAndParse(
           },
         });
         newClientsCreated++;
+
+        // Push contact to Allo for caller-ID
+        if (c.phone) {
+          pushContactToAllo(sanitize(c.phone), {
+            name: clientPrenom || undefined,
+            lastName: clientNom,
+            jobTitle: c.jobTitle ? sanitize(c.jobTitle) : undefined,
+            email: c.email ? sanitize(c.email) : undefined,
+          }).catch(() => {}); // fire-and-forget, don't block import
+        }
       }
     }
   }

@@ -232,6 +232,31 @@ export default async function integrationRouter(fastify: FastifyInstance) {
     },
   });
 
+  // POST /allo/push-contact - Push a single contact to Allo phonebook
+  fastify.post('/allo/push-contact', {
+    schema: {
+      description: 'Envoyer un contact vers Allo pour le caller-ID',
+      tags: ['Integrations - Allo'],
+      body: {
+        type: 'object',
+        required: ['phone'],
+        properties: {
+          phone: { type: 'string' },
+          name: { type: 'string' },
+          lastName: { type: 'string' },
+          jobTitle: { type: 'string' },
+          email: { type: 'string' },
+        },
+      },
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { phone, name, lastName, jobTitle, email } = request.body as any;
+      const result = await alloService.pushContactToAllo(phone, { name, lastName, jobTitle, email });
+      return result;
+    },
+  });
+
   // POST /allo/process-transcripts - AI-analyze all unprocessed Allo calls
   fastify.post('/allo/process-transcripts', {
     schema: {

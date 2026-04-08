@@ -760,6 +760,94 @@ export async function autoProcessTranscripts(userId: string) {
   };
 }
 
+// ─── PUSH CONTACT TO ALLO ──────────────────────────
+
+/**
+ * Create a contact in Allo so caller-ID shows the name when they call back.
+ * Silently skips if Allo is not configured or if the contact already exists.
+ */
+export async function pushContactToAllo(
+  phone: string,
+  data: { name?: string; lastName?: string; jobTitle?: string; email?: string },
+): Promise<{ success: boolean; alloId?: string }> {
+  const apiKey = process.env.ALLO_API_KEY;
+  const baseUrl = process.env.ALLO_BASE_URL || 'https://api.withallo.com';
+
+  if (!apiKey || !phone) return { success: false };
+
+  // Normalize phone to E.164 (if not already)
+  let e164 = phone.replace(/[\s.\-()]/g, '');
+  if (!e164.startsWith('+')) {
+    // French number without prefix
+    if (e164.startsWith('0') && e164.length === 10) {
+      e164 = '+33' + e164.slice(1);
+    } else {
+      e164 = '+' + e164;
+    }
+  }
+
+  try {
+    // Check if contact already exists in Allo
+    const searchRes = await fetch(`${baseUrl}/v1/api/contacts?size=1&search=${encodeURIComponent(e164)}`, {
+      headers: { Authorization: apiKey },
+    });
+    if (searchRes.ok) {
+      const searchBody = await searchRes.json() as any;
+      const existing = searchBody.data?.results || [];
+      if (existing.length > 0) {
+        return { success: true, alloId: existing[0].id };
+      }
+    }
+
+    // Create the contact
+    const body: Record<string, any> = {
+      numbers: [e164],
+    };
+    if (data.name) body.name = data.name;
+    if (data.lastName) body.last_name = data.lastName;
+    if (data.jobTitle) body.job_title = data.jobTitle;
+    if (data.email) body.emails = [data.email];
+
+    const res = await fetch(`${baseUrl}/v1/api/contacts`, {
+      method: 'POST',
+      headers: {
+        Authorization: apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('[Allo] Failed to create contact:', res.status, errText);
+      return { success: false };
+    }
+
+    const result = await res.json() as any;
+    console.log(`[Allo] Contact created: ${data.name || ''} ${data.lastName || ''} → ${e164}`);
+    return { success: true, alloId: result.data?.id };
+  } catch (err) {
+    console.error('[Allo] Error pushing contact:', err);
+    return { success: false };
+  }
+}
+
+/**
+ * Push multiple contacts to Allo in batch (for CSV imports etc.).
+ * Returns count of successfully created contacts.
+ */
+export async function pushContactsToAlloBatch(
+  contacts: Array<{ phone: string; name?: string; lastName?: string; jobTitle?: string; email?: string }>,
+): Promise<number> {
+  let created = 0;
+  for (const c of contacts) {
+    if (!c.phone) continue;
+    const result = await pushContactToAllo(c.phone, c);
+    if (result.success) created++;
+  }
+  return created;
+}
+
 /**
  * Validate Allo webhook signature.
  */
