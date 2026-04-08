@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Check, Clock, AlertTriangle, Calendar, Plus, Send,
   ChevronDown, ChevronUp, Mail, Loader2, Trash2, AlarmClock,
-  User, Building2, FileText, Briefcase, ExternalLink,
+  User, Building2, FileText, Briefcase, ExternalLink, Pencil,
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { api } from '../../lib/api-client';
@@ -93,11 +93,18 @@ export default function TachesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<Tache | null>(null);
   const [createForm, setCreateForm] = useState({
     titre: '',
     contenu: '',
     entiteType: 'CANDIDAT' as string,
     entiteId: '',
+    tacheDueDate: '',
+    tachePriority: 'MOYENNE' as string,
+  });
+  const [editForm, setEditForm] = useState({
+    titre: '',
+    contenu: '',
     tacheDueDate: '',
     tachePriority: 'MOYENNE' as string,
   });
@@ -133,6 +140,26 @@ export default function TachesPage() {
     mutationFn: (id: string) => api.delete(`/taches/${id}`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['taches'] }); toast('success', 'Tâche supprimée'); },
   });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => api.put(`/taches/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['taches'] });
+      toast('success', 'Tâche modifiée');
+      setEditingTask(null);
+    },
+    onError: () => toast('error', 'Erreur lors de la modification'),
+  });
+
+  const openEditModal = (t: Tache) => {
+    setEditForm({
+      titre: t.titre,
+      contenu: t.contenu || '',
+      tacheDueDate: t.tacheDueDate ? new Date(t.tacheDueDate).toISOString().slice(0, 16) : '',
+      tachePriority: t.type || 'MOYENNE',
+    });
+    setEditingTask(t);
+  };
 
   const isAdchaseTask = (t: Tache) => !!(t.metadata?.adchaseCampaignId);
 
@@ -414,13 +441,22 @@ export default function TachesPage() {
                       </span>
                     )}
                     {!isAdchase && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); if(confirm('Supprimer cette tâche ?')) deleteMutation.mutate(t.id); }}
-                        disabled={deleteMutation.isPending}
-                        className="ml-2 rounded p-1 text-neutral-300 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-40"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openEditModal(t); }}
+                          className="ml-2 rounded p-1 text-neutral-300 hover:bg-violet-50 hover:text-violet-500 transition-colors"
+                          title="Modifier"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); if(confirm('Supprimer cette tâche ?')) deleteMutation.mutate(t.id); }}
+                          disabled={deleteMutation.isPending}
+                          className="rounded p-1 text-neutral-300 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-40"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
                     )}
                   </div>
 
@@ -554,6 +590,59 @@ export default function TachesPage() {
               disabled={!createForm.titre || createMutation.isPending}
             >
               {createMutation.isPending ? 'Création...' : 'Créer la tâche'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit modal */}
+      <Modal isOpen={!!editingTask} onClose={() => setEditingTask(null)} title="Modifier la tâche">
+        <div className="space-y-4">
+          <Input
+            label="Titre"
+            placeholder="Ex: Relancer le candidat"
+            value={editForm.titre}
+            onChange={(e) => setEditForm(f => ({ ...f, titre: e.target.value }))}
+          />
+          <Textarea
+            label="Description (optionnel)"
+            placeholder="Détails de la tâche..."
+            value={editForm.contenu}
+            onChange={(e) => setEditForm(f => ({ ...f, contenu: e.target.value }))}
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Priorité"
+              options={[
+                { value: 'HAUTE', label: 'Haute' },
+                { value: 'MOYENNE', label: 'Moyenne' },
+                { value: 'BASSE', label: 'Basse' },
+              ]}
+              value={editForm.tachePriority}
+              onChange={(val) => setEditForm(f => ({ ...f, tachePriority: val }))}
+            />
+            <Input
+              label="Date d'échéance"
+              type="datetime-local"
+              value={editForm.tacheDueDate}
+              onChange={(e) => setEditForm(f => ({ ...f, tacheDueDate: e.target.value }))}
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setEditingTask(null)}>Annuler</Button>
+            <Button
+              onClick={() => editingTask && updateMutation.mutate({
+                id: editingTask.id,
+                data: {
+                  titre: editForm.titre,
+                  contenu: editForm.contenu || undefined,
+                  tacheDueDate: editForm.tacheDueDate ? new Date(editForm.tacheDueDate).toISOString() : null,
+                  tachePriority: editForm.tachePriority,
+                },
+              })}
+              disabled={!editForm.titre || updateMutation.isPending}
+            >
+              {updateMutation.isPending ? 'Enregistrement...' : 'Enregistrer'}
             </Button>
           </div>
         </div>
