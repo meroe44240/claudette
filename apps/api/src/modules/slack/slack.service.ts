@@ -367,6 +367,33 @@ const STAGE_LABELS: Record<string, string> = {
   OFFRE: 'offre',
 };
 
+// Daily objectives per metric
+const DAILY_OBJECTIVES: Record<string, number> = {
+  appels: 35,
+  rdv: 1,
+  presentations: 1,
+  pushes: 10,
+};
+
+/** Build a 10-block progress bar: █ filled, ░ empty */
+function buildProgressBar(current: number, target: number): string {
+  const ratio = Math.min(current / target, 1);
+  const filled = Math.round(ratio * 10);
+  return '█'.repeat(filled) + '░'.repeat(10 - filled);
+}
+
+/** Build a single objective line with emoji prefix, ratio, and bar */
+function buildObjLine(emoji: string, current: number, target: number): string {
+  const bar = buildProgressBar(current, target);
+  if (current >= target) {
+    return `✅ ${emoji} ${current}/${target}  ${bar}`;
+  }
+  if (current === 0) {
+    return `⚠️ ${emoji} 0/${target}  ${bar}`;
+  }
+  return `${emoji} ${current}/${target}  ${bar}`;
+}
+
 function buildSlackBlocks(data: DailyReportData): object {
   const blocks: object[] = [];
 
@@ -385,10 +412,20 @@ function buildSlackBlocks(data: DailyReportData): object {
 
     const displayName = user.prenom ? `${user.prenom} ${user.nom}` : user.nom;
 
-    // Activity line — condensed with dots
-    const activityLine = `📞 ${user.appels} · 📅 ${user.rdv} · 🎯 ${user.interviews} · 🤝 ${user.presentations} · 📨 ${user.pushes}`;
+    // Progress bar lines per objective
+    const objLines = [
+      buildObjLine('📞', user.appels, DAILY_OBJECTIVES.appels),
+      buildObjLine('📅', user.rdv, DAILY_OBJECTIVES.rdv),
+      buildObjLine('🤝', user.presentations, DAILY_OBJECTIVES.presentations),
+      buildObjLine('📨', user.pushes, DAILY_OBJECTIVES.pushes),
+    ];
 
-    let sectionText = `👤 *${displayName}*\n${activityLine}`;
+    // Add interviews as info line (no objective)
+    if (user.interviews > 0) {
+      objLines.push(`🎯 ${user.interviews} entretien${user.interviews > 1 ? 's' : ''}`);
+    }
+
+    let sectionText = `👤 *${displayName}*\n${objLines.join('\n')}`;
 
     // Mandats — only those with candidatsActifs > 0
     for (const m of user.mandats) {
