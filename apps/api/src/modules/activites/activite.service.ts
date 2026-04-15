@@ -3,6 +3,7 @@ import { NotFoundError } from '../../lib/errors.js';
 import { paginatedResult, paginationToSkipTake } from '../../lib/pagination.js';
 import type { PaginationParams } from '../../lib/pagination.js';
 import type { CreateActiviteInput, UpdateActiviteInput } from './activite.schema.js';
+import { notifyNewMeeting } from '../slack/slack.service.js';
 
 interface ListFilters {
   entiteType?: string;
@@ -100,6 +101,36 @@ export async function create(data: CreateActiviteInput, userId: string) {
         meetingTitle: data.titre || 'Meeting',
       }).catch(err => console.error('Failed to schedule feedback reminder:', err));
     }).catch(() => {});
+
+    // Fire-and-forget Slack notification for new meetings
+    (async () => {
+      try {
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { prenom: true } });
+        let clientNom: string | null = null;
+        let entrepriseNom: string | null = null;
+        if (data.entiteId && data.entiteType === 'CLIENT') {
+          const client = await prisma.client.findUnique({
+            where: { id: data.entiteId },
+            select: { nom: true, prenom: true, entreprise: { select: { nom: true } } },
+          });
+          if (client) {
+            clientNom = [client.prenom, client.nom].filter(Boolean).join(' ');
+            entrepriseNom = client.entreprise?.nom || null;
+          }
+        }
+        const meta = (data.metadata || {}) as Record<string, unknown>;
+        await notifyNewMeeting({
+          titre: data.titre || 'RDV',
+          recruteurPrenom: user?.prenom || null,
+          clientNom,
+          entrepriseNom,
+          date: (meta.startTime as string) || null,
+          lieu: (meta.location as string) || null,
+        });
+      } catch (err) {
+        console.error('[Slack] Failed to send new meeting notification:', err);
+      }
+    })();
   }
 
   return result;

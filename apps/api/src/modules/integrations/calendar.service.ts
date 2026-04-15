@@ -2,6 +2,7 @@ import prisma from '../../lib/db.js';
 import { AppError } from '../../lib/errors.js';
 import * as notificationService from '../notifications/notification.service.js';
 import { matchEmail } from './gmail.service.js';
+import { notifyNewMeeting } from '../slack/slack.service.js';
 
 // ─── TYPES ──────────────────────────────────────────
 
@@ -628,6 +629,35 @@ export async function createEvent(userId: string, data: CalendarEventData, sendN
     entiteType,
     entiteId,
   });
+
+  // Slack notification for new meeting (fire-and-forget)
+  (async () => {
+    try {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { prenom: true } });
+      let clientNom: string | null = null;
+      let entrepriseNom: string | null = null;
+      if (entiteId && entiteType === 'CLIENT') {
+        const client = await prisma.client.findUnique({
+          where: { id: entiteId },
+          select: { nom: true, prenom: true, entreprise: { select: { nom: true } } },
+        });
+        if (client) {
+          clientNom = [client.prenom, client.nom].filter(Boolean).join(' ');
+          entrepriseNom = client.entreprise?.nom || null;
+        }
+      }
+      await notifyNewMeeting({
+        titre: data.summary,
+        recruteurPrenom: user?.prenom || null,
+        clientNom,
+        entrepriseNom,
+        date: data.startTime,
+        lieu: data.location || null,
+      });
+    } catch (err) {
+      console.error('[Slack] Failed to send new meeting notification:', err);
+    }
+  })();
 
   if (!createdViaApi) {
     return {

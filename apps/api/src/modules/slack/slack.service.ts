@@ -745,6 +745,48 @@ export async function notifyCloseWon(data: {
   }
 }
 
+// ─── NEW MEETING NOTIFICATION ─────────────────────
+
+/**
+ * Notify Slack when a new meeting/RDV is created.
+ */
+export async function notifyNewMeeting(data: {
+  titre: string;
+  recruteurPrenom: string | null;
+  clientNom: string | null;
+  entrepriseNom: string | null;
+  date: string | null;
+  lieu: string | null;
+}): Promise<void> {
+  const config = await getSlackConfig();
+  if (!config || !config.enabled) return;
+
+  const recruteur = data.recruteurPrenom || 'Non assigné';
+  const lines = [`📅 *Nouveau RDV*`, ``];
+  lines.push(`📋 ${data.titre}`);
+  if (data.clientNom) lines.push(`👤 Contact : ${data.clientNom}`);
+  if (data.entrepriseNom) lines.push(`🏢 ${data.entrepriseNom}`);
+  if (data.date) {
+    const d = new Date(data.date);
+    const datePart = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Paris' });
+    const timePart = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+    lines.push(`🕐 ${datePart} à ${timePart}`);
+  }
+  if (data.lieu) lines.push(`📍 ${data.lieu}`);
+  lines.push(`👔 Recruteur : ${recruteur}`);
+
+  const payload = {
+    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: lines.join('\n') } }],
+  };
+
+  try {
+    await sendToWebhook(config.webhookUrl, payload);
+    console.log(`[Slack] New meeting notification sent: ${data.titre}`);
+  } catch (err) {
+    console.error('[Slack] Failed to send meeting notification:', err);
+  }
+}
+
 // ─── PUSH CV NOTIFICATION ──────────────────────────
 
 export async function sendPushNotification(data: {
