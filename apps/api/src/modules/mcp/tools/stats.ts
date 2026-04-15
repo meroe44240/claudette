@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { wrapTool } from '../mcp.tools.js';
 import prisma from '../../../lib/db.js';
 import { getPushStatsForUsers } from '../../pushes/push.service.js';
+import * as calendarService from '../../integrations/calendar.service.js';
+import * as clientService from '../../clients/client.service.js';
 
 function startOfDay(date: Date = new Date()): Date {
   const d = new Date(date);
@@ -191,6 +193,87 @@ export function registerStatsTools(server: McpServer) {
           ...bookings.map(b => ({ type: 'booking', title: `${b.firstName} ${b.lastName}`, date: b.bookingDate, time: b.bookingTime, duration: b.durationMinutes })),
         ],
       };
+    }),
+  );
+
+  // ─── create_rdv ──────────────────────────────────────
+  server.tool(
+    'create_rdv',
+    "[CONFIRMATION REQUISE] Cree un rendez-vous client. Cree l'evenement dans Google Calendar (si connecte) + une activite MEETING dans l'ATS. Tu DOIS demander confirmation avant de creer.",
+    {
+      titre: z.string().describe("Titre du RDV (ex: 'RDV Ponant - Poste Account Executive')"),
+      date: z.string().describe('Date et heure de debut au format ISO (ex: 2026-04-16T14:00:00)'),
+      duree: z.number().optional().default(60).describe('Duree en minutes (defaut: 60)'),
+      client_id: z.string().optional().describe('UUID du client. Si fourni, lie le RDV au client.'),
+      client_name: z.string().optional().describe('Nom du client si pas d\'UUID — recherche automatique.'),
+      description: z.string().optional().describe('Description / notes du RDV'),
+      lieu: z.string().optional().describe('Lieu (adresse, lien visio, etc.)'),
+      attendees: z.array(z.string()).optional().describe('Emails des participants pour invitation Calendar'),
+    },
+    wrapTool('create_rdv', async (args, user) => {
+      // Resolve client
+      let entiteId: string | undefined;
+      if (args.client_id) {
+        entiteId = args.client_id as string;
+      } else if (args.client_name) {
+        const results = await clientService.list({ page: 1, perPage: 1 }, args.client_name as string);
+        if (results.data[0]) {
+          entiteId = results.data[0].id;
+        }
+      }
+
+      const startTime = new Date(args.date as string);
+      const dureeMin = (args.duree as number) || 60;
+      const endTime = new Date(startTime.getTime() + dureeMin * 60 * 1000);
+
+      // Try to create via Google Calendar (will also create Activite)
+      try {
+        const result = await calendarService.createEvent(user.userId, {
+          summary: args.titre as string,
+          description: args.description as string | undefined,
+          location: args.lieu as string | undefined,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          attendees: args.attendees as string[] | undefined,
+          entiteType: 'CLIENT',
+          entiteId: entiteId,
+        });
+        return {
+          success: true,
+          calendar: result.success,
+          activite_id: result.activiteId,
+          google_event_id: result.googleEventId,
+          message: result.success
+            ? `RDV "${args.titre}" cree dans Calendar + ATS`
+            : `RDV "${args.titre}" cree dans l'ATS (Calendar non connecte)`,
+        };
+      } catch {
+        // Calendar not connected — create Activite only
+        const activite = await prisma.activite.create({
+          data: {
+            type: 'MEETING',
+            entiteType: 'CLIENT',
+            entiteId: entiteId || undefined,
+            userId: user.userId,
+            titre: args.titre as string,
+            contenu: args.description as string || `RDV planifie: ${args.titre}`,
+            source: 'MANUEL',
+            metadata: {
+              startTime: startTime.toISOString(),
+              endTime: endTime.toISOString(),
+              location: (args.lieu as string) || null,
+              attendees: (args.attendees as string[]) || [],
+              dureeMinutes: dureeMin,
+            },
+          },
+        });
+        return {
+          success: true,
+          calendar: false,
+          activite_id: activite.id,
+          message: `RDV "${args.titre}" cree dans l'ATS (Google Calendar non connecte)`,
+        };
+      }
     }),
   );
 
