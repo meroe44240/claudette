@@ -10,6 +10,7 @@ interface SlackConfig {
 
 interface MandatPipeline {
   titre: string;
+  clientNom: string | null;
   mandatId: string;
   candidatsActifs: number;
   dernierMouvement: string; // formatted date
@@ -81,13 +82,10 @@ function formatYesterdayFr(): string {
   const nowParis = new Date(Date.now() + offset);
   nowParis.setDate(nowParis.getDate() - 1);
   const options: Intl.DateTimeFormatOptions = {
-    weekday: 'long',
     day: 'numeric',
     month: 'long',
-    year: 'numeric',
     timeZone: 'Europe/Paris',
   };
-  // Use the actual yesterday date but format via UTC trick
   const yesterdayUtc = new Date(nowParis.getTime() - offset);
   return yesterdayUtc.toLocaleDateString('fr-FR', options);
 }
@@ -165,10 +163,13 @@ export async function saveSlackConfig(
 async function gatherDailyData(): Promise<DailyReportData> {
   const { start: yesterdayStart, end: yesterdayEnd } = getYesterdayRangeParis();
 
-  // Get all active users
-  const users = await prisma.user.findMany({
-    where: { role: { not: undefined as any } },
+  // Get all active users (exclude test accounts)
+  const allUsers = await prisma.user.findMany({
     select: { id: true, nom: true, prenom: true },
+  });
+  const users = allUsers.filter((u) => {
+    const full = `${u.prenom || ''} ${u.nom}`.toLowerCase();
+    return !full.includes('test');
   });
 
   // Gather per-user stats for yesterday
@@ -218,7 +219,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
         }),
       ]);
 
-      // Active mandats assigned to this user with candidature pipeline
+      // Active mandats assigned to this user with candidature pipeline + client name
       const activeMandats = await prisma.mandat.findMany({
         where: {
           assignedToId: user.id,
@@ -228,6 +229,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
           id: true,
           titrePoste: true,
           updatedAt: true,
+          entreprise: { select: { nom: true } },
           candidatures: {
             select: {
               stage: true,
@@ -237,37 +239,40 @@ async function gatherDailyData(): Promise<DailyReportData> {
         },
       });
 
-      const mandats: MandatPipeline[] = activeMandats.map((m) => {
-        const stages = {
-          SOURCING: 0,
-          CONTACTE: 0,
-          ENTRETIEN_1: 0,
-          ENTRETIEN_CLIENT: 0,
-          OFFRE: 0,
-          PLACE: 0,
-          REFUSE: 0,
-        };
+      const mandats: MandatPipeline[] = activeMandats
+        .map((m) => {
+          const stages = {
+            SOURCING: 0,
+            CONTACTE: 0,
+            ENTRETIEN_1: 0,
+            ENTRETIEN_CLIENT: 0,
+            OFFRE: 0,
+            PLACE: 0,
+            REFUSE: 0,
+          };
 
-        let latestMove = m.updatedAt;
-        for (const c of m.candidatures) {
-          stages[c.stage]++;
-          if (c.updatedAt > latestMove) {
-            latestMove = c.updatedAt;
+          let latestMove = m.updatedAt;
+          for (const c of m.candidatures) {
+            stages[c.stage]++;
+            if (c.updatedAt > latestMove) {
+              latestMove = c.updatedAt;
+            }
           }
-        }
 
-        const candidatsActifs = m.candidatures.filter(
-          (c) => c.stage !== 'REFUSE' && c.stage !== 'PLACE',
-        ).length;
+          const candidatsActifs = m.candidatures.filter(
+            (c) => c.stage !== 'REFUSE' && c.stage !== 'PLACE',
+          ).length;
 
-        return {
-          titre: m.titrePoste,
-          mandatId: m.id,
-          candidatsActifs,
-          dernierMouvement: formatShortDateFr(latestMove),
-          stages,
-        };
-      });
+          return {
+            titre: m.titrePoste,
+            clientNom: m.entreprise?.nom || null,
+            mandatId: m.id,
+            candidatsActifs,
+            dernierMouvement: formatShortDateFr(latestMove),
+            stages,
+          };
+        })
+        .filter((m) => m.candidatsActifs > 0); // Only mandats with active candidates
 
       return {
         userId: user.id,
@@ -353,102 +358,81 @@ async function gatherDailyData(): Promise<DailyReportData> {
   };
 }
 
+// Map stage enum to short French label
+const STAGE_LABELS: Record<string, string> = {
+  SOURCING: 'sourcing',
+  CONTACTE: 'contacté',
+  ENTRETIEN_1: 'entretien',
+  ENTRETIEN_CLIENT: 'client',
+  OFFRE: 'offre',
+};
+
 function buildSlackBlocks(data: DailyReportData): object {
   const blocks: object[] = [];
 
-  // Header
+  // Header — compact "📊 *HumanUp — 14 avril*"
   blocks.push({
-    type: 'header',
-    text: {
-      type: 'plain_text',
-      text: `📊 HumanUp — Brief du ${data.date}`,
-      emoji: true,
-    },
+    type: 'section',
+    text: { type: 'mrkdwn', text: `📊 *HumanUp — ${data.date}*` },
   });
 
-  // Per-recruiter sections (show ALL users, stats at 0 are shown)
+  // Per-recruiter sections
   for (const user of data.users) {
+    const hasActivity = user.appels + user.rdv + user.interviews + user.presentations + user.pushes > 0;
+
+    // Skip recruiter if all stats are 0 AND no active mandats
+    if (!hasActivity && user.mandats.length === 0) continue;
+
     const displayName = user.prenom ? `${user.prenom} ${user.nom}` : user.nom;
 
-    blocks.push({ type: 'divider' });
-
-    // Activity line
-    const activityLine = [
-      `📞 Calls : ${user.appels}`,
-      `📅 RDV : ${user.rdv}`,
-      `🎯 Interviews : ${user.interviews}`,
-      `🤝 Présentations : ${user.presentations}`,
-      `📨 Pushes : ${user.pushes}`,
-    ].join(' | ');
+    // Activity line — condensed with dots
+    const activityLine = `📞 ${user.appels} · 📅 ${user.rdv} · 🎯 ${user.interviews} · 🤝 ${user.presentations} · 📨 ${user.pushes}`;
 
     let sectionText = `👤 *${displayName}*\n${activityLine}`;
 
-    // Mandats pipeline
-    if (user.mandats.length > 0) {
-      sectionText += `\n\n*Mandats :*`;
-      for (const m of user.mandats) {
-        const s = m.stages;
-        sectionText += `\n• ${m.titre} — ${m.candidatsActifs} candidats actifs — Dernier mouvement : ${m.dernierMouvement}`;
-        sectionText += `\n  └ Pipeline : Sourcing (${s.SOURCING}) → Contacté (${s.CONTACTE}) → Entretien (${s.ENTRETIEN_1}) → Client (${s.ENTRETIEN_CLIENT}) → Offre (${s.OFFRE})`;
+    // Mandats — only those with candidatsActifs > 0
+    for (const m of user.mandats) {
+      // Build condensed pipeline: only stages > 0
+      const pipelineParts: string[] = [];
+      for (const [stage, label] of Object.entries(STAGE_LABELS)) {
+        const count = m.stages[stage as keyof typeof m.stages];
+        if (count > 0) pipelineParts.push(`${count} ${label}`);
       }
+      const pipelineStr = pipelineParts.length > 0 ? ` · ${pipelineParts.join(' · ')}` : '';
+
+      const clientStr = m.clientNom ? ` (${m.clientNom})` : '';
+      sectionText += `\n• ${m.titre}${clientStr} — ${m.candidatsActifs} actif${m.candidatsActifs > 1 ? 's' : ''}${pipelineStr}`;
     }
 
+    blocks.push({ type: 'divider' });
     blocks.push({
       type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: sectionText,
-      },
+      text: { type: 'mrkdwn', text: sectionText },
     });
   }
 
   blocks.push({ type: 'divider' });
 
-  // Top performer
+  // Top performer + alerts — compact footer
   const topLine = data.topPerformer
     ? `🏆 *Top performer :* ${data.topPerformer.name} (${data.topPerformer.metric})`
     : `🏆 *Top performer :* _aucune activité hier_`;
 
-  // Alerts
   const alertParts: string[] = [];
   if (data.alerts.dormantMandats.length > 0) {
-    const dormantList = data.alerts.dormantMandats
-      .slice(0, 5)
-      .map((d) => `${d.titre} (+${d.jours}j)`)
-      .join(', ');
-    const suffix =
-      data.alerts.dormantMandats.length > 5
-        ? ` et ${data.alerts.dormantMandats.length - 5} autre(s)`
-        : '';
-    alertParts.push(`${data.alerts.dormantMandats.length} mandat(s) sans mouvement +7j (${dormantList}${suffix})`);
+    alertParts.push(`${data.alerts.dormantMandats.length} mandats sans mouvement +7j`);
   }
   if (data.alerts.pushesSansReponse > 0) {
-    alertParts.push(`${data.alerts.pushesSansReponse} push(es) ENVOYÉ sans réponse +5j`);
+    alertParts.push(`${data.alerts.pushesSansReponse} pushes sans réponse +5j`);
   }
 
-  const alertLine =
-    alertParts.length > 0
-      ? `\n⚠️ *Alertes :* ${alertParts.join(' / ')}`
-      : '';
+  const alertLine = alertParts.length > 0
+    ? `\n⚠️ *Alertes :* ${alertParts.join(' · ')}`
+    : '';
 
   blocks.push({
     type: 'section',
-    text: {
-      type: 'mrkdwn',
-      text: topLine + alertLine,
-    },
-  });
-
-  // Footer with link
-  const appUrl = process.env.APP_URL || 'https://ats.propium.co';
-  blocks.push({
-    type: 'context',
-    elements: [
-      {
-        type: 'mrkdwn',
-        text: `📊 <${appUrl}/stats|Voir les stats détaillées>`,
-      },
-    ],
+    text: { type: 'mrkdwn', text: topLine + alertLine },
   });
 
   return { blocks };
