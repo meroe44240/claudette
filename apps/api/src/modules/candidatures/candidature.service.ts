@@ -2,6 +2,73 @@ import prisma from '../../lib/db.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../lib/errors.js';
 import type { CreateCandidatureInput, UpdateCandidatureInput } from './candidature.schema.js';
 import type { StageCandidature } from '@prisma/client';
+import {
+  notifyPresentation,
+  notifyRdvClient,
+  notifyCloseWon,
+} from '../slack/slack.service.js';
+import { logActivity } from '../../lib/activity-logger.js';
+
+/**
+ * Fetch full context for a candidature (candidat, mandat, entreprise, client, recruteur)
+ * and fire the appropriate Slack notification based on the new stage.
+ * All calls are fire-and-forget so they never block mutations.
+ */
+async function fireSlackStageNotification(
+  candidatureId: string,
+  newStage: string,
+  dateEntretienClient?: Date | null,
+): Promise<void> {
+  const candidature = await prisma.candidature.findUnique({
+    where: { id: candidatureId },
+    include: {
+      candidat: { select: { nom: true, prenom: true } },
+      mandat: {
+        include: {
+          entreprise: { select: { nom: true } },
+          client: { select: { nom: true, prenom: true } },
+          assignedTo: { select: { prenom: true } },
+        },
+      },
+    },
+  });
+  if (!candidature) return;
+
+  const { candidat, mandat } = candidature;
+  const contactNom = mandat.client
+    ? [mandat.client.prenom, mandat.client.nom].filter(Boolean).join(' ')
+    : null;
+
+  if (newStage === 'ENTRETIEN_CLIENT') {
+    await notifyPresentation({
+      candidatPrenom: candidat.prenom,
+      candidatNom: candidat.nom,
+      entrepriseNom: mandat.entreprise?.nom || 'N/A',
+      contactNom,
+      mandatTitre: mandat.titrePoste,
+      recruteurPrenom: mandat.assignedTo?.prenom || null,
+    });
+  } else if (newStage === 'ENTRETIEN_1') {
+    await notifyRdvClient({
+      candidatPrenom: candidat.prenom,
+      candidatNom: candidat.nom,
+      entrepriseNom: mandat.entreprise?.nom || 'N/A',
+      contactNom,
+      mandatTitre: mandat.titrePoste,
+      dateEntretien: dateEntretienClient || candidature.dateEntretienClient || null,
+      recruteurPrenom: mandat.assignedTo?.prenom || null,
+    });
+  } else if (newStage === 'PLACE') {
+    await notifyCloseWon({
+      candidatPrenom: candidat.prenom,
+      candidatNom: candidat.nom,
+      entrepriseNom: mandat.entreprise?.nom || 'N/A',
+      mandatTitre: mandat.titrePoste,
+      feeMontant: mandat.feeMontantFacture || mandat.feeMontantEstime || null,
+      recruteurPrenom: mandat.assignedTo?.prenom || null,
+    });
+  }
+}
 
 export async function list(filters: {
   mandatId?: string;
@@ -77,6 +144,23 @@ export async function create(data: CreateCandidatureInput, createdById: string) 
       changedById: createdById,
     },
   });
+
+  // Fire-and-forget: log "candidat added to mandat" activity
+  prisma.mandat
+    .findUnique({ where: { id: data.mandatId }, select: { titrePoste: true } })
+    .then((mandat) => {
+      const titre = mandat?.titrePoste || data.mandatId;
+      logActivity({
+        type: 'NOTE',
+        entiteType: 'CANDIDAT',
+        entiteId: data.candidatId,
+        userId: createdById,
+        titre: `Ajouté au mandat ${titre}`,
+        source: 'SYSTEME',
+        metadata: { candidatureId: candidature.id, mandatId: data.mandatId },
+      });
+    })
+    .catch(() => {});
 
   return candidature;
 }
@@ -162,6 +246,10 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
         },
       });
     }
+
+    // Fire-and-forget Slack notification for key stage changes
+    const dateEntretien = data.dateEntretienClient ? new Date(data.dateEntretienClient) : null;
+    fireSlackStageNotification(id, data.stage, dateEntretien).catch(() => {});
   }
 
   return candidature;
@@ -232,6 +320,9 @@ export async function bulkUpdateStage(
         metadata: { stageChange: true, candidatureId: id, mandatId: existing.mandatId, fromStage: existing.stage, toStage: stage },
       },
     });
+
+    // Fire-and-forget Slack notification for key stage changes
+    fireSlackStageNotification(id, stage, null).catch(() => {});
 
     results.push(updated);
   }

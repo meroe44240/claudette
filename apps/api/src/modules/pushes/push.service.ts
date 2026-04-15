@@ -1,5 +1,6 @@
 import prisma from '../../lib/db.js';
 import type { PushStatus, PushCanal } from '@prisma/client';
+import { sendPushNotification } from '../slack/slack.service.js';
 
 // ─── HELPERS ────────────────────────────────────────
 
@@ -108,6 +109,20 @@ async function syncProspectToCRM(
       },
     });
     console.log(`[Push→CRM] Entreprise creee: ${entreprise.nom} (${entreprise.id})`);
+
+    // Try Pappers enrichment for the newly created Entreprise
+    try {
+      const { enrichEntreprise } = await import('../integrations/pappers.service.js');
+      const result = await enrichEntreprise(entreprise.id);
+      if (result.success) {
+        console.log(`[Push→CRM] Pappers enrichment: ${result.fieldsUpdated.length} fields updated for "${entreprise.nom}"`);
+        // Reload entreprise to get enriched data
+        entreprise = (await prisma.entreprise.findUnique({ where: { id: entreprise.id } }))!;
+      }
+    } catch (err: any) {
+      // Non-blocking: Pappers enrichment is best-effort
+      console.warn(`[Push→CRM] Pappers enrichment skipped for "${entreprise.nom}":`, err.message || err);
+    }
   }
 
   // 2. Find or create Client (contact) if we have a name
@@ -242,6 +257,27 @@ export async function createPush(data: {
     });
   } catch (err) {
     console.error('[Push] Error auto-triggering persistence sequence:', err);
+  }
+
+  // Send Slack notification for the new push
+  try {
+    // Fetch entreprise SIREN if available (from the prospect's company)
+    const entreprise = await prisma.entreprise.findFirst({
+      where: { nom: { equals: prospect.companyName, mode: 'insensitive' } },
+      select: { siren: true },
+    });
+
+    await sendPushNotification({
+      candidatName,
+      entrepriseName: prospect.companyName,
+      siren: entreprise?.siren || null,
+      contactName: prospect.contactName || null,
+      contactEmail: prospect.contactEmail || null,
+      status: 'ENVOYE',
+      autoDetected: data.message?.startsWith('[Auto-detecte]') || false,
+    });
+  } catch (err) {
+    console.error('[Push] Slack notification error (non-blocking):', err);
   }
 
   return {

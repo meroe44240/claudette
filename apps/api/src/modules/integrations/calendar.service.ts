@@ -839,3 +839,325 @@ export function validateWebhookHeaders(
   const validStates = ['sync', 'exists', 'update'];
   return validStates.includes(resourceState);
 }
+
+// ─── CALENDAR EVENT CLASSIFIER & WATCHER ───────────
+
+type CalendarEventType = 'INTERVIEW' | 'PRESENTATION' | 'INTERNAL' | 'AMBIGU';
+
+interface ClassifiedEvent {
+  type: CalendarEventType;
+  googleEventId: string;
+  summary: string;
+  startTime: string;
+  endTime: string;
+  htmlLink?: string;
+  attendees: AttendeeDetail[];
+  internalCount: number;
+  externalCount: number;
+}
+
+/**
+ * Classify a single Google Calendar event based on attendees.
+ *
+ * Rules:
+ *  - All internal (humanup.io) → INTERNAL (skip)
+ *  - 1 internal + 1 external  → INTERVIEW  (recruiter + candidat)
+ *  - 1 internal + 2+ external → PRESENTATION (recruiter + candidat + client)
+ *  - Otherwise               → AMBIGU     (ask recruiter via Slack)
+ */
+async function classifyCalendarEvent(
+  item: any,
+  recruiterEmail: string,
+): Promise<ClassifiedEvent> {
+  const attendeeEmails: string[] = (item.attendees || [])
+    .map((a: any) => a.email)
+    .filter((e: string) => e && !e.includes('calendar.google.com'));
+
+  // Make sure the organiser is included (Google sometimes omits them)
+  if (recruiterEmail && !attendeeEmails.includes(recruiterEmail)) {
+    attendeeEmails.push(recruiterEmail);
+  }
+
+  const analysis = await analyzeAttendees(attendeeEmails);
+
+  const internalCount = analysis.details.filter((d) => d.role === 'internal').length;
+  const externalCount = analysis.details.filter((d) => d.role !== 'internal').length;
+
+  let type: CalendarEventType;
+  if (externalCount === 0) {
+    type = 'INTERNAL';
+  } else if (internalCount >= 1 && externalCount === 1) {
+    type = 'INTERVIEW';
+  } else if (internalCount >= 1 && externalCount >= 2) {
+    type = 'PRESENTATION';
+  } else {
+    type = 'AMBIGU';
+  }
+
+  return {
+    type,
+    googleEventId: item.id,
+    summary: item.summary || '(Sans titre)',
+    startTime: item.start?.dateTime || item.start?.date || '',
+    endTime: item.end?.dateTime || item.end?.date || '',
+    htmlLink: item.htmlLink,
+    attendees: analysis.details,
+    internalCount,
+    externalCount,
+  };
+}
+
+/**
+ * Send a Slack message asking the recruiter to classify an ambiguous event.
+ */
+async function notifyAmbiguousEvent(
+  classified: ClassifiedEvent,
+  recruiterName: string,
+): Promise<void> {
+  try {
+    const { getSlackConfig, sendToWebhook } = await import('../slack/slack.service.js');
+    const config = await getSlackConfig();
+    if (!config || !config.enabled) return;
+
+    const startDate = classified.startTime
+      ? new Date(classified.startTime).toLocaleString('fr-FR', {
+          weekday: 'short',
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'Europe/Paris',
+        })
+      : 'Heure inconnue';
+
+    const attendeeList = classified.attendees
+      .map((a) => {
+        const label = a.role === 'internal' ? '(interne)' : a.name ? `${a.name}` : a.email;
+        return `${a.email} ${label !== a.email ? `— ${label}` : ''}`;
+      })
+      .join('\n');
+
+    const payload = {
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: [
+              `❓ *Événement détecté — dis-moi le type*`,
+              ``,
+              `📅 *${classified.summary}* — ${startDate}`,
+              `👥 Participants :`,
+              attendeeList,
+              ``,
+              `Réponds :`,
+              `→ *INTERVIEW* (toi + candidat)`,
+              `→ *PRES* (toi + candidat + client)`,
+            ].join('\n'),
+          },
+        },
+      ],
+    };
+
+    await sendToWebhook(config.webhookUrl, payload);
+    console.log(`[CalendarWatcher] Slack notification sent for ambiguous event: ${classified.summary}`);
+  } catch (err) {
+    console.error('[CalendarWatcher] Failed to send Slack notification:', err);
+  }
+}
+
+/**
+ * Process a single classified event: create Activite if not already tracked.
+ * Returns true if a new Activite was created.
+ */
+async function processClassifiedEvent(
+  classified: ClassifiedEvent,
+  userId: string,
+  recruiterName: string,
+): Promise<boolean> {
+  // Skip internal events
+  if (classified.type === 'INTERNAL') return false;
+
+  // Check if already processed by googleEventId
+  const existing = await prisma.activite.findFirst({
+    where: {
+      source: 'CALENDAR',
+      metadata: { path: ['googleEventId'], equals: classified.googleEventId },
+    },
+  });
+  if (existing) return false;
+
+  // For AMBIGU events, send Slack and still create a MEETING with AMBIGU tag
+  if (classified.type === 'AMBIGU') {
+    notifyAmbiguousEvent(classified, recruiterName).catch(() => {});
+  }
+
+  // Determine the linked entity from attendees
+  const externalAttendees = classified.attendees.filter((a) => a.role !== 'internal');
+  let entiteType: 'CANDIDAT' | 'CLIENT' = 'CANDIDAT';
+  let entiteId = '00000000-0000-0000-0000-000000000000';
+
+  // For INTERVIEW: link to the candidat if found
+  // For PRESENTATION: link to the candidat if found (the main subject)
+  for (const att of externalAttendees) {
+    if (att.role === 'candidat' && att.entityId) {
+      entiteType = 'CANDIDAT';
+      entiteId = att.entityId;
+      break;
+    }
+    if (att.role === 'client' && att.entityId) {
+      entiteType = 'CLIENT';
+      entiteId = att.entityId;
+      // Don't break — prefer candidat if available
+    }
+  }
+
+  const calendarEventType = classified.type === 'INTERVIEW'
+    ? 'INTERVIEW'
+    : classified.type === 'PRESENTATION'
+      ? 'PRESENTATION'
+      : 'AMBIGU';
+
+  await prisma.activite.create({
+    data: {
+      type: 'MEETING',
+      entiteType,
+      entiteId,
+      userId,
+      titre: `${calendarEventType === 'INTERVIEW' ? '🎯 Interview' : calendarEventType === 'PRESENTATION' ? '🤝 Présentation' : '❓ RDV'} — ${classified.summary}`,
+      contenu: `Événement détecté automatiquement.\nParticipants : ${classified.attendees.map((a) => a.email).join(', ')}`,
+      source: 'CALENDAR',
+      metadata: {
+        googleEventId: classified.googleEventId,
+        calendarEventType,
+        startTime: classified.startTime,
+        endTime: classified.endTime,
+        htmlLink: classified.htmlLink,
+        attendees: classified.attendees.map((a) => ({
+          email: a.email,
+          role: a.role,
+          name: a.name,
+          entityId: a.entityId,
+        })),
+        autoClassified: true,
+      },
+    },
+  });
+
+  console.log(
+    `[CalendarWatcher] Created ${calendarEventType} activity for event "${classified.summary}" (user ${userId})`,
+  );
+  return true;
+}
+
+/**
+ * Calendar Watcher — runs every 15 minutes during business hours.
+ *
+ * For each recruiter with Calendar connected:
+ *  1. Fetch events created/modified in the last 16 minutes (overlap for safety)
+ *  2. Classify each event
+ *  3. Create Activite for INTERVIEW / PRESENTATION / AMBIGU
+ *  4. Send Slack DM for AMBIGU events
+ */
+export async function runCalendarWatcher(): Promise<void> {
+  // Only run Mon-Fri 8h-19h Paris
+  const now = new Date();
+  const parisStr = now.toLocaleString('en-GB', {
+    timeZone: 'Europe/Paris',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const [hours] = parisStr.split(':').map(Number);
+
+  const dayFormatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Paris',
+    weekday: 'short',
+  });
+  const dayStr = dayFormatter.format(now);
+  const dayMap: Record<string, number> = {
+    Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0,
+  };
+  const dayOfWeek = dayMap[dayStr] ?? now.getDay();
+
+  if (dayOfWeek < 1 || dayOfWeek > 5) return; // Weekend
+  if (hours < 8 || hours >= 19) return;         // Outside business hours
+
+  // Find all users with calendar (or gmail) integration enabled
+  const calendarConfigs = await prisma.integrationConfig.findMany({
+    where: {
+      provider: { in: ['calendar', 'gmail'] },
+      enabled: true,
+    },
+    select: { userId: true, provider: true },
+  });
+
+  // Deduplicate by userId (prefer calendar config over gmail)
+  const userIds = new Map<string, string>();
+  for (const cfg of calendarConfigs) {
+    if (!userIds.has(cfg.userId) || cfg.provider === 'calendar') {
+      userIds.set(cfg.userId, cfg.provider);
+    }
+  }
+
+  if (userIds.size === 0) return;
+
+  let totalCreated = 0;
+
+  for (const [userId] of userIds) {
+    try {
+      const accessToken = await getValidAccessToken(userId);
+
+      // Get the recruiter's email for classification
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, nom: true, prenom: true },
+      });
+      if (!user) continue;
+
+      const recruiterName = [user.prenom, user.nom].filter(Boolean).join(' ');
+
+      // Fetch events modified in the last 16 minutes (1 min overlap with 15 min interval)
+      const updatedMin = new Date(Date.now() - 16 * 60 * 1000).toISOString();
+      // Look at events in the next 30 days (upcoming interviews/presentations)
+      const timeMin = new Date().toISOString();
+      const timeMax = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      const calResponse = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
+          `updatedMin=${encodeURIComponent(updatedMin)}` +
+          `&timeMin=${encodeURIComponent(timeMin)}` +
+          `&timeMax=${encodeURIComponent(timeMax)}` +
+          `&maxResults=50` +
+          `&singleEvents=true` +
+          `&orderBy=startTime`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+
+      if (!calResponse.ok) {
+        const err = await calResponse.json() as any;
+        console.error(
+          `[CalendarWatcher] API error for user ${userId}: ${err.error?.message || calResponse.status}`,
+        );
+        continue;
+      }
+
+      const calData = await calResponse.json() as any;
+      const items = (calData.items || []).filter(
+        (item: any) => item.status !== 'cancelled' && (item.attendees || []).length > 0,
+      );
+
+      for (const item of items) {
+        const classified = await classifyCalendarEvent(item, user.email);
+        const created = await processClassifiedEvent(classified, userId, recruiterName);
+        if (created) totalCreated++;
+      }
+    } catch (err) {
+      console.error(`[CalendarWatcher] Error processing user ${userId}:`, err);
+    }
+  }
+
+  if (totalCreated > 0) {
+    console.log(`[CalendarWatcher] Completed: ${totalCreated} new activit(ies) created`);
+  }
+}

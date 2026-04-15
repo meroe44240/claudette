@@ -4,6 +4,7 @@ import { paginatedResult, paginationToSkipTake } from '../../lib/pagination.js';
 import type { PaginationParams } from '../../lib/pagination.js';
 import type { CreateMandatInput, UpdateMandatInput, UpdateFeeInput } from './mandat.schema.js';
 import { scoreCandidature } from '../candidatures/scoring.service.js';
+import { notifyNouvelleOpportunite, notifyCloseWon } from '../slack/slack.service.js';
 
 function calculateFeeMontantEstime(salaireMin?: number | null, salaireMax?: number | null, feePourcentage?: number | null): number | undefined {
   if (salaireMin != null && salaireMax != null && feePourcentage != null) {
@@ -153,6 +154,25 @@ export async function create(data: CreateMandatInput, createdById: string) {
   // Recalculate client typeClient after mandat creation
   await recalculateTypeClient(data.clientId);
 
+  // Fire-and-forget Slack notification for new opportunity
+  (async () => {
+    const fullMandat = await prisma.mandat.findUnique({
+      where: { id: mandat.id },
+      include: {
+        entreprise: { select: { nom: true } },
+        assignedTo: { select: { prenom: true } },
+      },
+    });
+    if (fullMandat) {
+      await notifyNouvelleOpportunite({
+        mandatTitre: fullMandat.titrePoste,
+        entrepriseNom: fullMandat.entreprise?.nom || 'N/A',
+        recruteurPrenom: fullMandat.assignedTo?.prenom || null,
+        feeMontantEstime: fullMandat.feeMontantEstime,
+      });
+    }
+  })().catch(() => {});
+
   return mandat;
 }
 
@@ -183,6 +203,34 @@ export async function update(id: string, data: UpdateMandatInput) {
   // Recalculate client typeClient if mandat statut changed
   if (data.statut !== undefined) {
     await recalculateTypeClient(existing.clientId);
+  }
+
+  // Fire-and-forget Slack notification when mandat is won
+  if (data.statut === 'GAGNE' && existing.statut !== 'GAGNE') {
+    (async () => {
+      // Find the placed candidat (if any) for this mandat
+      const placedCandidature = await prisma.candidature.findFirst({
+        where: { mandatId: id, stage: 'PLACE' },
+        include: { candidat: { select: { nom: true, prenom: true } } },
+      });
+      const fullMandat = await prisma.mandat.findUnique({
+        where: { id },
+        include: {
+          entreprise: { select: { nom: true } },
+          assignedTo: { select: { prenom: true } },
+        },
+      });
+      if (fullMandat) {
+        await notifyCloseWon({
+          candidatPrenom: placedCandidature?.candidat?.prenom || null,
+          candidatNom: placedCandidature?.candidat?.nom || 'Candidat non identifié',
+          entrepriseNom: fullMandat.entreprise?.nom || 'N/A',
+          mandatTitre: fullMandat.titrePoste,
+          feeMontant: fullMandat.feeMontantFacture || fullMandat.feeMontantEstime || null,
+          recruteurPrenom: fullMandat.assignedTo?.prenom || null,
+        });
+      }
+    })().catch(() => {});
   }
 
   return updated;

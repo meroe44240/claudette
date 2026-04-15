@@ -55,13 +55,13 @@ export default async function slackRouter(fastify: FastifyInstance) {
     handler: async (request, reply) => {
       const config = await slackService.getSlackConfig();
       if (!config) {
-        return { webhookUrl: '', enabled: false, sendTime: '19:00' };
+        return { webhookUrl: '', enabled: false, sendTime: '09:00' };
       }
       // Mask the webhook URL for security (show only last 10 chars)
       return {
         webhookUrl: config.webhookUrl,
         enabled: config.enabled,
-        sendTime: config.sendTime || '19:00',
+        sendTime: config.sendTime || '09:00',
       };
     },
   });

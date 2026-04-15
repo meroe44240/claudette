@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { wrapTool } from '../mcp.tools.js';
 import prisma from '../../../lib/db.js';
 import * as fullenrich from '../../integrations/fullenrich.service.js';
+import { logActivity } from '../../../lib/activity-logger.js';
 
 export function registerEnrichTools(server: McpServer) {
   // ─── enrich_contact ───────────────────────────────
@@ -20,7 +21,7 @@ export function registerEnrichTools(server: McpServer) {
       company_domain: z.string().optional().describe("Domaine de l'entreprise (ex: google.com)"),
       auto_update: z.boolean().optional().default(true).describe("Mettre a jour la fiche ATS avec les resultats (defaut: oui)"),
     },
-    wrapTool('enrich_contact', async (args) => {
+    wrapTool('enrich_contact', async (args, user) => {
       // Build enrichment input from ATS entity or manual params
       let input: fullenrich.EnrichInput = {};
       let entityType: 'candidat' | 'client' | null = null;
@@ -125,6 +126,25 @@ export function registerEnrichTools(server: McpServer) {
             await prisma.client.update({ where: { id: entityId }, data: updates as any });
           }
         }
+      }
+
+      // Fire-and-forget: log enrichment activity
+      if (entityType && entityId) {
+        const enrichedParts: string[] = [];
+        if (ci.most_probable_work_email?.email || ci.most_probable_personal_email?.email) enrichedParts.push('email');
+        if (ci.most_probable_phone?.number) enrichedParts.push('téléphone');
+        const enrichLabel = enrichedParts.length > 0 ? enrichedParts.join(' + ') : 'données';
+
+        logActivity({
+          type: 'NOTE',
+          entiteType: entityType === 'candidat' ? 'CANDIDAT' : 'CLIENT',
+          entiteId: entityId,
+          userId: user.userId,
+          titre: `${enrichLabel.charAt(0).toUpperCase() + enrichLabel.slice(1)} enrichi(e) via FullEnrich`,
+          contenu: updatedFields.length > 0 ? `Champs mis à jour : ${updatedFields.join(', ')}` : undefined,
+          source: 'SYSTEME',
+          metadata: { fullEnrich: true, enrichType: String(args.enrich_type), updatedFields },
+        }).catch(() => {});
       }
 
       return {

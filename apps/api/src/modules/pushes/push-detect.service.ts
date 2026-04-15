@@ -11,7 +11,9 @@
 
 import prisma from '../../lib/db.js';
 import { createPush } from './push.service.js';
+import { parseCv, updateCandidatFromCv } from '../ai/cv-parsing.service.js';
 import type { PushCanal } from '@prisma/client';
+import type { CvParsingResult } from '../ai/cv-parsing.service.js';
 
 // ─── TYPES ──────────────────────────────────────────
 
@@ -20,6 +22,13 @@ interface SentEmail {
   to: string;
   subject: string;
   snippet: string;
+}
+
+interface GmailAttachment {
+  attachmentId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
 }
 
 interface PushDetection {
@@ -170,6 +179,176 @@ function extractName(rawTo: string): string | null {
   const match = rawTo.match(/^"?(.+?)"?\s*</);
   if (match) return match[1].trim();
   return null;
+}
+
+// ─── GMAIL: ATTACHMENT HANDLING ────────────────────
+
+/** MIME types we consider as CV attachments */
+const CV_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
+/**
+ * Fetch the full message (format=full) to extract attachment metadata.
+ */
+async function getMessageAttachments(
+  accessToken: string,
+  messageId: string,
+): Promise<GmailAttachment[]> {
+  try {
+    const res = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!res.ok) return [];
+
+    const msgData = (await res.json()) as any;
+    const attachments: GmailAttachment[] = [];
+
+    function walkParts(parts: any[]) {
+      for (const part of parts) {
+        if (part.body?.attachmentId && CV_MIME_TYPES.has(part.mimeType)) {
+          attachments.push({
+            attachmentId: part.body.attachmentId,
+            filename: part.filename || 'attachment',
+            mimeType: part.mimeType,
+            size: part.body.size || 0,
+          });
+        }
+        if (part.parts) walkParts(part.parts);
+      }
+    }
+
+    if (msgData.payload?.parts) {
+      walkParts(msgData.payload.parts);
+    } else if (msgData.payload?.body?.attachmentId && CV_MIME_TYPES.has(msgData.payload.mimeType)) {
+      attachments.push({
+        attachmentId: msgData.payload.body.attachmentId,
+        filename: msgData.payload.filename || 'attachment',
+        mimeType: msgData.payload.mimeType,
+        size: msgData.payload.body.size || 0,
+      });
+    }
+
+    return attachments;
+  } catch (err) {
+    console.warn(`[PushDetect] Could not get attachments for ${messageId}:`, err);
+    return [];
+  }
+}
+
+/**
+ * Download a single Gmail attachment and return its Buffer.
+ * Gmail returns base64url-encoded data.
+ */
+async function downloadAttachment(
+  accessToken: string,
+  messageId: string,
+  attachmentId: string,
+): Promise<Buffer | null> {
+  try {
+    const res = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/attachments/${attachmentId}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as any;
+    if (!data.data) return null;
+
+    // Gmail uses base64url encoding (- and _ instead of + and /)
+    const base64 = data.data.replace(/-/g, '+').replace(/_/g, '/');
+    return Buffer.from(base64, 'base64');
+  } catch (err) {
+    console.warn(`[PushDetect] Could not download attachment ${attachmentId}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Download the first CV attachment from a Gmail message and parse it.
+ * Returns the parsed CV data + the raw buffer, or null if no attachment found or parsing fails.
+ */
+async function downloadAndParseCvAttachment(
+  accessToken: string,
+  messageId: string,
+  userId: string,
+): Promise<{ parsed: CvParsingResult; filename: string; buffer: Buffer } | null> {
+  const attachments = await getMessageAttachments(accessToken, messageId);
+  if (attachments.length === 0) return null;
+
+  // Take the first CV-like attachment
+  const attachment = attachments[0];
+  console.log(`[PushDetect] Downloading attachment: "${attachment.filename}" (${attachment.mimeType}, ${attachment.size} bytes)`);
+
+  const buffer = await downloadAttachment(accessToken, messageId, attachment.attachmentId);
+  if (!buffer) return null;
+
+  try {
+    const parsed = await parseCv(buffer, attachment.filename, userId);
+    console.log(`[PushDetect] CV parsed: ${parsed.candidate.first_name} ${parsed.candidate.last_name}`);
+    return { parsed, filename: attachment.filename, buffer };
+  } catch (err) {
+    console.error(`[PushDetect] CV parsing failed for "${attachment.filename}":`, err);
+    return null;
+  }
+}
+
+/**
+ * Create a new Candidat from parsed CV data.
+ * Returns the created candidate ID.
+ */
+async function createCandidatFromParsedCv(
+  parsed: CvParsingResult,
+  userId: string,
+): Promise<string> {
+  const candidat = await prisma.candidat.create({
+    data: {
+      nom: parsed.candidate.last_name || 'Inconnu',
+      prenom: parsed.candidate.first_name || undefined,
+      email: parsed.candidate.email || undefined,
+      telephone: parsed.candidate.phone || undefined,
+      posteActuel: parsed.candidate.current_title || undefined,
+      entrepriseActuelle: parsed.candidate.current_company || undefined,
+      localisation: parsed.candidate.city || undefined,
+      linkedinUrl: parsed.candidate.linkedin_url || undefined,
+      anneesExperience: parsed.candidate.years_experience || undefined,
+      tags: parsed.candidate.skills || [],
+      source: 'push-auto-detect',
+      aiPitchShort: parsed.pitch.short || undefined,
+      aiPitchLong: parsed.pitch.long || undefined,
+      aiSellingPoints: parsed.pitch.key_selling_points || [],
+      aiIdealFor: parsed.pitch.ideal_for || undefined,
+      aiAnonymizedProfile: parsed.anonymized_profile as any || undefined,
+      aiParsedAt: new Date(),
+      createdById: userId,
+      assignedToId: userId,
+    },
+  });
+
+  // Save structured experiences
+  if (parsed.candidate.experience && parsed.candidate.experience.length > 0) {
+    try {
+      const { bulkCreateExperiences } = await import('../candidats/candidat.service.js');
+      await bulkCreateExperiences(
+        candidat.id,
+        parsed.candidate.experience.map((exp) => ({
+          titre: exp.title,
+          entreprise: exp.company,
+          anneeDebut: exp.start_year,
+          anneeFin: exp.end_year ?? null,
+          highlights: exp.highlights || [],
+          source: 'cv' as const,
+        })),
+      );
+    } catch (err: any) {
+      console.error('[PushDetect] Failed to save experiences:', err.message);
+    }
+  }
+
+  console.log(`[PushDetect] Candidat created from CV: ${parsed.candidate.first_name} ${parsed.candidate.last_name} (${candidat.id})`);
+  return candidat.id;
 }
 
 // ─── AI CLASSIFICATION ─────────────────────────────
@@ -326,17 +505,46 @@ export async function detectPushesForUser(userId: string): Promise<{ detected: n
     }
 
     // Try to match candidate in DB
-    const candidatId = await findCandidateByName(detection.candidate_name);
+    let candidatId = await findCandidateByName(detection.candidate_name);
 
     if (!candidatId) {
-      // Can't create push without a candidate — log it for manual review
-      console.log(`[PushDetect] Push CV detected but candidate not found: "${detection.candidate_name}" → ${detection.prospect_company}`);
-      // Log as activity for visibility
+      // Candidate not found in DB — try downloading CV attachment and parsing it
+      console.log(`[PushDetect] Candidate "${detection.candidate_name}" not found — attempting CV attachment parsing...`);
+
+      const cvResult = await downloadAndParseCvAttachment(accessToken, email.id, userId);
+
+      if (cvResult) {
+        // CV parsed successfully — try to match again with parsed name
+        const parsedName = `${cvResult.parsed.candidate.first_name} ${cvResult.parsed.candidate.last_name}`.trim();
+        candidatId = await findCandidateByName(parsedName);
+
+        if (candidatId) {
+          // Candidate exists — update with CV data using the already-downloaded buffer
+          console.log(`[PushDetect] Matched existing candidate via CV parse: "${parsedName}" (${candidatId})`);
+          try {
+            await updateCandidatFromCv(cvResult.buffer, cvResult.filename, userId, candidatId);
+          } catch (err: any) {
+            console.warn(`[PushDetect] Failed to update existing candidate with CV:`, err.message);
+          }
+        } else {
+          // Create a new candidate from the parsed CV
+          try {
+            candidatId = await createCandidatFromParsedCv(cvResult.parsed, userId);
+          } catch (err: any) {
+            console.error(`[PushDetect] Failed to create candidate from CV:`, err.message);
+          }
+        }
+      }
+    }
+
+    if (!candidatId) {
+      // Still no candidate — log for manual review
+      console.log(`[PushDetect] Push CV detected but candidate not found and no CV attachment: "${detection.candidate_name}" → ${detection.prospect_company}`);
       await prisma.activite.create({
         data: {
           type: 'NOTE',
           titre: `Push CV detecte (candidat non trouve) — ${detection.candidate_name || 'inconnu'}`,
-          contenu: `Email envoye a ${detection.prospect_company || email.to}. Objet: ${email.subject}. Candidat mentionne: ${detection.candidate_name || 'non identifie'}.`,
+          contenu: `Email envoye a ${detection.prospect_company || email.to}. Objet: ${email.subject}. Candidat mentionne: ${detection.candidate_name || 'non identifie'}. Aucune piece jointe CV exploitable trouvee.`,
           userId,
           source: 'AGENT_IA',
           metadata: {

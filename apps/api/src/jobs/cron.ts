@@ -3,7 +3,7 @@
  * No external dependency required (no node-cron).
  *
  * Jobs:
- *  - Daily Slack report at 19:00 Europe/Paris (Mon-Fri)
+ *  - Daily Slack report at 09:00 Europe/Paris (Mon-Fri)
  *  - Calendar AI analysis every 30 minutes
  *  - Pipeline AI analysis every hour
  *  - Booking reminders: every 60 seconds (day-before + 1h-before emails)
@@ -16,6 +16,7 @@ const intervals: ReturnType<typeof setInterval>[] = [];
 
 // Track last execution to avoid double-runs
 let lastSlackReportDate = '';
+let lastBatchEnrichDate = '';
 
 // ─── HELPERS ────────────────────────────────────────
 
@@ -66,12 +67,12 @@ async function checkSlackReport(): Promise<void> {
     // Already sent today?
     if (lastSlackReportDate === dateKey) return;
 
-    // Get configured send time (default 19:00 Paris)
+    // Get configured send time (default 09:00 Paris)
     const { getSlackConfig } = await import('../modules/slack/slack.service.js');
     const config = await getSlackConfig();
     if (!config || !config.enabled) return;
 
-    const sendTime = config.sendTime || '19:00';
+    const sendTime = config.sendTime || '09:00';
     const [targetHour, targetMinute] = sendTime.split(':').map(Number);
 
     // Check if we're within the target window (allow 1 minute tolerance)
@@ -468,6 +469,19 @@ async function runPushDetect(): Promise<void> {
   }
 }
 
+// ─── CALENDAR WATCHER ─────────────────────────────
+
+async function runCalendarWatcherJob(): Promise<void> {
+  try {
+    const { runCalendarWatcher } = await import(
+      '../modules/integrations/calendar.service.js'
+    );
+    await runCalendarWatcher();
+  } catch (error) {
+    console.error('[Cron] Error in Calendar Watcher:', error);
+  }
+}
+
 // ─── SEQUENCE DUE RUNS ────────────────────────────
 
 async function runSequenceDueSteps(): Promise<void> {
@@ -481,6 +495,31 @@ async function runSequenceDueSteps(): Promise<void> {
     }
   } catch (error) {
     console.error('[Cron] Error in Sequence due runs:', error);
+  }
+}
+
+// ─── BATCH ENRICHMENT (WEEKLY) ─────────────────────
+
+async function checkBatchEnrichment(): Promise<void> {
+  try {
+    const now = new Date();
+    const dayOfWeekUtc = now.getUTCDay(); // 0 = Sunday
+    const hoursUtc = now.getUTCHours();
+    const minutesUtc = now.getUTCMinutes();
+    const dateKey = now.toISOString().slice(0, 10); // YYYY-MM-DD
+
+    // Only Sunday at 02:00 UTC
+    if (dayOfWeekUtc !== 0) return;
+    if (lastBatchEnrichDate === dateKey) return;
+    if (hoursUtc !== 2 || minutesUtc > 1) return;
+
+    lastBatchEnrichDate = dateKey;
+    console.log('[Cron] Starting weekly batch enrichment...');
+
+    const { runBatchEnrichment } = await import('./enrich-batch.js');
+    await runBatchEnrichment();
+  } catch (error) {
+    console.error('[Cron] Error in batch enrichment:', error);
   }
 }
 
@@ -531,6 +570,14 @@ export function startCronJobs(): void {
   const sequenceDueInterval = setInterval(runSequenceDueSteps, 5 * 60 * 1000);
   intervals.push(sequenceDueInterval);
 
+  // Calendar watcher every 15 minutes (business hours check is inside the function)
+  const calendarWatcherInterval = setInterval(runCalendarWatcherJob, 15 * 60 * 1000);
+  intervals.push(calendarWatcherInterval);
+
+  // Batch enrichment check every 60 seconds (runs Sunday 02:00 UTC only)
+  const batchEnrichInterval = setInterval(checkBatchEnrichment, 60 * 1000);
+  intervals.push(batchEnrichInterval);
+
   console.log('[Cron] Scheduled jobs started:');
   console.log('  - Slack daily report: checked every 60s (sends Mon-Fri at configured time, Europe/Paris)');
   console.log('  - Calendar AI analysis: every 30 minutes');
@@ -541,6 +588,8 @@ export function startCronJobs(): void {
   console.log('  - Allo auto-sync: every 10 minutes (calls + transcripts)');
   console.log('  - Push CV auto-detect: every 15 minutes (sent emails → push detection)');
   console.log('  - Sequence due steps: every 5 minutes (execute next steps for due runs)');
+  console.log('  - Calendar watcher: every 15 minutes (Mon-Fri 8h-19h Paris, classify events)');
+  console.log('  - Batch enrichment: checked every 60s (runs Sunday 02:00 UTC — Pappers + CV re-parse)');
 }
 
 export function stopCronJobs(): void {

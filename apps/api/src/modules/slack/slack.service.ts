@@ -5,7 +5,23 @@ import prisma from '../../lib/db.js';
 interface SlackConfig {
   webhookUrl: string;
   enabled: boolean;
-  sendTime?: string; // HH:MM format, default "19:00"
+  sendTime?: string; // HH:MM format, default "09:00"
+}
+
+interface MandatPipeline {
+  titre: string;
+  mandatId: string;
+  candidatsActifs: number;
+  dernierMouvement: string; // formatted date
+  stages: {
+    SOURCING: number;
+    CONTACTE: number;
+    ENTRETIEN_1: number;
+    ENTRETIEN_CLIENT: number;
+    OFFRE: number;
+    PLACE: number;
+    REFUSE: number;
+  };
 }
 
 interface UserDailyStats {
@@ -14,46 +30,25 @@ interface UserDailyStats {
   prenom: string | null;
   appels: number;
   rdv: number;
-  candidatsAvances: number;
-  tachesCompletees: number;
+  interviews: number;
+  presentations: number;
+  pushes: number;
+  mandats: MandatPipeline[];
+}
+
+interface AlertInfo {
+  dormantMandats: { titre: string; jours: number }[];
+  pushesSansReponse: number;
 }
 
 interface DailyReportData {
   date: string;
   users: UserDailyStats[];
-  teamAppels: number;
-  teamRdv: number;
-  teamCandidatsAvances: number;
-  teamTachesCompletees: number;
-  caMonth: number;
-  monthLabel: string;
-  topPerformer: { name: string; appels: number; rdv: number } | null;
-  dormantMandats: number;
+  topPerformer: { name: string; metric: string } | null;
+  alerts: AlertInfo;
 }
 
 // ─── HELPERS ────────────────────────────────────────
-
-function getParisDate(date: Date = new Date()): Date {
-  // Get the current time in Europe/Paris timezone
-  const parisStr = date.toLocaleString('en-US', { timeZone: 'Europe/Paris' });
-  return new Date(parisStr);
-}
-
-function getTodayStartParis(): Date {
-  const paris = getParisDate();
-  paris.setHours(0, 0, 0, 0);
-  // Convert back to UTC for DB queries
-  const offset = getParisOffsetMs();
-  return new Date(paris.getTime() - offset);
-}
-
-function getMonthStartParis(): Date {
-  const paris = getParisDate();
-  paris.setDate(1);
-  paris.setHours(0, 0, 0, 0);
-  const offset = getParisOffsetMs();
-  return new Date(paris.getTime() - offset);
-}
 
 function getParisOffsetMs(): number {
   const now = new Date();
@@ -62,15 +57,29 @@ function getParisOffsetMs(): number {
   return new Date(parisStr).getTime() - new Date(utcStr).getTime();
 }
 
-function formatCA(amount: number): string {
-  if (amount >= 1000) {
-    return `${Math.round(amount / 1000)}k€`;
-  }
-  return `${amount}€`;
+/** Return { start, end } as UTC Date objects representing yesterday 00:00-23:59:59 in Europe/Paris */
+function getYesterdayRangeParis(): { start: Date; end: Date } {
+  const offset = getParisOffsetMs();
+  // "Now" in Paris
+  const nowParis = new Date(Date.now() + offset);
+  // Yesterday in Paris
+  nowParis.setDate(nowParis.getDate() - 1);
+  nowParis.setHours(0, 0, 0, 0);
+  const startParis = new Date(nowParis);
+  const endParis = new Date(nowParis);
+  endParis.setHours(23, 59, 59, 999);
+  // Convert back to UTC for DB queries
+  return {
+    start: new Date(startParis.getTime() - offset),
+    end: new Date(endParis.getTime() - offset),
+  };
 }
 
-function formatDateFr(): string {
-  const paris = getParisDate();
+/** Format yesterday's date as "JOUR DD mois YYYY" in French */
+function formatYesterdayFr(): string {
+  const offset = getParisOffsetMs();
+  const nowParis = new Date(Date.now() + offset);
+  nowParis.setDate(nowParis.getDate() - 1);
   const options: Intl.DateTimeFormatOptions = {
     weekday: 'long',
     day: 'numeric',
@@ -78,12 +87,17 @@ function formatDateFr(): string {
     year: 'numeric',
     timeZone: 'Europe/Paris',
   };
-  return new Date().toLocaleDateString('fr-FR', options);
+  // Use the actual yesterday date but format via UTC trick
+  const yesterdayUtc = new Date(nowParis.getTime() - offset);
+  return yesterdayUtc.toLocaleDateString('fr-FR', options);
 }
 
-function getMonthLabelFr(): string {
-  return new Date().toLocaleDateString('fr-FR', {
-    month: 'long',
+/** Format a Date to a short French date string (DD/MM/YYYY) */
+function formatShortDateFr(d: Date): string {
+  return d.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
     timeZone: 'Europe/Paris',
   });
 }
@@ -102,7 +116,7 @@ export async function getSlackConfig(): Promise<SlackConfig | null> {
     return {
       webhookUrl: dbConfig.accessToken, // We store webhook URL in accessToken field
       enabled: dbConfig.enabled,
-      sendTime: (config?.sendTime as string) || '19:00',
+      sendTime: (config?.sendTime as string) || '09:00',
     };
   }
 
@@ -112,7 +126,7 @@ export async function getSlackConfig(): Promise<SlackConfig | null> {
     return {
       webhookUrl: envUrl,
       enabled: true,
-      sendTime: process.env.SLACK_SEND_TIME || '19:00',
+      sendTime: process.env.SLACK_SEND_TIME || '09:00',
     };
   }
 
@@ -130,27 +144,26 @@ export async function saveSlackConfig(
     update: {
       accessToken: input.webhookUrl,
       enabled: input.enabled,
-      config: { sendTime: input.sendTime || '19:00' },
+      config: { sendTime: input.sendTime || '09:00' },
     },
     create: {
       userId,
       provider: 'slack',
       accessToken: input.webhookUrl,
       enabled: input.enabled,
-      config: { sendTime: input.sendTime || '19:00' },
+      config: { sendTime: input.sendTime || '09:00' },
     },
   });
 
   return {
     webhookUrl: input.webhookUrl,
     enabled: input.enabled,
-    sendTime: input.sendTime || '19:00',
+    sendTime: input.sendTime || '09:00',
   };
 }
 
 async function gatherDailyData(): Promise<DailyReportData> {
-  const todayStart = getTodayStartParis();
-  const monthStart = getMonthStartParis();
+  const { start: yesterdayStart, end: yesterdayEnd } = getYesterdayRangeParis();
 
   // Get all active users
   const users = await prisma.user.findMany({
@@ -158,43 +171,103 @@ async function gatherDailyData(): Promise<DailyReportData> {
     select: { id: true, nom: true, prenom: true },
   });
 
-  // Gather per-user stats
+  // Gather per-user stats for yesterday
   const userStats: UserDailyStats[] = await Promise.all(
     users.map(async (user) => {
-      const [appels, rdv, tachesCompletees, candidatsAvances] = await Promise.all([
-        // Appels today
+      const [appels, rdv, interviews, presentations, pushesCount] = await Promise.all([
+        // Calls yesterday
         prisma.activite.count({
           where: {
             userId: user.id,
             type: 'APPEL',
-            createdAt: { gte: todayStart },
+            createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
           },
         }),
-        // RDV (meetings) today
+        // RDV (meetings) yesterday
         prisma.activite.count({
           where: {
             userId: user.id,
             type: 'MEETING',
-            createdAt: { gte: todayStart },
+            createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
           },
         }),
-        // Tasks completed today
+        // Interviews: meetings linked to a CANDIDAT entity yesterday
         prisma.activite.count({
           where: {
             userId: user.id,
-            isTache: true,
-            tacheCompleted: true,
-            updatedAt: { gte: todayStart },
+            type: 'MEETING',
+            entiteType: 'CANDIDAT',
+            createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
           },
         }),
-        // Candidates advanced: stageHistory changes today for this user's candidatures
-        prisma.stageHistory.count({
+        // Presentations: meetings linked to a CLIENT entity yesterday
+        prisma.activite.count({
           where: {
-            changedById: user.id,
-            changedAt: { gte: todayStart },
+            userId: user.id,
+            type: 'MEETING',
+            entiteType: 'CLIENT',
+            createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
+          },
+        }),
+        // Pushes created yesterday
+        prisma.push.count({
+          where: {
+            recruiterId: user.id,
+            sentAt: { gte: yesterdayStart, lte: yesterdayEnd },
           },
         }),
       ]);
+
+      // Active mandats assigned to this user with candidature pipeline
+      const activeMandats = await prisma.mandat.findMany({
+        where: {
+          assignedToId: user.id,
+          statut: { in: ['OUVERT', 'EN_COURS'] },
+        },
+        select: {
+          id: true,
+          titrePoste: true,
+          updatedAt: true,
+          candidatures: {
+            select: {
+              stage: true,
+              updatedAt: true,
+            },
+          },
+        },
+      });
+
+      const mandats: MandatPipeline[] = activeMandats.map((m) => {
+        const stages = {
+          SOURCING: 0,
+          CONTACTE: 0,
+          ENTRETIEN_1: 0,
+          ENTRETIEN_CLIENT: 0,
+          OFFRE: 0,
+          PLACE: 0,
+          REFUSE: 0,
+        };
+
+        let latestMove = m.updatedAt;
+        for (const c of m.candidatures) {
+          stages[c.stage]++;
+          if (c.updatedAt > latestMove) {
+            latestMove = c.updatedAt;
+          }
+        }
+
+        const candidatsActifs = m.candidatures.filter(
+          (c) => c.stage !== 'REFUSE' && c.stage !== 'PLACE',
+        ).length;
+
+        return {
+          titre: m.titrePoste,
+          mandatId: m.id,
+          candidatsActifs,
+          dernierMouvement: formatShortDateFr(latestMove),
+          stages,
+        };
+      });
 
       return {
         userId: user.id,
@@ -202,78 +275,81 @@ async function gatherDailyData(): Promise<DailyReportData> {
         prenom: user.prenom,
         appels,
         rdv,
-        candidatsAvances,
-        tachesCompletees,
+        interviews,
+        presentations,
+        pushes: pushesCount,
+        mandats,
       };
     }),
   );
 
-  // Team totals
-  const teamAppels = userStats.reduce((sum, u) => sum + u.appels, 0);
-  const teamRdv = userStats.reduce((sum, u) => sum + u.rdv, 0);
-  const teamCandidatsAvances = userStats.reduce((sum, u) => sum + u.candidatsAvances, 0);
-  const teamTachesCompletees = userStats.reduce((sum, u) => sum + u.tachesCompletees, 0);
-
-  // CA for current month (fees billed/paid)
-  const caResult = await prisma.mandat.aggregate({
-    where: {
-      feeStatut: { in: ['FACTURE', 'PAYE'] },
-      updatedAt: { gte: monthStart },
-    },
-    _sum: { feeMontantFacture: true },
-  });
-  const caMonth = caResult._sum.feeMontantFacture || 0;
-
-  // Top performer (weighted: appels + rdv*2)
+  // Top performer: weighted score = appels + rdv*2 + interviews*3 + pushes*2
   let topPerformer: DailyReportData['topPerformer'] = null;
   if (userStats.length > 0) {
-    const sorted = [...userStats].sort(
-      (a, b) => (b.appels + b.rdv * 2) - (a.appels + a.rdv * 2),
-    );
+    const scored = userStats.map((u) => ({
+      ...u,
+      score: u.appels + u.rdv * 2 + u.interviews * 3 + u.pushes * 2,
+    }));
+    const sorted = scored.sort((a, b) => b.score - a.score);
     const top = sorted[0];
-    if (top.appels > 0 || top.rdv > 0) {
+    if (top.score > 0) {
+      const name = top.prenom ? `${top.prenom} ${top.nom}` : top.nom;
+      const parts: string[] = [];
+      if (top.appels > 0) parts.push(`${top.appels} appels`);
+      if (top.rdv > 0) parts.push(`${top.rdv} RDV`);
+      if (top.interviews > 0) parts.push(`${top.interviews} interviews`);
+      if (top.pushes > 0) parts.push(`${top.pushes} pushes`);
       topPerformer = {
-        name: top.prenom ? `${top.prenom} ${top.nom}` : top.nom,
-        appels: top.appels,
-        rdv: top.rdv,
+        name,
+        metric: parts.join(', '),
       };
     }
   }
 
-  // Dormant mandats (no activity for 7+ days)
+  // ─── Alerts ───
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-  const activeMandats = await prisma.mandat.findMany({
+  // Dormant mandats: active mandats with no candidature movement for 7+ days
+  const allActiveMandats = await prisma.mandat.findMany({
     where: { statut: { in: ['OUVERT', 'EN_COURS'] } },
-    select: { id: true, updatedAt: true },
+    select: { id: true, titrePoste: true, updatedAt: true },
   });
 
-  let dormantCount = 0;
-  for (const mandat of activeMandats) {
-    const recentActivity = await prisma.activite.count({
+  const dormantMandats: AlertInfo['dormantMandats'] = [];
+  for (const mandat of allActiveMandats) {
+    const recentActivity = await prisma.stageHistory.count({
       where: {
-        entiteType: 'MANDAT',
-        entiteId: mandat.id,
-        createdAt: { gte: sevenDaysAgo },
+        candidature: { mandatId: mandat.id },
+        changedAt: { gte: sevenDaysAgo },
       },
     });
     if (recentActivity === 0) {
-      dormantCount++;
+      const daysSince = Math.floor(
+        (Date.now() - mandat.updatedAt.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      dormantMandats.push({ titre: mandat.titrePoste, jours: daysSince });
     }
   }
 
+  // Pushes ENVOYE without response for 5+ days
+  const fiveDaysAgo = new Date();
+  fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+  const pushesSansReponse = await prisma.push.count({
+    where: {
+      status: 'ENVOYE',
+      sentAt: { lte: fiveDaysAgo },
+    },
+  });
+
   return {
-    date: formatDateFr(),
+    date: formatYesterdayFr(),
     users: userStats,
-    teamAppels,
-    teamRdv,
-    teamCandidatsAvances,
-    teamTachesCompletees,
-    caMonth,
-    monthLabel: getMonthLabelFr(),
     topPerformer,
-    dormantMandats: dormantCount,
+    alerts: {
+      dormantMandats,
+      pushesSansReponse,
+    },
   };
 }
 
@@ -285,61 +361,74 @@ function buildSlackBlocks(data: DailyReportData): object {
     type: 'header',
     text: {
       type: 'plain_text',
-      text: `📊 HumanUp — Résumé du ${data.date}`,
+      text: `📊 HumanUp — Brief du ${data.date}`,
       emoji: true,
     },
   });
 
-  blocks.push({ type: 'divider' });
-
-  // Team summary
-  blocks.push({
-    type: 'section',
-    text: {
-      type: 'mrkdwn',
-      text: `*🏢 Équipe*\n📞 Appels : *${data.teamAppels}* | 📅 RDV : *${data.teamRdv}* | 👥 Candidats avancés : *${data.teamCandidatsAvances}* | 💰 CA ${data.monthLabel} : *${formatCA(data.caMonth)}*`,
-    },
-  });
-
-  blocks.push({ type: 'divider' });
-
-  // Per-user stats (only show users with activity)
-  const activeUsers = data.users.filter(
-    (u) => u.appels > 0 || u.rdv > 0 || u.candidatsAvances > 0 || u.tachesCompletees > 0,
-  );
-
-  for (const user of activeUsers) {
+  // Per-recruiter sections (show ALL users, stats at 0 are shown)
+  for (const user of data.users) {
     const displayName = user.prenom ? `${user.prenom} ${user.nom}` : user.nom;
-    blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*${displayName}*\n📞 ${user.appels} appels | 📅 ${user.rdv} RDV | 👥 ${user.candidatsAvances} candidats avancés | ✅ ${user.tachesCompletees} tâches`,
-      },
-    });
-  }
 
-  // If no one had activity
-  if (activeUsers.length === 0) {
+    blocks.push({ type: 'divider' });
+
+    // Activity line
+    const activityLine = [
+      `📞 Calls : ${user.appels}`,
+      `📅 RDV : ${user.rdv}`,
+      `🎯 Interviews : ${user.interviews}`,
+      `🤝 Présentations : ${user.presentations}`,
+      `📨 Pushes : ${user.pushes}`,
+    ].join(' | ');
+
+    let sectionText = `👤 *${displayName}*\n${activityLine}`;
+
+    // Mandats pipeline
+    if (user.mandats.length > 0) {
+      sectionText += `\n\n*Mandats :*`;
+      for (const m of user.mandats) {
+        const s = m.stages;
+        sectionText += `\n• ${m.titre} — ${m.candidatsActifs} candidats actifs — Dernier mouvement : ${m.dernierMouvement}`;
+        sectionText += `\n  └ Pipeline : Sourcing (${s.SOURCING}) → Contacté (${s.CONTACTE}) → Entretien (${s.ENTRETIEN_1}) → Client (${s.ENTRETIEN_CLIENT}) → Offre (${s.OFFRE})`;
+      }
+    }
+
     blocks.push({
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `_Aucune activité enregistrée aujourd'hui._`,
+        text: sectionText,
       },
     });
   }
 
   blocks.push({ type: 'divider' });
 
-  // Top performer + alerts
+  // Top performer
   const topLine = data.topPerformer
-    ? `🏆 *Top performer du jour* : ${data.topPerformer.name} (${data.topPerformer.appels} appels + ${data.topPerformer.rdv} RDV)`
-    : `🏆 *Top performer du jour* : _aucune activité_`;
+    ? `🏆 *Top performer :* ${data.topPerformer.name} (${data.topPerformer.metric})`
+    : `🏆 *Top performer :* _aucune activité hier_`;
+
+  // Alerts
+  const alertParts: string[] = [];
+  if (data.alerts.dormantMandats.length > 0) {
+    const dormantList = data.alerts.dormantMandats
+      .slice(0, 5)
+      .map((d) => `${d.titre} (+${d.jours}j)`)
+      .join(', ');
+    const suffix =
+      data.alerts.dormantMandats.length > 5
+        ? ` et ${data.alerts.dormantMandats.length - 5} autre(s)`
+        : '';
+    alertParts.push(`${data.alerts.dormantMandats.length} mandat(s) sans mouvement +7j (${dormantList}${suffix})`);
+  }
+  if (data.alerts.pushesSansReponse > 0) {
+    alertParts.push(`${data.alerts.pushesSansReponse} push(es) ENVOYÉ sans réponse +5j`);
+  }
 
   const alertLine =
-    data.dormantMandats > 0
-      ? `\n⚠️ *Alertes* : ${data.dormantMandats} mandat${data.dormantMandats > 1 ? 's' : ''} dormant${data.dormantMandats > 1 ? 's' : ''}`
+    alertParts.length > 0
+      ? `\n⚠️ *Alertes :* ${alertParts.join(' / ')}`
       : '';
 
   blocks.push({
@@ -365,7 +454,7 @@ function buildSlackBlocks(data: DailyReportData): object {
   return { blocks };
 }
 
-async function sendToWebhook(webhookUrl: string, payload: object): Promise<void> {
+export async function sendToWebhook(webhookUrl: string, payload: object): Promise<void> {
   const response = await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -428,5 +517,255 @@ export async function sendTestReport(
     const msg = error instanceof Error ? error.message : 'Erreur inconnue';
     console.error('[Slack] Failed to send test report:', msg);
     return { success: false, message: `Erreur: ${msg}` };
+  }
+}
+
+// ─── REAL-TIME EVENT NOTIFICATIONS ────────────────
+
+/**
+ * Notify Slack when a candidature reaches ENTRETIEN_CLIENT (presentation to client).
+ */
+export async function notifyPresentation(data: {
+  candidatPrenom: string | null;
+  candidatNom: string;
+  entrepriseNom: string;
+  contactNom: string | null;
+  mandatTitre: string;
+  recruteurPrenom: string | null;
+}): Promise<void> {
+  const config = await getSlackConfig();
+  if (!config || !config.enabled) return;
+
+  const candidatName = [data.candidatPrenom, data.candidatNom].filter(Boolean).join(' ');
+  const recruteur = data.recruteurPrenom || 'Non assigné';
+  const contact = data.contactNom || 'Non renseigné';
+
+  const payload = {
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: [
+            `🤝 *Nouvelle présentation*`,
+            ``,
+            `👤 ${candidatName}`,
+            `🏢 ${data.entrepriseNom} — ${contact}`,
+            `📋 Mandat : ${data.mandatTitre}`,
+            `👔 Recruteur : ${recruteur}`,
+          ].join('\n'),
+        },
+      },
+    ],
+  };
+
+  try {
+    await sendToWebhook(config.webhookUrl, payload);
+    console.log(`[Slack] Presentation notification sent: ${candidatName} → ${data.entrepriseNom}`);
+  } catch (err) {
+    console.error('[Slack] Failed to send presentation notification:', err);
+  }
+}
+
+/**
+ * Notify Slack when a candidature reaches ENTRETIEN_1 (RDV client booké).
+ */
+export async function notifyRdvClient(data: {
+  candidatPrenom: string | null;
+  candidatNom: string;
+  entrepriseNom: string;
+  contactNom: string | null;
+  mandatTitre: string;
+  dateEntretien: Date | null;
+  recruteurPrenom: string | null;
+}): Promise<void> {
+  const config = await getSlackConfig();
+  if (!config || !config.enabled) return;
+
+  const candidatName = [data.candidatPrenom, data.candidatNom].filter(Boolean).join(' ');
+  const recruteur = data.recruteurPrenom || 'Non assigné';
+  const contact = data.contactNom || 'Non renseigné';
+
+  let dateLine = '🕐 Date à confirmer';
+  if (data.dateEntretien) {
+    const d = data.dateEntretien;
+    const datePart = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Paris' });
+    const timePart = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+    dateLine = `🕐 ${datePart} à ${timePart}`;
+  }
+
+  const payload = {
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: [
+            `📅 *RDV client booké*`,
+            ``,
+            `👤 ${candidatName}`,
+            `🏢 ${data.entrepriseNom} — ${contact}`,
+            `📋 Mandat : ${data.mandatTitre}`,
+            dateLine,
+            `👔 Recruteur : ${recruteur}`,
+          ].join('\n'),
+        },
+      },
+    ],
+  };
+
+  try {
+    await sendToWebhook(config.webhookUrl, payload);
+    console.log(`[Slack] RDV notification sent: ${candidatName}`);
+  } catch (err) {
+    console.error('[Slack] Failed to send RDV notification:', err);
+  }
+}
+
+/**
+ * Notify Slack when a new mandat is created (nouvelle opportunité).
+ */
+export async function notifyNouvelleOpportunite(data: {
+  mandatTitre: string;
+  entrepriseNom: string;
+  recruteurPrenom: string | null;
+  feeMontantEstime: number | null | undefined;
+}): Promise<void> {
+  const config = await getSlackConfig();
+  if (!config || !config.enabled) return;
+
+  const recruteur = data.recruteurPrenom || 'Non assigné';
+  const feeLine = data.feeMontantEstime
+    ? `💰 Fee estimé : ${data.feeMontantEstime.toLocaleString('fr-FR')} €`
+    : `💰 Fee estimé : _Non renseigné_`;
+
+  const payload = {
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: [
+            `🌟 *Nouvelle opportunité*`,
+            ``,
+            `📋 ${data.mandatTitre}`,
+            `🏢 ${data.entrepriseNom}`,
+            `👔 Recruteur assigné : ${recruteur}`,
+            feeLine,
+          ].join('\n'),
+        },
+      },
+    ],
+  };
+
+  try {
+    await sendToWebhook(config.webhookUrl, payload);
+    console.log(`[Slack] Nouvelle opportunité notification sent: ${data.mandatTitre}`);
+  } catch (err) {
+    console.error('[Slack] Failed to send nouvelle opportunité notification:', err);
+  }
+}
+
+/**
+ * Notify Slack when a candidature reaches PLACE or mandat reaches GAGNE (close won).
+ */
+export async function notifyCloseWon(data: {
+  candidatPrenom: string | null;
+  candidatNom: string;
+  entrepriseNom: string;
+  mandatTitre: string;
+  feeMontant: number | null | undefined;
+  recruteurPrenom: string | null;
+}): Promise<void> {
+  const config = await getSlackConfig();
+  if (!config || !config.enabled) return;
+
+  const candidatName = [data.candidatPrenom, data.candidatNom].filter(Boolean).join(' ');
+  const recruteur = data.recruteurPrenom || 'Non assigné';
+  const feeLine = data.feeMontant
+    ? `💰 Fee : ${data.feeMontant.toLocaleString('fr-FR')} €`
+    : `💰 Fee : _À confirmer_`;
+
+  const payload = {
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: [
+            `🏆 *CLOSE WON*`,
+            ``,
+            `👤 ${candidatName} → ${data.entrepriseNom}`,
+            `📋 Mandat : ${data.mandatTitre}`,
+            feeLine,
+            `👔 Recruteur : ${recruteur}`,
+            ``,
+            `Félicitations ! 🎉`,
+          ].join('\n'),
+        },
+      },
+    ],
+  };
+
+  try {
+    await sendToWebhook(config.webhookUrl, payload);
+    console.log(`[Slack] Close Won notification sent: ${candidatName} → ${data.entrepriseNom}`);
+  } catch (err) {
+    console.error('[Slack] Failed to send Close Won notification:', err);
+  }
+}
+
+// ─── PUSH CV NOTIFICATION ──────────────────────────
+
+export async function sendPushNotification(data: {
+  candidatName: string;
+  entrepriseName: string;
+  siren?: string | null;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  status: string;
+  autoDetected?: boolean;
+}): Promise<void> {
+  const config = await getSlackConfig();
+  if (!config || !config.enabled) return;
+
+  const appUrl = process.env.APP_URL || 'https://ats.propium.co';
+  const sirenLine = data.siren ? ` (SIREN: ${data.siren})` : '';
+  const contactLine = [data.contactName, data.contactEmail].filter(Boolean).join(' — ');
+
+  const payload = {
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `📤 Push CV ${data.autoDetected ? '(auto-détecté)' : ''}`,
+          emoji: true,
+        },
+      },
+      { type: 'divider' },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Candidat*\n${data.candidatName}` },
+          { type: 'mrkdwn', text: `*Entreprise*\n${data.entrepriseName}${sirenLine}` },
+          { type: 'mrkdwn', text: `*Contact*\n${contactLine || '_Non renseigné_'}` },
+          { type: 'mrkdwn', text: `*Statut*\n${data.status}` },
+        ],
+      },
+      {
+        type: 'context',
+        elements: [
+          { type: 'mrkdwn', text: `📊 <${appUrl}/pushes|Voir les pushes>` },
+        ],
+      },
+    ],
+  };
+
+  try {
+    await sendToWebhook(config.webhookUrl, payload);
+    console.log(`[Slack] Push notification sent: ${data.candidatName} → ${data.entrepriseName}`);
+  } catch (err) {
+    console.error('[Slack] Failed to send push notification:', err);
   }
 }

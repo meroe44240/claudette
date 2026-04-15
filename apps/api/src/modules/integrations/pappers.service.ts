@@ -1,5 +1,6 @@
 import prisma from '../../lib/db.js';
 import { AppError } from '../../lib/errors.js';
+import { logActivity } from '../../lib/activity-logger.js';
 
 // ─── CONFIG ──────────────────────────────────────────
 
@@ -316,6 +317,20 @@ export async function enrichEntreprise(entrepriseId: string): Promise<{
   });
 
   console.log(`[Pappers] Enriched entreprise "${entreprise.nom}" — ${fieldsUpdated.length} fields updated`);
+
+  // Fire-and-forget: log enrichment activity
+  if (entreprise.createdById) {
+    logActivity({
+      type: 'NOTE',
+      entiteType: 'ENTREPRISE',
+      entiteId: entrepriseId,
+      userId: entreprise.createdById,
+      titre: 'Données Pappers mises à jour',
+      contenu: `Champs enrichis : ${fieldsUpdated.join(', ')}`,
+      source: 'SYSTEME',
+      metadata: { pappersEnrich: true, fieldsUpdated },
+    }).catch(() => {});
+  }
 
   return {
     success: true,
