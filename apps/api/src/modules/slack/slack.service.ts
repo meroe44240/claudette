@@ -475,11 +475,20 @@ function buildSlackBlocks(data: DailyReportData): object {
   return { blocks };
 }
 
+// Slack bot identity
+const SLACK_BOT_NAME = 'Luis Enrique';
+const SLACK_BOT_ICON = process.env.SLACK_BOT_ICON_URL || 'https://ats.propium.co/uploads/slack-avatar.jpg';
+
 export async function sendToWebhook(webhookUrl: string, payload: object): Promise<void> {
+  const enriched = {
+    username: SLACK_BOT_NAME,
+    icon_url: SLACK_BOT_ICON,
+    ...payload,
+  };
   const response = await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(enriched),
   });
 
   if (!response.ok) {
