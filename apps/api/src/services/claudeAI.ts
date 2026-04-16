@@ -289,14 +289,21 @@ async function callGemini(params: {
 // Routes to Gemini if user has it configured, otherwise falls back to Anthropic
 
 export async function callClaude(options: ClaudeCallOptions): Promise<ClaudeResponse> {
-  // Check if user has Gemini configured → use it instead of Anthropic
+  // 1. Check if user has their own AI config (highest priority)
   const userAiConfig = await getAiConfigWithKey(options.userId).catch(() => null);
 
   if (userAiConfig?.aiProvider === 'gemini' && userAiConfig.apiKey) {
     return callClaudeViaGemini(options, userAiConfig.model, userAiConfig.apiKey);
   }
 
-  // Original Anthropic path
+  // 2. Fallback: server-level GEMINI_API_KEY env var
+  const serverGeminiKey = process.env.GEMINI_API_KEY;
+  if (serverGeminiKey) {
+    const serverModel = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+    return callClaudeViaGemini(options, serverModel, serverGeminiKey);
+  }
+
+  // 3. Last resort: Anthropic
   return callClaudeViaAnthropic(options);
 }
 

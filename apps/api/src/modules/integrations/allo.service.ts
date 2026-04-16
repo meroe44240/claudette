@@ -15,6 +15,7 @@ interface AlloWebhookPayload {
   duration: number;         // seconds
   recordingUrl?: string;
   transcript?: string;      // call transcript text
+  alloSummary?: string;     // Allo AI-generated summary (markdown)
   timestamp: string;
   userId?: string;          // Allo user id (maps to recruiter)
   metadata?: Record<string, unknown>;
@@ -48,6 +49,54 @@ const PERSONAL_DOMAINS = new Set([
 ]);
 
 // ─── HELPERS ────────────────────────────────────────
+
+/**
+ * Extract bullet points from Allo markdown summary (## Summary section).
+ * Returns up to 3 sentences as summary bullets.
+ */
+function extractBullets(markdown: string): string[] {
+  // Try to get the ## Summary section
+  const summaryMatch = markdown.match(/## Summary\s*\n([\s\S]*?)(?=\n## |\n###|$)/);
+  if (summaryMatch) {
+    const text = summaryMatch[1].trim();
+    // Split into sentences, take up to 3
+    const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.length > 10);
+    return sentences.slice(0, 3).map(s => s.length > 120 ? s.substring(0, 117) + '...' : s);
+  }
+  // Fallback: first line after #
+  const titleMatch = markdown.match(/^#\s+(.+)/m);
+  return titleMatch ? [titleMatch[1]] : ['Résumé disponible'];
+}
+
+/**
+ * Extract action items from Allo markdown summary (## Conclusion & next steps).
+ */
+function extractActions(markdown: string): Array<{ title: string; priority: string; deadline_hint: string | null }> {
+  const actions: Array<{ title: string; priority: string; deadline_hint: string | null }> = [];
+  // Look for conclusion/next steps section
+  const conclusionMatch = markdown.match(/(?:Conclusion|next steps|Prochaines étapes|Actions?)\s*\n([\s\S]*?)(?=\n## |$)/i);
+  if (conclusionMatch) {
+    const lines = conclusionMatch[1].split('\n').filter(l => l.trim().startsWith('-'));
+    for (const line of lines.slice(0, 5)) {
+      const title = line.replace(/^-\s*/, '').trim();
+      if (title.length > 5) {
+        // Detect deadline hints
+        let deadline: string | null = null;
+        if (/demain/i.test(title)) deadline = 'demain';
+        else if (/cette semaine|fin de semaine/i.test(title)) deadline = 'cette semaine';
+        else if (/semaine prochaine/i.test(title)) deadline = 'semaine prochaine';
+        else if (/urgent|immédiat|asap/i.test(title)) deadline = 'ASAP';
+
+        actions.push({
+          title: title.length > 100 ? title.substring(0, 97) + '...' : title,
+          priority: deadline === 'ASAP' ? 'high' : 'medium',
+          deadline_hint: deadline,
+        });
+      }
+    }
+  }
+  return actions;
+}
 
 /**
  * Normalise a phone number to its last 10 digits for partial matching.
@@ -415,6 +464,36 @@ export async function processAlloWebhook(
       });
     }
 
+    // Store Allo summary even for unidentified contacts
+    if (payload.alloSummary && recruiterId) {
+      try {
+        const fallbackUuid = '00000000-0000-0000-0000-000000000000';
+        await prisma.aiCallSummary.create({
+          data: {
+            activiteId: activite.id,
+            entityType: 'CANDIDAT',
+            entityId: fallbackUuid,
+            userId: recruiterId,
+            summaryJson: {
+              source: 'allo',
+              alloSummary: payload.alloSummary,
+              interlocutor: { first_name: null, last_name: null, company: null, job_title: null },
+              summary: extractBullets(payload.alloSummary),
+              sentiment: 'neutral',
+              sentiment_detail: '',
+              action_items: extractActions(payload.alloSummary),
+              info_updates: [],
+              key_quotes: [],
+            } as any,
+            actionsAccepted: [],
+            updatesApplied: [],
+          },
+        });
+      } catch (err) {
+        console.error('[Allo] Failed to store Allo summary for unidentified:', err);
+      }
+    }
+
     return { processed: true, activiteId: activite.id, matched: false, unidentifiedPhone: externalPhone };
   }
 
@@ -456,6 +535,44 @@ export async function processAlloWebhook(
       entiteType: match.type,
       entiteId: match.id,
     });
+  }
+
+  // Auto-import Allo AI summary into AiCallSummary (no extra AI call needed)
+  if (payload.alloSummary && recruiterId) {
+    try {
+      const existing = await prisma.aiCallSummary.findUnique({ where: { activiteId: activite.id } });
+      if (!existing) {
+        const fallbackUuid = '00000000-0000-0000-0000-000000000000';
+        await prisma.aiCallSummary.create({
+          data: {
+            activiteId: activite.id,
+            entityType: match.type,
+            entityId: match.id || fallbackUuid,
+            userId: recruiterId,
+            summaryJson: {
+              source: 'allo',
+              alloSummary: payload.alloSummary,
+              interlocutor: {
+                first_name: match.prenom || null,
+                last_name: match.nom || null,
+                company: null,
+                job_title: null,
+              },
+              summary: extractBullets(payload.alloSummary),
+              sentiment: 'neutral',
+              sentiment_detail: '',
+              action_items: extractActions(payload.alloSummary),
+              info_updates: [],
+              key_quotes: [],
+            } as any,
+            actionsAccepted: [],
+            updatesApplied: [],
+          },
+        });
+      }
+    } catch (err) {
+      console.error('[Allo] Failed to store Allo summary:', err);
+    }
   }
 
   return { processed: true, activiteId: activite.id, matched: true, contactType: match.type };
@@ -568,6 +685,7 @@ export async function syncCalls(userId: string) {
               duration: durationSeconds,
               recordingUrl: call.recording_url || call.recordingUrl,
               transcript: transcriptText,
+              alloSummary: call.summary || undefined,
               timestamp: call.start_date || call.timestamp || call.createdAt,
               userId: call.userId,
             },

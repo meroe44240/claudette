@@ -93,11 +93,37 @@ export function App() {
         { type: 'GET_PAGE_DATA' },
         (response: PageData | undefined) => {
           if (chrome.runtime.lastError) {
-            // Content script not loaded yet - try injecting it
-            setPageError(
-              'Impossible de lire la page. Rechargez la page LinkedIn et r\u00e9essayez.'
+            // Content script not loaded — inject it and retry
+            chrome.scripting.executeScript(
+              { target: { tabId: tab.id! }, files: ['content.js'] },
+              () => {
+                if (chrome.runtime.lastError) {
+                  setPageError(
+                    'Impossible de lire la page. Rechargez la page LinkedIn et réessayez.'
+                  );
+                  setPageData({ type: 'unknown' });
+                  return;
+                }
+                // Wait for script to initialise then retry
+                setTimeout(() => {
+                  chrome.tabs.sendMessage(
+                    tab.id!,
+                    { type: 'GET_PAGE_DATA' },
+                    (retryResponse: PageData | undefined) => {
+                      if (chrome.runtime.lastError || !retryResponse) {
+                        setPageError(
+                          'Impossible de lire la page. Rechargez la page LinkedIn et réessayez.'
+                        );
+                        setPageData({ type: 'unknown' });
+                      } else {
+                        setPageError(null);
+                        setPageData(retryResponse);
+                      }
+                    }
+                  );
+                }, 800);
+              }
             );
-            setPageData({ type: 'unknown' });
           } else if (!response) {
             setPageData({ type: 'unknown' });
           } else {
