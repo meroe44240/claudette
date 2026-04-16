@@ -304,6 +304,7 @@ async function autoCreateContact(
 export async function processAlloWebhook(
   payload: AlloWebhookPayload,
   alloContactMap?: Map<string, AlloContact>,
+  overrideRecruiterId?: string,
 ) {
   const callEndedEvents = ['call.ended', 'call_finished', 'Call Finished', 'call.finished'];
   if (!callEndedEvents.includes(payload.event)) {
@@ -315,8 +316,10 @@ export async function processAlloWebhook(
   let match = await matchPhoneNumber(externalPhone);
 
   // Find the recruiter user linked to this Allo user
-  let recruiterId: string | null = null;
-  if (payload.userId) {
+  let recruiterId: string | null = overrideRecruiterId || null;
+
+  // If override provided, skip lookup
+  if (!recruiterId && payload.userId) {
     const config = await prisma.integrationConfig.findFirst({
       where: {
         provider: 'allo',
@@ -327,7 +330,23 @@ export async function processAlloWebhook(
     if (config) recruiterId = config.userId;
   }
 
-  // If no recruiter found, try to find any user with allo integration
+  // If no recruiter found, try matching by allo_number from the call itself
+  if (!recruiterId) {
+    const alloNumber = payload.direction === 'inbound' ? payload.to : payload.from;
+    if (alloNumber) {
+      const normNum = normalisePhone(alloNumber);
+      const configs = await prisma.integrationConfig.findMany({
+        where: { provider: 'allo', enabled: true },
+      });
+      const matched = configs.find((c: any) => {
+        const cfgNum = (c.config as any)?.alloNumber;
+        return cfgNum && normalisePhone(cfgNum) === normNum;
+      });
+      if (matched) recruiterId = matched.userId;
+    }
+  }
+
+  // Last resort: find any user with allo integration
   if (!recruiterId) {
     const anyConfig = await prisma.integrationConfig.findFirst({
       where: { provider: 'allo', enabled: true },
@@ -553,6 +572,7 @@ export async function syncCalls(userId: string) {
               userId: call.userId,
             },
             alloContactMap,
+            userId, // Pass the syncing user's ID to correctly attribute activities
           );
 
           synced++;
