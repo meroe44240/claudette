@@ -8,6 +8,7 @@
  */
 
 import prisma from '../lib/db.js';
+import { getAiConfigWithKey } from '../modules/ai/ai-config.service.js';
 
 // ─── MODELS & COSTS ─────────────────────────────────────
 
@@ -235,9 +236,148 @@ function parseJsonSafe(text: string): any {
   }
 }
 
+// ─── GEMINI API CALL ────────────────────────────────────
+
+async function callGemini(params: {
+  apiKey: string;
+  model: string;
+  systemPrompt: string;
+  userPrompt: string;
+  maxTokens: number;
+  temperature: number;
+}): Promise<{ rawText: string; inputTokens: number; outputTokens: number }> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${params.model}:generateContent?key=${params.apiKey}`;
+
+  const body = {
+    contents: [{ parts: [{ text: params.userPrompt }] }],
+    systemInstruction: { parts: [{ text: params.systemPrompt }] },
+    generationConfig: {
+      maxOutputTokens: params.maxTokens,
+      temperature: params.temperature,
+      responseMimeType: 'application/json',
+    },
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90_000);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      throw new Error(`Gemini API error ${response.status}: ${errBody}`);
+    }
+
+    const data = await response.json() as any;
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const inputTokens = data.usageMetadata?.promptTokenCount ?? 0;
+    const outputTokens = data.usageMetadata?.candidatesTokenCount ?? 0;
+
+    return { rawText, inputTokens, outputTokens };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // ─── PUBLIC: callClaude ──────────────────────────────────
+// Routes to Gemini if user has it configured, otherwise falls back to Anthropic
 
 export async function callClaude(options: ClaudeCallOptions): Promise<ClaudeResponse> {
+  // Check if user has Gemini configured → use it instead of Anthropic
+  const userAiConfig = await getAiConfigWithKey(options.userId).catch(() => null);
+
+  if (userAiConfig?.aiProvider === 'gemini' && userAiConfig.apiKey) {
+    return callClaudeViaGemini(options, userAiConfig.model, userAiConfig.apiKey);
+  }
+
+  // Original Anthropic path
+  return callClaudeViaAnthropic(options);
+}
+
+async function callClaudeViaGemini(
+  options: ClaudeCallOptions,
+  geminiModel: string,
+  apiKey: string,
+): Promise<ClaudeResponse> {
+  const maxTokens = options.maxTokens ?? 2000;
+  const temperature = options.temperature ?? 0;
+  const startTime = Date.now();
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const userPrompt = attempt === 0
+        ? options.userPrompt
+        : options.userPrompt + '\n\nIMPORTANT : Reponds UNIQUEMENT en JSON valide, sans markdown, sans backticks, sans commentaires.';
+
+      const result = await callGemini({
+        apiKey,
+        model: geminiModel,
+        systemPrompt: options.systemPrompt,
+        userPrompt,
+        maxTokens,
+        temperature,
+      });
+
+      const durationMs = Date.now() - startTime;
+      let content: any;
+
+      try {
+        content = parseJsonSafe(result.rawText);
+      } catch {
+        if (attempt === 0) {
+          lastError = new Error('Invalid JSON response from Gemini');
+          continue;
+        }
+        content = result.rawText;
+      }
+
+      await logUsage({
+        feature: options.feature,
+        model: geminiModel,
+        userId: options.userId,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        durationMs,
+        success: true,
+      });
+
+      return {
+        content,
+        rawText: result.rawText,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        model: geminiModel,
+        durationMs,
+      };
+    } catch (err: any) {
+      lastError = err;
+    }
+  }
+
+  const durationMs = Date.now() - startTime;
+  await logUsage({
+    feature: options.feature,
+    model: geminiModel,
+    userId: options.userId,
+    inputTokens: 0,
+    outputTokens: 0,
+    durationMs,
+    success: false,
+    error: lastError?.message ?? 'Unknown error',
+  });
+
+  throw lastError;
+}
+
+async function callClaudeViaAnthropic(options: ClaudeCallOptions): Promise<ClaudeResponse> {
   const tier = FEATURE_MODEL_MAP[options.feature] || 'fast';
   const model = MODELS[tier];
   const maxTokens = options.maxTokens ?? 2000;
