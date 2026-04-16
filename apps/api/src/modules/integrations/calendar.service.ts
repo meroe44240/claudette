@@ -1022,6 +1022,28 @@ async function processClassifiedEvent(
     notifyAmbiguousEvent(classified, recruiterName).catch(() => {});
   }
 
+  // For PRESENTATION events, notify the whole team on Slack
+  if (classified.type === 'PRESENTATION') {
+    try {
+      const { notifyPresentation } = await import('../slack/slack.service.js');
+      // Extract candidate and company info from attendees
+      const externalAtts = classified.attendees.filter((a) => a.role !== 'internal');
+      const candidatAtt = externalAtts.find((a) => a.role === 'candidat');
+      const clientAtt = externalAtts.find((a) => a.role === 'client');
+
+      await notifyPresentation({
+        candidatPrenom: null,
+        candidatNom: candidatAtt?.name || candidatAtt?.email || 'Candidat externe',
+        entrepriseNom: clientAtt?.name || clientAtt?.email || 'Entreprise',
+        contactNom: clientAtt?.name || null,
+        mandatTitre: classified.summary,
+        recruteurPrenom: recruiterName,
+      });
+    } catch (err) {
+      console.error('[CalendarWatcher] Slack presentation notification error:', err);
+    }
+  }
+
   // Determine the linked entity from attendees
   const externalAttendees = classified.attendees.filter((a) => a.role !== 'internal');
   let entiteType: 'CANDIDAT' | 'CLIENT' = 'CANDIDAT';
