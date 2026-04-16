@@ -171,17 +171,33 @@ Analyse cet appel et retourne le JSON suivant :
   ]
 }`;
 
-  // 6. Call Claude
+  // 6. Call AI (routes to Gemini if configured, otherwise Anthropic)
   const response = await callClaude({
     feature: 'call_summary',
     systemPrompt: CALL_SUMMARY_SYSTEM_PROMPT,
     userPrompt,
-    maxTokens: 2000,
+    maxTokens: 4096,
     temperature: 0,
     userId,
   });
 
-  const summaryJson = response.content as CallSummaryJson;
+  // Ensure summaryJson is a parsed object (not a string)
+  let summaryJson: CallSummaryJson;
+  if (typeof response.content === 'string') {
+    try {
+      summaryJson = JSON.parse(response.content);
+    } catch {
+      // Try to extract JSON from partial response
+      const match = response.content.match(/^(\{[\s\S]*\})\s*$/);
+      if (match) {
+        summaryJson = JSON.parse(match[1]);
+      } else {
+        throw new Error('Réponse IA invalide : JSON incomplet ou malformé');
+      }
+    }
+  } else {
+    summaryJson = response.content as CallSummaryJson;
+  }
 
   // 7. Store in AiCallSummary
   const fallbackUuid = '00000000-0000-0000-0000-000000000000';
