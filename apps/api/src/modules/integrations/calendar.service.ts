@@ -1026,17 +1026,74 @@ async function processClassifiedEvent(
   if (classified.type === 'PRESENTATION') {
     try {
       const { notifyPresentation } = await import('../slack/slack.service.js');
-      // Extract candidate and company info from attendees
       const externalAtts = classified.attendees.filter((a) => a.role !== 'internal');
       const candidatAtt = externalAtts.find((a) => a.role === 'candidat');
       const clientAtt = externalAtts.find((a) => a.role === 'client');
 
+      // Fetch full candidat info
+      let candidatPrenom: string | null = null;
+      let candidatNom = candidatAtt?.name || candidatAtt?.email || 'Candidat externe';
+      if (candidatAtt?.entityId) {
+        const candidat = await prisma.candidat.findUnique({
+          where: { id: candidatAtt.entityId },
+          select: { nom: true, prenom: true },
+        });
+        if (candidat) {
+          candidatPrenom = candidat.prenom || null;
+          candidatNom = candidat.nom;
+        }
+      }
+
+      // Fetch client's company (entreprise) + find matching mandate
+      let entrepriseNom = 'Entreprise';
+      let contactNom = clientAtt?.name || null;
+      let mandatTitre = classified.summary;
+
+      if (clientAtt?.entityId) {
+        const client = await prisma.client.findUnique({
+          where: { id: clientAtt.entityId },
+          select: { nom: true, prenom: true, entreprise: { select: { id: true, nom: true } } },
+        });
+        if (client) {
+          contactNom = `${client.prenom || ''} ${client.nom}`.trim();
+          if (client.entreprise) {
+            entrepriseNom = client.entreprise.nom;
+
+            // Try to find a matching mandate (same entreprise, candidat in pipeline or open)
+            if (candidatAtt?.entityId) {
+              const mandat = await prisma.mandat.findFirst({
+                where: {
+                  entrepriseId: client.entreprise.id,
+                  statut: { in: ['OUVERT', 'EN_COURS'] },
+                  candidatures: { some: { candidatId: candidatAtt.entityId } },
+                },
+                select: { titrePoste: true },
+              });
+              if (mandat) mandatTitre = mandat.titrePoste;
+            }
+
+            // Fallback: any open mandate for this company
+            if (mandatTitre === classified.summary) {
+              const anyMandat = await prisma.mandat.findFirst({
+                where: {
+                  entrepriseId: client.entreprise.id,
+                  statut: { in: ['OUVERT', 'EN_COURS'] },
+                },
+                select: { titrePoste: true },
+                orderBy: { createdAt: 'desc' },
+              });
+              if (anyMandat) mandatTitre = anyMandat.titrePoste;
+            }
+          }
+        }
+      }
+
       await notifyPresentation({
-        candidatPrenom: null,
-        candidatNom: candidatAtt?.name || candidatAtt?.email || 'Candidat externe',
-        entrepriseNom: clientAtt?.name || clientAtt?.email || 'Entreprise',
-        contactNom: clientAtt?.name || null,
-        mandatTitre: classified.summary,
+        candidatPrenom,
+        candidatNom,
+        entrepriseNom,
+        contactNom,
+        mandatTitre,
         recruteurPrenom: recruiterName,
       });
     } catch (err) {
