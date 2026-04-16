@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Phone, Mail, Send, MailOpen, Calendar, FileText, StickyNote, ListChecks, CheckCircle, Mic, Star, Plus, Loader2, ArrowRight, Zap, Search } from 'lucide-react';
+import { Phone, Mail, Send, MailOpen, Calendar, FileText, StickyNote, ListChecks, CheckCircle, Mic, Star, Plus, Loader2, ArrowRight, Zap, Search, AlertCircle, UserPlus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../lib/api-client';
 import Badge from '../../components/ui/Badge';
@@ -12,6 +12,7 @@ import Skeleton from '../../components/ui/Skeleton';
 import Pagination from '../../components/ui/Pagination';
 import { toast } from '../../components/ui/Toast';
 import AiCallSummaryEncart from './AiCallSummaryEncart';
+import IdentifyContactModal from './IdentifyContactModal';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -168,6 +169,11 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
   const [quickNote, setQuickNote] = useState('');
   const [quickNoteOpen, setQuickNoteOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // -- Identify contact modal --
+  const [identifyModalOpen, setIdentifyModalOpen] = useState(false);
+  const [identifyActiviteId, setIdentifyActiviteId] = useState('');
+  const [identifyPhone, setIdentifyPhone] = useState('');
 
   // -- Quick note mutation --
   const quickNoteMutation = useMutation({
@@ -421,6 +427,7 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
                   const meta = a.metadata ?? {};
                   const duration = meta.duration_seconds ? `${Math.round(meta.duration_seconds / 60)} min` : null;
                   const meetingDuration = meta.duration_minutes ? `${meta.duration_minutes}h` : null;
+                  const isUnidentified = a.type === 'APPEL' && meta.matched === false && meta.unidentifiedPhone;
 
                   return (
                     <motion.div key={a.id} className="relative pl-[56px] pb-5 group" variants={staggerItem}>
@@ -480,6 +487,30 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
                               )}
                               <Badge>{sourceLabels[a.source] || a.source}</Badge>
                             </div>
+
+                            {/* Unidentified call banner */}
+                            {isUnidentified && (
+                              <div className="mt-2.5 flex items-center justify-between rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <AlertCircle size={14} className="text-amber-600 shrink-0" />
+                                  <span className="text-[12px] font-medium text-amber-800">
+                                    Contact non identifié : {meta.unidentifiedPhone}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIdentifyActiviteId(a.id);
+                                    setIdentifyPhone(meta.unidentifiedPhone);
+                                    setIdentifyModalOpen(true);
+                                  }}
+                                  className="flex items-center gap-1 rounded-lg bg-white border border-amber-300 px-2.5 py-1 text-[12px] font-semibold text-amber-700 hover:bg-amber-100 transition-colors shrink-0 ml-2"
+                                >
+                                  <UserPlus size={13} />
+                                  Identifier
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           {/* Bookmark button */}
@@ -523,6 +554,14 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
           </div>
         )}
       </div>
+
+      {/* Identify Contact Modal */}
+      <IdentifyContactModal
+        isOpen={identifyModalOpen}
+        onClose={() => setIdentifyModalOpen(false)}
+        activiteId={identifyActiviteId}
+        phoneNumber={identifyPhone}
+      />
 
       {/* Create Activity Modal */}
       <Modal

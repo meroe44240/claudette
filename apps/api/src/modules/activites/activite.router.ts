@@ -103,6 +103,33 @@ export default async function activiteRouter(fastify: FastifyInstance) {
     },
   });
 
+  // POST /:id/identifier-contact - Link an unidentified call to a candidat/client
+  fastify.post('/:id/identifier-contact', {
+    schema: {
+      description: 'Identifier le contact d\'un appel non-identifié',
+      tags: ['Activites'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', format: 'uuid' } },
+      },
+      body: {
+        type: 'object',
+        required: ['entiteType', 'entiteId'],
+        properties: {
+          entiteType: { type: 'string', enum: ['CANDIDAT', 'CLIENT'] },
+          entiteId: { type: 'string', format: 'uuid' },
+        },
+      },
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { entiteType, entiteId } = request.body as { entiteType: 'CANDIDAT' | 'CLIENT'; entiteId: string };
+      return activiteService.identifierContact(id, entiteType, entiteId);
+    },
+  });
+
   // POST /:id/fichiers - Add fichier to activite
   fastify.post('/:id/fichiers', {
     schema: {

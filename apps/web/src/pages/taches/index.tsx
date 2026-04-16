@@ -5,6 +5,7 @@ import {
   Check, Clock, AlertTriangle, Calendar, Plus, Send,
   ChevronDown, ChevronUp, Mail, Loader2, Trash2, AlarmClock,
   User, Building2, FileText, Briefcase, ExternalLink, Pencil,
+  UserPlus, Phone,
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { api } from '../../lib/api-client';
@@ -20,6 +21,7 @@ import Input, { Textarea } from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import { toast } from '../../components/ui/Toast';
 import PageHeader from '../../components/ui/PageHeader';
+import IdentifyContactModal from '../../components/activity/IdentifyContactModal';
 import { useAuthStore } from '../../stores/auth-store';
 
 interface Tache {
@@ -108,6 +110,11 @@ export default function TachesPage() {
     tacheDueDate: '',
     tachePriority: 'MOYENNE' as string,
   });
+
+  // -- Identify contact modal --
+  const [identifyModalOpen, setIdentifyModalOpen] = useState(false);
+  const [identifyActiviteId, setIdentifyActiviteId] = useState('');
+  const [identifyPhone, setIdentifyPhone] = useState('');
 
   const queryClient = useQueryClient();
 
@@ -367,6 +374,22 @@ export default function TachesPage() {
                     <p className="mt-1 text-[13px] text-neutral-500 line-clamp-2">{t.contenu}</p>
                   )}
 
+                  {/* Identify contact button for unidentified call tasks */}
+                  {t.metadata?.unidentifiedPhone && t.metadata?.activiteId && !t.tacheCompleted && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIdentifyActiviteId(t.metadata!.activiteId);
+                        setIdentifyPhone(t.metadata!.unidentifiedPhone);
+                        setIdentifyModalOpen(true);
+                      }}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-1.5 text-[12px] font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
+                    >
+                      <UserPlus size={14} />
+                      Identifier ce contact ({t.metadata.unidentifiedPhone})
+                    </button>
+                  )}
+
                   {/* Entity link */}
                   {t.entiteType && t.entiteId && ENTITE_ROUTES[t.entiteType] && (
                     <Link
@@ -594,6 +617,17 @@ export default function TachesPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Identify Contact Modal */}
+      <IdentifyContactModal
+        isOpen={identifyModalOpen}
+        onClose={() => {
+          setIdentifyModalOpen(false);
+          refetch(); // Refresh tasks to show the closed task
+        }}
+        activiteId={identifyActiviteId}
+        phoneNumber={identifyPhone}
+      />
 
       {/* Edit modal */}
       <Modal isOpen={!!editingTask} onClose={() => setEditingTask(null)} title="Modifier la tâche">

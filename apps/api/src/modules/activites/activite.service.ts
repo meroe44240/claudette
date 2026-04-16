@@ -168,6 +168,109 @@ export async function remove(id: string) {
   return prisma.activite.delete({ where: { id } });
 }
 
+/**
+ * Identifier un contact pour une activité orpheline (appel non-identifié).
+ * - Rattache l'activité au contact choisi (entiteType + entiteId)
+ * - Enregistre le numéro de téléphone sur la fiche du contact
+ * - Ferme la tâche "Identifier le contact" associée
+ * - Met à jour le AiCallSummary si il existe
+ */
+export async function identifierContact(
+  activiteId: string,
+  entiteType: 'CANDIDAT' | 'CLIENT',
+  entiteId: string,
+) {
+  const activite = await prisma.activite.findUnique({ where: { id: activiteId } });
+  if (!activite) throw new NotFoundError('Activite', activiteId);
+
+  const meta = (activite.metadata as any) ?? {};
+  const phone = meta.unidentifiedPhone || meta.from || meta.to;
+
+  // 1. Fetch the contact name
+  let contactName = '';
+  if (entiteType === 'CANDIDAT') {
+    const candidat = await prisma.candidat.findUnique({
+      where: { id: entiteId },
+      select: { nom: true, prenom: true, telephone: true },
+    });
+    if (!candidat) throw new NotFoundError('Candidat', entiteId);
+    contactName = `${candidat.prenom ?? ''} ${candidat.nom}`.trim();
+
+    // Save phone number if missing
+    if (phone && !candidat.telephone) {
+      await prisma.candidat.update({
+        where: { id: entiteId },
+        data: { telephone: phone },
+      });
+    }
+  } else {
+    const client = await prisma.client.findUnique({
+      where: { id: entiteId },
+      select: { nom: true, prenom: true, telephone: true },
+    });
+    if (!client) throw new NotFoundError('Client', entiteId);
+    contactName = `${client.prenom ?? ''} ${client.nom}`.trim();
+
+    if (phone && !client.telephone) {
+      await prisma.client.update({
+        where: { id: entiteId },
+        data: { telephone: phone },
+      });
+    }
+  }
+
+  // 2. Update the activity: link to contact + update title
+  const direction = activite.direction === 'ENTRANT' ? 'entrant' : 'sortant';
+  await prisma.activite.update({
+    where: { id: activiteId },
+    data: {
+      entiteType,
+      entiteId,
+      titre: `Appel ${direction} - ${contactName}`,
+      metadata: { ...meta, matched: true, unidentifiedPhone: undefined, identifiedManually: true },
+    },
+  });
+
+  // 3. Close the associated "Identifier le contact" task
+  const identifyTask = await prisma.activite.findFirst({
+    where: {
+      type: 'TACHE',
+      isTache: true,
+      tacheCompleted: false,
+      metadata: { path: ['activiteId'], equals: activiteId },
+    },
+  });
+  if (identifyTask) {
+    await prisma.activite.update({
+      where: { id: identifyTask.id },
+      data: { tacheCompleted: true },
+    });
+  }
+
+  // 4. Update AiCallSummary if exists
+  const aiSummary = await prisma.aiCallSummary.findUnique({
+    where: { activiteId },
+  });
+  if (aiSummary) {
+    await prisma.aiCallSummary.update({
+      where: { activiteId },
+      data: {
+        entityType: entiteType,
+        entityId: entiteId,
+      },
+    });
+  }
+
+  return {
+    activiteId,
+    entiteType,
+    entiteId,
+    contactName,
+    phoneLinked: !!phone,
+    taskClosed: !!identifyTask,
+  };
+}
+
 export async function addFichier(
   activiteId: string,
   data: { nom: string; url: string; mimeType?: string; taille?: number },

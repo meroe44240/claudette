@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Phone, Mail, Calendar, FileText, ListChecks, Mic, Star, StarOff, Plus, Loader2, Search, MessageSquare } from 'lucide-react';
+import { Phone, Mail, Calendar, FileText, ListChecks, Mic, Star, StarOff, Plus, Loader2, Search, MessageSquare, AlertCircle, UserPlus } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import Badge from '../../components/ui/Badge';
 import Pagination from '../../components/ui/Pagination';
@@ -13,6 +13,7 @@ import Select from '../../components/ui/Select';
 import Input, { Textarea } from '../../components/ui/Input';
 import { toast } from '../../components/ui/Toast';
 import PageHeader from '../../components/ui/PageHeader';
+import IdentifyContactModal from '../../components/activity/IdentifyContactModal';
 
 const typeIcons: Record<string, React.ReactNode> = {
   APPEL: <Phone size={16} />,
@@ -86,6 +87,7 @@ interface Activite {
   titre: string | null;
   contenu: string | null;
   source: string;
+  metadata: any;
   bookmarked: boolean;
   isTache: boolean;
   tacheCompleted: boolean;
@@ -140,6 +142,11 @@ export default function ActivitesPage() {
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState('all');
   const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
+
+  // -- Identify contact modal --
+  const [identifyModalOpen, setIdentifyModalOpen] = useState(false);
+  const [identifyActiviteId, setIdentifyActiviteId] = useState('');
+  const [identifyPhone, setIdentifyPhone] = useState('');
 
   // -- Create activity modal state --
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -336,16 +343,20 @@ export default function ActivitesPage() {
                 </motion.div>
 
                 {/* Events for this day */}
-                {group.items.map((a) => (
+                {group.items.map((a) => {
+                  const meta = a.metadata ?? {};
+                  const isUnidentified = a.type === 'APPEL' && meta.matched === false && meta.unidentifiedPhone;
+
+                  return (
                   <motion.div key={a.id} variants={timelineItem} className="relative pl-[48px] pb-6 group">
                     {/* Colored dot */}
                     <div
                       className="absolute left-[14px] top-[4px] h-[12px] w-[12px] rounded-full border-2 border-white shadow-sm"
-                      style={{ backgroundColor: typeDotColors[a.type] || '#6B7194' }}
+                      style={{ backgroundColor: isUnidentified ? '#F59E0B' : (typeDotColors[a.type] || '#6B7194') }}
                     />
 
                     {/* Content card */}
-                    <div className="rounded-xl bg-white p-4 shadow-card hover:shadow-card-hover transition-shadow duration-200">
+                    <div className={`rounded-xl bg-white p-4 shadow-card hover:shadow-card-hover transition-shadow duration-200 ${isUnidentified ? 'border border-amber-200' : ''}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           {/* Time */}
@@ -371,6 +382,30 @@ export default function ActivitesPage() {
                               </span>
                             )}
                           </div>
+
+                          {/* Unidentified call banner */}
+                          {isUnidentified && (
+                            <div className="mt-2.5 flex items-center justify-between rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <AlertCircle size={14} className="text-amber-600 shrink-0" />
+                                <span className="text-[12px] font-medium text-amber-800">
+                                  Contact non identifié : {meta.unidentifiedPhone}
+                                </span>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIdentifyActiviteId(a.id);
+                                  setIdentifyPhone(meta.unidentifiedPhone);
+                                  setIdentifyModalOpen(true);
+                                }}
+                                className="flex items-center gap-1 rounded-lg bg-white border border-amber-300 px-2.5 py-1 text-[12px] font-semibold text-amber-700 hover:bg-amber-100 transition-colors shrink-0 ml-2"
+                              >
+                                <UserPlus size={13} />
+                                Identifier
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {/* Bookmark button */}
@@ -388,7 +423,8 @@ export default function ActivitesPage() {
                       </div>
                     </div>
                   </motion.div>
-                ))}
+                  );
+                })}
               </motion.div>
             ))}
           </div>
@@ -404,6 +440,14 @@ export default function ActivitesPage() {
           </div>
         )}
       </div>
+
+      {/* Identify Contact Modal */}
+      <IdentifyContactModal
+        isOpen={identifyModalOpen}
+        onClose={() => setIdentifyModalOpen(false)}
+        activiteId={identifyActiviteId}
+        phoneNumber={identifyPhone}
+      />
 
       {/* Create Activity Modal */}
       <Modal
