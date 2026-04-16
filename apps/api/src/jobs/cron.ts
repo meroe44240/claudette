@@ -574,6 +574,30 @@ export function startCronJobs(): void {
   const calendarWatcherInterval = setInterval(runCalendarWatcherJob, 15 * 60 * 1000);
   intervals.push(calendarWatcherInterval);
 
+  // Register Google Calendar push notifications (instant webhook on event changes)
+  // Run at startup + renew every 6 hours
+  (async () => {
+    try {
+      const { registerAllCalendarWatches } = await import(
+        '../modules/integrations/calendar.service.js'
+      );
+      await registerAllCalendarWatches();
+    } catch (err) {
+      console.error('[Cron] Error registering Calendar watches at startup:', err);
+    }
+  })();
+  const calendarWatchRenewInterval = setInterval(async () => {
+    try {
+      const { registerAllCalendarWatches } = await import(
+        '../modules/integrations/calendar.service.js'
+      );
+      await registerAllCalendarWatches();
+    } catch (err) {
+      console.error('[Cron] Error renewing Calendar watches:', err);
+    }
+  }, 6 * 60 * 60 * 1000);
+  intervals.push(calendarWatchRenewInterval);
+
   // Batch enrichment check every 60 seconds (runs Sunday 02:00 UTC only)
   const batchEnrichInterval = setInterval(checkBatchEnrichment, 60 * 1000);
   intervals.push(batchEnrichInterval);
@@ -589,6 +613,7 @@ export function startCronJobs(): void {
   console.log('  - Push CV auto-detect: every 15 minutes (sent emails → push detection)');
   console.log('  - Sequence due steps: every 5 minutes (execute next steps for due runs)');
   console.log('  - Calendar watcher: every 15 minutes (Mon-Fri 8h-19h Paris, classify events)');
+  console.log('  - Calendar push notifications: registered at startup, renewed every 6h');
   console.log('  - Batch enrichment: checked every 60s (runs Sunday 02:00 UTC — Pappers + CV re-parse)');
 }
 

@@ -499,40 +499,16 @@ export async function processCalendarWebhook(payload: CalendarWebhookPayload) {
           }
         }
 
-        // Create/update activity for the event
-        const existingActivity = await prisma.activite.findFirst({
-          where: {
-            source: 'CALENDAR',
-            metadata: { path: ['googleEventId'], equals: item.id },
-          },
+        // Classify and create activity (same logic as the watcher)
+        // Get the recruiter's email for classification
+        const recruiterUser = await prisma.user.findUnique({
+          where: { id: userId! },
+          select: { email: true, nom: true, prenom: true },
         });
-
-        if (!existingActivity) {
-          const attendeeMatch = await matchAttendees(
-            (item.attendees || []).map((a: any) => a.email).filter(Boolean),
-          );
-
-          await prisma.activite.create({
-            data: {
-              type: 'MEETING',
-              entiteType: attendeeMatch?.type ?? 'CANDIDAT',
-              entiteId: attendeeMatch?.id ?? '00000000-0000-0000-0000-000000000000',
-              userId,
-              titre: item.summary || 'Événement calendrier',
-              contenu: item.description?.substring(0, 500) || `Événement mis à jour`,
-              source: 'CALENDAR',
-              metadata: {
-                googleEventId: item.id,
-                startTime: item.start?.dateTime || item.start?.date,
-                endTime: item.end?.dateTime || item.end?.date,
-                location: item.location,
-                attendees: (item.attendees || []).map((a: any) => a.email),
-                htmlLink: item.htmlLink,
-                isCalendly: calendlyData.isCalendly,
-                calendlyData: calendlyData.isCalendly ? (calendlyData as any) : undefined,
-              },
-            },
-          });
+        if (recruiterUser) {
+          const recruiterName = `${recruiterUser.prenom || ''} ${recruiterUser.nom}`.trim();
+          const classified = await classifyCalendarEvent(item, recruiterUser.email);
+          await processClassifiedEvent(classified, userId!, recruiterName);
         }
       }
     }
@@ -868,6 +844,102 @@ export function validateWebhookHeaders(
 
   const validStates = ['sync', 'exists', 'update'];
   return validStates.includes(resourceState);
+}
+
+// ─── GOOGLE CALENDAR WATCH (Push Notifications) ────
+
+/**
+ * Register a Google Calendar watch channel so Google sends push notifications
+ * to our webhook endpoint whenever events change. Must be renewed before expiry.
+ *
+ * See: https://developers.google.com/calendar/api/guides/push
+ */
+export async function registerCalendarWatch(userId: string): Promise<{ channelId: string; expiration: string } | null> {
+  try {
+    const accessToken = await getValidAccessToken(userId);
+    const webhookUrl = `${process.env.APP_URL || 'https://ats.propium.co'}/api/v1/integrations/calendar/webhook`;
+    const channelId = `humanup-cal-${userId}-${Date.now()}`;
+    const channelToken = `watch-${userId}`;
+
+    const res = await fetch(
+      'https://www.googleapis.com/calendar/v3/calendars/primary/events/watch',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: channelId,
+          type: 'web_hook',
+          address: webhookUrl,
+          token: channelToken,
+          params: { ttl: '604800' }, // 7 days
+        }),
+      },
+    );
+
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error(`[CalendarWatch] Failed to register watch for user ${userId}:`, errBody);
+      return null;
+    }
+
+    const data = await res.json() as any;
+    const expiration = data.expiration ? new Date(Number(data.expiration)).toISOString() : 'unknown';
+
+    // Save watch info in integration config
+    const existingConfig = await prisma.integrationConfig.findFirst({
+      where: { userId, provider: 'calendar' },
+      select: { config: true },
+    });
+    const prevConfig = (existingConfig?.config as Record<string, unknown>) || {};
+
+    await prisma.integrationConfig.updateMany({
+      where: { userId, provider: 'calendar' },
+      data: {
+        config: {
+          ...prevConfig,
+          channelId,
+          channelToken,
+          channelExpiration: expiration,
+          resourceId: data.resourceId,
+        },
+      },
+    });
+
+    console.log(`[CalendarWatch] Registered for user ${userId}, expires ${expiration}`);
+    return { channelId, expiration };
+  } catch (err) {
+    console.error(`[CalendarWatch] Error registering watch for user ${userId}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Register watches for all users with Calendar connected.
+ * Called at startup and periodically to renew.
+ */
+export async function registerAllCalendarWatches(): Promise<void> {
+  const configs = await prisma.integrationConfig.findMany({
+    where: { provider: 'calendar', enabled: true },
+    select: { userId: true, config: true },
+  });
+
+  for (const cfg of configs) {
+    const config = cfg.config as Record<string, unknown> | null;
+    const expiration = config?.channelExpiration as string | undefined;
+
+    // Skip if watch is still valid (more than 1 hour remaining)
+    if (expiration) {
+      const expiresAt = new Date(expiration).getTime();
+      if (expiresAt > Date.now() + 60 * 60 * 1000) {
+        continue;
+      }
+    }
+
+    await registerCalendarWatch(cfg.userId);
+  }
 }
 
 // ─── CALENDAR EVENT CLASSIFIER & WATCHER ───────────
