@@ -71,6 +71,7 @@ model Entreprise {
   nom          String            @db.VarChar(255)
   secteur      String?           @db.VarChar(100)
   siteWeb      String?           @db.VarChar(500)
+  domaine      String?           @db.VarChar(255)
   taille       TailleEntreprise?
   localisation String?           @db.VarChar(255)
   linkedinUrl  String?           @db.VarChar(500)
@@ -1099,19 +1100,65 @@ model Push {
   prospect     Prospect   @relation(fields: [prospectId], references: [id])
   recruiterId  String     @db.Uuid
   recruiter    User       @relation("PushRecruiter", fields: [recruiterId], references: [id])
-  canal           PushCanal
-  status          PushStatus @default(ENVOYE)
-  message         String?    @db.Text
-  sentAt          DateTime   @default(now()) @db.Timestamptz()
-  gmailSentAt     DateTime?  @map("gmail_sent_at") @db.Timestamptz()
-  gmailThreadId   String?    @map("gmail_thread_id") @db.VarChar(100)
-  gmailMessageId  String?    @map("gmail_message_id") @db.VarChar(100)
-  updatedAt       DateTime   @updatedAt @db.Timestamptz()
+  canal              PushCanal
+  status             PushStatus @default(ENVOYE)
+  message            String?    @db.Text
+  sentAt             DateTime   @default(now()) @db.Timestamptz()
+  gmailSentAt        DateTime?  @map("gmail_sent_at") @db.Timestamptz()
+  gmailThreadId      String?    @map("gmail_thread_id") @db.VarChar(100)
+  gmailMessageId     String?    @map("gmail_message_id") @db.VarChar(100)
+  autoDetected       Boolean    @default(false) @map("auto_detected")
+  detectionConfidence Float?    @map("detection_confidence")
+  followupCount      Int        @default(0) @map("followup_count")
+  lastTouchpointAt   DateTime?  @map("last_touchpoint_at") @db.Timestamptz()
+  hasDuplicateWarning Boolean   @default(false) @map("has_duplicate_warning")
+  updatedAt          DateTime   @updatedAt @db.Timestamptz()
+
+  events          PushEvent[]
+  detectionLogs   PushDetectionLog[]
 
   @@index([recruiterId, sentAt])
   @@index([status])
   @@index([gmailThreadId])
+  @@index([candidatId, prospectId])
   @@map("pushes")
+}
+
+model PushEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  pushId      String   @db.Uuid
+  push        Push     @relation(fields: [pushId], references: [id], onDelete: Cascade)
+  eventType   String   @db.VarChar(50)
+  // types: sent, opened, reply_received, followup_sent, status_changed, duplicate_blocked
+  occurredAt  DateTime @default(now()) @db.Timestamptz()
+  actorType   String?  @db.VarChar(20) // recruiter, prospect, system
+  actorId     String?  @db.Uuid
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @db.Timestamptz()
+
+  @@index([pushId, occurredAt(sort: Desc)])
+  @@index([eventType])
+  @@map("push_events")
+}
+
+model PushDetectionLog {
+  id                   String   @id @default(uuid()) @db.Uuid
+  gmailMessageId       String   @db.VarChar(255)
+  recruiterId          String   @db.Uuid
+  status               String   @db.VarChar(50) // created, rejected, error
+  rejectionReason      String?  @db.Text
+  extractedData        Json?
+  candidateMatchScore  Float?
+  isPushConfidence     Float?
+  finalConfidence      Float?
+  pushId               String?  @db.Uuid
+  push                 Push?    @relation(fields: [pushId], references: [id])
+  createdAt            DateTime @default(now()) @db.Timestamptz()
+
+  @@index([recruiterId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("push_detection_logs")
 }
 
 enum PushCanal {

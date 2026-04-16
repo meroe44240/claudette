@@ -1,10 +1,17 @@
 /**
- * Push CV Auto-Detect Service
+ * Push CV Auto-Detect Service (v2)
  *
- * Scans sent Gmail emails and uses Claude AI to detect "push CV" emails —
+ * Scans sent Gmail emails and uses Gemini AI to detect "push CV" emails —
  * emails where the recruiter sends a candidate's CV/profile to a prospect.
  *
- * When detected, auto-creates a Push record + follow-up tasks.
+ * Improvements over v1:
+ *  - Uses Gemini instead of Anthropic for classification
+ *  - isActiveClient filter (skip active clients, only target prospects)
+ *  - Anti-duplicate check (same candidate+company in 3/12 months)
+ *  - Reply classification (auto-update push status on prospect replies)
+ *  - PushDetectionLog (for debugging and threshold tuning)
+ *  - PushEvent timeline (lifecycle tracking)
+ *  - Better candidate matching (fuzzy + email)
  *
  * Cron: every 15 minutes.
  */
@@ -12,16 +19,25 @@
 import prisma from '../../lib/db.js';
 import { createPush } from './push.service.js';
 import { parseCv, updateCandidatFromCv } from '../ai/cv-parsing.service.js';
-import type { PushCanal } from '@prisma/client';
+import { isActiveClient } from './is-active-client.js';
+import { checkDuplicatePush } from './check-duplicate.js';
+import { classifyReply } from './classify-reply.js';
+import { emitPushEvent } from './push-events.js';
+import { callClaude } from '../../services/claudeAI.js';
+import type { PushCanal, PushStatus } from '@prisma/client';
 import type { CvParsingResult } from '../ai/cv-parsing.service.js';
 
 // ─── TYPES ──────────────────────────────────────────
 
 interface SentEmail {
   id: string;
+  threadId: string;
   to: string;
+  from: string;
   subject: string;
   snippet: string;
+  labelIds: string[];
+  internalDate: number;
 }
 
 interface GmailAttachment {
@@ -35,6 +51,8 @@ interface PushDetection {
   is_push_cv: boolean;
   confidence: number;
   candidate_name: string | null;
+  candidate_email: string | null;
+  job_title_pitched: string | null;
   prospect_company: string | null;
   prospect_contact: string | null;
   prospect_email: string | null;
@@ -44,14 +62,23 @@ interface PushDetection {
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
+const CONFIDENCE_THRESHOLD = parseFloat(process.env.PUSH_DETECTION_CONFIDENCE_THRESHOLD || '0.7');
 
 /** Domains to skip — internal, services, automated */
 const SKIP_DOMAINS = new Set([
   'humanup.io',
-  'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+  'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'outlook.fr',
+  'live.com', 'live.fr', 'orange.fr', 'free.fr', 'sfr.fr', 'laposte.net',
   'google.com', 'linkedin.com', 'slack.com', 'github.com',
-  'calendly.com', 'zoom.us', 'notion.so',
+  'calendly.com', 'zoom.us', 'notion.so', 'figma.com',
+  'docusign.net', 'stripe.com', 'hubspot.com', 'salesforce.com',
 ]);
+
+/** Auto-reply patterns */
+const AUTO_REPLY_PATTERNS = [
+  /out of office/i, /absence.*bureau/i, /automatique/i, /auto-reply/i,
+  /hors du bureau/i, /congés/i, /en vacances/i, /indisponible/i,
+];
 
 // ─── TOKEN ──────────────────────────────────────────
 
@@ -95,7 +122,7 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
   return config.accessToken;
 }
 
-// ─── GMAIL: FETCH SENT EMAILS ───────────────────────
+// ─── GMAIL: FETCH EMAILS ────────────────────────────
 
 async function fetchRecentSentEmails(
   accessToken: string,
@@ -120,7 +147,7 @@ async function fetchRecentSentEmails(
     const fetches = batch.map(async (msg: any) => {
       try {
         const msgRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=To&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=In-Reply-To&metadataHeaders=List-Unsubscribe`,
           { headers: { Authorization: `Bearer ${accessToken}` } },
         );
         const msgData = (await msgRes.json()) as any;
@@ -130,11 +157,18 @@ async function fetchRecentSentEmails(
           headers[h.name.toLowerCase()] = h.value;
         }
 
+        // Skip newsletters (has List-Unsubscribe header)
+        if (headers['list-unsubscribe']) return;
+
         emails.push({
           id: msg.id,
+          threadId: msgData.threadId || msg.id,
           to: headers['to'] || '',
+          from: headers['from'] || '',
           subject: headers['subject'] || '',
           snippet: msgData.snippet || '',
+          labelIds: msgData.labelIds || [],
+          internalDate: parseInt(msgData.internalDate || '0', 10),
         });
       } catch (e) {
         console.warn(`[PushDetect] Could not fetch message ${msg.id}:`, e);
@@ -146,27 +180,55 @@ async function fetchRecentSentEmails(
   return emails;
 }
 
-// ─── PRE-FILTER ─────────────────────────────────────
+/**
+ * Fetch recent inbox emails (for reply detection)
+ */
+async function fetchRecentInboxEmails(
+  accessToken: string,
+  sinceTimestamp: Date,
+  maxResults = 20,
+): Promise<SentEmail[]> {
+  const epochSeconds = Math.floor(sinceTimestamp.getTime() / 1000);
+  const query = `in:inbox after:${epochSeconds}`;
 
-function shouldAnalyze(email: SentEmail): boolean {
-  // Skip emails to self or internal domains
-  const toEmail = extractEmail(email.to);
-  if (!toEmail) return false;
+  const listRes = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  const listData = (await listRes.json()) as any;
+  if (!listData.messages?.length) return [];
 
-  const domain = toEmail.split('@')[1]?.toLowerCase() || '';
-  if (SKIP_DOMAINS.has(domain)) return false;
+  const emails: SentEmail[] = [];
+  for (const msg of listData.messages) {
+    try {
+      const msgRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=To&metadataHeaders=From&metadataHeaders=Subject`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      const msgData = (await msgRes.json()) as any;
+      const headers: Record<string, string> = {};
+      for (const h of (msgData.payload?.headers || [])) {
+        headers[h.name.toLowerCase()] = h.value;
+      }
 
-  // Quick heuristic: push CVs typically mention CV, profil, candidat, poste, etc.
-  const text = `${email.subject} ${email.snippet}`.toLowerCase();
-  const pushKeywords = ['cv', 'profil', 'candidat', 'candidature', 'poste', 'recrutement', 'talent', 'collaborateur', 'présenter', 'recommander'];
-  const hasKeyword = pushKeywords.some(kw => text.includes(kw));
-
-  // Also check for attachment hints
-  const attachmentHints = ['ci-joint', 'en pièce jointe', 'pj', 'attached', 'attachment'];
-  const hasAttachment = attachmentHints.some(kw => text.includes(kw));
-
-  return hasKeyword || hasAttachment;
+      emails.push({
+        id: msg.id,
+        threadId: msgData.threadId || msg.id,
+        to: headers['to'] || '',
+        from: headers['from'] || '',
+        subject: headers['subject'] || '',
+        snippet: msgData.snippet || '',
+        labelIds: msgData.labelIds || [],
+        internalDate: parseInt(msgData.internalDate || '0', 10),
+      });
+    } catch {
+      // skip
+    }
+  }
+  return emails;
 }
+
+// ─── PRE-FILTERS ────────────────────────────────────
 
 function extractEmail(rawTo: string): string | null {
   const match = rawTo.match(/<(.+?)>/);
@@ -181,17 +243,42 @@ function extractName(rawTo: string): string | null {
   return null;
 }
 
-// ─── GMAIL: ATTACHMENT HANDLING ────────────────────
+function extractDomain(email: string): string | null {
+  const parts = email.split('@');
+  return parts.length === 2 ? parts[1].toLowerCase() : null;
+}
 
-/** MIME types we consider as CV attachments */
+function isAutoReply(subject: string, snippet: string): boolean {
+  const text = `${subject} ${snippet}`;
+  return AUTO_REPLY_PATTERNS.some(p => p.test(text));
+}
+
+function shouldAnalyze(email: SentEmail): boolean {
+  const toEmail = extractEmail(email.to);
+  if (!toEmail) return false;
+
+  const domain = extractDomain(toEmail);
+  if (!domain || SKIP_DOMAINS.has(domain)) return false;
+
+  if (isAutoReply(email.subject, email.snippet)) return false;
+
+  // Quick keyword heuristic
+  const text = `${email.subject} ${email.snippet}`.toLowerCase();
+  const pushKeywords = [
+    'cv', 'profil', 'candidat', 'candidature', 'poste', 'recrutement',
+    'talent', 'collaborateur', 'présenter', 'recommander', 'opportunité',
+    'ci-joint', 'en pièce jointe', 'pj', 'attached', 'attachment',
+  ];
+  return pushKeywords.some(kw => text.includes(kw));
+}
+
+// ─── GMAIL: ATTACHMENT HANDLING ─────────────────────
+
 const CV_MIME_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
 
-/**
- * Fetch the full message (format=full) to extract attachment metadata.
- */
 async function getMessageAttachments(
   accessToken: string,
   messageId: string,
@@ -232,16 +319,11 @@ async function getMessageAttachments(
     }
 
     return attachments;
-  } catch (err) {
-    console.warn(`[PushDetect] Could not get attachments for ${messageId}:`, err);
+  } catch {
     return [];
   }
 }
 
-/**
- * Download a single Gmail attachment and return its Buffer.
- * Gmail returns base64url-encoded data.
- */
 async function downloadAttachment(
   accessToken: string,
   messageId: string,
@@ -257,19 +339,13 @@ async function downloadAttachment(
     const data = (await res.json()) as any;
     if (!data.data) return null;
 
-    // Gmail uses base64url encoding (- and _ instead of + and /)
     const base64 = data.data.replace(/-/g, '+').replace(/_/g, '/');
     return Buffer.from(base64, 'base64');
-  } catch (err) {
-    console.warn(`[PushDetect] Could not download attachment ${attachmentId}:`, err);
+  } catch {
     return null;
   }
 }
 
-/**
- * Download the first CV attachment from a Gmail message and parse it.
- * Returns the parsed CV data + the raw buffer, or null if no attachment found or parsing fails.
- */
 async function downloadAndParseCvAttachment(
   accessToken: string,
   messageId: string,
@@ -278,27 +354,18 @@ async function downloadAndParseCvAttachment(
   const attachments = await getMessageAttachments(accessToken, messageId);
   if (attachments.length === 0) return null;
 
-  // Take the first CV-like attachment
   const attachment = attachments[0];
-  console.log(`[PushDetect] Downloading attachment: "${attachment.filename}" (${attachment.mimeType}, ${attachment.size} bytes)`);
-
   const buffer = await downloadAttachment(accessToken, messageId, attachment.attachmentId);
   if (!buffer) return null;
 
   try {
     const parsed = await parseCv(buffer, attachment.filename, userId);
-    console.log(`[PushDetect] CV parsed: ${parsed.candidate.first_name} ${parsed.candidate.last_name}`);
     return { parsed, filename: attachment.filename, buffer };
-  } catch (err) {
-    console.error(`[PushDetect] CV parsing failed for "${attachment.filename}":`, err);
+  } catch {
     return null;
   }
 }
 
-/**
- * Create a new Candidat from parsed CV data.
- * Returns the created candidate ID.
- */
 async function createCandidatFromParsedCv(
   parsed: CvParsingResult,
   userId: string,
@@ -327,8 +394,7 @@ async function createCandidatFromParsedCv(
     },
   });
 
-  // Save structured experiences
-  if (parsed.candidate.experience && parsed.candidate.experience.length > 0) {
+  if (parsed.candidate.experience?.length) {
     try {
       const { bulkCreateExperiences } = await import('../candidats/candidat.service.js');
       await bulkCreateExperiences(
@@ -347,46 +413,46 @@ async function createCandidatFromParsedCv(
     }
   }
 
-  console.log(`[PushDetect] Candidat created from CV: ${parsed.candidate.first_name} ${parsed.candidate.last_name} (${candidat.id})`);
   return candidat.id;
 }
 
-// ─── AI CLASSIFICATION ─────────────────────────────
+// ─── AI CLASSIFICATION (Gemini via callClaude) ──────
 
-const SYSTEM_PROMPT = `Tu es un classificateur d'emails pour un cabinet de recrutement.
-Tu dois determiner si un email envoye par un recruteur est un "push CV" — c'est-a-dire l'envoi du CV ou profil d'un candidat a un prospect (entreprise non-cliente) pour proposer ses services.
+const EXTRACT_AND_CLASSIFY_PROMPT = `Tu analyses un email envoyé par un recruteur en chasse de tête.
 
-Reponds UNIQUEMENT en JSON valide, sans markdown, sans commentaire.
+Détermine si c'est un "push CV" — l'envoi proactif d'un profil candidat à un prospect.
 
-Schema de reponse:
-{
-  "is_push_cv": boolean,
-  "confidence": number (0-100),
-  "candidate_name": string | null,
-  "prospect_company": string | null,
-  "prospect_contact": string | null,
-  "prospect_email": string | null
-}
-
-Indices qu'un email est un push CV:
+Signaux POSITIFS (push) :
 - Mention d'un candidat, profil, CV
 - Proposition de rencontre/entretien avec un candidat
-- Presentation des competences d'une personne
-- Piece jointe CV
-- Formulation type: "je me permets de vous presenter...", "voici le profil de..."
+- Présentation des compétences d'une personne
+- Pièce jointe CV
+- Formulation type : "je me permets de vous présenter...", "voici le profil de..."
+- Premier contact dans un thread
 
-Indices que ce n'est PAS un push CV:
-- Echange interne
-- Newsletter, notification
+Signaux NÉGATIFS (pas un push) :
+- Réponse à un brief client actif / mention d'un mandat
+- Échange interne (@humanup.io)
+- Newsletter, notification, auto-reply
 - Discussion commerciale sans candidat
 - Relance sur facture/contrat
-- Email de suivi sans mention de candidat`;
+- Ton de suivi : "comme convenu", "suite à notre appel"
+- Thread avec >3 messages (discussion en cours)
 
-async function classifyEmail(email: SentEmail): Promise<PushDetection | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+Retourne STRICTEMENT ce JSON, rien d'autre :
+{
+  "is_push_cv": true/false,
+  "confidence": 0.0-1.0,
+  "candidate_name": "Prénom Nom du candidat présenté ou null",
+  "candidate_email": "email du candidat si mentionné ou null",
+  "job_title_pitched": "poste pitché ou null",
+  "prospect_company": "entreprise du destinataire ou null",
+  "prospect_contact": "nom du contact destinataire ou null",
+  "prospect_email": "email du destinataire ou null"
+}`;
 
-  const userPrompt = `Analyse cet email envoye:
+async function classifyEmail(email: SentEmail, userId: string): Promise<PushDetection | null> {
+  const userPrompt = `Analyse cet email envoyé :
 
 Destinataire: ${email.to}
 Objet: ${email.subject}
@@ -395,28 +461,19 @@ Extrait: ${email.snippet}
 Est-ce un push CV ?`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 300,
-        temperature: 0,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
+    const response = await callClaude({
+      feature: 'push_detect',
+      systemPrompt: EXTRACT_AND_CLASSIFY_PROMPT,
+      userPrompt,
+      maxTokens: 500,
+      temperature: 0,
+      userId,
     });
 
-    if (!response.ok) return null;
+    const text = typeof response.content === 'string'
+      ? response.content
+      : JSON.stringify(response.content);
 
-    const data = (await response.json()) as any;
-    const text = data.content?.[0]?.text || '';
-
-    // Parse JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
 
@@ -427,9 +484,17 @@ Est-ce un push CV ?`;
   }
 }
 
-// ─── CANDIDATE MATCHING ────────────────────────────
+// ─── CANDIDATE MATCHING (improved fuzzy) ────────────
 
-async function findCandidateByName(name: string | null): Promise<string | null> {
+function normalizeForMatch(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+async function findCandidateByName(name: string | null): Promise<{ id: string; score: number } | null> {
   if (!name) return null;
 
   const parts = name.trim().split(/\s+/);
@@ -438,7 +503,8 @@ async function findCandidateByName(name: string | null): Promise<string | null> 
   const firstName = parts[0];
   const lastName = parts.slice(1).join(' ');
 
-  const candidat = await prisma.candidat.findFirst({
+  // Try exact match first
+  const exactMatch = await prisma.candidat.findFirst({
     where: {
       OR: [
         { prenom: { equals: firstName, mode: 'insensitive' }, nom: { equals: lastName, mode: 'insensitive' } },
@@ -448,13 +514,262 @@ async function findCandidateByName(name: string | null): Promise<string | null> 
     select: { id: true },
   });
 
-  return candidat?.id || null;
+  if (exactMatch) return { id: exactMatch.id, score: 0.85 };
+
+  // Fuzzy match: search broadly then compare with normalization
+  const normalFirst = normalizeForMatch(firstName);
+  const normalLast = normalizeForMatch(lastName);
+
+  const candidates = await prisma.candidat.findMany({
+    where: {
+      OR: [
+        { nom: { contains: lastName.slice(0, 3), mode: 'insensitive' } },
+        { nom: { contains: firstName.slice(0, 3), mode: 'insensitive' } },
+      ],
+    },
+    select: { id: true, nom: true, prenom: true },
+    take: 50,
+  });
+
+  for (const c of candidates) {
+    const cFirst = normalizeForMatch(c.prenom || '');
+    const cLast = normalizeForMatch(c.nom);
+
+    // Check both orderings
+    const match1 = cFirst === normalFirst && cLast === normalLast;
+    const match2 = cFirst === normalLast && cLast === normalFirst;
+
+    if (match1 || match2) return { id: c.id, score: 0.85 };
+  }
+
+  return null;
+}
+
+async function findCandidateByEmail(email: string | null): Promise<{ id: string; score: number } | null> {
+  if (!email) return null;
+
+  const candidat = await prisma.candidat.findFirst({
+    where: { email: { equals: email.toLowerCase(), mode: 'insensitive' } },
+    select: { id: true },
+  });
+
+  return candidat ? { id: candidat.id, score: 1.0 } : null;
+}
+
+// ─── DETECTION LOG ──────────────────────────────────
+
+async function logDetection(params: {
+  gmailMessageId: string;
+  recruiterId: string;
+  status: 'created' | 'rejected' | 'error';
+  rejectionReason?: string;
+  extractedData?: any;
+  candidateMatchScore?: number;
+  isPushConfidence?: number;
+  finalConfidence?: number;
+  pushId?: string;
+}) {
+  try {
+    await prisma.pushDetectionLog.create({
+      data: {
+        gmailMessageId: params.gmailMessageId,
+        recruiterId: params.recruiterId,
+        status: params.status,
+        rejectionReason: params.rejectionReason,
+        extractedData: params.extractedData,
+        candidateMatchScore: params.candidateMatchScore,
+        isPushConfidence: params.isPushConfidence,
+        finalConfidence: params.finalConfidence,
+        pushId: params.pushId,
+      },
+    });
+  } catch (err) {
+    console.error('[PushDetect] Failed to log detection:', err);
+  }
+}
+
+// ─── REPLY DETECTION PIPELINE ───────────────────────
+
+async function processIncomingReplies(
+  accessToken: string,
+  userId: string,
+  sinceTimestamp: Date,
+): Promise<{ processed: number }> {
+  let processed = 0;
+
+  const inboxEmails = await fetchRecentInboxEmails(accessToken, sinceTimestamp);
+  if (inboxEmails.length === 0) return { processed: 0 };
+
+  for (const email of inboxEmails) {
+    // Skip emails from @humanup.io (internal)
+    const fromEmail = extractEmail(email.from);
+    if (!fromEmail) continue;
+    const fromDomain = extractDomain(fromEmail);
+    if (fromDomain === 'humanup.io') continue;
+
+    // Check if this thread is linked to a push
+    const push = await prisma.push.findFirst({
+      where: { gmailThreadId: email.threadId },
+      include: {
+        candidat: { select: { nom: true, prenom: true } },
+        prospect: { select: { companyName: true, contactName: true } },
+      },
+    });
+    if (!push) continue;
+
+    // Skip if we already processed this message
+    const alreadyLogged = await prisma.pushEvent.findFirst({
+      where: {
+        pushId: push.id,
+        eventType: 'reply_received',
+        metadata: { path: ['gmailMessageId'], equals: email.id },
+      },
+    });
+    if (alreadyLogged) continue;
+
+    // Auto-reply check
+    if (isAutoReply(email.subject, email.snippet)) continue;
+
+    // Classify the reply
+    const candidateName = `${push.candidat.prenom || ''} ${push.candidat.nom}`.trim();
+    const classification = await classifyReply(
+      email.snippet,
+      { candidateName, sentAt: push.sentAt.toISOString() },
+      userId,
+    );
+
+    if (!classification || classification.category === 'out_of_office') continue;
+
+    // Map reply category to push status
+    const statusMap: Record<string, PushStatus> = {
+      interested: 'REPONDU',
+      interview_requested: 'RDV_BOOK',
+      declined: 'SANS_SUITE',
+      needs_more_info: 'REPONDU',
+    };
+
+    const newStatus = statusMap[classification.category];
+    if (newStatus && push.status === 'ENVOYE') {
+      // Update push status
+      await prisma.push.update({
+        where: { id: push.id },
+        data: { status: newStatus },
+      });
+
+      // Create follow-up task for meaningful replies
+      if (classification.category === 'interested' || classification.category === 'needs_more_info') {
+        await prisma.activite.create({
+          data: {
+            type: 'TACHE',
+            isTache: true,
+            tacheCompleted: false,
+            titre: `Follow-up push — ${push.prospect.companyName} (${classification.category})`,
+            contenu: `Réponse du prospect : ${classification.keyPoints.join('. ')}\n\nAction suggérée : ${classification.suggestedAction}`,
+            userId,
+            source: 'AGENT_IA',
+            tacheDueDate: new Date(Date.now() + 48 * 60 * 60 * 1000), // +48h
+            metadata: { priority: 'HAUTE', pushId: push.id, replyCategory: classification.category },
+          },
+        });
+      }
+
+      if (classification.category === 'interview_requested') {
+        await prisma.activite.create({
+          data: {
+            type: 'TACHE',
+            isTache: true,
+            tacheCompleted: false,
+            titre: `Booker RDV — ${candidateName} × ${push.prospect.companyName}`,
+            contenu: `Le prospect demande un entretien avec ${candidateName}.\n\n${classification.suggestedAction}`,
+            userId,
+            source: 'AGENT_IA',
+            tacheDueDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // +24h urgent
+            metadata: { priority: 'HAUTE', pushId: push.id, replyCategory: 'interview_requested' },
+          },
+        });
+      }
+    }
+
+    // Log the reply event
+    await emitPushEvent({
+      pushId: push.id,
+      eventType: 'reply_received',
+      actorType: 'prospect',
+      metadata: {
+        gmailMessageId: email.id,
+        category: classification.category,
+        confidence: classification.confidence,
+        keyPoints: classification.keyPoints,
+        suggestedAction: classification.suggestedAction,
+        newStatus: newStatus || null,
+      },
+    });
+
+    // Send Slack notification for meaningful replies
+    if (classification.category !== 'other') {
+      try {
+        const { sendPushReplyNotification } = await import('../slack/slack.service.js');
+        await sendPushReplyNotification({
+          candidatName: candidateName,
+          entrepriseName: push.prospect.companyName,
+          contactName: push.prospect.contactName,
+          category: classification.category,
+          keyPoints: classification.keyPoints,
+          suggestedAction: classification.suggestedAction,
+          recruiterId: userId,
+        });
+      } catch {
+        // non-blocking
+      }
+    }
+
+    processed++;
+    console.log(`[PushDetect] Reply classified: ${push.prospect.companyName} → ${classification.category} (${Math.round(classification.confidence * 100)}%)`);
+  }
+
+  return { processed };
+}
+
+// ─── FOLLOWUP DETECTION ─────────────────────────────
+
+async function detectFollowupsInThread(email: SentEmail, userId: string): Promise<boolean> {
+  // Check if this is a sent email on a thread already linked to a push
+  const push = await prisma.push.findFirst({
+    where: { gmailThreadId: email.threadId, recruiterId: userId },
+  });
+
+  if (!push) return false;
+
+  // It's a follow-up on an existing push thread
+  await prisma.push.update({
+    where: { id: push.id },
+    data: {
+      followupCount: { increment: 1 },
+      lastTouchpointAt: new Date(),
+    },
+  });
+
+  await emitPushEvent({
+    pushId: push.id,
+    eventType: 'followup_sent',
+    actorType: 'recruiter',
+    actorId: userId,
+    metadata: { gmailMessageId: email.id, subject: email.subject },
+  });
+
+  console.log(`[PushDetect] Followup #${push.followupCount + 1} detected on push ${push.id}`);
+  return true; // Signal that this email was handled
 }
 
 // ─── MAIN PROCESS ───────────────────────────────────
 
-export async function detectPushesForUser(userId: string): Promise<{ detected: number; skipped: number }> {
-  const stats = { detected: 0, skipped: 0 };
+export async function detectPushesForUser(userId: string): Promise<{
+  detected: number;
+  skipped: number;
+  replies: number;
+  followups: number;
+}> {
+  const stats = { detected: 0, skipped: 0, replies: 0, followups: 0 };
 
   const accessToken = await getValidAccessToken(userId);
   if (!accessToken) return stats;
@@ -467,8 +782,17 @@ export async function detectPushesForUser(userId: string): Promise<{ detected: n
   const configData = (config.config as Record<string, any>) || {};
   const lastCheck = configData.lastPushDetectCheck
     ? new Date(configData.lastPushDetectCheck)
-    : new Date(Date.now() - 60 * 60 * 1000); // Default: last hour
+    : new Date(Date.now() - 60 * 60 * 1000);
 
+  // ── Process incoming replies first ──
+  try {
+    const replyResult = await processIncomingReplies(accessToken, userId, lastCheck);
+    stats.replies = replyResult.processed;
+  } catch (err) {
+    console.error('[PushDetect] Reply processing error:', err);
+  }
+
+  // ── Process outgoing emails ──
   const sentEmails = await fetchRecentSentEmails(accessToken, lastCheck);
   if (sentEmails.length === 0) {
     await prisma.integrationConfig.update({
@@ -479,111 +803,243 @@ export async function detectPushesForUser(userId: string): Promise<{ detected: n
   }
 
   // Get already-detected gmailMessageIds to avoid duplicates
-  const existingPushes = await prisma.activite.findMany({
-    where: {
-      userId,
-      source: 'GMAIL',
-      metadata: { path: ['pushAutoDetected'], equals: true },
-    },
-    select: { metadata: true },
+  const existingLogs = await prisma.pushDetectionLog.findMany({
+    where: { recruiterId: userId },
+    select: { gmailMessageId: true },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
   });
-
-  const knownIds = new Set<string>();
-  for (const a of existingPushes) {
-    const meta = a.metadata as Record<string, any>;
-    if (meta?.gmailMessageId) knownIds.add(meta.gmailMessageId);
-  }
+  const knownIds = new Set(existingLogs.map(l => l.gmailMessageId));
 
   for (const email of sentEmails) {
     if (knownIds.has(email.id)) { stats.skipped++; continue; }
-    if (!shouldAnalyze(email)) { stats.skipped++; continue; }
 
-    const detection = await classifyEmail(email);
-    if (!detection || !detection.is_push_cv || detection.confidence < 60) {
+    // Check if this is a followup on an existing push thread
+    const isFollowup = await detectFollowupsInThread(email, userId);
+    if (isFollowup) {
+      stats.followups++;
+      knownIds.add(email.id);
+      continue;
+    }
+
+    if (!shouldAnalyze(email)) {
       stats.skipped++;
       continue;
     }
 
-    // Try to match candidate in DB
-    let candidatId = await findCandidateByName(detection.candidate_name);
+    // ── Filter: is recipient an active client? ──
+    const recipientEmail = extractEmail(email.to);
+    if (recipientEmail) {
+      const clientCheck = await isActiveClient(recipientEmail);
+      if (clientCheck.isActive) {
+        await logDetection({
+          gmailMessageId: email.id,
+          recruiterId: userId,
+          status: 'rejected',
+          rejectionReason: `active_client:${clientCheck.reason} (${clientCheck.companyName})`,
+        });
+        stats.skipped++;
+        continue;
+      }
+    }
 
+    // ── AI Classification ──
+    const detection = await classifyEmail(email, userId);
+    if (!detection || !detection.is_push_cv) {
+      await logDetection({
+        gmailMessageId: email.id,
+        recruiterId: userId,
+        status: 'rejected',
+        rejectionReason: detection ? `ai_rejected (confidence: ${detection.confidence})` : 'ai_error',
+        extractedData: detection,
+        isPushConfidence: detection?.confidence,
+      });
+      stats.skipped++;
+      continue;
+    }
+
+    // ── Candidate matching ──
+    let candidateMatch = await findCandidateByEmail(detection.candidate_email);
+    if (!candidateMatch) {
+      candidateMatch = await findCandidateByName(detection.candidate_name);
+    }
+
+    let candidatId = candidateMatch?.id || null;
+    const candidateMatchScore = candidateMatch?.score || 0;
+
+    // Try CV attachment if no match
     if (!candidatId) {
-      // Candidate not found in DB — try downloading CV attachment and parsing it
-      console.log(`[PushDetect] Candidate "${detection.candidate_name}" not found — attempting CV attachment parsing...`);
-
       const cvResult = await downloadAndParseCvAttachment(accessToken, email.id, userId);
-
       if (cvResult) {
-        // CV parsed successfully — try to match again with parsed name
         const parsedName = `${cvResult.parsed.candidate.first_name} ${cvResult.parsed.candidate.last_name}`.trim();
-        candidatId = await findCandidateByName(parsedName);
+        const emailMatch = await findCandidateByEmail(cvResult.parsed.candidate.email || null);
+        const nameMatch = emailMatch || await findCandidateByName(parsedName);
 
-        if (candidatId) {
-          // Candidate exists — update with CV data using the already-downloaded buffer
-          console.log(`[PushDetect] Matched existing candidate via CV parse: "${parsedName}" (${candidatId})`);
+        if (nameMatch) {
+          candidatId = nameMatch.id;
           try {
             await updateCandidatFromCv(cvResult.buffer, cvResult.filename, userId, candidatId);
-          } catch (err: any) {
-            console.warn(`[PushDetect] Failed to update existing candidate with CV:`, err.message);
-          }
+          } catch {}
         } else {
-          // Create a new candidate from the parsed CV
           try {
             candidatId = await createCandidatFromParsedCv(cvResult.parsed, userId);
           } catch (err: any) {
-            console.error(`[PushDetect] Failed to create candidate from CV:`, err.message);
+            console.error('[PushDetect] Failed to create candidate from CV:', err.message);
           }
         }
       }
     }
 
-    if (!candidatId) {
-      // Still no candidate — log for manual review
-      console.log(`[PushDetect] Push CV detected but candidate not found and no CV attachment: "${detection.candidate_name}" → ${detection.prospect_company}`);
-      await prisma.activite.create({
-        data: {
-          type: 'NOTE',
-          titre: `Push CV detecte (candidat non trouve) — ${detection.candidate_name || 'inconnu'}`,
-          contenu: `Email envoye a ${detection.prospect_company || email.to}. Objet: ${email.subject}. Candidat mentionne: ${detection.candidate_name || 'non identifie'}. Aucune piece jointe CV exploitable trouvee.`,
-          userId,
-          source: 'AGENT_IA',
-          metadata: {
-            gmailMessageId: email.id,
-            pushAutoDetected: true,
-            candidateName: detection.candidate_name,
-            prospectCompany: detection.prospect_company,
-            confidence: detection.confidence,
-            needsManualReview: true,
-          },
-        },
+    // ── Score calculation ──
+    const prospectConfirmed = recipientEmail
+      ? !(await isActiveClient(recipientEmail)).isActive
+      : true;
+
+    const finalConfidence =
+      0.4 * (candidatId ? candidateMatchScore || 0.85 : 0) +
+      0.3 * detection.confidence +
+      0.3 * (prospectConfirmed ? 1.0 : 0);
+
+    if (finalConfidence < CONFIDENCE_THRESHOLD || !candidatId) {
+      await logDetection({
+        gmailMessageId: email.id,
+        recruiterId: userId,
+        status: 'rejected',
+        rejectionReason: !candidatId
+          ? 'candidate_not_found'
+          : `below_threshold (${finalConfidence.toFixed(2)} < ${CONFIDENCE_THRESHOLD})`,
+        extractedData: detection,
+        candidateMatchScore,
+        isPushConfidence: detection.confidence,
+        finalConfidence,
       });
-      stats.detected++;
+
+      // Create note for manual review if candidate wasn't found
+      if (!candidatId && detection.confidence > 0.5) {
+        await prisma.activite.create({
+          data: {
+            type: 'NOTE',
+            titre: `Push CV détecté (candidat non trouvé) — ${detection.candidate_name || 'inconnu'}`,
+            contenu: `Email envoyé à ${detection.prospect_company || email.to}. Objet: ${email.subject}. Candidat mentionné: ${detection.candidate_name || 'non identifié'}.`,
+            userId,
+            source: 'AGENT_IA',
+            metadata: {
+              gmailMessageId: email.id,
+              pushAutoDetected: true,
+              candidateName: detection.candidate_name,
+              prospectCompany: detection.prospect_company,
+              confidence: detection.confidence,
+              needsManualReview: true,
+            },
+          },
+        });
+      }
+
+      stats.skipped++;
       continue;
     }
 
-    // Create the push
+    // ── Anti-duplicate check ──
+    const prospectCompanyName = detection.prospect_company || extractDomain(recipientEmail || '') || 'Inconnu';
+    const dupCheck = await checkDuplicatePush(candidatId, prospectCompanyName);
+
+    if (dupCheck.blockingLevel === 'hard_block') {
+      await logDetection({
+        gmailMessageId: email.id,
+        recruiterId: userId,
+        status: 'rejected',
+        rejectionReason: `duplicate_hard_block (${dupCheck.monthsAgo}mo ago by ${dupCheck.existingPush?.recruiterName})`,
+        extractedData: detection,
+        candidateMatchScore,
+        isPushConfidence: detection.confidence,
+        finalConfidence,
+      });
+
+      // Emit duplicate blocked event on existing push
+      if (dupCheck.existingPush) {
+        await emitPushEvent({
+          pushId: dupCheck.existingPush.id,
+          eventType: 'duplicate_blocked',
+          actorType: 'system',
+          metadata: {
+            blockedRecruiterId: userId,
+            gmailMessageId: email.id,
+            monthsAgo: dupCheck.monthsAgo,
+          },
+        });
+      }
+
+      // Slack DM urgent
+      try {
+        const { sendDuplicatePushAlert } = await import('../slack/slack.service.js');
+        const candidat = await prisma.candidat.findUnique({
+          where: { id: candidatId },
+          select: { nom: true, prenom: true },
+        });
+        await sendDuplicatePushAlert({
+          candidatName: `${candidat?.prenom || ''} ${candidat?.nom || ''}`.trim(),
+          entrepriseName: prospectCompanyName,
+          originalRecruiter: dupCheck.existingPush?.recruiterName || '',
+          monthsAgo: dupCheck.monthsAgo || 0,
+          recruiterId: userId,
+        });
+      } catch {}
+
+      stats.skipped++;
+      continue;
+    }
+
+    // ── Create the push ──
     try {
-      const prospectEmail = detection.prospect_email || extractEmail(email.to);
+      const prospectEmail = detection.prospect_email || recipientEmail;
       const prospectContact = detection.prospect_contact || extractName(email.to);
 
-      await createPush({
+      const result = await createPush({
         candidatId,
         prospect: {
-          companyName: detection.prospect_company || prospectEmail?.split('@')[1]?.split('.')[0] || 'Inconnu',
+          companyName: prospectCompanyName,
           contactName: prospectContact || undefined,
           contactEmail: prospectEmail || undefined,
         },
         canal: 'EMAIL' as PushCanal,
-        message: `[Auto-detecte] ${email.subject}`,
+        message: `[Auto-détecté] ${email.subject}`,
         recruiterId: userId,
+        gmailThreadId: email.threadId,
+        gmailMessageId: email.id,
       });
 
-      // Log the detection
+      // Update with auto-detected fields
+      await prisma.push.update({
+        where: { id: result.push_id },
+        data: {
+          autoDetected: true,
+          detectionConfidence: finalConfidence,
+          hasDuplicateWarning: dupCheck.blockingLevel === 'warn',
+        },
+      });
+
+      // Emit 'sent' event
+      await emitPushEvent({
+        pushId: result.push_id,
+        eventType: 'sent',
+        actorType: 'recruiter',
+        actorId: userId,
+        metadata: {
+          gmailMessageId: email.id,
+          gmailThreadId: email.threadId,
+          autoDetected: true,
+          detectionConfidence: finalConfidence,
+          candidateName: detection.candidate_name,
+          jobTitlePitched: detection.job_title_pitched,
+        },
+      });
+
+      // Log in candidate timeline
       await prisma.activite.create({
         data: {
           type: 'NOTE',
-          titre: `Push CV auto-detecte — ${detection.candidate_name} → ${detection.prospect_company}`,
-          contenu: `Push cree automatiquement depuis l'email: "${email.subject}"`,
+          titre: `Push auto-détecté — ${detection.candidate_name} → ${prospectCompanyName}`,
+          contenu: `Push créé automatiquement. Email: "${email.subject}". Confiance: ${Math.round(finalConfidence * 100)}%`,
           userId,
           source: 'AGENT_IA',
           entiteType: 'CANDIDAT',
@@ -591,15 +1047,42 @@ export async function detectPushesForUser(userId: string): Promise<{ detected: n
           metadata: {
             gmailMessageId: email.id,
             pushAutoDetected: true,
-            confidence: detection.confidence,
+            pushId: result.push_id,
+            confidence: finalConfidence,
+            prospectCompany: prospectCompanyName,
+            jobTitlePitched: detection.job_title_pitched,
           },
         },
       });
 
-      console.log(`[PushDetect] Push auto-cree: ${detection.candidate_name} → ${detection.prospect_company} (${detection.confidence}%)`);
+      // Log detection
+      await logDetection({
+        gmailMessageId: email.id,
+        recruiterId: userId,
+        status: 'created',
+        extractedData: detection,
+        candidateMatchScore,
+        isPushConfidence: detection.confidence,
+        finalConfidence,
+        pushId: result.push_id,
+      });
+
+      if (dupCheck.blockingLevel === 'warn') {
+        console.log(`[PushDetect] Push created with duplicate warning: ${detection.candidate_name} → ${prospectCompanyName} (${dupCheck.monthsAgo}mo ago)`);
+      }
+
+      console.log(`[PushDetect] Push auto-créé: ${detection.candidate_name} → ${prospectCompanyName} (${Math.round(finalConfidence * 100)}%)`);
       stats.detected++;
     } catch (err) {
       console.error(`[PushDetect] Error creating push for email ${email.id}:`, err);
+      await logDetection({
+        gmailMessageId: email.id,
+        recruiterId: userId,
+        status: 'error',
+        rejectionReason: `create_error: ${(err as Error).message}`,
+        extractedData: detection,
+        finalConfidence,
+      });
       stats.skipped++;
     }
 
@@ -619,8 +1102,13 @@ export async function detectPushesForUser(userId: string): Promise<{ detected: n
  * Process all users with Gmail integration.
  * Called by the cron job every 15 minutes.
  */
-export async function detectAllPushes(): Promise<{ detected: number; skipped: number }> {
-  const total = { detected: 0, skipped: 0 };
+export async function detectAllPushes(): Promise<{
+  detected: number;
+  skipped: number;
+  replies: number;
+  followups: number;
+}> {
+  const total = { detected: 0, skipped: 0, replies: 0, followups: 0 };
 
   const gmailConfigs = await prisma.integrationConfig.findMany({
     where: { provider: 'gmail', enabled: true },
@@ -632,13 +1120,15 @@ export async function detectAllPushes(): Promise<{ detected: number; skipped: nu
       const result = await detectPushesForUser(userId);
       total.detected += result.detected;
       total.skipped += result.skipped;
+      total.replies += result.replies;
+      total.followups += result.followups;
     } catch (err) {
       console.error(`[PushDetect] Error for user ${userId}:`, err);
     }
   }
 
-  if (total.detected > 0) {
-    console.log(`[PushDetect] Done: ${total.detected} pushes detected, ${total.skipped} skipped`);
+  if (total.detected > 0 || total.replies > 0) {
+    console.log(`[PushDetect] Done: ${total.detected} pushes, ${total.replies} replies, ${total.followups} followups, ${total.skipped} skipped`);
   }
 
   return total;
