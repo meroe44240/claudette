@@ -1068,6 +1068,9 @@ async function notifyAmbiguousEvent(
   }
 }
 
+// In-memory lock to prevent duplicate processing when multiple webhooks fire simultaneously
+const processingEvents = new Set<string>();
+
 /**
  * Process a single classified event: create Activite if not already tracked.
  * Returns true if a new Activite was created.
@@ -1080,6 +1083,24 @@ async function processClassifiedEvent(
   // Skip internal events
   if (classified.type === 'INTERNAL') return false;
 
+  // In-memory lock: skip if already being processed right now
+  const lockKey = `${classified.googleEventId}:${userId}`;
+  if (processingEvents.has(lockKey)) return false;
+  processingEvents.add(lockKey);
+
+  try {
+    return await _processClassifiedEventInner(classified, userId, recruiterName);
+  } finally {
+    // Release lock after a short delay to catch rapid duplicate webhooks
+    setTimeout(() => processingEvents.delete(lockKey), 5000);
+  }
+}
+
+async function _processClassifiedEventInner(
+  classified: ClassifiedEvent,
+  userId: string,
+  recruiterName: string,
+): Promise<boolean> {
   // Check if already processed by googleEventId
   const existing = await prisma.activite.findFirst({
     where: {
