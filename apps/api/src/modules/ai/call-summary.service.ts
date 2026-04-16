@@ -184,11 +184,12 @@ Analyse cet appel et retourne le JSON suivant :
   const summaryJson = response.content as CallSummaryJson;
 
   // 7. Store in AiCallSummary
+  const fallbackUuid = '00000000-0000-0000-0000-000000000000';
   const summary = await prisma.aiCallSummary.create({
     data: {
       activiteId,
       entityType: activite.entiteType ?? 'CANDIDAT',
-      entityId: activite.entiteId ?? '',
+      entityId: activite.entiteId || fallbackUuid,
       userId,
       summaryJson: summaryJson as any,
       actionsAccepted: [],
