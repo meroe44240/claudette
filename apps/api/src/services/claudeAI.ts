@@ -255,6 +255,10 @@ async function callGemini(params: {
       maxOutputTokens: params.maxTokens,
       temperature: params.temperature,
       responseMimeType: 'application/json',
+      // Gemini 2.5-flash spends tokens on "thinking" by default which can exhaust
+      // maxOutputTokens before producing any visible output. Disable thinking for
+      // these short classification/extraction calls.
+      thinkingConfig: { thinkingBudget: 0 },
     },
   };
 
