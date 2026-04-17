@@ -13,6 +13,8 @@ interface MandatPipeline {
   clientNom: string | null;
   mandatId: string;
   candidatsActifs: number;
+  /** Candidatures moved to ENTRETIEN_CLIENT (or further) yesterday — "profils envoyés au client" */
+  profilsEnvoyesHier: number;
   dernierMouvement: string; // formatted date
   stages: {
     SOURCING: number;
@@ -232,12 +234,30 @@ async function gatherDailyData(): Promise<DailyReportData> {
           entreprise: { select: { nom: true } },
           candidatures: {
             select: {
+              id: true,
               stage: true,
               updatedAt: true,
             },
           },
         },
       });
+
+      // Count stage transitions INTO ENTRETIEN_CLIENT (or further) yesterday
+      // — these are the "new profiles sent to the client" per mandate.
+      const candidatureIds = activeMandats.flatMap((m) => m.candidatures.map((c) => c.id));
+      const profilesSentHistory = candidatureIds.length > 0
+        ? await prisma.stageHistory.findMany({
+            where: {
+              candidatureId: { in: candidatureIds },
+              toStage: { in: ['ENTRETIEN_CLIENT', 'OFFRE', 'PLACE'] },
+              changedAt: { gte: yesterdayStart, lte: yesterdayEnd },
+            },
+            select: { candidatureId: true, toStage: true },
+          })
+        : [];
+
+      // Count unique candidatures (1 candidature → max 1 count per day, even if multi-stage moves)
+      const candidatureIdsSentYesterday = new Set(profilesSentHistory.map((h) => h.candidatureId));
 
       const mandats: MandatPipeline[] = activeMandats
         .map((m) => {
@@ -252,10 +272,14 @@ async function gatherDailyData(): Promise<DailyReportData> {
           };
 
           let latestMove = m.updatedAt;
+          let profilsEnvoyesHier = 0;
           for (const c of m.candidatures) {
             stages[c.stage]++;
             if (c.updatedAt > latestMove) {
               latestMove = c.updatedAt;
+            }
+            if (candidatureIdsSentYesterday.has(c.id)) {
+              profilsEnvoyesHier++;
             }
           }
 
@@ -268,6 +292,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
             clientNom: m.entreprise?.nom || null,
             mandatId: m.id,
             candidatsActifs,
+            profilsEnvoyesHier,
             dernierMouvement: formatShortDateFr(latestMove),
             stages,
           };
@@ -438,7 +463,10 @@ function buildSlackBlocks(data: DailyReportData): object {
       const pipelineStr = pipelineParts.length > 0 ? ` · ${pipelineParts.join(' · ')}` : '';
 
       const clientStr = m.clientNom ? ` (${m.clientNom})` : '';
-      sectionText += `\n• ${m.titre}${clientStr} — ${m.candidatsActifs} actif${m.candidatsActifs > 1 ? 's' : ''}${pipelineStr}`;
+      const sentStr = m.profilsEnvoyesHier > 0
+        ? ` · 📤 ${m.profilsEnvoyesHier} profil${m.profilsEnvoyesHier > 1 ? 's' : ''} envoyé${m.profilsEnvoyesHier > 1 ? 's' : ''} hier`
+        : '';
+      sectionText += `\n• ${m.titre}${clientStr} — ${m.candidatsActifs} actif${m.candidatsActifs > 1 ? 's' : ''}${pipelineStr}${sentStr}`;
     }
 
     blocks.push({ type: 'divider' });
