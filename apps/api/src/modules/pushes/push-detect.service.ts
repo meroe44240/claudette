@@ -705,23 +705,9 @@ async function processIncomingReplies(
       },
     });
 
-    // Send Slack notification for meaningful replies
-    if (classification.category !== 'other') {
-      try {
-        const { sendPushReplyNotification } = await import('../slack/slack.service.js');
-        await sendPushReplyNotification({
-          candidatName: candidateName,
-          entrepriseName: push.prospect.companyName,
-          contactName: push.prospect.contactName,
-          category: classification.category,
-          keyPoints: classification.keyPoints,
-          suggestedAction: classification.suggestedAction,
-          recruiterId: userId,
-        });
-      } catch {
-        // non-blocking
-      }
-    }
+    // Slack notification on push replies is intentionally disabled — the
+    // classification is logged on the push and visible in the ATS. Daily
+    // Slack report surfaces the activity without spamming the channel.
 
     processed++;
     console.log(`[PushDetect] Reply classified: ${push.prospect.companyName} → ${classification.category} (${Math.round(classification.confidence * 100)}%)`);
