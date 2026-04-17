@@ -412,6 +412,10 @@ export async function processAlloWebhook(
   const direction = payload.direction === 'inbound' ? 'ENTRANT' : 'SORTANT';
   const durationMinutes = Math.ceil(payload.duration / 60);
 
+  // Use Allo's real call start time (from payload.timestamp) for createdAt
+  // so stats/reports reflect when the call actually happened, not when it was synced.
+  const callStartedAt = payload.timestamp ? new Date(payload.timestamp) : undefined;
+
   // ─── UNIDENTIFIED PHONE NUMBER — create task instead of phantom contact ───
   if (!match) {
     // Create activity without entity link
@@ -425,6 +429,7 @@ export async function processAlloWebhook(
           ? `Appel de ${durationMinutes} min avec ${externalPhone}\n\n--- Transcript ---\n${payload.transcript}`
           : `Appel de ${durationMinutes} min avec ${externalPhone}`,
         source: 'ALLO',
+        ...(callStartedAt ? { createdAt: callStartedAt } : {}),
         metadata: {
           callId: payload.callId,
           from: payload.from,
@@ -434,6 +439,7 @@ export async function processAlloWebhook(
           transcript: payload.transcript || undefined,
           matched: false,
           unidentifiedPhone: externalPhone,
+          callStartedAt: payload.timestamp || undefined,
         },
       },
     });
@@ -513,6 +519,7 @@ export async function processAlloWebhook(
         ? `Appel de ${durationMinutes} min avec ${contactName}\n\n--- Transcript ---\n${payload.transcript}`
         : `Appel de ${durationMinutes} min avec ${contactName}`,
       source: 'ALLO',
+      ...(callStartedAt ? { createdAt: callStartedAt } : {}),
       metadata: {
         callId: payload.callId,
         from: payload.from,
@@ -521,6 +528,7 @@ export async function processAlloWebhook(
         recordingUrl: payload.recordingUrl,
         transcript: payload.transcript || undefined,
         matched: true,
+        callStartedAt: payload.timestamp || undefined,
       },
     },
   });

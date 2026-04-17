@@ -218,6 +218,8 @@ export async function createPush(data: {
   recruiterId: string;
   gmailThreadId?: string;
   gmailMessageId?: string;
+  /** Real send date of the underlying email (for auto-detected pushes). Defaults to now(). */
+  sentAt?: Date;
 }) {
   const prospect = await upsertProspect({ ...data.prospect, recruiterId: data.recruiterId });
 
@@ -230,7 +232,8 @@ export async function createPush(data: {
       message: data.message,
       gmailThreadId: data.gmailThreadId,
       gmailMessageId: data.gmailMessageId,
-      gmailSentAt: data.gmailThreadId ? new Date() : undefined,
+      gmailSentAt: data.sentAt || (data.gmailThreadId ? new Date() : undefined),
+      ...(data.sentAt ? { sentAt: data.sentAt } : {}),
     },
     include: {
       candidat: { select: { nom: true, prenom: true } },

@@ -1006,6 +1006,9 @@ export async function detectPushesForUser(userId: string): Promise<{
         recruiterId: userId,
         gmailThreadId: email.threadId,
         gmailMessageId: email.id,
+        // Use the email's real send time so daily reports count the push on the
+        // correct day, not the day the detection cron ran.
+        sentAt: email.internalDate ? new Date(email.internalDate) : undefined,
       });
 
       // Update with auto-detected fields
