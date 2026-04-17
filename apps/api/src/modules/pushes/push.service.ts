@@ -1,6 +1,5 @@
 import prisma from '../../lib/db.js';
 import type { PushStatus, PushCanal } from '@prisma/client';
-import { sendPushNotification } from '../slack/slack.service.js';
 
 // ─── HELPERS ────────────────────────────────────────
 
@@ -269,26 +268,9 @@ export async function createPush(data: {
     }
   }
 
-  // Send Slack notification for the new push
-  try {
-    // Fetch entreprise SIREN if available (from the prospect's company)
-    const entreprise = await prisma.entreprise.findFirst({
-      where: { nom: { equals: prospect.companyName, mode: 'insensitive' } },
-      select: { siren: true },
-    });
-
-    await sendPushNotification({
-      candidatName,
-      entrepriseName: prospect.companyName,
-      siren: entreprise?.siren || null,
-      contactName: prospect.contactName || null,
-      contactEmail: prospect.contactEmail || null,
-      status: 'ENVOYE',
-      autoDetected: data.message?.startsWith('[Auto-detecte]') || false,
-    });
-  } catch (err) {
-    console.error('[Push] Slack notification error (non-blocking):', err);
-  }
+  // Slack notification for new pushes is intentionally disabled — the daily
+  // report already counts pushes per recruiter. We avoid spamming the channel
+  // on every send, especially for auto-detected ones.
 
   return {
     push_id: push.id,
