@@ -1120,27 +1120,86 @@ async function _processClassifiedEventInner(
     try {
       const { notifyPresentation } = await import('../slack/slack.service.js');
       const externalAtts = classified.attendees.filter((a) => a.role !== 'internal');
-      const candidatAtt = externalAtts.find((a) => a.role === 'candidat');
+      let candidatAtt = externalAtts.find((a) => a.role === 'candidat');
       const clientAtt = externalAtts.find((a) => a.role === 'client');
 
-      // Fetch full candidat info
+      // ── Resolve candidat ──
       let candidatPrenom: string | null = null;
       let candidatNom = candidatAtt?.name || candidatAtt?.email || 'Candidat externe';
-      if (candidatAtt?.entityId) {
+      let resolvedCandidatId: string | null = candidatAtt?.entityId || null;
+
+      if (resolvedCandidatId) {
         const candidat = await prisma.candidat.findUnique({
-          where: { id: candidatAtt.entityId },
+          where: { id: resolvedCandidatId },
           select: { nom: true, prenom: true },
         });
         if (candidat) {
           candidatPrenom = candidat.prenom || null;
           candidatNom = candidat.nom;
         }
+      } else {
+        // No attendee matched a candidat in DB — fall back to parsing the event title.
+        // Patterns we support:
+        //   "Entretien : Dimitri X Privateaser"
+        //   "Mendo × Théo Faugeras"   (recruiter × candidat)
+        //   "Théo Faugeras × Client"
+        //   "Suivi Théo Creative Developer Client"
+        // Strategy: split on ' x ' / ' X ' / ' × ', pick the tokens that don't
+        // look like a known entreprise/client, search candidats by each token.
+        const rawTitle = (classified.summary || '').replace(/^(entretien|suivi|présentation|presentation|meeting|rdv)\s*[:\-–]\s*/i, '');
+        const parts = rawTitle.split(/\s+(?:x|X|×)\s+/).map((p) => p.trim()).filter(Boolean);
+
+        // Also consider each attendee name that wasn't matched (external emails with display names)
+        const externalNames = externalAtts
+          .filter((a) => !a.entityId && a.name)
+          .map((a) => a.name as string);
+
+        const candidates = [...parts, ...externalNames];
+
+        for (const token of candidates) {
+          if (!token || token.length < 2) continue;
+          // Skip tokens that look like the entreprise name we already know
+          if (clientAtt?.name && token.toLowerCase().includes(clientAtt.name.toLowerCase())) continue;
+
+          // Try full-string match first, then first-word match (firstname only)
+          const words = token.split(/\s+/).filter((w) => w.length >= 2);
+          const queries = [token, ...words].filter((q, i, arr) => arr.indexOf(q) === i);
+
+          for (const q of queries) {
+            const found = await prisma.candidat.findFirst({
+              where: {
+                OR: [
+                  { prenom: { equals: q, mode: 'insensitive' } },
+                  { nom: { equals: q, mode: 'insensitive' } },
+                  { prenom: { contains: q, mode: 'insensitive' } },
+                  { nom: { contains: q, mode: 'insensitive' } },
+                ],
+              },
+              select: { id: true, nom: true, prenom: true },
+              orderBy: { updatedAt: 'desc' },
+            });
+            if (found) {
+              resolvedCandidatId = found.id;
+              candidatPrenom = found.prenom || null;
+              candidatNom = found.nom;
+              candidatAtt = {
+                email: candidatAtt?.email || '',
+                role: 'candidat',
+                name: `${found.prenom || ''} ${found.nom}`.trim(),
+                entityId: found.id,
+              };
+              console.log(`[CalendarWatcher] Resolved candidat from title/name "${q}": ${found.prenom} ${found.nom}`);
+              break;
+            }
+          }
+          if (resolvedCandidatId) break;
+        }
       }
 
-      // Fetch client's company (entreprise) + find matching mandate
+      // ── Resolve client/entreprise ──
       let entrepriseNom = 'Entreprise';
       let contactNom = clientAtt?.name || null;
-      let mandatTitre = classified.summary;
+      let clientEntrepriseId: string | null = null;
 
       if (clientAtt?.entityId) {
         const client = await prisma.client.findUnique({
@@ -1151,35 +1210,50 @@ async function _processClassifiedEventInner(
           contactNom = `${client.prenom || ''} ${client.nom}`.trim();
           if (client.entreprise) {
             entrepriseNom = client.entreprise.nom;
-
-            // Try to find a matching mandate (same entreprise, candidat in pipeline or open)
-            if (candidatAtt?.entityId) {
-              const mandat = await prisma.mandat.findFirst({
-                where: {
-                  entrepriseId: client.entreprise.id,
-                  statut: { in: ['OUVERT', 'EN_COURS'] },
-                  candidatures: { some: { candidatId: candidatAtt.entityId } },
-                },
-                select: { titrePoste: true },
-              });
-              if (mandat) mandatTitre = mandat.titrePoste;
-            }
-
-            // Fallback: any open mandate for this company
-            if (mandatTitre === classified.summary) {
-              const anyMandat = await prisma.mandat.findFirst({
-                where: {
-                  entrepriseId: client.entreprise.id,
-                  statut: { in: ['OUVERT', 'EN_COURS'] },
-                },
-                select: { titrePoste: true },
-                orderBy: { createdAt: 'desc' },
-              });
-              if (anyMandat) mandatTitre = anyMandat.titrePoste;
-            }
+            clientEntrepriseId = client.entreprise.id;
           }
         }
       }
+
+      // ── Resolve mandat — priority order ──
+      //  1. Candidat is in pipeline for an active mandate (any entreprise)
+      //     → this is the most reliable signal and handles duplicated entreprises.
+      //  2. Mandat on the client's entreprise that is ENTRETIEN_CLIENT-stage for the candidat
+      //  3. Any active mandate on the client's entreprise
+      //  4. Fall back to the event title
+      let mandatTitre: string | null = null;
+
+      if (resolvedCandidatId) {
+        const candidatMandat = await prisma.mandat.findFirst({
+          where: {
+            statut: { in: ['OUVERT', 'EN_COURS'] },
+            candidatures: { some: { candidatId: resolvedCandidatId } },
+          },
+          select: { titrePoste: true, entreprise: { select: { id: true, nom: true } } },
+          orderBy: { updatedAt: 'desc' },
+        });
+        if (candidatMandat) {
+          mandatTitre = candidatMandat.titrePoste;
+          // If the client was unknown, infer entreprise from the mandat
+          if (!clientEntrepriseId && candidatMandat.entreprise) {
+            entrepriseNom = candidatMandat.entreprise.nom;
+          }
+        }
+      }
+
+      if (!mandatTitre && clientEntrepriseId) {
+        const anyMandat = await prisma.mandat.findFirst({
+          where: {
+            entrepriseId: clientEntrepriseId,
+            statut: { in: ['OUVERT', 'EN_COURS'] },
+          },
+          select: { titrePoste: true },
+          orderBy: { updatedAt: 'desc' },
+        });
+        if (anyMandat) mandatTitre = anyMandat.titrePoste;
+      }
+
+      if (!mandatTitre) mandatTitre = classified.summary;
 
       await notifyPresentation({
         candidatPrenom,
