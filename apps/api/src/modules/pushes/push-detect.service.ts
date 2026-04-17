@@ -989,6 +989,30 @@ export async function detectPushesForUser(userId: string): Promise<{
       continue;
     }
 
+    // ── Existing entreprise check — skip auto-push creation ──
+    // If the entreprise is already in our DB (even without active mandate), this
+    // is an "envoi de CV" to an existing relationship, not a prospection push.
+    // Skip auto-creation and let the recruiter classify it manually.
+    const existingEntreprise = await prisma.entreprise.findFirst({
+      where: { nom: { equals: prospectCompanyName, mode: 'insensitive' } },
+      select: { id: true, nom: true },
+    });
+    if (existingEntreprise) {
+      await logDetection({
+        gmailMessageId: email.id,
+        recruiterId: userId,
+        status: 'rejected',
+        rejectionReason: `existing_entreprise (${existingEntreprise.nom}) — envoi CV, not push`,
+        extractedData: detection,
+        candidateMatchScore,
+        isPushConfidence: detection.confidence,
+        finalConfidence,
+      });
+      console.log(`[PushDetect] Skipped auto-push: entreprise "${existingEntreprise.nom}" already exists → envoi CV not push`);
+      stats.skipped++;
+      continue;
+    }
+
     // ── Create the push ──
     try {
       const prospectEmail = detection.prospect_email || recipientEmail;

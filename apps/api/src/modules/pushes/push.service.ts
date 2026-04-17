@@ -220,6 +220,11 @@ export async function createPush(data: {
   gmailMessageId?: string;
   /** Real send date of the underlying email (for auto-detected pushes). Defaults to now(). */
   sentAt?: Date;
+  /**
+   * If true, auto-starts the Persistance Client sequence. Default: false.
+   * The recruiter should explicitly opt in from the UI instead of auto-trigger.
+   */
+  autoStartSequence?: boolean;
 }) {
   const prospect = await upsertProspect({ ...data.prospect, recruiterId: data.recruiterId });
 
@@ -245,21 +250,23 @@ export async function createPush(data: {
   const label = `${push.prospect.contactName || push.prospect.companyName} — ${candidatName}`;
   const tasks = await createFollowupTasks(push.id, data.recruiterId, label);
 
-  // Auto-trigger Persistance Client sequence after push
+  // Only auto-trigger Persistance Client sequence when explicitly requested.
   let sequenceRun = null;
-  try {
-    const { triggerPersistenceSequence } = await import('../sequences/sequence.service.js');
-    sequenceRun = await triggerPersistenceSequence({
-      pushId: push.id,
-      prospectId: prospect.id,
-      prospectName: prospect.contactName || prospect.companyName,
-      prospectCompany: prospect.companyName,
-      prospectEmail: prospect.contactEmail || undefined,
-      candidatName,
-      recruiterId: data.recruiterId,
-    });
-  } catch (err) {
-    console.error('[Push] Error auto-triggering persistence sequence:', err);
+  if (data.autoStartSequence) {
+    try {
+      const { triggerPersistenceSequence } = await import('../sequences/sequence.service.js');
+      sequenceRun = await triggerPersistenceSequence({
+        pushId: push.id,
+        prospectId: prospect.id,
+        prospectName: prospect.contactName || prospect.companyName,
+        prospectCompany: prospect.companyName,
+        prospectEmail: prospect.contactEmail || undefined,
+        candidatName,
+        recruiterId: data.recruiterId,
+      });
+    } catch (err) {
+      console.error('[Push] Error auto-triggering persistence sequence:', err);
+    }
   }
 
   // Send Slack notification for the new push
