@@ -13,6 +13,7 @@ import Input, { Textarea } from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Skeleton, { SkeletonCard } from '../../components/ui/Skeleton';
 import ActivityJournal from '../../components/activity/ActivityJournal';
+import MandatTimeline from '../../components/activity/MandatTimeline';
 import DeleteConfirmModal from '../../components/ui/DeleteConfirmModal';
 import { toast } from '../../components/ui/Toast';
 
@@ -1109,6 +1110,10 @@ export default function MandatDetailPage() {
           </Card>
         </motion.div>
       </motion.div>
+
+      <div className="mt-8 rounded-lg border border-border bg-white p-6">
+        <MandatTimeline mandatId={mandat.id} />
+      </div>
 
       <div className="mt-8">
         <ActivityJournal entiteType="MANDAT" entiteId={mandat.id} />

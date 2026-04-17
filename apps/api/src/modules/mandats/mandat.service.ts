@@ -356,6 +356,215 @@ export async function getKanban(id: string) {
   return kanban;
 }
 
+// ─── TIMELINE: full history of a mandat ──────────────
+//
+// Aggregates, for a given mandat, all activity sources into a single
+// chronological feed:
+//   • Stage transitions  (StageHistory for all candidatures of the mandat)
+//   • Candidatures created/removed
+//   • Activities (notes, emails, calls, meetings) linked directly to the mandat
+//   • Activities linked to the candidats of the mandat (filtered to entities
+//     belonging to this pipeline)
+//   • Mandate status changes (fee events, etc.) from Activite source = SYSTEM
+//
+// Returns items sorted by date desc, ready to be displayed as a timeline.
+
+export type TimelineItem =
+  | {
+      kind: 'stage_change';
+      id: string;
+      date: string;
+      fromStage: string | null;
+      toStage: string;
+      candidat: { id: string; nom: string; prenom: string | null };
+      user: { nom: string; prenom: string | null } | null;
+    }
+  | {
+      kind: 'candidature_created';
+      id: string;
+      date: string;
+      stage: string;
+      candidat: { id: string; nom: string; prenom: string | null };
+    }
+  | {
+      kind: 'activite';
+      id: string;
+      date: string;
+      type: string;
+      direction: string | null;
+      titre: string | null;
+      contenu: string | null;
+      source: string;
+      entiteType: string | null;
+      entiteId: string | null;
+      candidat: { id: string; nom: string; prenom: string | null } | null;
+      user: { nom: string; prenom: string | null } | null;
+    };
+
+export async function getTimeline(id: string): Promise<TimelineItem[]> {
+  const mandat = await prisma.mandat.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!mandat) throw new NotFoundError('Mandat', id);
+
+  // 1. All candidatures (ids + linked candidats) for this mandat
+  const candidatures = await prisma.candidature.findMany({
+    where: { mandatId: id },
+    select: {
+      id: true,
+      stage: true,
+      createdAt: true,
+      candidat: { select: { id: true, nom: true, prenom: true } },
+    },
+  });
+  const candidatureIds = candidatures.map((c) => c.id);
+  const candidatIds = candidatures.map((c) => c.candidat.id);
+  const candidatureByCandidatId = new Map(
+    candidatures.map((c) => [c.candidat.id, c]),
+  );
+
+  // 2. Stage transitions for those candidatures
+  const stageHistory = candidatureIds.length > 0
+    ? await prisma.stageHistory.findMany({
+        where: { candidatureId: { in: candidatureIds } },
+        select: {
+          id: true,
+          fromStage: true,
+          toStage: true,
+          changedAt: true,
+          changedById: true,
+          candidatureId: true,
+        },
+        orderBy: { changedAt: 'desc' },
+      })
+    : [];
+
+  // Resolve users for stage transitions in one query
+  const userIds = Array.from(
+    new Set(stageHistory.map((h) => h.changedById).filter((x): x is string => !!x)),
+  );
+  const users = userIds.length > 0
+    ? await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, nom: true, prenom: true },
+      })
+    : [];
+  const userById = new Map(users.map((u) => [u.id, u]));
+
+  // Map candidatureId -> candidat
+  const candidatByCandidatureId = new Map(
+    candidatures.map((c) => [c.id, c.candidat]),
+  );
+
+  // 3. Activities attached directly to the mandat
+  const mandatActivites = await prisma.activite.findMany({
+    where: { entiteType: 'MANDAT', entiteId: id },
+    select: {
+      id: true,
+      type: true,
+      direction: true,
+      titre: true,
+      contenu: true,
+      source: true,
+      entiteType: true,
+      entiteId: true,
+      createdAt: true,
+      user: { select: { nom: true, prenom: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  // 4. Activities on the candidats of the mandat (so we see calls/emails
+  //    with the candidats as part of this mandat's history)
+  const candidatActivites = candidatIds.length > 0
+    ? await prisma.activite.findMany({
+        where: { entiteType: 'CANDIDAT', entiteId: { in: candidatIds } },
+        select: {
+          id: true,
+          type: true,
+          direction: true,
+          titre: true,
+          contenu: true,
+          source: true,
+          entiteType: true,
+          entiteId: true,
+          createdAt: true,
+          user: { select: { nom: true, prenom: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      })
+    : [];
+
+  // ─── Build unified timeline ───
+  const items: TimelineItem[] = [];
+
+  for (const h of stageHistory) {
+    const candidat = candidatByCandidatureId.get(h.candidatureId);
+    if (!candidat) continue;
+    items.push({
+      kind: 'stage_change',
+      id: h.id,
+      date: h.changedAt.toISOString(),
+      fromStage: h.fromStage,
+      toStage: h.toStage,
+      candidat,
+      user: h.changedById ? userById.get(h.changedById) || null : null,
+    });
+  }
+
+  for (const c of candidatures) {
+    items.push({
+      kind: 'candidature_created',
+      id: c.id,
+      date: c.createdAt.toISOString(),
+      stage: c.stage,
+      candidat: c.candidat,
+    });
+  }
+
+  for (const a of mandatActivites) {
+    items.push({
+      kind: 'activite',
+      id: a.id,
+      date: a.createdAt.toISOString(),
+      type: a.type,
+      direction: a.direction,
+      titre: a.titre,
+      contenu: a.contenu,
+      source: a.source,
+      entiteType: a.entiteType,
+      entiteId: a.entiteId,
+      candidat: null,
+      user: a.user,
+    });
+  }
+
+  for (const a of candidatActivites) {
+    const cand = a.entiteId ? candidatureByCandidatId.get(a.entiteId)?.candidat : null;
+    items.push({
+      kind: 'activite',
+      id: a.id,
+      date: a.createdAt.toISOString(),
+      type: a.type,
+      direction: a.direction,
+      titre: a.titre,
+      contenu: a.contenu,
+      source: a.source,
+      entiteType: a.entiteType,
+      entiteId: a.entiteId,
+      candidat: cand || null,
+      user: a.user,
+    });
+  }
+
+  // Sort desc by date
+  items.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+  return items;
+}
+
 export async function updateFee(id: string, data: UpdateFeeInput) {
   const existing = await prisma.mandat.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError('Mandat', id);

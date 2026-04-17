@@ -142,6 +142,24 @@ export default async function mandatRouter(fastify: FastifyInstance) {
     },
   });
 
+  // GET /:id/timeline - Full chronological history of the mandat
+  fastify.get('/:id/timeline', {
+    schema: {
+      description: 'Historique complet du mandat : transitions de stage, candidatures, activites lies au mandat et aux candidats',
+      tags: ['Mandats'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', format: 'uuid' } },
+      },
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      return mandatService.getTimeline(id);
+    },
+  });
+
   // GET /:id/kanban - Get candidatures grouped by stage
   fastify.get('/:id/kanban', {
     schema: {
