@@ -299,7 +299,7 @@ export async function callClaude(options: ClaudeCallOptions): Promise<ClaudeResp
   // 2. Fallback: server-level GEMINI_API_KEY env var
   const serverGeminiKey = process.env.GEMINI_API_KEY;
   if (serverGeminiKey) {
-    const serverModel = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+    const serverModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
     return callClaudeViaGemini(options, serverModel, serverGeminiKey);
   }
 
