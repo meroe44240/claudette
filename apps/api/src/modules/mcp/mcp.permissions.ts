@@ -70,6 +70,7 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   // ═══ ENRICHISSEMENT ═══
   enrich_contact:                { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   search_people_external:        { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  search_talents_kalent:         { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_enrich_credits:            { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
   // ═══ DELETE (avec confirmation) ═══
