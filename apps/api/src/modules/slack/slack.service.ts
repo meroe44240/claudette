@@ -27,6 +27,11 @@ interface MandatPipeline {
   };
 }
 
+interface MandatHighlight {
+  titre: string;
+  clientNom: string | null;
+}
+
 interface UserDailyStats {
   userId: string;
   nom: string;
@@ -37,6 +42,12 @@ interface UserDailyStats {
   presentations: number;
   pushes: number;
   mandats: MandatPipeline[];
+  /** Candidatures moved to ENTRETIEN_CLIENT (or further) yesterday — with mandate info */
+  nouvellesPresentations: { candidat: string; mandat: string }[];
+  /** Candidatures moved to ENTRETIEN_1 yesterday — first meet with a new candidate */
+  nouveauxMeets: { candidat: string; mandat: string }[];
+  /** New mandates created yesterday (assigned to this user) */
+  nouveauxMandats: MandatHighlight[];
 }
 
 interface AlertInfo {
@@ -299,6 +310,63 @@ async function gatherDailyData(): Promise<DailyReportData> {
         })
         .filter((m) => m.candidatsActifs > 0); // Only mandats with active candidates
 
+      // ── Highlights ──
+      // Nouvelles présentations: candidatures moved to ENTRETIEN_CLIENT yesterday (with mandate+candidat)
+      // Nouveaux meets: candidatures moved to ENTRETIEN_1 yesterday (first internal interview)
+      const yesterdayStageTransitions = candidatureIds.length > 0
+        ? await prisma.stageHistory.findMany({
+            where: {
+              candidatureId: { in: candidatureIds },
+              toStage: { in: ['ENTRETIEN_1', 'ENTRETIEN_CLIENT'] },
+              changedAt: { gte: yesterdayStart, lte: yesterdayEnd },
+            },
+            select: {
+              toStage: true,
+              candidature: {
+                select: {
+                  candidat: { select: { nom: true, prenom: true } },
+                  mandat: {
+                    select: {
+                      titrePoste: true,
+                      entreprise: { select: { nom: true } },
+                    },
+                  },
+                },
+              },
+            },
+          })
+        : [];
+
+      const nouvellesPresentations = yesterdayStageTransitions
+        .filter((t) => t.toStage === 'ENTRETIEN_CLIENT')
+        .map((t) => ({
+          candidat: `${t.candidature.candidat.prenom || ''} ${t.candidature.candidat.nom}`.trim(),
+          mandat: `${t.candidature.mandat.titrePoste}${t.candidature.mandat.entreprise ? ` (${t.candidature.mandat.entreprise.nom})` : ''}`,
+        }));
+
+      const nouveauxMeets = yesterdayStageTransitions
+        .filter((t) => t.toStage === 'ENTRETIEN_1')
+        .map((t) => ({
+          candidat: `${t.candidature.candidat.prenom || ''} ${t.candidature.candidat.nom}`.trim(),
+          mandat: `${t.candidature.mandat.titrePoste}${t.candidature.mandat.entreprise ? ` (${t.candidature.mandat.entreprise.nom})` : ''}`,
+        }));
+
+      // Nouveaux mandats rentrés: mandats created yesterday assigned to this user
+      const newMandats = await prisma.mandat.findMany({
+        where: {
+          assignedToId: user.id,
+          createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
+        },
+        select: {
+          titrePoste: true,
+          entreprise: { select: { nom: true } },
+        },
+      });
+      const nouveauxMandats: MandatHighlight[] = newMandats.map((m) => ({
+        titre: m.titrePoste,
+        clientNom: m.entreprise?.nom || null,
+      }));
+
       return {
         userId: user.id,
         nom: user.nom,
@@ -309,6 +377,9 @@ async function gatherDailyData(): Promise<DailyReportData> {
         presentations,
         pushes: pushesCount,
         mandats,
+        nouvellesPresentations,
+        nouveauxMeets,
+        nouveauxMandats,
       };
     }),
   );
@@ -451,6 +522,22 @@ function buildSlackBlocks(data: DailyReportData): object {
     }
 
     let sectionText = `👤 *${displayName}*\n${objLines.join('\n')}`;
+
+    // Highlights — positive news from yesterday
+    const highlights: string[] = [];
+    for (const p of user.nouvellesPresentations) {
+      highlights.push(`🤝 *Nouvelle présentation* — ${p.candidat} → ${p.mandat}`);
+    }
+    for (const m of user.nouveauxMeets) {
+      highlights.push(`🎯 *Nouveau meet* — ${m.candidat} → ${m.mandat}`);
+    }
+    for (const m of user.nouveauxMandats) {
+      const clientStr = m.clientNom ? ` (${m.clientNom})` : '';
+      highlights.push(`📋 *Nouveau mandat rentré* — ${m.titre}${clientStr}`);
+    }
+    if (highlights.length > 0) {
+      sectionText += `\n\n${highlights.join('\n')}`;
+    }
 
     // Mandats — only those with candidatsActifs > 0
     for (const m of user.mandats) {
