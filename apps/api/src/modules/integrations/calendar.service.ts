@@ -1139,62 +1139,120 @@ async function _processClassifiedEventInner(
         }
       } else {
         // No attendee matched a candidat in DB — fall back to parsing the event title.
-        // Patterns we support:
-        //   "Entretien : Dimitri X Privateaser"
-        //   "Mendo × Théo Faugeras"   (recruiter × candidat)
-        //   "Théo Faugeras × Client"
-        //   "Suivi Théo Creative Developer Client"
-        // Strategy: split on ' x ' / ' X ' / ' × ', pick the tokens that don't
-        // look like a known entreprise/client, search candidats by each token.
-        const rawTitle = (classified.summary || '').replace(/^(entretien|suivi|présentation|presentation|meeting|rdv)\s*[:\-–]\s*/i, '');
+        // Patterns supported:
+        //   "Entretien : Dimitri X Privateaser" → token "Dimitri"
+        //   "Mendo × Théo Faugeras" → token "Théo Faugeras"
+        //
+        // Rules (strict — must not false-match):
+        //  - Only EXACT matches on prenom or nom (no contains — "Of" would match "Coffolé").
+        //  - Skip common non-name words (stopwords).
+        //  - Only look for active candidats with a pipeline (candidatures exist).
+        //  - If client entreprise is known, prefer candidats linked to a mandate on
+        //    that entreprise.
+
+        const STOPWORDS = new Set([
+          'of', 'the', 'and', 'weekly', 'daily', 'standup', 'stand-up', 'meeting',
+          'rdv', 'review', 'sync', 'call', 'suivi', 'entretien', 'presentation',
+          'présentation', 'interview', 'brief', 'debrief', 'team', 'head', 'director',
+          'directeur', 'manager', 'sales', 'marketing', 'product', 'chief', 'lead',
+          'senior', 'junior', 'mid', 'staff', 'founding', 'co-founder', 'cofounder',
+          'cto', 'ceo', 'cfo', 'coo', 'vp', 'account', 'executive', 'comptable',
+          'general', 'général', 'auxiliaire', 'new', 'onboarding', 'client',
+          'prospect', 'candidat', 'point', 'sync', 'catch', 'catchup', 'kickoff',
+          'kick-off', 'kick', 'off', 'on', 'in', 'internal', 'externe', 'external',
+        ]);
+
+        const isNameToken = (s: string): boolean => {
+          const lower = s.toLowerCase();
+          if (lower.length < 3) return false;
+          if (STOPWORDS.has(lower)) return false;
+          if (!/^[A-ZÀ-Ý][a-zà-ÿ'\-]+$/u.test(s)) return false; // Capitalized word only
+          return true;
+        };
+
+        const rawTitle = (classified.summary || '').replace(
+          /^(entretien|suivi|présentation|presentation|meeting|rdv)\s*[:\-–]\s*/i,
+          '',
+        );
         const parts = rawTitle.split(/\s+(?:x|X|×)\s+/).map((p) => p.trim()).filter(Boolean);
 
-        // Also consider each attendee name that wasn't matched (external emails with display names)
         const externalNames = externalAtts
           .filter((a) => !a.entityId && a.name)
           .map((a) => a.name as string);
 
-        const candidates = [...parts, ...externalNames];
-
-        for (const token of candidates) {
-          if (!token || token.length < 2) continue;
-          // Skip tokens that look like the entreprise name we already know
-          if (clientAtt?.name && token.toLowerCase().includes(clientAtt.name.toLowerCase())) continue;
-
-          // Try full-string match first, then first-word match (firstname only)
-          const words = token.split(/\s+/).filter((w) => w.length >= 2);
-          const queries = [token, ...words].filter((q, i, arr) => arr.indexOf(q) === i);
-
-          for (const q of queries) {
-            const found = await prisma.candidat.findFirst({
-              where: {
-                OR: [
-                  { prenom: { equals: q, mode: 'insensitive' } },
-                  { nom: { equals: q, mode: 'insensitive' } },
-                  { prenom: { contains: q, mode: 'insensitive' } },
-                  { nom: { contains: q, mode: 'insensitive' } },
-                ],
-              },
-              select: { id: true, nom: true, prenom: true },
-              orderBy: { updatedAt: 'desc' },
-            });
-            if (found) {
-              resolvedCandidatId = found.id;
-              candidatPrenom = found.prenom || null;
-              candidatNom = found.nom;
-              candidatAtt = {
-                email: candidatAtt?.email || '',
-                role: 'candidat',
-                name: `${found.prenom || ''} ${found.nom}`.trim(),
-                entityId: found.id,
-              };
-              console.log(`[CalendarWatcher] Resolved candidat from title/name "${q}": ${found.prenom} ${found.nom}`);
-              break;
-            }
+        // Gather candidate tokens. For each part, keep the whole trimmed string
+        // if every word is a name, and also the individual words.
+        const candidateTokens: string[] = [];
+        for (const part of [...parts, ...externalNames]) {
+          if (clientAtt?.name && part.toLowerCase().includes(clientAtt.name.toLowerCase())) continue;
+          // Whole string if all tokens are name-like
+          const words = part.split(/\s+/);
+          if (words.length >= 2 && words.every(isNameToken)) {
+            candidateTokens.push(part);
           }
-          if (resolvedCandidatId) break;
+          for (const w of words) {
+            if (isNameToken(w)) candidateTokens.push(w);
+          }
         }
+        // Dedupe
+        const uniqueTokens = Array.from(new Set(candidateTokens));
+
+        for (const q of uniqueTokens) {
+          // EXACT match only, with ACTIVE pipeline. If we know the client entreprise,
+          // strongly prefer candidats linked to a mandate on that entreprise.
+          const whereBase: any = {
+            OR: [
+              { prenom: { equals: q, mode: 'insensitive' } },
+              { nom: { equals: q, mode: 'insensitive' } },
+            ],
+          };
+
+          // Candidats with an open candidature (any stage except final REFUSE/PLACE),
+          // optionally on the client entreprise if known.
+          const candidatureWhere: any = {
+            stage: { notIn: ['REFUSE', 'PLACE'] },
+          };
+          const clientEntrepriseForFilter = clientAtt?.entityId
+            ? (await prisma.client.findUnique({
+                where: { id: clientAtt.entityId },
+                select: { entrepriseId: true },
+              }))?.entrepriseId
+            : null;
+          if (clientEntrepriseForFilter) {
+            candidatureWhere.mandat = { entrepriseId: clientEntrepriseForFilter };
+          }
+
+          const found = await prisma.candidat.findFirst({
+            where: {
+              ...whereBase,
+              candidatures: { some: candidatureWhere },
+            },
+            select: { id: true, nom: true, prenom: true },
+            orderBy: { updatedAt: 'desc' },
+          });
+
+          if (found) {
+            resolvedCandidatId = found.id;
+            candidatPrenom = found.prenom || null;
+            candidatNom = found.nom;
+            candidatAtt = {
+              email: candidatAtt?.email || '',
+              role: 'candidat',
+              name: `${found.prenom || ''} ${found.nom}`.trim(),
+              entityId: found.id,
+            };
+            console.log(`[CalendarWatcher] Resolved candidat from title/name "${q}": ${found.prenom} ${found.nom}`);
+            break;
+          }
+        }
+
       }
+
+      // If no candidat could be resolved, skip the Slack notification entirely.
+      // Better silent than sending a wrong "Candidat externe" or a false match.
+      if (!resolvedCandidatId) {
+        console.log(`[CalendarWatcher] No candidat resolved for event "${classified.summary}" — skipping Slack presentation notification`);
+      } else {
 
       // ── Resolve client/entreprise ──
       let entrepriseNom = 'Entreprise';
@@ -1253,16 +1311,17 @@ async function _processClassifiedEventInner(
         if (anyMandat) mandatTitre = anyMandat.titrePoste;
       }
 
-      if (!mandatTitre) mandatTitre = classified.summary;
+        if (!mandatTitre) mandatTitre = classified.summary;
 
-      await notifyPresentation({
-        candidatPrenom,
-        candidatNom,
-        entrepriseNom,
-        contactNom,
-        mandatTitre,
-        recruteurPrenom: recruiterName,
-      });
+        await notifyPresentation({
+          candidatPrenom,
+          candidatNom,
+          entrepriseNom,
+          contactNom,
+          mandatTitre,
+          recruteurPrenom: recruiterName,
+        });
+      } // end of "else" — candidat resolved, notif sent
     } catch (err) {
       console.error('[CalendarWatcher] Slack presentation notification error:', err);
     }
