@@ -1068,6 +1068,65 @@ async function notifyAmbiguousEvent(
   }
 }
 
+/**
+ * Send a Slack question when a meeting is client-only (no candidat attendee):
+ * could be a business-dev RDV or a presentation where the candidat was missed.
+ */
+async function notifyClientMeetingAmbiguity(
+  classified: ClassifiedEvent,
+  recruiterName: string,
+): Promise<void> {
+  try {
+    const { getSlackConfig, sendToWebhook } = await import('../slack/slack.service.js');
+    const config = await getSlackConfig();
+    if (!config || !config.enabled) return;
+
+    const startDate = classified.startTime
+      ? new Date(classified.startTime).toLocaleString('fr-FR', {
+          weekday: 'short',
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'Europe/Paris',
+        })
+      : 'Heure inconnue';
+
+    const clientsList = classified.attendees
+      .filter((a) => a.role === 'client')
+      .map((a) => a.name || a.email)
+      .join(', ');
+
+    const payload = {
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: [
+              `❓ *${recruiterName}* — c'était quoi ce meeting ?`,
+              ``,
+              `📅 *${classified.summary}* — ${startDate}`,
+              `🏢 Avec : ${clientsList}`,
+              ``,
+              `📅 *RDV client* (business dev)`,
+              `🤝 *Présentation* (avec un candidat qui aurait dû être invité)`,
+              `🎯 *Entretien candidat* (le client n'est pas pertinent)`,
+              ``,
+              `_Classe-le dans l'ATS si besoin._`,
+            ].join('\n'),
+          },
+        },
+      ],
+    };
+
+    await sendToWebhook(config.webhookUrl, payload);
+    console.log(`[CalendarWatcher] Slack ambiguity ping sent for client meeting: ${classified.summary}`);
+  } catch (err) {
+    console.error('[CalendarWatcher] Failed to send client-meeting ambiguity Slack:', err);
+  }
+}
+
 // In-memory lock to prevent duplicate processing when multiple webhooks fire simultaneously
 const processingEvents = new Set<string>();
 
@@ -1113,6 +1172,20 @@ async function _processClassifiedEventInner(
   // For AMBIGU events, send Slack and still create a MEETING with AMBIGU tag
   if (classified.type === 'AMBIGU') {
     notifyAmbiguousEvent(classified, recruiterName).catch(() => {});
+  }
+
+  // Client-only meetings are ambiguous: they could be either business-dev RDV
+  // (recruiter + client) or a presentation where the candidat's email wasn't
+  // added to the invite. Ping the recruiter on Slack to ask the nature.
+  const externalsForCheck = classified.attendees.filter((a) => a.role !== 'internal');
+  const hasCandidatAttendee = externalsForCheck.some((a) => a.role === 'candidat');
+  const hasClientAttendee = externalsForCheck.some((a) => a.role === 'client');
+  const clientOnlyMeeting =
+    !hasCandidatAttendee &&
+    hasClientAttendee &&
+    (classified.type === 'INTERVIEW' || classified.type === 'PRESENTATION');
+  if (clientOnlyMeeting) {
+    notifyClientMeetingAmbiguity(classified, recruiterName).catch(() => {});
   }
 
   // For PRESENTATION events, notify the whole team on Slack
