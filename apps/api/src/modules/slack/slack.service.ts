@@ -48,8 +48,8 @@ interface UserDailyStats {
   /** CV sent on an existing mandate = stage → ENTRETIEN_CLIENT */
   pushMandat: number;
   mandats: MandatPipeline[];
-  /** Candidatures moved to ENTRETIEN_CLIENT (or further) yesterday — with mandate info */
-  nouvellesPresentations: { candidat: string; mandat: string }[];
+  /** Candidatures moved to ENTRETIEN_CLIENT (or further) yesterday — CV sent on mandate */
+  nouveauxPushMandat: { candidat: string; mandat: string }[];
   /** Candidatures moved to ENTRETIEN_1 yesterday — first meet with a new candidate */
   nouveauxMeets: { candidat: string; mandat: string }[];
   /** New mandates created yesterday (assigned to this user) */
@@ -383,7 +383,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
           })
         : [];
 
-      const nouvellesPresentations = yesterdayStageTransitions
+      const nouveauxPushMandat = yesterdayStageTransitions
         .filter((t) => t.toStage === 'ENTRETIEN_CLIENT')
         .map((t) => ({
           candidat: `${t.candidature.candidat.prenom || ''} ${t.candidature.candidat.nom}`.trim(),
@@ -424,7 +424,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
         pushes,
         pushMandat,
         mandats,
-        nouvellesPresentations,
+        nouveauxPushMandat,
         nouveauxMeets,
         nouveauxMandats,
       };
@@ -581,8 +581,8 @@ function buildSlackBlocks(data: DailyReportData): object {
 
     // Highlights — positive news from yesterday
     const highlights: string[] = [];
-    for (const p of user.nouvellesPresentations) {
-      highlights.push(`🤝 *Nouvelle présentation* — ${p.candidat} → ${p.mandat}`);
+    for (const p of user.nouveauxPushMandat) {
+      highlights.push(`📤 *Nouveau push mandat* — ${p.candidat} → ${p.mandat}`);
     }
     for (const m of user.nouveauxMeets) {
       highlights.push(`🎯 *Nouveau meet* — ${m.candidat} → ${m.mandat}`);
