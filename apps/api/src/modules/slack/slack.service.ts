@@ -728,6 +728,8 @@ export async function notifyPresentation(data: {
   contactNom: string | null;
   mandatTitre: string;
   recruteurPrenom: string | null;
+  /** When the presentation happened (or will happen). Defaults to now. */
+  date?: Date | null;
 }): Promise<void> {
   const config = await getSlackConfig();
   if (!config || !config.enabled) return;
@@ -735,6 +737,14 @@ export async function notifyPresentation(data: {
   const candidatName = [data.candidatPrenom, data.candidatNom].filter(Boolean).join(' ');
   const recruteur = data.recruteurPrenom || 'Non assigné';
   const contact = data.contactNom || 'Non renseigné';
+
+  const date = data.date || new Date();
+  const dateStr = date.toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'Europe/Paris',
+  });
 
   const payload = {
     blocks: [
@@ -745,6 +755,7 @@ export async function notifyPresentation(data: {
           text: [
             `🤝 *Nouvelle présentation*`,
             ``,
+            `📅 ${dateStr}`,
             `👤 ${candidatName}`,
             `🏢 ${data.entrepriseNom} — ${contact}`,
             `📋 Mandat : ${data.mandatTitre}`,

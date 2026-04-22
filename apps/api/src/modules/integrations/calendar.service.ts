@@ -1393,6 +1393,8 @@ async function _processClassifiedEventInner(
           contactNom,
           mandatTitre,
           recruteurPrenom: recruiterName,
+          // Use the calendar event start time as the presentation date
+          date: classified.startTime ? new Date(classified.startTime) : null,
         });
       } // end of "else" — candidat resolved, notif sent
     } catch (err) {

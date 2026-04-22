@@ -47,6 +47,8 @@ async function fireSlackStageNotification(
       contactNom,
       mandatTitre: mandat.titrePoste,
       recruteurPrenom: mandat.assignedTo?.prenom || null,
+      // Prefer the explicit client-interview date if set, else today.
+      date: dateEntretienClient || candidature.dateEntretienClient || null,
     });
   } else if (newStage === 'ENTRETIEN_1') {
     await notifyRdvClient({
