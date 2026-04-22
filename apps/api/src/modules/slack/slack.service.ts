@@ -188,7 +188,15 @@ async function gatherDailyData(): Promise<DailyReportData> {
   // Gather per-user stats for yesterday
   const userStats: UserDailyStats[] = await Promise.all(
     users.map(async (user) => {
-      const [appels, rdv, interviews, presentations, pushesCount] = await Promise.all([
+      const [
+        appels,
+        rdvMeetings,
+        interviewsMeetings,
+        presentationsMeetings,
+        pushesCount,
+        stageTransitionsToInterview1,
+        stageTransitionsToClientInterview,
+      ] = await Promise.all([
         // Calls yesterday
         prisma.activite.count({
           where: {
@@ -197,7 +205,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
             createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
           },
         }),
-        // RDV (meetings) yesterday
+        // MEETING activities yesterday
         prisma.activite.count({
           where: {
             userId: user.id,
@@ -205,7 +213,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
             createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
           },
         }),
-        // Interviews: meetings linked to a CANDIDAT entity yesterday
+        // MEETING(CANDIDAT) — internal interviews
         prisma.activite.count({
           where: {
             userId: user.id,
@@ -214,7 +222,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
             createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
           },
         }),
-        // Presentations: meetings linked to a CLIENT entity yesterday
+        // MEETING(CLIENT) — client-facing meetings
         prisma.activite.count({
           where: {
             userId: user.id,
@@ -223,14 +231,40 @@ async function gatherDailyData(): Promise<DailyReportData> {
             createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
           },
         }),
-        // Pushes created yesterday
+        // Push CV records sent yesterday
         prisma.push.count({
           where: {
             recruiterId: user.id,
             sentAt: { gte: yesterdayStart, lte: yesterdayEnd },
           },
         }),
+        // Stage transitions to ENTRETIEN_1 yesterday on user's mandates (= nouveau meet)
+        prisma.stageHistory.count({
+          where: {
+            toStage: 'ENTRETIEN_1',
+            changedAt: { gte: yesterdayStart, lte: yesterdayEnd },
+            candidature: { mandat: { assignedToId: user.id } },
+          },
+        }),
+        // Stage transitions to ENTRETIEN_CLIENT yesterday (= profil envoyé / présentation)
+        prisma.stageHistory.count({
+          where: {
+            toStage: 'ENTRETIEN_CLIENT',
+            changedAt: { gte: yesterdayStart, lte: yesterdayEnd },
+            candidature: { mandat: { assignedToId: user.id } },
+          },
+        }),
       ]);
+
+      // Combine activity counts with stage transitions so KPIs reflect everything
+      // the recruiter actually accomplished yesterday — the highlights section
+      // already uses stage history, so the counters need to include it too.
+      const rdv = rdvMeetings + stageTransitionsToInterview1;
+      const interviews = interviewsMeetings + stageTransitionsToInterview1;
+      const presentations = presentationsMeetings + stageTransitionsToClientInterview;
+      // A "profil envoyé au client" is the direct outcome of a push, so we
+      // include stage transitions to ENTRETIEN_CLIENT in the push counter too.
+      const pushes = pushesCount + stageTransitionsToClientInterview;
 
       // Active mandats assigned to this user with candidature pipeline + client name
       const activeMandats = await prisma.mandat.findMany({
@@ -375,7 +409,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
         rdv,
         interviews,
         presentations,
-        pushes: pushesCount,
+        pushes,
         mandats,
         nouvellesPresentations,
         nouveauxMeets,
