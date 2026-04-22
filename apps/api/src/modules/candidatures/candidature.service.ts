@@ -162,6 +162,14 @@ export async function create(data: CreateCandidatureInput, createdById: string) 
     })
     .catch(() => {});
 
+  // If the candidature is created DIRECTLY at an advanced stage
+  // (ENTRETIEN_1 / ENTRETIEN_CLIENT / PLACE), fire the matching Slack notif —
+  // this happens e.g. when a recruiter drops a candidat straight into the
+  // client-interview column of the kanban.
+  if (['ENTRETIEN_1', 'ENTRETIEN_CLIENT', 'PLACE'].includes(data.stage)) {
+    fireSlackStageNotification(candidature.id, data.stage, null).catch(() => {});
+  }
+
   return candidature;
 }
 
