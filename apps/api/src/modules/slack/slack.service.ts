@@ -37,10 +37,16 @@ interface UserDailyStats {
   nom: string;
   prenom: string | null;
   appels: number;
+  /** RDV business dev = MEETING with CLIENT entity, excluding 3-way presentations */
   rdv: number;
+  /** Interviews with candidat = MEETING(CANDIDAT) + stage → ENTRETIEN_1 */
   interviews: number;
+  /** 3-way meetings (client + candidat) = calendar PRESENTATION events */
   presentations: number;
+  /** Cold-outreach push CV to clients = Push records */
   pushes: number;
+  /** CV sent on an existing mandate = stage → ENTRETIEN_CLIENT */
+  pushMandat: number;
   mandats: MandatPipeline[];
   /** Candidatures moved to ENTRETIEN_CLIENT (or further) yesterday — with mandate info */
   nouvellesPresentations: { candidat: string; mandat: string }[];
@@ -186,13 +192,20 @@ async function gatherDailyData(): Promise<DailyReportData> {
   });
 
   // Gather per-user stats for yesterday
+  //
+  // Definitions (per product spec):
+  //   📅 RDV         = business dev meeting with a client (client only, no candidat)
+  //   🎯 Interview   = first meet with a candidat
+  //   🤝 Presentation = 3-way meeting (client + candidat, physically/virtually together)
+  //   📨 Push         = cold outreach CV to a client (Push record)
+  //   📤 Push Mandat  = CV sent on an existing mandate (stage → ENTRETIEN_CLIENT)
   const userStats: UserDailyStats[] = await Promise.all(
     users.map(async (user) => {
       const [
         appels,
-        rdvMeetings,
-        interviewsMeetings,
-        presentationsMeetings,
+        meetingsClientCount,
+        meetingsCandidatCount,
+        meetingsPresentationCount,
         pushesCount,
         stageTransitionsToInterview1,
         stageTransitionsToClientInterview,
@@ -205,40 +218,43 @@ async function gatherDailyData(): Promise<DailyReportData> {
             createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
           },
         }),
-        // MEETING activities yesterday
-        prisma.activite.count({
-          where: {
-            userId: user.id,
-            type: 'MEETING',
-            createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
-          },
-        }),
-        // MEETING(CANDIDAT) — internal interviews
-        prisma.activite.count({
-          where: {
-            userId: user.id,
-            type: 'MEETING',
-            entiteType: 'CANDIDAT',
-            createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
-          },
-        }),
-        // MEETING(CLIENT) — client-facing meetings
+        // MEETING(CLIENT) not classified as PRESENTATION = business dev RDV
         prisma.activite.count({
           where: {
             userId: user.id,
             type: 'MEETING',
             entiteType: 'CLIENT',
             createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
+            NOT: { metadata: { path: ['calendarEventType'], equals: 'PRESENTATION' } },
           },
         }),
-        // Push CV records sent yesterday
+        // MEETING(CANDIDAT) not classified as PRESENTATION = interview with candidat
+        prisma.activite.count({
+          where: {
+            userId: user.id,
+            type: 'MEETING',
+            entiteType: 'CANDIDAT',
+            createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
+            NOT: { metadata: { path: ['calendarEventType'], equals: 'PRESENTATION' } },
+          },
+        }),
+        // MEETING classified PRESENTATION = 3-way client+candidat meetings
+        prisma.activite.count({
+          where: {
+            userId: user.id,
+            type: 'MEETING',
+            createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
+            metadata: { path: ['calendarEventType'], equals: 'PRESENTATION' },
+          },
+        }),
+        // Push records (cold-outreach CV to clients)
         prisma.push.count({
           where: {
             recruiterId: user.id,
             sentAt: { gte: yesterdayStart, lte: yesterdayEnd },
           },
         }),
-        // Stage transitions to ENTRETIEN_1 yesterday on user's mandates (= nouveau meet)
+        // Stage transitions to ENTRETIEN_1 = first meet scheduled with candidat
         prisma.stageHistory.count({
           where: {
             toStage: 'ENTRETIEN_1',
@@ -246,7 +262,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
             candidature: { mandat: { assignedToId: user.id } },
           },
         }),
-        // Stage transitions to ENTRETIEN_CLIENT yesterday (= profil envoyé / présentation)
+        // Stage transitions to ENTRETIEN_CLIENT = CV sent on an existing mandate
         prisma.stageHistory.count({
           where: {
             toStage: 'ENTRETIEN_CLIENT',
@@ -256,15 +272,11 @@ async function gatherDailyData(): Promise<DailyReportData> {
         }),
       ]);
 
-      // Combine activity counts with stage transitions so KPIs reflect everything
-      // the recruiter actually accomplished yesterday — the highlights section
-      // already uses stage history, so the counters need to include it too.
-      const rdv = rdvMeetings + stageTransitionsToInterview1;
-      const interviews = interviewsMeetings + stageTransitionsToInterview1;
-      const presentations = presentationsMeetings + stageTransitionsToClientInterview;
-      // A "profil envoyé au client" is the direct outcome of a push, so we
-      // include stage transitions to ENTRETIEN_CLIENT in the push counter too.
-      const pushes = pushesCount + stageTransitionsToClientInterview;
+      const rdv = meetingsClientCount;
+      const interviews = meetingsCandidatCount + stageTransitionsToInterview1;
+      const presentations = meetingsPresentationCount;
+      const pushes = pushesCount;
+      const pushMandat = stageTransitionsToClientInterview;
 
       // Active mandats assigned to this user with candidature pipeline + client name
       const activeMandats = await prisma.mandat.findMany({
@@ -410,6 +422,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
         interviews,
         presentations,
         pushes,
+        pushMandat,
         mandats,
         nouvellesPresentations,
         nouveauxMeets,
@@ -503,6 +516,7 @@ const DAILY_OBJECTIVES: Record<string, number> = {
   rdv: 1,
   presentations: 1,
   pushes: 10,
+  pushMandat: 1,
 };
 
 /** Build a 10-block progress bar: █ filled, ░ empty */
@@ -535,7 +549,14 @@ function buildSlackBlocks(data: DailyReportData): object {
 
   // Per-recruiter sections
   for (const user of data.users) {
-    const hasActivity = user.appels + user.rdv + user.interviews + user.presentations + user.pushes > 0;
+    const hasActivity =
+      user.appels +
+        user.rdv +
+        user.interviews +
+        user.presentations +
+        user.pushes +
+        user.pushMandat >
+      0;
 
     // Skip recruiter if all stats are 0 AND no active mandats
     if (!hasActivity && user.mandats.length === 0) continue;
@@ -548,6 +569,7 @@ function buildSlackBlocks(data: DailyReportData): object {
       buildObjLine('📅', user.rdv, DAILY_OBJECTIVES.rdv),
       buildObjLine('🤝', user.presentations, DAILY_OBJECTIVES.presentations),
       buildObjLine('📨', user.pushes, DAILY_OBJECTIVES.pushes),
+      buildObjLine('📤', user.pushMandat, DAILY_OBJECTIVES.pushMandat),
     ];
 
     // Add interviews as info line (no objective)
