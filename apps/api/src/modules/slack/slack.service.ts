@@ -41,15 +41,17 @@ interface UserDailyStats {
   rdv: number;
   /** Interviews with candidat = MEETING(CANDIDAT) + stage → ENTRETIEN_1 */
   interviews: number;
-  /** 3-way meetings (client + candidat) = calendar PRESENTATION events */
+  /**
+   * Presentations (candidate presented to client). Includes both:
+   *   - stage → ENTRETIEN_CLIENT transitions (candidat presented on a mandate)
+   *   - MEETING events classified PRESENTATION (3-way client + candidat meet)
+   */
   presentations: number;
   /** Cold-outreach push CV to clients = Push records */
   pushes: number;
-  /** CV sent on an existing mandate = stage → ENTRETIEN_CLIENT */
-  pushMandat: number;
   mandats: MandatPipeline[];
-  /** Candidatures moved to ENTRETIEN_CLIENT (or further) yesterday — CV sent on mandate */
-  nouveauxPushMandat: { candidat: string; mandat: string }[];
+  /** Candidatures moved to ENTRETIEN_CLIENT yesterday — candidats presented */
+  nouvellesPresentations: { candidat: string; mandat: string }[];
   /** Candidatures moved to ENTRETIEN_1 yesterday — first meet with a new candidate */
   nouveauxMeets: { candidat: string; mandat: string }[];
   /** New mandates created yesterday (assigned to this user) */
@@ -274,9 +276,11 @@ async function gatherDailyData(): Promise<DailyReportData> {
 
       const rdv = meetingsClientCount;
       const interviews = meetingsCandidatCount + stageTransitionsToInterview1;
-      const presentations = meetingsPresentationCount;
+      // Presentation = candidat presented to client. Covers both stage moves
+      // (candidat moved to ENTRETIEN_CLIENT on a mandate) and actual 3-way
+      // calendar meetings classified PRESENTATION.
+      const presentations = meetingsPresentationCount + stageTransitionsToClientInterview;
       const pushes = pushesCount;
-      const pushMandat = stageTransitionsToClientInterview;
 
       // Active mandats assigned to this user with candidature pipeline + client name
       const activeMandats = await prisma.mandat.findMany({
@@ -383,7 +387,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
           })
         : [];
 
-      const nouveauxPushMandat = yesterdayStageTransitions
+      const nouvellesPresentations = yesterdayStageTransitions
         .filter((t) => t.toStage === 'ENTRETIEN_CLIENT')
         .map((t) => ({
           candidat: `${t.candidature.candidat.prenom || ''} ${t.candidature.candidat.nom}`.trim(),
@@ -422,9 +426,8 @@ async function gatherDailyData(): Promise<DailyReportData> {
         interviews,
         presentations,
         pushes,
-        pushMandat,
         mandats,
-        nouveauxPushMandat,
+        nouvellesPresentations,
         nouveauxMeets,
         nouveauxMandats,
       };
@@ -516,7 +519,6 @@ const DAILY_OBJECTIVES: Record<string, number> = {
   rdv: 1,
   presentations: 1,
   pushes: 10,
-  pushMandat: 1,
 };
 
 /** Build a 10-block progress bar: █ filled, ░ empty */
@@ -550,13 +552,7 @@ function buildSlackBlocks(data: DailyReportData): object {
   // Per-recruiter sections
   for (const user of data.users) {
     const hasActivity =
-      user.appels +
-        user.rdv +
-        user.interviews +
-        user.presentations +
-        user.pushes +
-        user.pushMandat >
-      0;
+      user.appels + user.rdv + user.interviews + user.presentations + user.pushes > 0;
 
     // Skip recruiter if all stats are 0 AND no active mandats
     if (!hasActivity && user.mandats.length === 0) continue;
@@ -569,7 +565,6 @@ function buildSlackBlocks(data: DailyReportData): object {
       buildObjLine('📅', user.rdv, DAILY_OBJECTIVES.rdv),
       buildObjLine('🤝', user.presentations, DAILY_OBJECTIVES.presentations),
       buildObjLine('📨', user.pushes, DAILY_OBJECTIVES.pushes),
-      buildObjLine('📤', user.pushMandat, DAILY_OBJECTIVES.pushMandat),
     ];
 
     // Add interviews as info line (no objective)
@@ -581,8 +576,8 @@ function buildSlackBlocks(data: DailyReportData): object {
 
     // Highlights — positive news from yesterday
     const highlights: string[] = [];
-    for (const p of user.nouveauxPushMandat) {
-      highlights.push(`📤 *Nouveau push mandat* — ${p.candidat} → ${p.mandat}`);
+    for (const p of user.nouvellesPresentations) {
+      highlights.push(`🤝 *Nouvelle présentation* — ${p.candidat} → ${p.mandat}`);
     }
     for (const m of user.nouveauxMeets) {
       highlights.push(`🎯 *Nouveau meet* — ${m.candidat} → ${m.mandat}`);
