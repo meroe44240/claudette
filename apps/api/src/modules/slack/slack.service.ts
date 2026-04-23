@@ -663,6 +663,42 @@ export async function sendToWebhook(webhookUrl: string, payload: object): Promis
   }
 }
 
+/**
+ * Send a Slack DM to a specific user using the bot token + chat.postMessage.
+ * Requires SLACK_BOT_TOKEN env var and the user's Slack ID.
+ * Returns true if sent, false if config is missing (caller can decide what to do).
+ */
+export async function sendSlackDm(
+  slackUserId: string,
+  payload: { blocks?: object[]; text?: string },
+): Promise<boolean> {
+  const botToken = process.env.SLACK_BOT_TOKEN;
+  if (!botToken || !slackUserId) return false;
+
+  try {
+    const response = await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        Authorization: `Bearer ${botToken}`,
+      },
+      body: JSON.stringify({
+        channel: slackUserId,
+        ...payload,
+      }),
+    });
+    const data = (await response.json()) as any;
+    if (!data.ok) {
+      console.error(`[Slack DM] chat.postMessage failed: ${data.error}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[Slack DM] Error:', err);
+    return false;
+  }
+}
+
 // ─── PUBLIC API ─────────────────────────────────────
 
 export async function sendDailyReport(): Promise<{ success: boolean; message: string }> {

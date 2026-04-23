@@ -1010,16 +1010,22 @@ async function classifyCalendarEvent(
 }
 
 /**
- * Send a Slack message asking the recruiter to classify an ambiguous event.
+ * DM the recruiter to classify an ambiguous event. Silent no-op if the user
+ * has no slackUserId or the bot token is missing.
  */
 async function notifyAmbiguousEvent(
   classified: ClassifiedEvent,
-  recruiterName: string,
+  userId: string,
+  _recruiterName: string,
 ): Promise<void> {
   try {
-    const { getSlackConfig, sendToWebhook } = await import('../slack/slack.service.js');
-    const config = await getSlackConfig();
-    if (!config || !config.enabled) return;
+    const { sendSlackDm } = await import('../slack/slack.service.js');
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { slackUserId: true },
+    });
+    if (!user?.slackUserId) return;
 
     const startDate = classified.startTime
       ? new Date(classified.startTime).toLocaleString('fr-FR', {
@@ -1039,47 +1045,54 @@ async function notifyAmbiguousEvent(
       })
       .join('\n');
 
-    const payload = {
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: [
-              `❓ *Événement détecté — dis-moi le type*`,
-              ``,
-              `📅 *${classified.summary}* — ${startDate}`,
-              `👥 Participants :`,
-              attendeeList,
-              ``,
-              `Réponds :`,
-              `→ *INTERVIEW* (toi + candidat)`,
-              `→ *PRES* (toi + candidat + client)`,
-            ].join('\n'),
-          },
+    const blocks = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: [
+            `❓ *Événement détecté — dis-moi le type*`,
+            ``,
+            `📅 *${classified.summary}* — ${startDate}`,
+            `👥 Participants :`,
+            attendeeList,
+            ``,
+            `Réponds :`,
+            `→ *INTERVIEW* (toi + candidat)`,
+            `→ *PRES* (toi + candidat + client)`,
+          ].join('\n'),
         },
-      ],
-    };
+      },
+    ];
 
-    await sendToWebhook(config.webhookUrl, payload);
-    console.log(`[CalendarWatcher] Slack notification sent for ambiguous event: ${classified.summary}`);
+    const sent = await sendSlackDm(user.slackUserId, { blocks });
+    if (sent) {
+      console.log(`[CalendarWatcher] Slack DM ambiguous sent for event: ${classified.summary}`);
+    }
   } catch (err) {
-    console.error('[CalendarWatcher] Failed to send Slack notification:', err);
+    console.error('[CalendarWatcher] Failed to send ambiguous DM:', err);
   }
 }
 
 /**
- * Send a Slack question when a meeting is client-only (no candidat attendee):
- * could be a business-dev RDV or a presentation where the candidat was missed.
+ * Send a Slack DM to the recruiter when a meeting is client-only (no candidat
+ * attendee) — could be a business-dev RDV or a presentation where the candidat
+ * was missed. Silent no-op if the recruiter has no slackUserId configured or
+ * SLACK_BOT_TOKEN is missing (we don't spam the channel for ambiguous events).
  */
 async function notifyClientMeetingAmbiguity(
   classified: ClassifiedEvent,
+  userId: string,
   recruiterName: string,
 ): Promise<void> {
   try {
-    const { getSlackConfig, sendToWebhook } = await import('../slack/slack.service.js');
-    const config = await getSlackConfig();
-    if (!config || !config.enabled) return;
+    const { sendSlackDm } = await import('../slack/slack.service.js');
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { slackUserId: true },
+    });
+    if (!user?.slackUserId) return; // No DM target — skip silently
 
     const startDate = classified.startTime
       ? new Date(classified.startTime).toLocaleString('fr-FR', {
@@ -1097,33 +1110,33 @@ async function notifyClientMeetingAmbiguity(
       .map((a) => a.name || a.email)
       .join(', ');
 
-    const payload = {
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: [
-              `❓ *${recruiterName}* — c'était quoi ce meeting ?`,
-              ``,
-              `📅 *${classified.summary}* — ${startDate}`,
-              `🏢 Avec : ${clientsList}`,
-              ``,
-              `📅 *RDV client* (business dev)`,
-              `🤝 *Présentation* (avec un candidat qui aurait dû être invité)`,
-              `🎯 *Entretien candidat* (le client n'est pas pertinent)`,
-              ``,
-              `_Classe-le dans l'ATS si besoin._`,
-            ].join('\n'),
-          },
+    const blocks = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: [
+            `❓ *${recruiterName}* — c'était quoi ce meeting ?`,
+            ``,
+            `📅 *${classified.summary}* — ${startDate}`,
+            `🏢 Avec : ${clientsList}`,
+            ``,
+            `📅 *RDV client* (business dev)`,
+            `🤝 *Présentation* (avec un candidat qui aurait dû être invité)`,
+            `🎯 *Entretien candidat* (le client n'est pas pertinent)`,
+            ``,
+            `_Classe-le dans l'ATS si besoin._`,
+          ].join('\n'),
         },
-      ],
-    };
+      },
+    ];
 
-    await sendToWebhook(config.webhookUrl, payload);
-    console.log(`[CalendarWatcher] Slack ambiguity ping sent for client meeting: ${classified.summary}`);
+    const sent = await sendSlackDm(user.slackUserId, { blocks });
+    if (sent) {
+      console.log(`[CalendarWatcher] Slack DM ambiguity sent to ${recruiterName} for: ${classified.summary}`);
+    }
   } catch (err) {
-    console.error('[CalendarWatcher] Failed to send client-meeting ambiguity Slack:', err);
+    console.error('[CalendarWatcher] Failed to send client-meeting ambiguity DM:', err);
   }
 }
 
@@ -1171,7 +1184,7 @@ async function _processClassifiedEventInner(
 
   // For AMBIGU events, send Slack and still create a MEETING with AMBIGU tag
   if (classified.type === 'AMBIGU') {
-    notifyAmbiguousEvent(classified, recruiterName).catch(() => {});
+    notifyAmbiguousEvent(classified, userId, recruiterName).catch(() => {});
   }
 
   // Client-only meetings are ambiguous: they could be either business-dev RDV
@@ -1185,7 +1198,7 @@ async function _processClassifiedEventInner(
     hasClientAttendee &&
     (classified.type === 'INTERVIEW' || classified.type === 'PRESENTATION');
   if (clientOnlyMeeting) {
-    notifyClientMeetingAmbiguity(classified, recruiterName).catch(() => {});
+    notifyClientMeetingAmbiguity(classified, userId, recruiterName).catch(() => {});
   }
 
   // For PRESENTATION events, notify the whole team on Slack

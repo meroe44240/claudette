@@ -25,6 +25,7 @@ model User {
   variableRate       Float?    // Commission % sur les fees placés
   startDate          DateTime? @db.Timestamptz() // Date de début pour prorata
   calendlyUrl        String?   @db.VarChar(500)
+  slackUserId        String?   @db.VarChar(30) // Slack user id (e.g. U0123ABC) for DMs
   createdAt          DateTime  @default(now()) @db.Timestamptz()
   updatedAt          DateTime  @updatedAt @db.Timestamptz()
 
