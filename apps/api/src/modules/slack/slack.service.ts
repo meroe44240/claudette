@@ -79,13 +79,18 @@ function getParisOffsetMs(): number {
   return new Date(parisStr).getTime() - new Date(utcStr).getTime();
 }
 
-/** Return { start, end } as UTC Date objects representing yesterday 00:00-23:59:59 in Europe/Paris */
+/** Return { start, end } as UTC Date objects representing the last reported day
+ * 00:00-23:59:59 in Europe/Paris. On Monday this returns Friday so the report
+ * doesn't show empty weekend stats. */
 function getYesterdayRangeParis(): { start: Date; end: Date } {
   const offset = getParisOffsetMs();
   // "Now" in Paris
   const nowParis = new Date(Date.now() + offset);
-  // Yesterday in Paris
+  // Yesterday in Paris, then walk back over weekends
   nowParis.setDate(nowParis.getDate() - 1);
+  while (nowParis.getDay() === 0 || nowParis.getDay() === 6) {
+    nowParis.setDate(nowParis.getDate() - 1);
+  }
   nowParis.setHours(0, 0, 0, 0);
   const startParis = new Date(nowParis);
   const endParis = new Date(nowParis);
@@ -97,11 +102,15 @@ function getYesterdayRangeParis(): { start: Date; end: Date } {
   };
 }
 
-/** Format yesterday's date as "JOUR DD mois YYYY" in French */
+/** Format the last reported day's date as "DD mois" in French.
+ * On Monday this returns Friday's date. */
 function formatYesterdayFr(): string {
   const offset = getParisOffsetMs();
   const nowParis = new Date(Date.now() + offset);
   nowParis.setDate(nowParis.getDate() - 1);
+  while (nowParis.getDay() === 0 || nowParis.getDay() === 6) {
+    nowParis.setDate(nowParis.getDate() - 1);
+  }
   const options: Intl.DateTimeFormatOptions = {
     day: 'numeric',
     month: 'long',
