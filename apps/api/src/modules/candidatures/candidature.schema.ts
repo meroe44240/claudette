@@ -22,6 +22,8 @@ export const updateCandidatureSchema = z.object({
   dateEntretienClient: z.string().datetime().optional(),
   dateDemarrage: z.string().datetime().optional(),
   feeMontantFacture: z.number().int().nonnegative().optional(),
+  sourcePlacement: z.string().max(255).optional(),
+  sourceLead: z.string().max(255).optional(),
 });
 
 export type CreateCandidatureInput = z.infer<typeof createCandidatureSchema>;

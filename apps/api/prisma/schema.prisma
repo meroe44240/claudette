@@ -268,6 +268,7 @@ model Mandat {
   ficheDePoste         String?      @db.Text
   scorecard            Json?
   scorecardGeneratedAt DateTime?    @db.Timestamptz()
+  sourceLead       String?      @db.VarChar(255)
   createdAt        DateTime     @default(now()) @db.Timestamptz()
   updatedAt        DateTime     @updatedAt @db.Timestamptz()
 
@@ -314,6 +315,7 @@ model Candidature {
   datePresentation    DateTime?        @db.Timestamptz()
   dateEntretienClient DateTime?        @db.Timestamptz()
   dateDemarrage       DateTime?        @db.Date
+  sourcePlacement     String?          @db.VarChar(255)
   motifRefus          MotifRefus?
   motifRefusDetail    String?          @db.Text
   createdById         String?          @db.Uuid

@@ -928,6 +928,8 @@ export async function notifyCloseWon(data: {
   mandatTitre: string;
   feeMontant: number | null | undefined;
   dateDemarrage?: Date | null;
+  sourcePlacement?: string | null;
+  sourceLead?: string | null;
   recruteurPrenom: string | null;
 }): Promise<void> {
   const config = await getSlackConfig();
@@ -940,6 +942,12 @@ export async function notifyCloseWon(data: {
     : `💰 Fee : _À confirmer_`;
   const startLine = data.dateDemarrage
     ? `🚀 Démarrage : ${formatShortDateFr(new Date(data.dateDemarrage))}`
+    : null;
+  const sourcePlacementLine = data.sourcePlacement
+    ? `🎯 Source profil : ${data.sourcePlacement}`
+    : null;
+  const sourceLeadLine = data.sourceLead
+    ? `📥 Source lead : ${data.sourceLead}`
     : null;
 
   const payload = {
@@ -955,6 +963,8 @@ export async function notifyCloseWon(data: {
             `📋 Mandat : ${data.mandatTitre}`,
             feeLine,
             ...(startLine ? [startLine] : []),
+            ...(sourcePlacementLine ? [sourcePlacementLine] : []),
+            ...(sourceLeadLine ? [sourceLeadLine] : []),
             `👔 Recruteur : ${recruteur}`,
             ``,
             `Félicitations ! 🎉`,
