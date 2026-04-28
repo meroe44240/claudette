@@ -29,6 +29,7 @@ import { toast } from '../../components/ui/Toast';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
+import PlacementModal from '../../components/mandats/PlacementModal';
 import Select from '../../components/ui/Select';
 import Skeleton from '../../components/ui/Skeleton';
 import Confetti from '../../components/ui/Confetti';
@@ -466,6 +467,15 @@ export default function MandatKanbanPage() {
   }>({ open: false, candidatureId: null, sourceStage: null });
   const [selectedMotif, setSelectedMotif] = useState<string>('');
 
+  // Placement modal state (PLACE transition asks to confirm fee + start date)
+  const [placementModal, setPlacementModal] = useState<{
+    open: boolean;
+    candidatureId: string | null;
+    sourceStage: StageCandidature | null;
+    candidatId: string | null;
+    candidatName: string | null;
+  }>({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null });
+
   // Task suggestion after stage change
   const [taskSuggestion, setTaskSuggestion] = useState<{
     candidatId: string;
@@ -580,10 +590,21 @@ export default function MandatKanbanPage() {
 
   // Mutation for updating candidature stage (optimistic)
   const updateStageMutation = useMutation({
-    mutationFn: (params: { candidatureId: string; stage: StageCandidature; motifRefus?: MotifRefus; candidatId?: string; candidatName?: string; sourceStage?: StageCandidature }) =>
+    mutationFn: (params: {
+      candidatureId: string;
+      stage: StageCandidature;
+      motifRefus?: MotifRefus;
+      candidatId?: string;
+      candidatName?: string;
+      sourceStage?: StageCandidature;
+      feeMontantFacture?: number;
+      dateDemarrage?: string;
+    }) =>
       api.put(`/candidatures/${params.candidatureId}`, {
         stage: params.stage,
         ...(params.motifRefus ? { motifRefus: params.motifRefus } : {}),
+        ...(params.feeMontantFacture !== undefined ? { feeMontantFacture: params.feeMontantFacture } : {}),
+        ...(params.dateDemarrage ? { dateDemarrage: params.dateDemarrage } : {}),
       }),
     onMutate: async (variables) => {
       // Cancel any in-flight queries for this kanban
@@ -713,6 +734,18 @@ export default function MandatKanbanPage() {
     if (!movedItem) return;
     const candidatName = `${movedItem.candidat.prenom || ''} ${movedItem.candidat.nom}`.trim();
 
+    // If moving to PLACE, ask for invoice amount + start date before committing.
+    if (targetStage === 'PLACE') {
+      setPlacementModal({
+        open: true,
+        candidatureId,
+        sourceStage,
+        candidatId: movedItem.candidat.id,
+        candidatName,
+      });
+      return;
+    }
+
     // Optimistic update happens in onMutate
     updateStageMutation.mutate({
       candidatureId,
@@ -758,6 +791,26 @@ export default function MandatKanbanPage() {
   function handleCancelRefusal() {
     setRefusalModal({ open: false, candidatureId: null, sourceStage: null });
     setSelectedMotif('');
+  }
+
+  // Confirm placement (PLACE)
+  function handleConfirmPlacement(payload: { feeMontantFacture: number; dateDemarrage: string }) {
+    if (!placementModal.candidatureId) return;
+    updateStageMutation.mutate({
+      candidatureId: placementModal.candidatureId,
+      stage: 'PLACE',
+      sourceStage: placementModal.sourceStage || undefined,
+      candidatId: placementModal.candidatId || undefined,
+      candidatName: placementModal.candidatName || undefined,
+      feeMontantFacture: payload.feeMontantFacture,
+      dateDemarrage: payload.dateDemarrage,
+    });
+    setPlacementModal({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null });
+  }
+
+  // Cancel placement — keep candidature at its previous stage
+  function handleCancelPlacement() {
+    setPlacementModal({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null });
   }
 
   // Compute summary counts (based on unfiltered data)
@@ -979,6 +1032,15 @@ export default function MandatKanbanPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Placement Modal */}
+      <PlacementModal
+        isOpen={placementModal.open}
+        onClose={handleCancelPlacement}
+        onConfirm={handleConfirmPlacement}
+        isPending={updateStageMutation.isPending}
+        candidatName={placementModal.candidatName}
+      />
 
       {/* Refusal Modal */}
       <Modal

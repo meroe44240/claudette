@@ -67,6 +67,7 @@ async function fireSlackStageNotification(
       entrepriseNom: mandat.entreprise?.nom || 'N/A',
       mandatTitre: mandat.titrePoste,
       feeMontant: mandat.feeMontantFacture || mandat.feeMontantEstime || null,
+      dateDemarrage: candidature.dateDemarrage || null,
       recruteurPrenom: mandat.assignedTo?.prenom || null,
     });
   }
@@ -192,11 +193,25 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
   if (data.motifRefusDetail !== undefined) updateData.motifRefusDetail = data.motifRefusDetail;
   if (data.datePresentation !== undefined) updateData.datePresentation = new Date(data.datePresentation);
   if (data.dateEntretienClient !== undefined) updateData.dateEntretienClient = new Date(data.dateEntretienClient);
+  if (data.dateDemarrage !== undefined) updateData.dateDemarrage = new Date(data.dateDemarrage);
 
-  const candidature = await prisma.candidature.update({
-    where: { id },
-    data: updateData,
-  });
+  // When closing won (PLACE) with a confirmed invoice amount, write the
+  // definitive fee + invoice status on the mandat in the same transaction.
+  const placementWithFee = data.stage === 'PLACE' && data.feeMontantFacture !== undefined;
+
+  const candidature = placementWithFee
+    ? await prisma.$transaction(async (tx) => {
+        const updated = await tx.candidature.update({ where: { id }, data: updateData });
+        await tx.mandat.update({
+          where: { id: existing.mandatId },
+          data: {
+            feeMontantFacture: data.feeMontantFacture,
+            feeStatut: 'FACTURE',
+          },
+        });
+        return updated;
+      })
+    : await prisma.candidature.update({ where: { id }, data: updateData });
 
   // If stage changed, create StageHistory entry
   if (data.stage && data.stage !== existing.stage) {

@@ -20,6 +20,8 @@ export const updateCandidatureSchema = z.object({
   motifRefusDetail: z.string().optional(),
   datePresentation: z.string().datetime().optional(),
   dateEntretienClient: z.string().datetime().optional(),
+  dateDemarrage: z.string().datetime().optional(),
+  feeMontantFacture: z.number().int().nonnegative().optional(),
 });
 
 export type CreateCandidatureInput = z.infer<typeof createCandidatureSchema>;
