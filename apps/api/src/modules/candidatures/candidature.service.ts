@@ -68,6 +68,8 @@ async function fireSlackStageNotification(
       mandatTitre: mandat.titrePoste,
       feeMontant: mandat.feeMontantFacture || mandat.feeMontantEstime || null,
       dateDemarrage: candidature.dateDemarrage || null,
+      sourcePlacement: candidature.sourcePlacement || null,
+      sourceLead: mandat.sourceLead || null,
       recruteurPrenom: mandat.assignedTo?.prenom || null,
     });
   }
@@ -194,21 +196,27 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
   if (data.datePresentation !== undefined) updateData.datePresentation = new Date(data.datePresentation);
   if (data.dateEntretienClient !== undefined) updateData.dateEntretienClient = new Date(data.dateEntretienClient);
   if (data.dateDemarrage !== undefined) updateData.dateDemarrage = new Date(data.dateDemarrage);
+  if (data.sourcePlacement !== undefined) updateData.sourcePlacement = data.sourcePlacement;
 
-  // When closing won (PLACE) with a confirmed invoice amount, write the
-  // definitive fee + invoice status on the mandat in the same transaction.
-  const placementWithFee = data.stage === 'PLACE' && data.feeMontantFacture !== undefined;
+  // When closing won (PLACE), write the definitive fee + invoice status +
+  // mandat lead source on the mandat in the same transaction as the
+  // candidature update.
+  const isPlacement =
+    data.stage === 'PLACE' &&
+    (data.feeMontantFacture !== undefined || data.sourceLead !== undefined);
 
-  const candidature = placementWithFee
+  const candidature = isPlacement
     ? await prisma.$transaction(async (tx) => {
         const updated = await tx.candidature.update({ where: { id }, data: updateData });
-        await tx.mandat.update({
-          where: { id: existing.mandatId },
-          data: {
-            feeMontantFacture: data.feeMontantFacture,
-            feeStatut: 'FACTURE',
-          },
-        });
+        const mandatUpdate: any = {};
+        if (data.feeMontantFacture !== undefined) {
+          mandatUpdate.feeMontantFacture = data.feeMontantFacture;
+          mandatUpdate.feeStatut = 'FACTURE';
+        }
+        if (data.sourceLead !== undefined) {
+          mandatUpdate.sourceLead = data.sourceLead;
+        }
+        await tx.mandat.update({ where: { id: existing.mandatId }, data: mandatUpdate });
         return updated;
       })
     : await prisma.candidature.update({ where: { id }, data: updateData });

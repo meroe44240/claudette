@@ -599,12 +599,16 @@ export default function MandatKanbanPage() {
       sourceStage?: StageCandidature;
       feeMontantFacture?: number;
       dateDemarrage?: string;
+      sourcePlacement?: string;
+      sourceLead?: string;
     }) =>
       api.put(`/candidatures/${params.candidatureId}`, {
         stage: params.stage,
         ...(params.motifRefus ? { motifRefus: params.motifRefus } : {}),
         ...(params.feeMontantFacture !== undefined ? { feeMontantFacture: params.feeMontantFacture } : {}),
         ...(params.dateDemarrage ? { dateDemarrage: params.dateDemarrage } : {}),
+        ...(params.sourcePlacement ? { sourcePlacement: params.sourcePlacement } : {}),
+        ...(params.sourceLead ? { sourceLead: params.sourceLead } : {}),
       }),
     onMutate: async (variables) => {
       // Cancel any in-flight queries for this kanban
@@ -794,7 +798,12 @@ export default function MandatKanbanPage() {
   }
 
   // Confirm placement (PLACE)
-  function handleConfirmPlacement(payload: { feeMontantFacture: number; dateDemarrage: string }) {
+  function handleConfirmPlacement(payload: {
+    feeMontantFacture: number;
+    dateDemarrage: string;
+    sourcePlacement: string;
+    sourceLead: string;
+  }) {
     if (!placementModal.candidatureId) return;
     updateStageMutation.mutate({
       candidatureId: placementModal.candidatureId,
@@ -804,6 +813,8 @@ export default function MandatKanbanPage() {
       candidatName: placementModal.candidatName || undefined,
       feeMontantFacture: payload.feeMontantFacture,
       dateDemarrage: payload.dateDemarrage,
+      sourcePlacement: payload.sourcePlacement,
+      sourceLead: payload.sourceLead,
     });
     setPlacementModal({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null });
   }
