@@ -925,6 +925,7 @@ export async function notifyCloseWon(data: {
   candidatPrenom: string | null;
   candidatNom: string;
   entrepriseNom: string;
+  contactNom?: string | null;
   mandatTitre: string;
   feeMontant: number | null | undefined;
   dateDemarrage?: Date | null;
@@ -943,6 +944,9 @@ export async function notifyCloseWon(data: {
   const startLine = data.dateDemarrage
     ? `🚀 Démarrage : ${formatShortDateFr(new Date(data.dateDemarrage))}`
     : null;
+  const contactLine = data.contactNom
+    ? `🤝 Client : ${data.contactNom} (${data.entrepriseNom})`
+    : `🏢 Client : ${data.entrepriseNom}`;
   const sourcePlacementLine = data.sourcePlacement
     ? `🎯 Source profil : ${data.sourcePlacement}`
     : null;
@@ -959,7 +963,8 @@ export async function notifyCloseWon(data: {
           text: [
             `🏆 *CLOSE WON*`,
             ``,
-            `👤 ${candidatName} → ${data.entrepriseNom}`,
+            `👤 Candidat : ${candidatName}`,
+            contactLine,
             `📋 Mandat : ${data.mandatTitre}`,
             feeLine,
             ...(startLine ? [startLine] : []),
