@@ -65,6 +65,7 @@ async function fireSlackStageNotification(
       candidatPrenom: candidat.prenom,
       candidatNom: candidat.nom,
       entrepriseNom: mandat.entreprise?.nom || 'N/A',
+      contactNom,
       mandatTitre: mandat.titrePoste,
       feeMontant: mandat.feeMontantFacture || mandat.feeMontantEstime || null,
       dateDemarrage: candidature.dateDemarrage || null,
