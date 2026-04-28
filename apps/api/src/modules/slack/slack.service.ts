@@ -927,6 +927,7 @@ export async function notifyCloseWon(data: {
   entrepriseNom: string;
   mandatTitre: string;
   feeMontant: number | null | undefined;
+  dateDemarrage?: Date | null;
   recruteurPrenom: string | null;
 }): Promise<void> {
   const config = await getSlackConfig();
@@ -937,6 +938,9 @@ export async function notifyCloseWon(data: {
   const feeLine = data.feeMontant
     ? `💰 Fee : ${data.feeMontant.toLocaleString('fr-FR')} €`
     : `💰 Fee : _À confirmer_`;
+  const startLine = data.dateDemarrage
+    ? `🚀 Démarrage : ${formatShortDateFr(new Date(data.dateDemarrage))}`
+    : null;
 
   const payload = {
     blocks: [
@@ -950,6 +954,7 @@ export async function notifyCloseWon(data: {
             `👤 ${candidatName} → ${data.entrepriseNom}`,
             `📋 Mandat : ${data.mandatTitre}`,
             feeLine,
+            ...(startLine ? [startLine] : []),
             `👔 Recruteur : ${recruteur}`,
             ``,
             `Félicitations ! 🎉`,

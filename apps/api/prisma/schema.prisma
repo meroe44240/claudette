@@ -313,6 +313,7 @@ model Candidature {
   notes               String?          @db.Text
   datePresentation    DateTime?        @db.Timestamptz()
   dateEntretienClient DateTime?        @db.Timestamptz()
+  dateDemarrage       DateTime?        @db.Date
   motifRefus          MotifRefus?
   motifRefusDetail    String?          @db.Text
   createdById         String?          @db.Uuid
