@@ -41,6 +41,7 @@ type StageCandidature =
   | 'SOURCING'
   | 'CONTACTE'
   | 'ENTRETIEN_1'
+  | 'ENVOYE_CLIENT'
   | 'ENTRETIEN_CLIENT'
   | 'OFFRE'
   | 'PLACE'
