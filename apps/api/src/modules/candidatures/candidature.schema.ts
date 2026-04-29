@@ -4,14 +4,14 @@ export const createCandidatureSchema = z.object({
   mandatId: z.string().uuid('mandatId doit etre un UUID valide'),
   candidatId: z.string().uuid('candidatId doit etre un UUID valide'),
   stage: z
-    .enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE'])
+    .enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE'])
     .default('SOURCING'),
   notes: z.string().optional(),
 });
 
 export const updateCandidatureSchema = z.object({
   stage: z
-    .enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE'])
+    .enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE'])
     .optional(),
   notes: z.string().optional(),
   motifRefus: z

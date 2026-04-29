@@ -189,10 +189,11 @@ const feeStatutVariant: Record<FeeStatut, 'default' | 'warning' | 'success'> = {
   PAYE: 'success',
 };
 
-const stageBadgeVariant: Record<string, 'sourcing' | 'contacte' | 'entretien1' | 'entretienClient' | 'offre' | 'place' | 'refuse'> = {
+const stageBadgeVariant: Record<string, 'sourcing' | 'contacte' | 'entretien1' | 'envoyeClient' | 'entretienClient' | 'offre' | 'place' | 'refuse'> = {
   SOURCING: 'sourcing',
   CONTACTE: 'contacte',
   ENTRETIEN_1: 'entretien1',
+  ENVOYE_CLIENT: 'envoyeClient',
   ENTRETIEN_CLIENT: 'entretienClient',
   OFFRE: 'offre',
   PLACE: 'place',
@@ -203,6 +204,7 @@ const stageLabels: Record<string, string> = {
   SOURCING: 'Sourcing',
   CONTACTE: 'Contacté',
   ENTRETIEN_1: 'Entretien 1',
+  ENVOYE_CLIENT: 'Envoyé client',
   ENTRETIEN_CLIENT: 'Entretien Client',
   OFFRE: 'Offre',
   PLACE: 'Placé',

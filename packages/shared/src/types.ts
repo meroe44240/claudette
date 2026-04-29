@@ -6,7 +6,7 @@ export type RoleContact = 'HIRING_MANAGER' | 'DRH' | 'PROCUREMENT' | 'CEO' | 'AU
 
 export type StatutClient = 'LEAD' | 'PREMIER_CONTACT' | 'BESOIN_QUALIFIE' | 'PROPOSITION_ENVOYEE' | 'MANDAT_SIGNE' | 'RECURRENT' | 'INACTIF';
 
-export type StageCandidature = 'SOURCING' | 'CONTACTE' | 'ENTRETIEN_1' | 'ENTRETIEN_CLIENT' | 'OFFRE' | 'PLACE' | 'REFUSE';
+export type StageCandidature = 'SOURCING' | 'CONTACTE' | 'ENTRETIEN_1' | 'ENVOYE_CLIENT' | 'ENTRETIEN_CLIENT' | 'OFFRE' | 'PLACE' | 'REFUSE';
 
 export type StatutMandat = 'OUVERT' | 'EN_COURS' | 'GAGNE' | 'PERDU' | 'ANNULE' | 'CLOTURE';
 

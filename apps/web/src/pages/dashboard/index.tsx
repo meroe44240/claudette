@@ -169,6 +169,7 @@ const PIPELINE_STAGES = [
   { key: 'SOURCING', label: 'Src', color: '#A78BFA' },
   { key: 'CONTACTE', label: 'Cont', color: '#3B82F6' },
   { key: 'ENTRETIEN_1', label: 'Entr', color: '#7C5CFC' },
+  { key: 'ENVOYE_CLIENT', label: 'Env', color: '#F97316' },
   { key: 'ENTRETIEN_CLIENT', label: 'Client', color: '#14B8A6' },
   { key: 'OFFRE', label: 'Offre', color: '#F59E0B' },
   { key: 'PLACE', label: 'Place', color: '#059669' },
