@@ -14,7 +14,7 @@ export default async function candidatureRouter(fastify: FastifyInstance) {
     preHandler: [authenticate],
     handler: async (request) => {
       const query = request.query as { mandatId?: string; stage?: string; include?: string };
-      const stage = query.stage ? z.enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE']).parse(query.stage) : undefined;
+      const stage = query.stage ? z.enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE']).parse(query.stage) : undefined;
       return candidatureService.list({
         mandatId: query.mandatId,
         stage,
@@ -48,7 +48,7 @@ export default async function candidatureRouter(fastify: FastifyInstance) {
     handler: async (request) => {
       const input = z.object({
         ids: z.array(z.string().min(1)).min(1),
-        stage: z.enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE']),
+        stage: z.enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE']),
         motifRefus: z.string().optional(),
         motifRefusDetail: z.string().optional(),
       }).parse(request.body);

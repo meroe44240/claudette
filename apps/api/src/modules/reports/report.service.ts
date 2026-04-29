@@ -578,7 +578,7 @@ export function generateMandatReportHtml(data: MandatReportData): string {
     year: 'numeric',
   });
 
-  const stageOrder = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE'];
+  const stageOrder = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE'];
   const stageColors: Record<string, string> = {
     SOURCING: '#93C5FD',
     CONTACTE: '#6EE7B7',

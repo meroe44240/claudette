@@ -346,7 +346,7 @@ export async function getKanban(id: string) {
   }));
 
   // Group candidatures by stage
-  const stages = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE'] as const;
+  const stages = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE'] as const;
   const kanban: Record<string, typeof scoredCandidatures> = {};
 
   for (const stage of stages) {

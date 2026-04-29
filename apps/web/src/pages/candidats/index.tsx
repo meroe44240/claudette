@@ -97,6 +97,7 @@ const STAGE_OPTIONS = [
   { value: 'SOURCING', label: 'Sourcing' },
   { value: 'CONTACTE', label: 'Contacté' },
   { value: 'ENTRETIEN_1', label: 'Entretien 1' },
+  { value: 'ENVOYE_CLIENT', label: 'Envoyé client' },
   { value: 'ENTRETIEN_CLIENT', label: 'Entretien client' },
   { value: 'OFFRE', label: 'Offre' },
   { value: 'PLACE', label: 'Placé' },

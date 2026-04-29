@@ -20,6 +20,7 @@ interface MandatPipeline {
     SOURCING: number;
     CONTACTE: number;
     ENTRETIEN_1: number;
+    ENVOYE_CLIENT: number;
     ENTRETIEN_CLIENT: number;
     OFFRE: number;
     PLACE: number;
@@ -335,6 +336,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
             SOURCING: 0,
             CONTACTE: 0,
             ENTRETIEN_1: 0,
+            ENVOYE_CLIENT: 0,
             ENTRETIEN_CLIENT: 0,
             OFFRE: 0,
             PLACE: 0,

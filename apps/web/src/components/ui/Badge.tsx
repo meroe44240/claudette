@@ -11,6 +11,7 @@ type BadgeVariant =
   | 'sourcing'
   | 'contacte'
   | 'entretien1'
+  | 'envoyeClient'
   | 'entretienClient'
   | 'offre'
   | 'place'
@@ -38,6 +39,7 @@ const variantStyles: Record<BadgeVariant, string> = {
   sourcing: 'bg-stage-sourcing text-[#7C3AED] border border-[#DDD6FE]',
   contacte: 'bg-stage-contacte text-[#5B3FD4] border border-[#C4B5FD]',
   entretien1: 'bg-stage-entretien1 text-[#4338CA] border border-[#C7D2FE]',
+  envoyeClient: 'bg-[#FFEDD5] text-[#C2410C] border border-[#FED7AA]',
   entretienClient: 'bg-stage-entretien-client text-[#D97706] border border-[#FDE68A]',
   offre: 'bg-stage-offre text-[#059669] border border-[#A7F3D0]',
   place: 'bg-stage-place text-white border border-[#059669]',

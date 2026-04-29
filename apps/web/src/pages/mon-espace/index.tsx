@@ -72,6 +72,7 @@ const stageLabels: Record<string, string> = {
   SOURCING: 'Sourcing',
   CONTACTE: 'Contacté',
   ENTRETIEN_1: 'Entretien 1',
+  ENVOYE_CLIENT: 'Envoyé client',
   ENTRETIEN_CLIENT: 'Entretien Client',
   OFFRE: 'Offre',
   PLACE: 'Placé',
