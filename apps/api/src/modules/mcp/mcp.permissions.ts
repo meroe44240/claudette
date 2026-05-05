@@ -40,7 +40,7 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   create_candidate:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   create_client:                 { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   create_company:                { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  create_mandate:                { level: 'confirm', roles: ['ADMIN'] },
+  create_mandate:                { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   move_candidate_stage:          { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   add_candidate_to_mandate:      { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   create_task:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
