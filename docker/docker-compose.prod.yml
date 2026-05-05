@@ -37,6 +37,7 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      TZ: Europe/Paris
       DATABASE_URL: postgresql://${POSTGRES_USER:-humanup}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-humanup_prod}
       REDIS_URL: redis://redis:6379
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
