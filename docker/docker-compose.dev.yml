@@ -28,6 +28,7 @@ services:
     ports:
       - "3001:3001"
     environment:
+      TZ: Europe/Paris
       DATABASE_URL: postgresql://humanup:humanup_dev@postgres:5432/humanup_dev
       REDIS_URL: redis://redis:6379
     depends_on:
