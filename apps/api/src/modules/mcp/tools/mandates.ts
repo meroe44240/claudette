@@ -118,22 +118,46 @@ export function registerMandateTools(server: McpServer) {
 
   server.tool(
     'move_candidate_stage',
-    "[CONFIRMATION REQUISE] Deplace un candidat d'une etape a une autre dans le pipeline d'un mandat. Tu DOIS demander confirmation.",
+    "[CONFIRMATION REQUISE] Deplace un candidat d'une etape a une autre dans le pipeline d'un mandat. Si new_stage='PLACE' (closing won), fournis fee_montant_facture + date_demarrage + source_placement + source_lead pour mettre a jour le fee facture du mandat. Tu DOIS demander confirmation.",
     {
       candidature_id: z.string().describe('UUID de la candidature'),
-      new_stage: z.string().describe('Nouvelle etape : SOURCING, CONTACTE, ENTRETIEN_1, ENTRETIEN_CLIENT, OFFRE, PLACE, REFUSE'),
-      motif_refus: z.string().optional().describe('Si refuse : SALAIRE, PROFIL_PAS_ALIGNE, CANDIDAT_DECLINE, CLIENT_REFUSE, TIMING, POSTE_POURVU, AUTRE'),
+      new_stage: z.string().describe('Nouvelle etape : SOURCING, CONTACTE, ENTRETIEN_1, ENVOYE_CLIENT, ENTRETIEN_CLIENT, OFFRE, PLACE, REFUSE'),
+      motif_refus: z.string().optional().describe('Si REFUSE : SALAIRE, PROFIL_PAS_ALIGNE, CANDIDAT_DECLINE, CLIENT_REFUSE, TIMING, POSTE_POURVU, AUTRE'),
+      fee_montant_facture: z.number().int().nonnegative().optional().describe('Si PLACE : montant de la facture en euros (entier). Ecrit feeMontantFacture + feeStatut=FACTURE sur le mandat.'),
+      date_demarrage: z.string().optional().describe('Si PLACE : date de demarrage du candidat (YYYY-MM-DD ou ISO 8601).'),
+      source_placement: z.string().optional().describe('Si PLACE : source du profil place (LinkedIn Recruiter, Indeed, Cooptation, Approche directe, etc.)'),
+      source_lead: z.string().optional().describe('Si PLACE : source du lead/mandat (Cold call, Cooptation, Inbound, etc.). Ecrit sourceLead sur le mandat.'),
     },
     wrapTool('move_candidate_stage', async (args, user) => {
-      const result = await candidatureService.update(
-        args.candidature_id as string,
-        {
-          stage: args.new_stage as any,
-          motifRefus: args.motif_refus as any,
-        },
-        user.userId,
-      );
-      return { success: true, message: `Candidature deplacee vers ${args.new_stage}` };
+      const updates: Record<string, unknown> = {
+        stage: args.new_stage,
+        motifRefus: args.motif_refus,
+      };
+
+      if (args.new_stage === 'PLACE') {
+        if (args.fee_montant_facture !== undefined) {
+          updates.feeMontantFacture = args.fee_montant_facture;
+        }
+        if (args.date_demarrage !== undefined) {
+          const raw = String(args.date_demarrage);
+          const iso = raw.includes('T') ? raw : new Date(`${raw}T00:00:00`).toISOString();
+          updates.dateDemarrage = iso;
+        }
+        if (args.source_placement !== undefined) {
+          updates.sourcePlacement = args.source_placement;
+        }
+        if (args.source_lead !== undefined) {
+          updates.sourceLead = args.source_lead;
+        }
+      }
+
+      await candidatureService.update(args.candidature_id as string, updates as any, user.userId);
+
+      const feeMsg =
+        args.new_stage === 'PLACE' && args.fee_montant_facture !== undefined
+          ? ` (fee mandat mis a jour : ${args.fee_montant_facture}€, statut FACTURE)`
+          : '';
+      return { success: true, message: `Candidature deplacee vers ${args.new_stage}${feeMsg}` };
     }),
   );
 
