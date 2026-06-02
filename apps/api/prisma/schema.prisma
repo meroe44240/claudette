@@ -32,14 +32,14 @@ model User {
   candidatsCreated    Candidat[]     @relation("CandidatCreatedBy")
   clientsCreated      Client[]       @relation("ClientCreatedBy")
   entreprisesCreated  Entreprise[]   @relation("EntrepriseCreatedBy")
-  mandatsCreated      Mandat[]       @relation("MandatCreatedBy")
-  candidaturesCreated Candidature[]  @relation("CandidatureCreatedBy")
+  mandatsCreated      Mandat[]       @relation("MandatCreatedBy")  candidaturesCreated Candidature[]  @relation("CandidatureCreatedBy")
   activites           Activite[]     @relation("ActiviteUser")
   notifications       Notification[] @relation("NotificationUser")
   templates           Template[]     @relation("TemplateCreatedBy")
   assignedCandidats   Candidat[]     @relation("CandidatAssignedTo")
   assignedClients     Client[]       @relation("ClientAssignedTo")
   assignedMandats     Mandat[]       @relation("MandatAssignedTo")
+  sourcedMandats      Mandat[]       @relation("MandatSourceur")
   sequences           Sequence[]     @relation("SequenceCreatedBy")
   auditLogs           AuditLog[]     @relation("AuditLogUser")
   reminders           Reminder[]     @relation("ReminderUser")
@@ -264,6 +264,8 @@ model Mandat {
   createdBy        User?        @relation("MandatCreatedBy", fields: [createdById], references: [id])
   assignedToId     String?      @db.Uuid
   assignedTo       User?        @relation("MandatAssignedTo", fields: [assignedToId], references: [id])
+  sourceurId       String?      @db.Uuid
+  sourceur         User?        @relation("MandatSourceur", fields: [sourceurId], references: [id])
   transcript           String?      @db.Text
   ficheDePoste         String?      @db.Text
   scorecard            Json?

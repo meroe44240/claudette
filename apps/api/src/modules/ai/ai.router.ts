@@ -768,7 +768,10 @@ Rédige un email de prospection sharp pour présenter ce profil à un client.`,
           take: 10,
         }),
         prisma.mandat.findMany({
-          where: { assignedToId: userId, statut: { in: ['OUVERT', 'EN_COURS'] } },
+          where: {
+            OR: [{ assignedToId: userId }, { sourceurId: userId }],
+            statut: { in: ['OUVERT', 'EN_COURS'] },
+          },
           select: { titrePoste: true, candidatures: { select: { stage: true } } },
         }),
         prisma.activite.count({
