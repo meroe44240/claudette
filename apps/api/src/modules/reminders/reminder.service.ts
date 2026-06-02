@@ -161,6 +161,7 @@ export async function generateAutoReminders(userId: string) {
       statut: { in: ['OUVERT', 'EN_COURS'] },
       OR: [
         { assignedToId: userId },
+        { sourceurId: userId },
         { createdById: userId },
       ],
     },

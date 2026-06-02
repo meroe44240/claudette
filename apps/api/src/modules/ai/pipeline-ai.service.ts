@@ -291,11 +291,12 @@ function parseAiResponse(responseText: string): AiPipelineMove[] {
  * Analyze pipeline and suggest stage moves for active candidatures.
  */
 export async function analyzePipelineMoves(userId: string) {
-  // 1. Get all mandats assigned to or created by this user
+  // 1. Get all mandats this user owns, sources for, or created
   const mandats = await prisma.mandat.findMany({
     where: {
       OR: [
         { assignedToId: userId },
+        { sourceurId: userId },
         { createdById: userId },
       ],
       statut: { in: ['OUVERT', 'EN_COURS'] },

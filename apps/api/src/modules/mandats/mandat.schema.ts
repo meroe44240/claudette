@@ -13,6 +13,7 @@ export const createMandatSchema = z.object({
   priorite: z.enum(['BASSE', 'NORMALE', 'HAUTE', 'URGENTE']).optional(),
   notes: z.string().optional(),
   assignedToId: z.string().uuid().optional(),
+  sourceurId: z.string().uuid().nullable().optional(),
 });
 
 export const updateMandatSchema = z.object({
@@ -28,6 +29,7 @@ export const updateMandatSchema = z.object({
   priorite: z.enum(['BASSE', 'NORMALE', 'HAUTE', 'URGENTE']).optional(),
   notes: z.string().nullable().optional(),
   assignedToId: z.string().uuid().nullable().optional(),
+  sourceurId: z.string().uuid().nullable().optional(),
   transcript: z.string().nullable().optional(),
   ficheDePoste: z.string().nullable().optional(),
   scorecard: z.any().optional(),
