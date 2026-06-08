@@ -51,15 +51,19 @@ export async function list(
   priorite?: string,
   entrepriseId?: string,
   assignedToId?: string,
+  userInvolvedId?: string,
 ) {
   const where: any = {};
+  const andClauses: any[] = [];
 
   if (search) {
-    where.OR = [
-      { titrePoste: { contains: search, mode: 'insensitive' } },
-      { description: { contains: search, mode: 'insensitive' } },
-      { entreprise: { nom: { contains: search, mode: 'insensitive' } } },
-    ];
+    andClauses.push({
+      OR: [
+        { titrePoste: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { entreprise: { nom: { contains: search, mode: 'insensitive' } } },
+      ],
+    });
   }
 
   if (statut) {
@@ -76,6 +80,21 @@ export async function list(
 
   if (assignedToId) {
     where.assignedToId = assignedToId;
+  }
+
+  // "Mes mandats" for a non-admin user: include mandates where the user is
+  // either primary (assignedTo) or sourceur (co-recruiter).
+  if (userInvolvedId) {
+    andClauses.push({
+      OR: [
+        { assignedToId: userInvolvedId },
+        { sourceurId: userInvolvedId },
+      ],
+    });
+  }
+
+  if (andClauses.length) {
+    where.AND = andClauses;
   }
 
   const { skip, take } = paginationToSkipTake(params);

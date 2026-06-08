@@ -28,14 +28,15 @@ export default async function mandatRouter(fastify: FastifyInstance) {
       const query = request.query as any;
       const params = parsePagination(query);
 
-      // Non-admin users see only their own mandats by default
-      // Admins see all unless they explicitly filter by consultant
+      // Non-admin users see mandats where they are EITHER assignedTo or sourceur.
+      // Admins see all unless they explicitly filter by consultant.
       // scope=all bypasses isolation (for cross-recruiter actions like adding candidatures)
       let assignedToId: string | undefined;
+      let userInvolvedId: string | undefined;
       if (query.scope === 'all') {
         // No isolation — allow seeing all mandats (e.g. for "ajouter au mandat" dropdown)
       } else if (request.userRole !== 'ADMIN') {
-        assignedToId = request.userId;
+        userInvolvedId = request.userId;
       } else if (query.assignedToId && query.assignedToId !== 'all') {
         assignedToId = query.assignedToId;
       }
@@ -47,6 +48,7 @@ export default async function mandatRouter(fastify: FastifyInstance) {
         query.priorite,
         query.entrepriseId,
         assignedToId,
+        userInvolvedId,
       );
     },
   });
