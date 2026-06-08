@@ -641,6 +641,7 @@ export async function getRecruteurStats(userId: string) {
       OR: [
         { createdById: userId },
         { assignedToId: userId },
+        { sourceurId: userId },
         { candidatures: { some: { createdById: userId } } },
       ],
     },
