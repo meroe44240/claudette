@@ -29,6 +29,22 @@ function startOfQuarter(date: Date = new Date()): Date {
   return new Date(date.getFullYear(), q, 1);
 }
 
+/** Count weekdays (Mon-Fri) between two Dates, inclusive. */
+function countWeekdays(start: Date, end: Date): number {
+  if (end < start) return 0;
+  let count = 0;
+  const d = new Date(start);
+  d.setHours(0, 0, 0, 0);
+  const stop = new Date(end);
+  stop.setHours(23, 59, 59, 999);
+  while (d <= stop) {
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) count += 1;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
 export function registerStatsTools(server: McpServer) {
   // ─── get_daily_brief ──────────────────────────────────
   server.tool(
@@ -396,6 +412,167 @@ export function registerStatsTools(server: McpServer) {
           days_inactive: Math.floor((Date.now() - m.updatedAt.getTime()) / 86400000),
         })),
         instructions_for_claude: 'Presente un tableau recapitulatif par recruteur avec un classement. Signale les mandats dormants comme alertes.',
+      };
+    }),
+  );
+
+  // ─── get_recruiter_stats (admin only) ─────────────────
+  server.tool(
+    'get_recruiter_stats',
+    "[ADMIN UNIQUEMENT] Stats d'un recruteur specifique pour une periode : appels (total + moyenne/jour ouvre), nouvelles opportunites, mandats clotures, presentations candidat, deals closes. Identifie le recruteur par email, id, ou nom.",
+    {
+      user_email: z.string().optional().describe("Email du recruteur (ex: valentin@humanup.io)"),
+      user_id: z.string().optional().describe('UUID du recruteur'),
+      user_name: z.string().optional().describe('Nom ou prenom du recruteur (recherche insensitive)'),
+      period: z.string().optional().default('this_quarter').describe('today, this_week, this_month, this_quarter, this_year'),
+    },
+    wrapTool('get_recruiter_stats', async (args) => {
+      // Resolve target user
+      let target: { id: string; email: string; nom: string; prenom: string | null } | null = null;
+      if (args.user_id) {
+        target = await prisma.user.findUnique({
+          where: { id: args.user_id as string },
+          select: { id: true, email: true, nom: true, prenom: true },
+        });
+      } else if (args.user_email) {
+        target = await prisma.user.findUnique({
+          where: { email: args.user_email as string },
+          select: { id: true, email: true, nom: true, prenom: true },
+        });
+      } else if (args.user_name) {
+        const q = args.user_name as string;
+        target = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { prenom: { contains: q, mode: 'insensitive' } },
+              { nom: { contains: q, mode: 'insensitive' } },
+              { email: { contains: q, mode: 'insensitive' } },
+            ],
+          },
+          select: { id: true, email: true, nom: true, prenom: true },
+        });
+      }
+      if (!target) {
+        return { error: 'Recruteur introuvable. Fournis user_email, user_id ou user_name.' };
+      }
+
+      // Period bounds
+      const now = new Date();
+      const period = (args.period as string) || 'this_quarter';
+      let startDate: Date;
+      let endDate: Date;
+      switch (period) {
+        case 'today':
+          startDate = startOfDay();
+          endDate = new Date(startDate);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+        case 'this_week':
+          startDate = startOfWeek();
+          endDate = new Date(startDate);
+          endDate.setDate(endDate.getDate() + 6);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+        case 'this_month':
+          startDate = startOfMonth();
+          endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0, 23, 59, 59, 999);
+          break;
+        case 'this_quarter':
+          startDate = startOfQuarter();
+          endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 3, 0, 23, 59, 59, 999);
+          break;
+        case 'this_year':
+          startDate = new Date(now.getFullYear(), 0, 1);
+          endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+          break;
+        default:
+          startDate = startOfQuarter();
+          endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 3, 0, 23, 59, 59, 999);
+      }
+      // Cap the effective end at "now" for computing per-day averages.
+      const effectiveEnd = now < endDate ? now : endDate;
+      const workingDays = countWeekdays(startDate, effectiveEnd);
+
+      const userId = target.id;
+
+      const [callsTotal, newOpportunities, mandatsClosed, presentations, dealsClosed] = await Promise.all([
+        // 1. Calls (total on period)
+        prisma.activite.count({
+          where: {
+            userId,
+            type: 'APPEL',
+            createdAt: { gte: startDate, lte: endDate },
+          },
+        }),
+        // 2. Nouvelles opportunites: mandats crees dans la periode ou l'user est owner/sourceur/createur
+        prisma.mandat.count({
+          where: {
+            createdAt: { gte: startDate, lte: endDate },
+            OR: [
+              { assignedToId: userId },
+              { sourceurId: userId },
+              { createdById: userId },
+            ],
+          },
+        }),
+        // 3. Mandats clotures dans la periode (GAGNE/PERDU/CLOTURE/ANNULE)
+        prisma.mandat.count({
+          where: {
+            statut: { in: ['GAGNE', 'PERDU', 'CLOTURE', 'ANNULE'] },
+            dateCloture: { gte: startDate, lte: endDate },
+            OR: [
+              { assignedToId: userId },
+              { sourceurId: userId },
+            ],
+          },
+        }),
+        // 4. Presentations candidat (stage -> ENTRETIEN_CLIENT)
+        prisma.stageHistory.count({
+          where: {
+            toStage: 'ENTRETIEN_CLIENT',
+            changedAt: { gte: startDate, lte: endDate },
+            OR: [
+              { changedById: userId },
+              { candidature: { mandat: { assignedToId: userId } } },
+              { candidature: { mandat: { sourceurId: userId } } },
+            ],
+          },
+        }),
+        // 5. Deals closes (stage -> PLACE)
+        prisma.stageHistory.count({
+          where: {
+            toStage: 'PLACE',
+            changedAt: { gte: startDate, lte: endDate },
+            OR: [
+              { changedById: userId },
+              { candidature: { mandat: { assignedToId: userId } } },
+              { candidature: { mandat: { sourceurId: userId } } },
+            ],
+          },
+        }),
+      ]);
+
+      const callsPerDayAvg = workingDays > 0 ? Math.round((callsTotal / workingDays) * 10) / 10 : 0;
+
+      return {
+        user: {
+          id: target.id,
+          name: `${target.prenom || ''} ${target.nom}`.trim(),
+          email: target.email,
+        },
+        period,
+        start_date: startDate.toISOString(),
+        end_date: endDate.toISOString(),
+        working_days: workingDays,
+        stats: {
+          calls_total: callsTotal,
+          calls_per_day_avg: callsPerDayAvg,
+          new_opportunities: newOpportunities,
+          mandats_closed: mandatsClosed,
+          presentations_candidat: presentations,
+          deals_closed: dealsClosed,
+        },
+        instructions_for_claude: 'Presente les 5 metriques (avec la moyenne calls/jour) dans un tableau clair. Le champ working_days te dit sur combien de jours ouvres la periode etait effectivement mesuree.',
       };
     }),
   );
