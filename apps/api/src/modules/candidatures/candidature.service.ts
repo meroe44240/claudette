@@ -188,6 +188,20 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
     throw new ValidationError('Le motif de refus est requis lorsque le stage est REFUSE');
   }
 
+  // Passing to PLACE (close-won) requires the definitive invoice amount and
+  // start date. The UI modal and the MCP move_candidate_stage tool already
+  // enforce this — the service check is defense in depth so any other caller
+  // (raw API request, batch script, future integration) cannot silently
+  // create half-populated placements that then leak into KPIs.
+  if (data.stage === 'PLACE' && existing.stage !== 'PLACE') {
+    if (data.feeMontantFacture === undefined || data.feeMontantFacture === null) {
+      throw new ValidationError('Le montant de la facture est requis pour passer une candidature en PLACE (close won).');
+    }
+    if (data.dateDemarrage === undefined || data.dateDemarrage === null) {
+      throw new ValidationError('La date de démarrage est requise pour passer une candidature en PLACE (close won).');
+    }
+  }
+
   const updateData: any = {};
 
   if (data.stage !== undefined) updateData.stage = data.stage;
@@ -317,6 +331,13 @@ export async function bulkUpdateStage(
 ) {
   if (stage === 'REFUSE' && !motifRefus) {
     throw new ValidationError('Le motif de refus est requis pour le stage REFUSE');
+  }
+
+  // Bulk PLACE isn't supported: each placement needs its own fee + start date
+  // (enforced by the modal + move_candidate_stage). Reject the whole batch
+  // upfront rather than half-write placements without those values.
+  if (stage === 'PLACE') {
+    throw new ValidationError('Impossible de passer plusieurs candidatures en PLACE en batch : chaque placement doit renseigner le montant facturé et la date de démarrage. Utilise le modal individuel.');
   }
 
   const results = [];
