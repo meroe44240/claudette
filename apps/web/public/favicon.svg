@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#22177A"/>
-  <rect x="10" y="20" width="44" height="24" rx="6" fill="#E6E9AF"/>
-  <text x="32" y="40"
-        font-family="Archivo Black, Arial Black, sans-serif"
-        font-size="20" font-weight="900"
-        fill="#22177A" text-anchor="middle"
-        letter-spacing="-0.5">Up</text>
-</svg>

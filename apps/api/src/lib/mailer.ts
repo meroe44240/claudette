@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { LOGO_MARK_ON_NAVY_DATA_URI } from './brand-assets.js';
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.resend.com',
@@ -91,17 +92,15 @@ export function renderBrandedEmail(opts: BrandedEmailOptions): string {
 </head>
 <body style="margin:0;padding:24px;background:${BRAND.bg};font-family:${FONT_BODY};color:${BRAND.text};font-size:14px;line-height:1.6;">
   <div style="max-width:560px;margin:0 auto;">
-    <div style="padding:24px;background:${BRAND.primary};border-radius:16px 16px 0 0;color:#fff;">
+    <div style="padding:22px 24px;background:${BRAND.primary};border-radius:16px 16px 0 0;color:#fff;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
         <tr>
-          <td style="width:52px;vertical-align:middle;">
-            <div style="display:inline-block;padding:6px 10px;background:${BRAND.highlight};border-radius:8px;">
-              <span style="font-family:${FONT_DISPLAY};font-size:16px;color:${BRAND.primary};letter-spacing:-0.02em;line-height:1;">Up</span>
-            </div>
+          <td style="width:58px;vertical-align:middle;">
+            <img src="${LOGO_MARK_ON_NAVY_DATA_URI}" alt="HumanUp" width="46" height="48" style="display:block;border:0;outline:none;text-decoration:none;">
           </td>
           <td style="padding-left:12px;vertical-align:middle;">
-            <div style="font-family:${FONT_DISPLAY};font-size:14px;letter-spacing:0.02em;text-transform:uppercase;color:${BRAND.highlight};line-height:1;">HumanUp</div>
-            <div style="margin-top:2px;font-family:${FONT_BODY};font-size:11px;color:#c4c1d0;opacity:0.9;">ATS · CRM</div>
+            <div style="font-family:${FONT_DISPLAY};font-size:15px;letter-spacing:0.08em;text-transform:uppercase;color:${BRAND.highlight};line-height:1;">HUMANUP</div>
+            <div style="margin-top:4px;font-family:${FONT_BODY};font-size:11px;color:#c4c1d0;letter-spacing:0.14em;text-transform:uppercase;opacity:0.85;">Recruitment Agency</div>
           </td>
         </tr>
       </table>

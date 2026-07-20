@@ -12,6 +12,7 @@ import type {
   Stage,
   UserRef,
 } from './recap.types.js';
+import { LOGO_MARK_ON_NAVY_DATA_URI } from '../../lib/brand-assets.js';
 
 // ─── Helpers ─────────────────────────────────────────
 
@@ -114,15 +115,13 @@ ${GOOGLE_FONTS_LINK}
 
 function renderBrandHeader(title: string, subtitle: string): string {
   return `
-  <div style="padding:28px;background:${COLORS.accent};border-radius:16px;margin-bottom:16px;color:#fff;">
+  <div style="padding:26px 28px;background:${COLORS.accent};border-radius:16px;margin-bottom:16px;color:#fff;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
       <tr>
-        <td style="width:56px;vertical-align:middle;">
-          <div style="display:inline-block;padding:8px 12px;background:${COLORS.highlight};border-radius:10px;">
-            <span style="font-family:${FONT_DISPLAY};font-size:20px;color:${COLORS.accent};letter-spacing:-0.02em;line-height:1;">Up</span>
-          </div>
+        <td style="width:74px;vertical-align:middle;">
+          <img src="${LOGO_MARK_ON_NAVY_DATA_URI}" alt="HumanUp" width="60" height="62" style="display:block;border:0;outline:none;text-decoration:none;">
         </td>
-        <td style="padding-left:16px;vertical-align:middle;">
+        <td style="padding-left:18px;vertical-align:middle;">
           <div style="font-family:${FONT_DISPLAY};font-size:22px;letter-spacing:-0.01em;line-height:1.1;">${escapeHtml(title)}</div>
           <div style="margin-top:4px;font-family:${FONT_BODY};font-size:12px;color:${COLORS.highlight};opacity:0.9;">${escapeHtml(subtitle)}</div>
         </td>

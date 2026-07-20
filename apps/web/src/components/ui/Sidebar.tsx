@@ -176,16 +176,13 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
   // Shared sidebar content (used by both desktop and mobile)
   const sidebarContent = (mobile: boolean) => (
     <>
-      {/* Logo — brand "Up" pill */}
-      <div className="flex h-16 items-center gap-3 px-6">
-        <div className="flex h-9 w-11 shrink-0 items-center justify-center rounded-lg bg-highlight" style={{ backgroundColor: '#E6E9AF' }}>
-          <span
-            className="text-[15px] font-black leading-none"
-            style={{ fontFamily: "'Archivo Black', sans-serif", color: '#22177A', letterSpacing: '-0.02em' }}
-          >
-            Up
-          </span>
-        </div>
+      {/* Logo — mark chartreuse on navy */}
+      <div className="flex h-16 items-center gap-3 px-5">
+        <img
+          src="/brand/logo-mark-cream.png"
+          alt="HumanUp"
+          className="h-9 w-auto shrink-0"
+        />
         <AnimatePresence>
           {(mobile || !collapsed) && (
             <motion.span
@@ -193,10 +190,10 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="whitespace-nowrap text-lg font-bold text-white"
+              className="whitespace-nowrap text-lg text-white"
               style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em' }}
             >
-              HumanUp
+              HUMANUP
             </motion.span>
           )}
         </AnimatePresence>

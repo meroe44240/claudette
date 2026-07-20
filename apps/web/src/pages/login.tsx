@@ -46,18 +46,14 @@ export default function LoginPage() {
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-primary-500/10 blur-3xl"
           />
         </div>
-        <div className="relative z-10 text-center text-white">
-          <div className="mx-auto mb-6 inline-flex items-center justify-center rounded-2xl bg-highlight px-8 py-4 shadow-lg" style={{ backgroundColor: '#E6E9AF' }}>
-            <span
-              className="text-6xl leading-none"
-              style={{ fontFamily: "'Archivo Black', sans-serif", color: '#22177A', letterSpacing: '-0.03em' }}
-            >
-              Up
-            </span>
-          </div>
-          <h1 className="text-4xl tracking-tight" style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em' }}>HumanUp</h1>
-          <p className="mt-3 text-lg text-white/85">Votre plateforme de recrutement</p>
-          <p className="mt-1 text-sm text-highlight/90" style={{ color: '#E6E9AF', letterSpacing: '0.18em' }}>ATS · CRM</p>
+        <div className="relative z-10 flex flex-col items-center text-center text-white">
+          <img
+            src="/brand/logo-mark-cream.png"
+            alt="HumanUp"
+            className="h-40 w-auto drop-shadow-2xl"
+          />
+          <h1 className="mt-6 text-4xl tracking-tight" style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em' }}>HUMANUP</h1>
+          <p className="mt-2 text-sm text-white/80" style={{ letterSpacing: '0.28em', textTransform: 'uppercase' }}>Recruitment Agency</p>
         </div>
       </div>
 
@@ -65,10 +61,12 @@ export default function LoginPage() {
       <div className="flex w-full items-center justify-center bg-bg p-8 lg:w-1/2">
         <div className="w-full max-w-md animate-fadeInUp">
           <div className="mb-8 lg:hidden text-center">
-            <div className="mx-auto mb-4 inline-flex items-center justify-center rounded-xl px-4 py-2" style={{ backgroundColor: '#22177A' }}>
-              <span style={{ fontFamily: "'Archivo Black', sans-serif", color: '#E6E9AF', fontSize: '24px', letterSpacing: '-0.02em' }}>Up</span>
-            </div>
-            <h1 className="text-2xl gradient-text" style={{ fontFamily: "'Archivo Black', sans-serif" }}>HumanUp</h1>
+            <img
+              src="/brand/logo-mark-navy.png"
+              alt="HumanUp"
+              className="mx-auto mb-3 h-16 w-auto"
+            />
+            <h1 className="text-2xl" style={{ fontFamily: "'Archivo Black', sans-serif", color: '#22177A', letterSpacing: '-0.01em' }}>HUMANUP</h1>
           </div>
           <h2 className="text-2xl text-neutral-900" style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em' }}>Connexion</h2>
           <p className="mt-2 text-sm text-neutral-500">Connectez-vous à votre espace de recrutement</p>
