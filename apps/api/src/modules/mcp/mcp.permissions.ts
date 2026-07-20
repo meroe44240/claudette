@@ -28,7 +28,6 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   get_call_brief:                { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   click_to_call:                 { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   suggest_candidates_for_mandate:{ level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  get_job_applications:          { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_sequence_details:          { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   // Admin only — lecture equipe
   get_team_stats:                { level: 'free', roles: ['ADMIN'] },
