@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Megaphone, Sparkles, Loader2, ChevronDown, ChevronUp, Plus, AlertTriangle, ClipboardList, MessageSquare, Target, Copy, Zap, Star, Search } from 'lucide-react';
+import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Sparkles, Loader2, ChevronDown, ChevronUp, Plus, AlertTriangle, ClipboardList, MessageSquare, Target, Copy, Zap, Star, Search } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import PageHeader from '../../components/ui/PageHeader';
@@ -757,9 +757,6 @@ export default function MandatDetailPage() {
                     {bookingCopied ? 'Copie !' : 'Lien booking'}
                   </Button>
                 )}
-                <Button variant="secondary" size="sm" onClick={() => navigate(`/job-board/new?mandatId=${id}`)}>
-                  <Megaphone size={14} /> Job Board
-                </Button>
                 <Button variant="secondary" size="sm" onClick={handleStartEdit}>
                   <Pencil size={14} /> Modifier
                 </Button>

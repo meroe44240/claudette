@@ -14,10 +14,6 @@ const ChangePasswordPage = lazy(() => import('./pages/change-password'));
 // Public pages
 const PublicBookingPage = lazy(() => import('./pages/public-booking/index'));
 const BookingCancelPage = lazy(() => import('./pages/public-booking/cancel'));
-const PublicJobListPage = lazy(() => import('./pages/jobs/public-list'));
-const PublicJobDetailPage = lazy(() => import('./pages/jobs/public-detail'));
-const SpontaneousPage = lazy(() => import('./pages/jobs/spontaneous'));
-const JobConfirmationPage = lazy(() => import('./pages/jobs/confirmation'));
 const DocsMcpPage = lazy(() => import('./pages/docs/mcp'));
 
 // Protected pages
@@ -55,9 +51,6 @@ const RevenueForecastPage = lazy(() => import('./pages/stats/revenue-forecast'))
 const PipelineIntelligencePage = lazy(() => import('./pages/dashboard/pipeline-intelligence'));
 const AlertsPage = lazy(() => import('./pages/dashboard/alerts'));
 const EmailsPage = lazy(() => import('./pages/emails/index'));
-const JobBoardPage = lazy(() => import('./pages/jobs/index'));
-const JobBoardNewPage = lazy(() => import('./pages/jobs/new'));
-const JobBoardEditPage = lazy(() => import('./pages/jobs/edit'));
 const PushesPage = lazy(() => import('./pages/pushes/index'));
 const McpLogsPage = lazy(() => import('./pages/mcp-logs/index'));
 const AdminAnalyticsPage = lazy(() => import('./pages/admin/analytics'));
@@ -80,10 +73,6 @@ export default function App() {
         <Route path="/book/cancel/:bookingId" element={<BookingCancelPage />} />
         <Route path="/book/:slug/:mandatSlug" element={<PublicBookingPage />} />
         <Route path="/book/:slug" element={<PublicBookingPage />} />
-        <Route path="/jobs" element={<PublicJobListPage />} />
-        <Route path="/jobs/candidature-spontanee" element={<SpontaneousPage />} />
-        <Route path="/jobs/confirmation" element={<JobConfirmationPage />} />
-        <Route path="/jobs/:slug" element={<PublicJobDetailPage />} />
         <Route path="/docs/mcp" element={<DocsMcpPage />} />
         <Route
           element={
@@ -128,9 +117,6 @@ export default function App() {
           <Route path="placements" element={<PlacementsPage />} />
           <Route path="revenue-forecast" element={<RevenueForecastPage />} />
           <Route path="emails" element={<EmailsPage />} />
-          <Route path="job-board" element={<JobBoardPage />} />
-          <Route path="job-board/new" element={<JobBoardNewPage />} />
-          <Route path="job-board/:id" element={<JobBoardEditPage />} />
           <Route path="pushes" element={<PushesPage />} />
           <Route path="mcp-logs" element={<McpLogsPage />} />
           <Route path="admin/analytics" element={<AdminAnalyticsPage />} />
