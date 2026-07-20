@@ -125,6 +125,8 @@ export async function getById(id: string) {
       entreprise: true,
       client: true,
       assignedTo: { select: { id: true, nom: true, prenom: true } },
+      sales: { select: { id: true, nom: true, prenom: true } },
+      recruteur: { select: { id: true, nom: true, prenom: true } },
       candidatures: {
         include: {
           candidat: {

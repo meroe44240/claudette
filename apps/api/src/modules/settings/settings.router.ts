@@ -4,11 +4,15 @@ import * as settingsService from './settings.service.js';
 import { authenticate, requireRole } from '../../middleware/auth.js';
 import prisma from '../../lib/db.js';
 
+const fonctionEnum = z.enum(['SALES', 'RECRUTEUR', 'LES_DEUX']);
+
 const createUserSchema = z.object({
   email: z.string().email(),
   nom: z.string().min(1),
   prenom: z.string().optional(),
   role: z.enum(['ADMIN', 'RECRUTEUR']),
+  fonction: fonctionEnum.optional(),
+  excludeFromTeamStats: z.boolean().optional(),
   password: z.string().min(8),
 });
 
@@ -16,6 +20,8 @@ const updateUserSchema = z.object({
   nom: z.string().min(1).optional(),
   prenom: z.string().optional(),
   role: z.enum(['ADMIN', 'RECRUTEUR']).optional(),
+  fonction: fonctionEnum.optional(),
+  excludeFromTeamStats: z.boolean().optional(),
 });
 
 export default async function settingsRouter(fastify: FastifyInstance) {

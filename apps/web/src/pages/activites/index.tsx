@@ -25,12 +25,12 @@ const typeIcons: Record<string, React.ReactNode> = {
 };
 
 const typeDotColors: Record<string, string> = {
-  APPEL: '#7C5CFC',
+  APPEL: '#22177A',
   EMAIL: '#3B82F6',
   MEETING: '#10B981',
   NOTE: '#F59E0B',
-  TACHE: '#6B7194',
-  TRANSCRIPT: '#6B7194',
+  TACHE: '#6e6a85',
+  TRANSCRIPT: '#6e6a85',
 };
 
 const sourceLabels: Record<string, string> = {
@@ -310,7 +310,7 @@ export default function ActivitesPage() {
             onClick={() => { setActiveTab(tab.id); setPage(1); }}
             className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
               activeTab === tab.id
-                ? 'bg-[#7C5CFC] text-white shadow-sm'
+                ? 'bg-[#22177A] text-white shadow-sm'
                 : 'bg-transparent text-neutral-500 hover:bg-neutral-50'
             }`}
           >
@@ -352,7 +352,7 @@ export default function ActivitesPage() {
                     {/* Colored dot */}
                     <div
                       className="absolute left-[14px] top-[4px] h-[12px] w-[12px] rounded-full border-2 border-white shadow-sm"
-                      style={{ backgroundColor: isUnidentified ? '#F59E0B' : (typeDotColors[a.type] || '#6B7194') }}
+                      style={{ backgroundColor: isUnidentified ? '#F59E0B' : (typeDotColors[a.type] || '#6e6a85') }}
                     />
 
                     {/* Content card */}
@@ -506,7 +506,7 @@ export default function ActivitesPage() {
               Entité liée
             </label>
             {newEntiteId ? (
-              <div className="flex items-center gap-2 rounded-xl border border-[#7C5CFC]/30 bg-[#7C5CFC]/5 px-3 py-2">
+              <div className="flex items-center gap-2 rounded-xl border border-[#22177A]/30 bg-[#22177A]/5 px-3 py-2">
                 <span className="flex-1 text-sm font-medium text-neutral-900">{selectedEntityLabel}</span>
                 <button
                   type="button"
@@ -524,7 +524,7 @@ export default function ActivitesPage() {
                     value={entitySearch}
                     onChange={(e) => setEntitySearch(e.target.value)}
                     placeholder="Rechercher..."
-                    className="w-full rounded-xl border border-neutral-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:ring-4 focus:ring-[#7C5CFC]/10 focus:border-[#7C5CFC]"
+                    className="w-full rounded-xl border border-neutral-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:ring-4 focus:ring-[#22177A]/10 focus:border-[#22177A]"
                   />
                 </div>
                 <div className="max-h-40 overflow-y-auto rounded-xl border border-neutral-200">

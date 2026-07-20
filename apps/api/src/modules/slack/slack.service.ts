@@ -259,13 +259,8 @@ async function gatherDailyData(): Promise<DailyReportData> {
             metadata: { path: ['calendarEventType'], equals: 'PRESENTATION' },
           },
         }),
-        // Push records (cold-outreach CV to clients)
-        prisma.push.count({
-          where: {
-            recruiterId: user.id,
-            sentAt: { gte: yesterdayStart, lte: yesterdayEnd },
-          },
-        }),
+        // Push CV feature removed (chantier 4) — always 0.
+        Promise.resolve(0),
         // Stage transitions to ENTRETIEN_1 = first meet scheduled with candidat
         prisma.stageHistory.count({
           where: {
@@ -495,14 +490,8 @@ async function gatherDailyData(): Promise<DailyReportData> {
   }
 
   // Pushes ENVOYE without response for 5+ days
-  const fiveDaysAgo = new Date();
-  fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-  const pushesSansReponse = await prisma.push.count({
-    where: {
-      status: 'ENVOYE',
-      sentAt: { lte: fiveDaysAgo },
-    },
-  });
+  // Push CV feature removed (chantier 4).
+  const pushesSansReponse = 0;
 
   return {
     date: formatYesterdayFr(),
@@ -1033,183 +1022,3 @@ export async function notifyNewMeeting(data: {
 
 // ─── PUSH CV NOTIFICATION ──────────────────────────
 
-export async function sendPushNotification(data: {
-  candidatName: string;
-  entrepriseName: string;
-  siren?: string | null;
-  contactName?: string | null;
-  contactEmail?: string | null;
-  status: string;
-  autoDetected?: boolean;
-}): Promise<void> {
-  const config = await getSlackConfig();
-  if (!config || !config.enabled) return;
-
-  const appUrl = process.env.APP_URL || 'https://ats.propium.co';
-  const sirenLine = data.siren ? ` (SIREN: ${data.siren})` : '';
-  const contactLine = [data.contactName, data.contactEmail].filter(Boolean).join(' — ');
-
-  const payload = {
-    blocks: [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `📤 Push CV ${data.autoDetected ? '(auto-détecté)' : ''}`,
-          emoji: true,
-        },
-      },
-      { type: 'divider' },
-      {
-        type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*Candidat*\n${data.candidatName}` },
-          { type: 'mrkdwn', text: `*Entreprise*\n${data.entrepriseName}${sirenLine}` },
-          { type: 'mrkdwn', text: `*Contact*\n${contactLine || '_Non renseigné_'}` },
-          { type: 'mrkdwn', text: `*Statut*\n${data.status}` },
-        ],
-      },
-      {
-        type: 'context',
-        elements: [
-          { type: 'mrkdwn', text: `📊 <${appUrl}/pushes|Voir les pushes>` },
-        ],
-      },
-    ],
-  };
-
-  try {
-    await sendToWebhook(config.webhookUrl, payload);
-    console.log(`[Slack] Push notification sent: ${data.candidatName} → ${data.entrepriseName}`);
-  } catch (err) {
-    console.error('[Slack] Failed to send push notification:', err);
-  }
-}
-
-// ─── PUSH REPLY NOTIFICATION ──────────────────────────
-
-export async function sendPushReplyNotification(data: {
-  candidatName: string;
-  entrepriseName: string;
-  contactName?: string | null;
-  category: string;
-  keyPoints: string[];
-  suggestedAction: string;
-  recruiterId: string;
-}): Promise<void> {
-  const config = await getSlackConfig();
-  if (!config || !config.enabled) return;
-
-  const categoryEmoji: Record<string, string> = {
-    interested: '🟢',
-    interview_requested: '🔥',
-    declined: '🔴',
-    needs_more_info: '🟡',
-    out_of_office: '✈️',
-    other: '⚪',
-  };
-
-  const categoryLabel: Record<string, string> = {
-    interested: 'Intéressé',
-    interview_requested: 'Entretien demandé',
-    declined: 'Refusé',
-    needs_more_info: 'Demande d\'infos',
-    out_of_office: 'Absent (OOO)',
-    other: 'Autre',
-  };
-
-  const emoji = categoryEmoji[data.category] || '⚪';
-  const label = categoryLabel[data.category] || data.category;
-  const keyPointsText = data.keyPoints.length > 0
-    ? data.keyPoints.map(p => `• ${p}`).join('\n')
-    : '_Aucun point clé_';
-
-  const payload = {
-    blocks: [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `${emoji} Réponse Push CV — ${label}`,
-          emoji: true,
-        },
-      },
-      { type: 'divider' },
-      {
-        type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*Candidat*\n${data.candidatName}` },
-          { type: 'mrkdwn', text: `*Entreprise*\n${data.entrepriseName}` },
-          { type: 'mrkdwn', text: `*Contact*\n${data.contactName || '_Non renseigné_'}` },
-        ],
-      },
-      {
-        type: 'section',
-        text: { type: 'mrkdwn', text: `*Points clés :*\n${keyPointsText}` },
-      },
-      {
-        type: 'section',
-        text: { type: 'mrkdwn', text: `*Action suggérée :*\n${data.suggestedAction}` },
-      },
-    ],
-  };
-
-  try {
-    await sendToWebhook(config.webhookUrl, payload);
-    console.log(`[Slack] Push reply notification: ${data.candidatName} → ${data.entrepriseName} (${data.category})`);
-  } catch (err) {
-    console.error('[Slack] Failed to send push reply notification:', err);
-  }
-}
-
-// ─── DUPLICATE PUSH ALERT ──────────────────────────
-
-export async function sendDuplicatePushAlert(data: {
-  candidatName: string;
-  entrepriseName: string;
-  originalRecruiter: string;
-  monthsAgo: number;
-  recruiterId: string;
-}): Promise<void> {
-  const config = await getSlackConfig();
-  if (!config || !config.enabled) return;
-
-  const payload = {
-    blocks: [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: '⚠️ Push CV en doublon détecté',
-          emoji: true,
-        },
-      },
-      { type: 'divider' },
-      {
-        type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*Candidat*\n${data.candidatName}` },
-          { type: 'mrkdwn', text: `*Entreprise*\n${data.entrepriseName}` },
-          { type: 'mrkdwn', text: `*Déjà pushé par*\n${data.originalRecruiter}` },
-          { type: 'mrkdwn', text: `*Il y a*\n${data.monthsAgo} mois` },
-        ],
-      },
-      {
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: '🚫 Ce push a été bloqué automatiquement pour éviter un envoi en doublon.',
-          },
-        ],
-      },
-    ],
-  };
-
-  try {
-    await sendToWebhook(config.webhookUrl, payload);
-    console.log(`[Slack] Duplicate push alert: ${data.candidatName} → ${data.entrepriseName}`);
-  } catch (err) {
-    console.error('[Slack] Failed to send duplicate push alert:', err);
-  }
-}

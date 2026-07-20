@@ -26,6 +26,8 @@ model User {
   startDate          DateTime? @db.Timestamptz() // Date de début pour prorata
   calendlyUrl        String?   @db.VarChar(500)
   slackUserId        String?   @db.VarChar(30) // Slack user id (e.g. U0123ABC) for DMs
+  fonction             Fonction @default(RECRUTEUR)
+  excludeFromTeamStats Boolean  @default(false)
   createdAt          DateTime  @default(now()) @db.Timestamptz()
   updatedAt          DateTime  @updatedAt @db.Timestamptz()
 
@@ -35,27 +37,20 @@ model User {
   mandatsCreated      Mandat[]       @relation("MandatCreatedBy")
   candidaturesCreated Candidature[]  @relation("CandidatureCreatedBy")
   activites           Activite[]     @relation("ActiviteUser")
-  notifications       Notification[] @relation("NotificationUser")
-  templates           Template[]     @relation("TemplateCreatedBy")
   assignedCandidats   Candidat[]     @relation("CandidatAssignedTo")
   assignedClients     Client[]       @relation("ClientAssignedTo")
   assignedMandats     Mandat[]       @relation("MandatAssignedTo")
   sourcedMandats      Mandat[]       @relation("MandatSourceur")
-  sequences           Sequence[]     @relation("SequenceCreatedBy")
+  salesMandats        Mandat[]       @relation("MandatSales")
+  recruteurMandats    Mandat[]       @relation("MandatRecruteur")
   auditLogs           AuditLog[]     @relation("AuditLogUser")
   reminders           Reminder[]     @relation("ReminderUser")
   calendarSuggestions AiCalendarSuggestion[] @relation("CalendarSuggestionUser")
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionUser")
-  bookingSetting      BookingSetting? @relation("BookingSettingUser")
-  bookings            Booking[]       @relation("BookingUser")
-  assignedJobPostings  JobPosting[]    @relation("JobPostingAssignedTo")
-  createdJobPostings   JobPosting[]    @relation("JobPostingCreatedBy")
-  reviewedApplications JobApplication[] @relation("JobApplicationReviewedBy")
   onboardingCompleted  Boolean   @default(false)
   mcpActionLogs        McpActionLog[]          @relation("McpActionLogUser")
   recruiterObjectives  RecruiterObjective[]    @relation("RecruiterObjectiveUser")
   aiPendingValidations AiPendingValidation[]   @relation("AiPendingValidationUser")
-  pushes               Push[]                  @relation("PushRecruiter")
 
   @@map("users")
 }
@@ -64,6 +59,15 @@ enum Role {
   ADMIN
   MANAGER
   RECRUTEUR
+}
+
+// Fonction (metier) — distincte de Role (permission).
+// Un user peut etre SALES (chasse le mandat cote client), RECRUTEUR (source les
+// candidats), ou LES_DEUX (Meroe par exemple).
+enum Fonction {
+  SALES
+  RECRUTEUR
+  LES_DEUX
 }
 
 // ─── ENTREPRISES ─────────────────────────────────────
@@ -134,8 +138,7 @@ model Client {
   createdAt    DateTime     @default(now()) @db.Timestamptz()
   updatedAt    DateTime     @updatedAt @db.Timestamptz()
 
-  mandats  Mandat[]
-  bookings Booking[] @relation("BookingClient")
+  mandats Mandat[]
 
   @@map("clients")
 }
@@ -205,11 +208,8 @@ model Candidat {
   createdAt          DateTime  @default(now()) @db.Timestamptz()
   updatedAt          DateTime  @updatedAt @db.Timestamptz()
 
-  candidatures    Candidature[]
-  bookings        Booking[]       @relation("BookingCandidat")
-  jobApplications JobApplication[] @relation("JobApplicationCandidat")
-  experiences     CandidatExperience[]
-  pushes          Push[]
+  candidatures Candidature[]
+  experiences  CandidatExperience[]
 
   @@map("candidats")
 }
@@ -267,6 +267,14 @@ model Mandat {
   assignedTo       User?        @relation("MandatAssignedTo", fields: [assignedToId], references: [id])
   sourceurId       String?      @db.Uuid
   sourceur         User?        @relation("MandatSourceur", fields: [sourceurId], references: [id])
+  // Binome : Sales chasse le mandat cote client, Recruteur source les candidats.
+  // Backfill : salesId = assignedToId, recruteurId = sourceurId.
+  // assignedTo/sourceur restent pour compat mais salesId/recruteurId sont la
+  // source de verite pour le recap et les futures attributions CA/prime.
+  salesId          String?      @db.Uuid
+  sales            User?        @relation("MandatSales", fields: [salesId], references: [id])
+  recruteurId      String?      @db.Uuid
+  recruteur        User?        @relation("MandatRecruteur", fields: [recruteurId], references: [id])
   transcript           String?      @db.Text
   ficheDePoste         String?      @db.Text
   scorecard            Json?
@@ -277,8 +285,6 @@ model Mandat {
 
   candidatures        Candidature[]
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionMandat")
-  bookings            Booking[]       @relation("BookingMandat")
-  jobPostings         JobPosting[]    @relation("JobPostingMandat")
 
   @@map("mandats")
 }
@@ -446,61 +452,7 @@ model FichierActivite {
 
 // ─── NOTIFICATIONS ───────────────────────────────────
 
-model Notification {
-  id         String           @id @default(uuid()) @db.Uuid
-  userId     String           @db.Uuid
-  user       User             @relation("NotificationUser", fields: [userId], references: [id])
-  type       TypeNotification
-  titre      String           @db.VarChar(500)
-  contenu    String?          @db.Text
-  entiteType EntiteType?
-  entiteId   String?          @db.Uuid
-  lue        Boolean          @default(false)
-  createdAt  DateTime         @default(now()) @db.Timestamptz()
-
-  @@index([userId, lue])
-  @@map("notifications")
-}
-
-enum TypeNotification {
-  EMAIL_RECU
-  APPEL_ENTRANT
-  TRANSCRIPT_PARSE
-  TACHE_ECHEANCE
-  CANDIDATURE_STAGE_CHANGE
-  RELANCE_CLIENT
-  SYSTEME
-  AI_SUMMARY_READY
-  AI_BRIEF_READY
-  JOB_APPLICATION_NEW
-}
-
 // ─── TEMPLATES ───────────────────────────────────────
-
-model Template {
-  id          String       @id @default(uuid()) @db.Uuid
-  nom         String       @db.VarChar(255)
-  type        TypeTemplate
-  sujet       String?      @db.VarChar(500)
-  contenu     String       @db.Text
-  variables   String[]     @default([])
-  createdById String?      @db.Uuid
-  createdBy   User?        @relation("TemplateCreatedBy", fields: [createdById], references: [id])
-  isGlobal    Boolean      @default(false)
-  createdAt   DateTime     @default(now()) @db.Timestamptz()
-  updatedAt   DateTime     @updatedAt @db.Timestamptz()
-
-  @@map("templates")
-}
-
-enum TypeTemplate {
-  EMAIL_PRISE_CONTACT
-  EMAIL_RELANCE
-  EMAIL_PRESENTATION_CLIENT
-  NOTE_BRIEF_POSTE
-  NOTE_COMPTE_RENDU
-  AUTRE
-}
 
 // ─── INTEGRATION CONFIG ────────────────────────────
 model IntegrationConfig {
@@ -521,166 +473,9 @@ model IntegrationConfig {
 
 // ─── SÉQUENCES (WORKFLOWS AUTOMATIQUES) ────────────
 
-model Sequence {
-  id          String         @id @default(uuid()) @db.Uuid
-  nom         String         @db.VarChar(255)
-  description String?        @db.Text
-  persona     String?        @db.VarChar(255)  // "Candidat passif Tech", "DRH Grand Groupe", etc.
-  targetType  String         @db.VarChar(50)   // "candidate" | "client"
-  steps       Json           @default("[]")    // Array de SequenceStep (channel-based)
-  stopOnReply  Boolean        @default(true)    // Pause sequence if contact replies
-  isActive     Boolean        @default(true)
-  isSystem     Boolean        @default(false) @map("is_system")   // Template systeme non supprimable
-  autoTrigger  Boolean        @default(false) @map("auto_trigger")   // Declenchement auto sur evenement
-  triggerEvent String?        @map("trigger_event") @db.VarChar(100)   // Ex: push_cv_created
-  createdById  String?        @db.Uuid
-  createdBy    User?          @relation("SequenceCreatedBy", fields: [createdById], references: [id])
-  runs         SequenceRun[]
-  createdAt   DateTime       @default(now()) @db.Timestamptz()
-  updatedAt   DateTime       @updatedAt @db.Timestamptz()
-
-  @@map("sequences")
-}
-
-model SequenceRun {
-  id           String              @id @default(uuid()) @db.Uuid
-  sequenceId   String              @db.Uuid
-  sequence     Sequence            @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
-  targetType   String              @db.VarChar(50)
-  targetId     String              @db.Uuid
-  mandatId     String?             @db.Uuid
-  assignedToId String?             @db.Uuid   // Recruiter running the sequence
-  pushId       String?             @map("push_id") @db.Uuid   // Push CV qui a declenche la sequence
-  currentStep  Int                 @default(0)
-  status       String              @default("running") @db.VarChar(20) // running, paused_reply, completed, cancelled
-  startedAt    DateTime            @default(now()) @db.Timestamptz()
-  nextActionAt DateTime?           @db.Timestamptz()
-  metadata     Json                @default("{}")
-  stepLogs     SequenceStepLog[]
-  dailyResearch SequenceDailyResearch[]
-  createdAt    DateTime            @default(now()) @db.Timestamptz()
-  updatedAt    DateTime            @updatedAt @db.Timestamptz()
-
-  @@index([status, nextActionAt])
-  @@map("sequence_runs")
-}
-
-model SequenceStepLog {
-  id                 String      @id @default(uuid()) @db.Uuid
-  sequenceRunId      String      @db.Uuid
-  sequenceRun        SequenceRun @relation(fields: [sequenceRunId], references: [id], onDelete: Cascade)
-  stepOrder          Int
-  actionType         String      @db.VarChar(50)
-  channel            String?     @db.VarChar(20) // email, call, whatsapp
-  status             String      @default("pending") @db.VarChar(20) // pending, task_created, validated, skipped, reply_detected
-  taskId             String?     @db.Uuid // The task created for this step
-  executedAt         DateTime?   @db.Timestamptz()
-  responseDetectedAt DateTime?   @db.Timestamptz()
-  result             Json        @default("{}")
-  createdAt          DateTime    @default(now()) @db.Timestamptz()
-
-  @@map("sequence_step_logs")
-}
-
-model SequenceDailyResearch {
-  id               String      @id @default(uuid()) @db.Uuid
-  sequenceRunId    String      @map("sequence_run_id") @db.Uuid
-  sequenceRun      SequenceRun @relation(fields: [sequenceRunId], references: [id], onDelete: Cascade)
-  researchDate     DateTime    @map("research_date") @db.Date
-  researchData     Json        @default("{}") @map("research_data")   // job_postings, company_news, linkedin_posts, best_signal, suggested_angle
-  generatedContent Json?       @map("generated_content")               // Contenu pre-redige pour la tache du jour
-  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz()
-
-  @@unique([sequenceRunId, researchDate])
-  @@map("sequence_daily_research")
-}
-
 // ─── SDR MANAGER (LISTES DE PROSPECTION) ────────────
 
-model SdrList {
-  id                String       @id @default(uuid()) @db.Uuid
-  name              String       @db.VarChar(255)
-  fileName          String       @db.VarChar(255)
-  totalContacts     Int          @default(0)
-  processedContacts Int          @default(0)
-  sequenceId        String?      @db.Uuid  // Optional link to a sequence for non-respondents
-  assignedToId      String?      @db.Uuid  // Default assigned recruiter
-  status            String       @default("imported") @db.VarChar(20) // imported, in_progress, completed
-  metadata          Json         @default("{}")  // Column mappings, import stats, etc.
-  createdById       String?      @db.Uuid
-  createdAt         DateTime     @default(now()) @db.Timestamptz()
-  updatedAt         DateTime     @updatedAt @db.Timestamptz()
-
-  contacts SdrContact[]
-
-  @@map("sdr_lists")
-}
-
-model SdrContact {
-  id             String    @id @default(uuid()) @db.Uuid
-  sdrListId      String    @db.Uuid
-  sdrList        SdrList   @relation(fields: [sdrListId], references: [id], onDelete: Cascade)
-  candidatId     String?   @db.Uuid   // Linked candidate if matched or created
-  companyId      String?   @db.Uuid   // Linked company if matched or created
-  rawData        Json      @default("{}")  // Original CSV row data
-  firstName      String?   @db.VarChar(255)
-  lastName       String?   @db.VarChar(255)
-  email          String?   @db.VarChar(255)
-  phone          String?   @db.VarChar(100)
-  company        String?   @db.VarChar(255)
-  jobTitle       String?   @db.VarChar(255)
-  callResult     String    @default("pending") @db.VarChar(30) // pending, answered, no_answer, voicemail, wrong_number, not_interested, callback
-  sequenceRunId  String?   @db.Uuid   // If contact was enrolled in a sequence
-  notes          String?   @db.Text
-  processedAt    DateTime? @db.Timestamptz()
-  orderInList    Int       @default(0)
-  createdAt      DateTime  @default(now()) @db.Timestamptz()
-
-  @@index([sdrListId, orderInList])
-  @@index([callResult])
-  @@map("sdr_contacts")
-}
-
 // ─── ADCHASE (PUSH CANDIDAT → PROSPECTS) ────────────
-
-model AdchaseCampaign {
-  id                 String    @id @default(uuid()) @db.Uuid
-  candidatId         String?   @db.Uuid
-  anonymizedProfile  Json      @default("{}")  // { titre, points, ville, secteur, experience }
-  anonymizedCvUrl    String?   @db.VarChar(500)
-  emailSubject       String    @db.VarChar(500)
-  emailBody          String    @db.Text
-  sequenceId         String?   @db.Uuid   // Follow-up sequence for non-respondents
-  totalProspects     Int       @default(0)
-  status             String    @default("draft") @db.VarChar(20) // draft, scheduled, sending, active, completed
-  scheduledAt        DateTime? @db.Timestamptz()
-  sentAt             DateTime? @db.Timestamptz()
-  createdById        String?   @db.Uuid
-  createdAt          DateTime  @default(now()) @db.Timestamptz()
-  updatedAt          DateTime  @updatedAt @db.Timestamptz()
-
-  prospects AdchaseProspect[]
-
-  @@map("adchase_campaigns")
-}
-
-model AdchaseProspect {
-  id              String    @id @default(uuid()) @db.Uuid
-  campaignId      String    @db.Uuid
-  campaign        AdchaseCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  clientId        String    @db.Uuid
-  emailStatus     String    @default("pending") @db.VarChar(20) // pending, sent, opened, replied, bounced
-  replySentiment  String?   @db.VarChar(20)  // interested, not_now, not_interested
-  sequenceRunId   String?   @db.Uuid
-  sentAt          DateTime? @db.Timestamptz()
-  openedAt        DateTime? @db.Timestamptz()
-  repliedAt       DateTime? @db.Timestamptz()
-  notes           String?   @db.Text
-  createdAt       DateTime  @default(now()) @db.Timestamptz()
-
-  @@index([campaignId])
-  @@map("adchase_prospects")
-}
 
 // ─── AUDIT LOG (Historique des modifications) ────────────
 
@@ -854,179 +649,7 @@ model AiPipelineSuggestion {
 
 // ─── BOOKING SYSTEM (Calendly-like) ─────────────────
 
-model BookingSetting {
-  id              String   @id @default(uuid()) @db.Uuid
-  userId          String   @unique @db.Uuid
-  user            User     @relation("BookingSettingUser", fields: [userId], references: [id])
-  slug            String   @unique @db.VarChar(100)
-  isActive        Boolean  @default(true)
-  workingDays     Int[]    @default([1, 2, 3, 4, 5])
-  startTime       String   @default("09:00") @db.VarChar(5)
-  endTime         String   @default("18:00") @db.VarChar(5)
-  slotDuration    Int      @default(30)
-  bufferMinutes   Int      @default(15)
-  minNoticeHours  Int      @default(2)
-  maxAdvanceDays  Int      @default(30)
-  welcomeMessage  String?  @db.Text
-  reminderEmail   Boolean  @default(true)
-  reminderBefore  Boolean  @default(true)
-  createdAt       DateTime @default(now()) @db.Timestamptz()
-  updatedAt       DateTime @updatedAt @db.Timestamptz()
-
-  bookingTypes    BookingType[]
-
-  @@map("booking_settings")
-}
-
-model BookingType {
-  id              String   @id @default(uuid()) @db.Uuid
-  settingId       String   @db.Uuid
-  setting         BookingSetting @relation(fields: [settingId], references: [id], onDelete: Cascade)
-  slug            String   @db.VarChar(100)
-  label           String   @db.VarChar(100)
-  durationMinutes Int
-  targetType      String   @db.VarChar(20) // 'candidate' or 'client'
-  isActive        Boolean  @default(true)
-  sortOrder       Int      @default(0)
-
-  @@unique([settingId, slug])
-  @@map("booking_types")
-}
-
-model Booking {
-  id                  String    @id @default(uuid()) @db.Uuid
-  userId              String    @db.Uuid
-  user                User      @relation("BookingUser", fields: [userId], references: [id])
-  mandatId            String?   @db.Uuid
-  mandat              Mandat?   @relation("BookingMandat", fields: [mandatId], references: [id])
-  entityType          String    @db.VarChar(20)
-  candidatId          String?   @db.Uuid
-  candidat            Candidat? @relation("BookingCandidat", fields: [candidatId], references: [id])
-  clientId            String?   @db.Uuid
-  client              Client?   @relation("BookingClient", fields: [clientId], references: [id])
-  firstName           String    @db.VarChar(100)
-  lastName            String    @db.VarChar(100)
-  email               String    @db.VarChar(255)
-  phone               String    @db.VarChar(50)
-  salary              String?   @db.VarChar(50)
-  currentCompany      String?   @db.VarChar(255)
-  availability        String?   @db.VarChar(50)
-  competingProcesses  String?   @db.VarChar(50)
-  message             String?   @db.Text
-  bookingDate         DateTime  @db.Date
-  bookingTime         String    @db.VarChar(5)
-  durationMinutes     Int       @default(30)
-  calendarEventId     String?   @db.VarChar(255)
-  status              String    @default("confirmed") @db.VarChar(20)
-  cancelToken         String?   @unique @db.VarChar(64)
-  cancelledAt         DateTime? @db.Timestamptz()
-  cancelReason        String?   @db.Text
-  createdAt           DateTime  @default(now()) @db.Timestamptz()
-  reminders           BookingReminder[]
-
-  @@index([userId])
-  @@index([email])
-  @@index([bookingDate])
-  @@index([status])
-  @@map("bookings")
-}
-
-model BookingReminder {
-  id           String    @id @default(uuid()) @db.Uuid
-  bookingId    String    @db.Uuid
-  booking      Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  type         String    @db.VarChar(30)
-  status       String    @default("pending") @db.VarChar(20)
-  scheduledAt  DateTime  @db.Timestamptz()
-  sentAt       DateTime? @db.Timestamptz()
-  errorMessage String?   @db.Text
-  createdAt    DateTime  @default(now()) @db.Timestamptz()
-
-  @@index([status, scheduledAt])
-  @@map("booking_reminders")
-}
-
 // ─── JOB BOARD ──────────────────────────────────────
-
-enum JobPostingStatus {
-  DRAFT
-  PUBLISHED
-  ARCHIVED
-}
-
-enum JobPostingVisibility {
-  PUBLIC
-  PRIVATE_LINK
-}
-
-enum JobApplicationStatus {
-  NEW
-  REVIEWED
-  SHORTLISTED
-  REJECTED
-}
-
-model JobPosting {
-  id                 String               @id @default(uuid()) @db.Uuid
-  mandatId           String?              @db.Uuid
-  mandat             Mandat?              @relation("JobPostingMandat", fields: [mandatId], references: [id])
-  slug               String               @unique @db.VarChar(255)
-  title              String               @db.VarChar(255)
-  companyDescription String?              @db.Text
-  location           String?              @db.VarChar(255)
-  salaryRange        String?              @db.VarChar(100)
-  description        String?              @db.Text
-  tags               String[]             @default([])
-  jobType            String?              @db.VarChar(50)
-  sector             String?              @db.VarChar(50)
-  status             JobPostingStatus     @default(DRAFT)
-  visibility         JobPostingVisibility @default(PUBLIC)
-  isUrgent           Boolean              @default(false)
-  assignedToId       String?              @db.Uuid
-  assignedTo         User?                @relation("JobPostingAssignedTo", fields: [assignedToId], references: [id])
-  createdById        String?              @db.Uuid
-  createdBy          User?                @relation("JobPostingCreatedBy", fields: [createdById], references: [id])
-  viewCount          Int                  @default(0)
-  applicationCount   Int                  @default(0)
-  publishedAt        DateTime?            @db.Timestamptz()
-  archivedAt         DateTime?            @db.Timestamptz()
-  createdAt          DateTime             @default(now()) @db.Timestamptz()
-  updatedAt          DateTime             @updatedAt @db.Timestamptz()
-
-  applications JobApplication[]
-
-  @@index([status, publishedAt])
-  @@map("job_postings")
-}
-
-model JobApplication {
-  id             String               @id @default(uuid()) @db.Uuid
-  jobPostingId   String?              @db.Uuid
-  jobPosting     JobPosting?          @relation(fields: [jobPostingId], references: [id])
-  candidatId     String?              @db.Uuid
-  candidat       Candidat?            @relation("JobApplicationCandidat", fields: [candidatId], references: [id])
-  firstName      String               @db.VarChar(255)
-  lastName       String               @db.VarChar(255)
-  email          String               @db.VarChar(255)
-  phone          String?              @db.VarChar(50)
-  salaryCurrent  String?              @db.VarChar(100)
-  currentCompany String?              @db.VarChar(255)
-  availability   String?              @db.VarChar(100)
-  cvFileUrl      String?              @db.VarChar(500)
-  source         String               @default("job_board") @db.VarChar(100)
-  isSpontaneous  Boolean              @default(false)
-  jobTypeSought  String?              @db.VarChar(100)
-  status         JobApplicationStatus @default(NEW)
-  reviewedAt     DateTime?            @db.Timestamptz()
-  reviewedById   String?              @db.Uuid
-  reviewedBy     User?                @relation("JobApplicationReviewedBy", fields: [reviewedById], references: [id])
-  createdAt      DateTime             @default(now()) @db.Timestamptz()
-  updatedAt      DateTime             @updatedAt @db.Timestamptz()
-
-  @@index([jobPostingId, status])
-  @@index([email])
-  @@map("job_applications")
-}
 
 // ─── MCP (Model Context Protocol) ────────────────────
 
@@ -1085,104 +708,6 @@ model AiPendingValidation {
 
 // ─── PROSPECTS (Push CV) ────────────────────────────
 
-model Prospect {
-  id              String   @id @default(uuid()) @db.Uuid
-  companyName     String   @db.VarChar(255)
-  contactName     String?  @db.VarChar(255)
-  contactEmail    String?  @db.VarChar(255)
-  contactLinkedin String?  @db.VarChar(500)
-  sector          String?  @db.VarChar(100)
-  createdAt       DateTime @default(now()) @db.Timestamptz()
-  updatedAt       DateTime @updatedAt @db.Timestamptz()
-
-  pushes Push[]
-
-  @@map("prospects")
-}
-
-model Push {
-  id           String     @id @default(uuid()) @db.Uuid
-  candidatId   String     @db.Uuid
-  candidat     Candidat   @relation(fields: [candidatId], references: [id])
-  prospectId   String     @db.Uuid
-  prospect     Prospect   @relation(fields: [prospectId], references: [id])
-  recruiterId  String     @db.Uuid
-  recruiter    User       @relation("PushRecruiter", fields: [recruiterId], references: [id])
-  canal              PushCanal
-  status             PushStatus @default(ENVOYE)
-  message            String?    @db.Text
-  sentAt             DateTime   @default(now()) @db.Timestamptz()
-  gmailSentAt        DateTime?  @map("gmail_sent_at") @db.Timestamptz()
-  gmailThreadId      String?    @map("gmail_thread_id") @db.VarChar(100)
-  gmailMessageId     String?    @map("gmail_message_id") @db.VarChar(100)
-  autoDetected       Boolean    @default(false) @map("auto_detected")
-  detectionConfidence Float?    @map("detection_confidence")
-  followupCount      Int        @default(0) @map("followup_count")
-  lastTouchpointAt   DateTime?  @map("last_touchpoint_at") @db.Timestamptz()
-  hasDuplicateWarning Boolean   @default(false) @map("has_duplicate_warning")
-  updatedAt          DateTime   @updatedAt @db.Timestamptz()
-
-  events          PushEvent[]
-  detectionLogs   PushDetectionLog[]
-
-  @@index([recruiterId, sentAt])
-  @@index([status])
-  @@index([gmailThreadId])
-  @@index([candidatId, prospectId])
-  @@map("pushes")
-}
-
-model PushEvent {
-  id          String   @id @default(uuid()) @db.Uuid
-  pushId      String   @db.Uuid
-  push        Push     @relation(fields: [pushId], references: [id], onDelete: Cascade)
-  eventType   String   @db.VarChar(50)
-  // types: sent, opened, reply_received, followup_sent, status_changed, duplicate_blocked
-  occurredAt  DateTime @default(now()) @db.Timestamptz()
-  actorType   String?  @db.VarChar(20) // recruiter, prospect, system
-  actorId     String?  @db.Uuid
-  metadata    Json     @default("{}")
-  createdAt   DateTime @default(now()) @db.Timestamptz()
-
-  @@index([pushId, occurredAt(sort: Desc)])
-  @@index([eventType])
-  @@map("push_events")
-}
-
-model PushDetectionLog {
-  id                   String   @id @default(uuid()) @db.Uuid
-  gmailMessageId       String   @db.VarChar(255)
-  recruiterId          String   @db.Uuid
-  status               String   @db.VarChar(50) // created, rejected, error
-  rejectionReason      String?  @db.Text
-  extractedData        Json?
-  candidateMatchScore  Float?
-  isPushConfidence     Float?
-  finalConfidence      Float?
-  pushId               String?  @db.Uuid
-  push                 Push?    @relation(fields: [pushId], references: [id])
-  createdAt            DateTime @default(now()) @db.Timestamptz()
-
-  @@index([recruiterId])
-  @@index([status])
-  @@index([createdAt])
-  @@map("push_detection_logs")
-}
-
-enum PushCanal {
-  EMAIL
-  LINKEDIN
-}
-
-enum PushStatus {
-  ENVOYE
-  OUVERT
-  REPONDU
-  RDV_BOOK
-  CONVERTI_MANDAT
-  SANS_SUITE
-}
-
 model OAuthCode {
   id                  String   @id @default(uuid()) @db.Uuid
   code                String   @unique @db.VarChar(255)
@@ -1197,4 +722,23 @@ model OAuthCode {
 
   @@index([code])
   @@map("oauth_codes")
+}
+
+// ─── RECAP EMAIL ─────────────────────────────────────
+//
+// Trace des envois du recap bi-hebdomadaire (lundi & vendredi 08:00 ICT).
+// Sert a :
+//  - Calculer la fenetre glissante (windowStart = sentAt du dernier run SENT).
+//  - Garantir l'idempotence : jamais deux envois SENT sur la meme date ICT.
+model RecapRun {
+  id          String   @id @default(uuid()) @db.Uuid
+  sentAt      DateTime @db.Timestamptz()
+  windowStart DateTime @db.Timestamptz()
+  windowEnd   DateTime @db.Timestamptz()
+  status      String   @db.VarChar(20) // SENT | FAILED
+  error       String?  @db.Text
+  createdAt   DateTime @default(now()) @db.Timestamptz()
+
+  @@index([sentAt])
+  @@map("recap_runs")
 }

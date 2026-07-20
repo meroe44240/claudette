@@ -3,7 +3,7 @@ import prisma from '../../lib/db.js';
 import { hashPassword, verifyPassword } from '../../lib/password.js';
 import { generateAccessToken, generateRefreshToken } from '../../lib/jwt.js';
 import { UnauthorizedError, NotFoundError, ValidationError } from '../../lib/errors.js';
-import { sendEmail } from '../../lib/mailer.js';
+import { sendEmail, renderBrandedEmail } from '../../lib/mailer.js';
 import type { LoginInput, ChangePasswordInput, ForgotPasswordInput, ResetPasswordInput } from './auth.schema.js';
 
 const resetTokens = new Map<string, { userId: string; expiresAt: Date }>();
@@ -81,15 +81,21 @@ export async function forgotPassword(input: ForgotPasswordInput) {
   });
 
   const resetUrl = `${process.env.APP_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
+  const firstName = user.prenom || user.nom;
   try {
     await sendEmail(
       user.email,
       'HumanUp — Réinitialisation de votre mot de passe',
-      `<p>Bonjour ${user.prenom || user.nom},</p>
-       <p>Cliquez sur le lien suivant pour réinitialiser votre mot de passe :</p>
-       <p><a href="${resetUrl}">${resetUrl}</a></p>
-       <p>Ce lien est valable 1 heure.</p>
-       <p>Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.</p>`,
+      renderBrandedEmail({
+        title: 'Réinitialisation de mot de passe',
+        bodyHtml: `
+          <p>Bonjour ${firstName},</p>
+          <p>Nous avons reçu une demande de réinitialisation de mot de passe pour votre compte HumanUp.</p>
+          <p>Cliquez sur le bouton ci-dessous pour définir un nouveau mot de passe. Ce lien est valable <strong>1 heure</strong>.</p>
+        `,
+        cta: { label: 'Réinitialiser mon mot de passe', href: resetUrl },
+        signature: `Si vous n'avez pas demandé cette réinitialisation, ignorez cet email — votre mot de passe reste inchangé.`,
+      }),
     );
   } catch {
     // Log but don't fail — we never reveal if the email exists

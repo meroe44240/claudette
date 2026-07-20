@@ -16,12 +16,16 @@ import Skeleton from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import { toast } from '../../components/ui/Toast';
 
+type Fonction = 'SALES' | 'RECRUTEUR' | 'LES_DEUX';
+
 interface User {
   id: string;
   nom: string;
   prenom: string | null;
   email: string;
   role: 'ADMIN' | 'RECRUTEUR';
+  fonction: Fonction;
+  excludeFromTeamStats: boolean;
   lastLoginAt: string | null;
   createdAt: string;
 }
@@ -31,13 +35,33 @@ interface CreateUserPayload {
   nom: string;
   prenom: string;
   role: string;
+  fonction: Fonction;
+  excludeFromTeamStats: boolean;
   password: string;
+}
+
+interface UpdateUserPayload {
+  role?: string;
+  fonction?: Fonction;
+  excludeFromTeamStats?: boolean;
 }
 
 const roleOptions = [
   { value: 'RECRUTEUR', label: 'Recruteur' },
   { value: 'ADMIN', label: 'Administrateur' },
 ];
+
+const fonctionOptions: { value: Fonction; label: string }[] = [
+  { value: 'SALES', label: 'Sales' },
+  { value: 'RECRUTEUR', label: 'Recruteur' },
+  { value: 'LES_DEUX', label: 'Les deux' },
+];
+
+const fonctionLabel: Record<Fonction, string> = {
+  SALES: 'Sales',
+  RECRUTEUR: 'Recruteur',
+  LES_DEUX: 'Les deux',
+};
 
 const roleBadgeVariant: Record<string, 'info' | 'warning'> = {
   ADMIN: 'warning',
@@ -52,7 +76,6 @@ const sidebarItems: { id: SettingsSection; label: string; icon: React.ReactNode 
   { id: 'integrations', label: 'Intégrations', icon: <Puzzle size={16} /> },
   { id: 'pipeline', label: 'Pipeline', icon: <GitBranch size={16} /> },
   { id: 'notifications', label: 'Notifications', icon: <Bell size={16} /> },
-  { id: 'booking' as SettingsSection, label: 'Booking', icon: <CalendarCheck size={16} /> },
 ];
 
 export default function SettingsPage() {
@@ -69,6 +92,8 @@ export default function SettingsPage() {
   const [formNom, setFormNom] = useState('');
   const [formPrenom, setFormPrenom] = useState('');
   const [formRole, setFormRole] = useState('RECRUTEUR');
+  const [formFonction, setFormFonction] = useState<Fonction>('RECRUTEUR');
+  const [formExcludeStats, setFormExcludeStats] = useState(false);
   const [formPassword, setFormPassword] = useState('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -295,12 +320,25 @@ export default function SettingsPage() {
     },
   });
 
+  const updateUserMutation = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateUserPayload }) =>
+      api.put(`/settings/users/${id}`, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings', 'users'] });
+    },
+    onError: () => {
+      toast('error', 'Erreur lors de la mise à jour');
+    },
+  });
+
   const closeCreateModal = () => {
     setShowCreateModal(false);
     setFormEmail('');
     setFormNom('');
     setFormPrenom('');
     setFormRole('RECRUTEUR');
+    setFormFonction('RECRUTEUR');
+    setFormExcludeStats(false);
     setFormPassword('');
     setFormErrors({});
   };
@@ -324,6 +362,8 @@ export default function SettingsPage() {
       nom: formNom.trim(),
       prenom: formPrenom.trim(),
       role: formRole,
+      fonction: formFonction,
+      excludeFromTeamStats: formExcludeStats,
       password: formPassword,
     });
   };
@@ -363,6 +403,50 @@ export default function SettingsPage() {
         <Badge variant={roleBadgeVariant[u.role] || 'default'}>
           {u.role === 'ADMIN' ? 'Admin' : 'Recruteur'}
         </Badge>
+      ),
+    },
+    {
+      key: 'fonction',
+      header: 'Fonction',
+      render: (u: User) => (
+        <select
+          value={u.fonction}
+          onChange={(e) =>
+            updateUserMutation.mutate({
+              id: u.id,
+              patch: { fonction: e.target.value as Fonction },
+            })
+          }
+          className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 focus:border-primary-500 focus:outline-none"
+        >
+          {fonctionOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      ),
+    },
+    {
+      key: 'excludeFromTeamStats',
+      header: 'Hors stats équipe',
+      render: (u: User) => (
+        <label className="inline-flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={u.excludeFromTeamStats}
+            onChange={(e) =>
+              updateUserMutation.mutate({
+                id: u.id,
+                patch: { excludeFromTeamStats: e.target.checked },
+              })
+            }
+            className="h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+          />
+          <span className="text-xs text-neutral-500">
+            {u.excludeFromTeamStats ? 'Exclu' : '—'}
+          </span>
+        </label>
       ),
     },
     {
@@ -609,7 +693,7 @@ export default function SettingsPage() {
                           value={aiApiKey}
                           onChange={(e) => setAiApiKey(e.target.value)}
                           placeholder={aiConfigData?.data?.hasApiKey ? 'Cle deja configuree (laisser vide pour garder)' : 'Entrez votre cle API...'}
-                          className="w-full rounded-lg border-[1.5px] border-neutral-100 bg-white px-3 py-2.5 pr-10 text-sm outline-none transition-all placeholder:text-text-tertiary focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.1)]"
+                          className="w-full rounded-lg border-[1.5px] border-neutral-100 bg-white px-3 py-2.5 pr-10 text-sm outline-none transition-all placeholder:text-text-tertiary focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
                         />
                         <button
                           type="button"
@@ -959,12 +1043,29 @@ export default function SettingsPage() {
             }}
             error={formErrors.email}
           />
-          <Select
-            label="Rôle"
-            options={roleOptions}
-            value={formRole}
-            onChange={setFormRole}
-          />
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Rôle"
+              options={roleOptions}
+              value={formRole}
+              onChange={setFormRole}
+            />
+            <Select
+              label="Fonction"
+              options={fonctionOptions}
+              value={formFonction}
+              onChange={(v) => setFormFonction(v as Fonction)}
+            />
+          </div>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={formExcludeStats}
+              onChange={(e) => setFormExcludeStats(e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+            />
+            <span>Exclure des totaux d'équipe (recaps, dashboards)</span>
+          </label>
           <Input
             label="Mot de passe"
             type="password"

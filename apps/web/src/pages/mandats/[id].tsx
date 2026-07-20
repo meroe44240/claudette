@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Megaphone, Sparkles, Loader2, ChevronDown, ChevronUp, Plus, AlertTriangle, ClipboardList, MessageSquare, Target, Copy, Zap, Star, Search } from 'lucide-react';
+import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Sparkles, Loader2, ChevronDown, ChevronUp, Plus, AlertTriangle, ClipboardList, MessageSquare, Target, Copy, Zap, Star, Search } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import PageHeader from '../../components/ui/PageHeader';
@@ -76,8 +76,18 @@ interface MandatDetail {
   ficheDePoste: string | null;
   scorecard: Scorecard | null;
   scorecardGeneratedAt: string | null;
+  salesId: string | null;
+  sales: { id: string; nom: string; prenom: string | null } | null;
+  recruteurId: string | null;
+  recruteur: { id: string; nom: string; prenom: string | null } | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface TeamMember {
+  id: string;
+  nom: string;
+  prenom: string | null;
 }
 
 interface ScorecardCompetence {
@@ -127,6 +137,8 @@ interface EditForm {
   priorite: string;
   statut: string;
   notes: string;
+  salesId: string;
+  recruteurId: string;
 }
 
 const statutLabels: Record<StatutMandat, string> = {
@@ -244,6 +256,8 @@ function buildEditForm(mandat: MandatDetail): EditForm {
     priorite: mandat.priorite || 'NORMALE',
     statut: mandat.statut || 'OUVERT',
     notes: mandat.notes || '',
+    salesId: mandat.salesId || '',
+    recruteurId: mandat.recruteurId || '',
   };
 }
 
@@ -547,6 +561,20 @@ export default function MandatDetailPage() {
     enabled: !!id,
   });
 
+  const { data: teamMembers } = useQuery({
+    queryKey: ['settings', 'team'],
+    queryFn: () => api.get<TeamMember[]>('/settings/team'),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const teamOptions = [
+    { value: '', label: '—' },
+    ...(teamMembers ?? []).map((t) => ({
+      value: t.id,
+      label: [t.prenom, t.nom].filter(Boolean).join(' ') || t.nom,
+    })),
+  ];
+
   usePageTitle(mandat ? `${mandat.titrePoste} — ${mandat.entreprise.nom}` : 'Mandat');
 
   const updateMutation = useMutation({
@@ -690,6 +718,8 @@ export default function MandatDetailPage() {
     if (editForm.statut) payload.statut = editForm.statut;
     if (editForm.notes.trim()) payload.notes = editForm.notes.trim();
     else payload.notes = null;
+    payload.salesId = editForm.salesId || null;
+    payload.recruteurId = editForm.recruteurId || null;
 
     updateMutation.mutate(payload);
   };
@@ -757,9 +787,6 @@ export default function MandatDetailPage() {
                     {bookingCopied ? 'Copie !' : 'Lien booking'}
                   </Button>
                 )}
-                <Button variant="secondary" size="sm" onClick={() => navigate(`/job-board/new?mandatId=${id}`)}>
-                  <Megaphone size={14} /> Job Board
-                </Button>
                 <Button variant="secondary" size="sm" onClick={handleStartEdit}>
                   <Pencil size={14} /> Modifier
                 </Button>
@@ -807,6 +834,18 @@ export default function MandatDetailPage() {
                   value={editForm.statut}
                   onChange={(val) => setEditForm((prev) => prev ? { ...prev, statut: val } : prev)}
                 />
+                <Select
+                  label="Sales (chasse le mandat)"
+                  options={teamOptions}
+                  value={editForm.salesId}
+                  onChange={(val) => setEditForm((prev) => prev ? { ...prev, salesId: val } : prev)}
+                />
+                <Select
+                  label="Recruteur (source les candidats)"
+                  options={teamOptions}
+                  value={editForm.recruteurId}
+                  onChange={(val) => setEditForm((prev) => prev ? { ...prev, recruteurId: val } : prev)}
+                />
                 <div className="sm:col-span-2">
                   <Textarea
                     label="Description"
@@ -848,6 +887,24 @@ export default function MandatDetailPage() {
                   <div className="flex items-center gap-2 text-sm">
                     <Calendar size={14} className="text-text-tertiary" />
                     <span className="text-text-primary">Ouvert le {formatDate(mandat.dateOuverture)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <User size={14} className="text-text-tertiary" />
+                    <span className="text-text-tertiary">Sales : </span>
+                    <span className="text-text-primary">
+                      {mandat.sales
+                        ? [mandat.sales.prenom, mandat.sales.nom].filter(Boolean).join(' ')
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <User size={14} className="text-text-tertiary" />
+                    <span className="text-text-tertiary">Recruteur : </span>
+                    <span className="text-text-primary">
+                      {mandat.recruteur
+                        ? [mandat.recruteur.prenom, mandat.recruteur.nom].filter(Boolean).join(' ')
+                        : '—'}
+                    </span>
                   </div>
                 </div>
 

@@ -156,7 +156,7 @@ export default function IdentifyContactModal({
               onClick={() => setActiveTab(tab.id)}
               className={`rounded-full px-3 py-1 text-[13px] font-medium transition-all ${
                 activeTab === tab.id
-                  ? 'bg-[#7C5CFC] text-white'
+                  ? 'bg-[#22177A] text-white'
                   : 'text-neutral-500 hover:bg-neutral-50'
               }`}
             >

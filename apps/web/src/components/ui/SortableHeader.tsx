@@ -23,7 +23,7 @@ export default function SortableHeader({ label, sortKey, sortConfig, onSort }: S
       className="inline-flex items-center gap-1 group cursor-pointer select-none"
     >
       <span>{label}</span>
-      <span className={`inline-flex flex-col transition-colors ${isActive ? 'text-[#7C5CFC]' : 'text-neutral-300 group-hover:text-neutral-400'}`}>
+      <span className={`inline-flex flex-col transition-colors ${isActive ? 'text-[#22177A]' : 'text-neutral-300 group-hover:text-neutral-400'}`}>
         {isActive ? (
           isAsc ? <ChevronUp size={12} strokeWidth={2.5} /> : <ChevronDown size={12} strokeWidth={2.5} />
         ) : (

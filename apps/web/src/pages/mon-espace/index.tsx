@@ -202,7 +202,7 @@ export default function MonEspacePage() {
       />
       {/* Header: Avatar + User info */}
       <motion.div className="mb-6 flex items-center gap-5" variants={sectionItem}>
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#7C5CFC] to-[#A78BFA] text-[22px] font-bold text-white shadow-lg">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#22177A] to-[#8e7cc3] text-[22px] font-bold text-white shadow-lg">
           {initials}
         </div>
         <div>
@@ -218,7 +218,7 @@ export default function MonEspacePage() {
       {/* Mini KPI pills */}
       <motion.div className="mb-8 flex flex-wrap items-center gap-3" variants={sectionItem}>
         <div className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 shadow-sm">
-          <Briefcase size={16} className="text-[#7C5CFC]" />
+          <Briefcase size={16} className="text-[#22177A]" />
           <span className="text-sm font-semibold text-neutral-700">{mandatsCount} mandats actifs</span>
         </div>
         <div className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 shadow-sm">
@@ -300,7 +300,7 @@ export default function MonEspacePage() {
               onClick={() => setShowOverdue(false)}
               className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
                 !showOverdue
-                  ? 'bg-[#7C5CFC] text-white shadow-sm'
+                  ? 'bg-[#22177A] text-white shadow-sm'
                   : 'bg-transparent text-neutral-500 hover:bg-neutral-50'
               }`}
             >
@@ -342,7 +342,7 @@ export default function MonEspacePage() {
                         <Check size={14} className="text-white" strokeWidth={3} />
                       </div>
                     ) : (
-                      <div className="h-[22px] w-[22px] rounded-full border-2 border-neutral-300 hover:border-[#7C5CFC] transition-colors" />
+                      <div className="h-[22px] w-[22px] rounded-full border-2 border-neutral-300 hover:border-[#22177A] transition-colors" />
                     )}
                   </button>
                   <div className="min-w-0 flex-1">

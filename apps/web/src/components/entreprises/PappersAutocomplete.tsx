@@ -213,7 +213,7 @@ export default function PappersAutocomplete({ onSelect }: PappersAutocompletePro
             if (suggestions.length > 0) setIsOpen(true);
           }}
           placeholder="Rechercher sur Pappers (nom ou SIREN)..."
-          className="w-full rounded-lg border-[1.5px] border-neutral-100 bg-white py-2.5 pl-9 pr-24 text-sm outline-none transition-all placeholder:text-neutral-400 focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.1)]"
+          className="w-full rounded-lg border-[1.5px] border-neutral-100 bg-white py-2.5 pl-9 pr-24 text-sm outline-none transition-all placeholder:text-neutral-400 focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
           disabled={isLoading}
         />
         <div className="absolute inset-y-0 right-0 flex items-center gap-1 pr-2">

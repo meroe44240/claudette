@@ -365,7 +365,7 @@ export default function EntreprisesPage() {
           type="checkbox"
           checked={allSelected}
           onChange={toggleSelectAll}
-          className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer"
+          className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer"
         />
       ) as unknown as string,
       render: (r: Entreprise) => (
@@ -374,7 +374,7 @@ export default function EntreprisesPage() {
           checked={selectedIds.has(r.id)}
           onChange={(e) => { e.stopPropagation(); toggleSelect(r.id); }}
           onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer"
+          className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer"
         />
       ),
       className: 'w-10',
@@ -517,8 +517,8 @@ export default function EntreprisesPage() {
         onClick={() => navigate(`/entreprises/${entreprise.id}`)}
         onMouseEnter={() => prefetchOnHover(['entreprise', entreprise.id], `/entreprises/${entreprise.id}`)}
         onMouseLeave={cancelPrefetch}
-        className={`group relative cursor-pointer rounded-xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:border-[#7C5CFC]/30 ${
-          isSelected ? 'border-[#7C5CFC] ring-2 ring-[#7C5CFC]/20 shadow-md' : 'border-neutral-100 shadow-sm'
+        className={`group relative cursor-pointer rounded-xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:border-[#22177A]/30 ${
+          isSelected ? 'border-[#22177A] ring-2 ring-[#22177A]/20 shadow-md' : 'border-neutral-100 shadow-sm'
         }`}
       >
         <div className="flex items-center gap-4 px-4 py-3">
@@ -528,7 +528,7 @@ export default function EntreprisesPage() {
             checked={isSelected}
             onChange={(e) => { e.stopPropagation(); toggleSelect(entreprise.id); }}
             onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
+            className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer flex-shrink-0"
           />
 
           {/* Logo */}

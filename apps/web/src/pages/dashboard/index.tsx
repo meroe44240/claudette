@@ -40,7 +40,6 @@ interface BandeauData {
   emailsNonLus: number;
   mandatsDormants: { count: number; worst: { titre: string; jours: number } | null };
   tachesEnRetard: number;
-  sequenceReplies: number;
   rdvAujourdhui: number;
 }
 
@@ -48,6 +47,8 @@ interface KpisData {
   caMois: { value: number; delta: number | null };
   appels: { today: number; week: number; moyJour: number };
   rdv: { today: number; week: number; confirmes: number; enAttente: number };
+  presentationsMois: number;
+  placementsMois: number;
   candidatsEnProcess: number;
   pipePondere: { value: number; delta: number | null };
 }
@@ -166,9 +167,9 @@ const fadeUp = {
 // ─── PIPELINE STAGE LABELS ──────────────────────────
 
 const PIPELINE_STAGES = [
-  { key: 'SOURCING', label: 'Src', color: '#A78BFA' },
+  { key: 'SOURCING', label: 'Src', color: '#8e7cc3' },
   { key: 'CONTACTE', label: 'Cont', color: '#3B82F6' },
-  { key: 'ENTRETIEN_1', label: 'Entr', color: '#7C5CFC' },
+  { key: 'ENTRETIEN_1', label: 'Entr', color: '#22177A' },
   { key: 'ENVOYE_CLIENT', label: 'Env', color: '#F97316' },
   { key: 'ENTRETIEN_CLIENT', label: 'Client', color: '#14B8A6' },
   { key: 'OFFRE', label: 'Offre', color: '#F59E0B' },
@@ -189,7 +190,7 @@ function StageDots({ highestStage }: { highestStage: string }) {
                 className="h-[1.5px]"
                 style={{
                   width: 8,
-                  background: isReached ? stage.color : '#EEEEF4',
+                  background: isReached ? stage.color : '#eceaf2',
                 }}
               />
             )}
@@ -199,7 +200,7 @@ function StageDots({ highestStage }: { highestStage: string }) {
                 height: isCurrent ? 10 : 7,
                 borderRadius: '50%',
                 background: isReached ? stage.color : 'transparent',
-                border: !isReached ? '1.5px solid #EEEEF4' : isCurrent ? `2px solid ${stage.color}` : 'none',
+                border: !isReached ? '1.5px solid #eceaf2' : isCurrent ? `2px solid ${stage.color}` : 'none',
                 flexShrink: 0,
               }}
               title={stage.label}
@@ -424,7 +425,6 @@ function RecruiterDashboard() {
       items.push(`${bandeau.mandatsDormants.count} mandat${bandeau.mandatsDormants.count > 1 ? 's' : ''} dormant${bandeau.mandatsDormants.count > 1 ? 's' : ''}${worst ? ` (${worst.jours}j)` : ''}`);
     }
     if (bandeau.tachesEnRetard > 0) items.push(`${bandeau.tachesEnRetard} tache${bandeau.tachesEnRetard > 1 ? 's' : ''} en retard`);
-    if (bandeau.sequenceReplies > 0) items.push(`${bandeau.sequenceReplies} reponse${bandeau.sequenceReplies > 1 ? 's' : ''} sequence`);
     if (bandeau.rdvAujourdhui > 0) items.push(`${bandeau.rdvAujourdhui} RDV aujourd'hui`);
     return items;
   }, [bandeau]);
@@ -595,31 +595,31 @@ function RecruiterDashboard() {
               </div>
             </motion.div>
 
-            {/* CANDIDATS EN PROCESS */}
+            {/* PRESENTATIONS MOIS */}
             <motion.div variants={fadeUp} className="flex-1 flex flex-col justify-center px-4 border-r border-neutral-100">
               <div className="flex items-center gap-1.5">
                 <Users size={13} className="text-pipeline-500" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Candidats</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Présentations</span>
               </div>
               <div className="flex items-baseline gap-1.5 mt-0.5">
                 <span className="text-[18px] font-bold text-pipeline-500 leading-none">
-                  <AnimatedCounter value={kpis?.candidatsEnProcess ?? 0} />
+                  <AnimatedCounter value={kpis?.presentationsMois ?? 0} />
                 </span>
-                <span className="text-[10px] text-neutral-400">en process</span>
+                <span className="text-[10px] text-neutral-400">ce mois</span>
               </div>
             </motion.div>
 
-            {/* PIPE PONDERE */}
+            {/* PLACEMENTS MOIS */}
             <motion.div variants={fadeUp} className="flex-1 flex flex-col justify-center px-4">
               <div className="flex items-center gap-1.5">
                 <TrendingUp size={13} className="text-brand-500" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Pipe Pondere</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Placements</span>
               </div>
-              <div className="flex items-baseline gap-2 mt-0.5">
+              <div className="flex items-baseline gap-1.5 mt-0.5">
                 <span className="text-[18px] font-bold text-brand-500 leading-none">
-                  <AnimatedCounter value={kpis?.pipePondere.value ?? 0} formatFn={formatCurrency} />
+                  <AnimatedCounter value={kpis?.placementsMois ?? 0} />
                 </span>
-                <TrendBadge value={kpis?.pipePondere.delta ?? null} />
+                <span className="text-[10px] text-neutral-400">ce mois</span>
               </div>
             </motion.div>
           </motion.div>

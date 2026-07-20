@@ -238,7 +238,7 @@ export default function MandatsPage() {
           type="checkbox"
           checked={allSelected}
           onChange={toggleSelectAll}
-          className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer"
+          className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer"
         />
       ) as unknown as string,
       render: (r: Mandat) => (
@@ -247,7 +247,7 @@ export default function MandatsPage() {
           checked={selectedIds.has(r.id)}
           onChange={(e) => { e.stopPropagation(); toggleSelect(r.id); }}
           onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer"
+          className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer"
         />
       ),
       className: 'w-10',
@@ -473,7 +473,7 @@ export default function MandatsPage() {
                 setPage(1);
               }}
               placeholder="Rechercher un mandat..."
-              className="h-[40px] w-full rounded-lg border-[1.5px] border-neutral-100 bg-white pl-10 pr-4 text-sm shadow-sm outline-none transition-all focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.1)]"
+              className="h-[40px] w-full rounded-lg border-[1.5px] border-neutral-100 bg-white pl-10 pr-4 text-sm shadow-sm outline-none transition-all focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
             />
           </div>
           <button

@@ -238,7 +238,7 @@ export default function TachesPage() {
                 activeTab === tab.id
                   ? tab.id === 'overdue'
                     ? 'bg-red-500 text-white shadow-sm'
-                    : 'bg-[#7C5CFC] text-white shadow-sm'
+                    : 'bg-[#22177A] text-white shadow-sm'
                   : 'bg-transparent text-neutral-500 hover:bg-neutral-50'
               }`}
             >
@@ -260,7 +260,7 @@ export default function TachesPage() {
             <button
               onClick={() => { setViewAll(false); setPage(1); }}
               className={`rounded-md px-3 py-1 text-[13px] font-medium transition-all ${
-                !viewAll ? 'bg-[#7C5CFC] text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+                !viewAll ? 'bg-[#22177A] text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
               }`}
             >
               Mes tâches
@@ -268,7 +268,7 @@ export default function TachesPage() {
             <button
               onClick={() => { setViewAll(true); setPage(1); }}
               className={`rounded-md px-3 py-1 text-[13px] font-medium transition-all ${
-                viewAll ? 'bg-[#7C5CFC] text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+                viewAll ? 'bg-[#22177A] text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
               }`}
             >
               Toutes
@@ -317,7 +317,7 @@ export default function TachesPage() {
                         <Check size={14} className="text-white" strokeWidth={3} />
                       </div>
                     ) : (
-                      <div className="h-[22px] w-[22px] rounded-full border-2 border-neutral-300 transition-colors group-hover:border-[#7C5CFC]" />
+                      <div className="h-[22px] w-[22px] rounded-full border-2 border-neutral-300 transition-colors group-hover:border-[#22177A]" />
                     )}
                   </button>
                 ) : (

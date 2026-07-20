@@ -20,8 +20,6 @@ import candidatureRouter from './modules/candidatures/candidature.router.js';
 import searchRouter from './modules/search/search.router.js';
 import activiteRouter from './modules/activites/activite.router.js';
 import tacheRouter from './modules/taches/tache.router.js';
-import templateRouter from './modules/templates/template.router.js';
-import notificationRouter from './modules/notifications/notification.router.js';
 import dashboardRouter from './modules/dashboard/dashboard.router.js';
 import settingsRouter from './modules/settings/settings.router.js';
 import integrationRouter from './modules/integrations/integration.router.js';
@@ -30,26 +28,19 @@ import importRouter from './modules/import/import.router.js';
 import aiRouter from './modules/ai/ai.router.js';
 import calendarAiRouter from './modules/ai/calendar-ai.router.js';
 import pipelineAiRouter from './modules/ai/pipeline-ai.router.js';
-import sequenceRouter from './modules/sequences/sequence.router.js';
-import sdrRouter from './modules/sdr/sdr.router.js';
-import adchaseRouter from './modules/adchase/adchase.router.js';
 import adminRouter from './modules/admin/admin.router.js';
 import exportRouter from './modules/export/export.router.js';
 import emailRouter from './modules/email/email.router.js';
-import auditRouter from './modules/audit/audit.router.js';
-import reminderRouter from './modules/reminders/reminder.router.js';
 import documentRouter from './modules/documents/document.router.js';
 import pipelineRouter from './modules/clients/pipeline.router.js';
 import adminDashboardRouter from './modules/dashboard/admin-dashboard.router.js';
 import reportRouter from './modules/reports/report.router.js';
 import statsRouter from './modules/stats/stats.router.js';
 import slackRouter from './modules/slack/slack.router.js';
-import bookingRouter, { bookingPublicRouter } from './modules/booking/booking.router.js';
-import jobRouter, { jobPublicRouter } from './modules/jobs/job.router.js';
-import pushRouter from './modules/pushes/push.router.js';
 import mcpLogsRouter from './modules/mcp/mcp-logs.router.js';
 import mcpOAuthRouter from './modules/mcp/mcp.oauth.js';
 import mcpPlugin from './modules/mcp/mcp.plugin.js';
+import recapRouter from './modules/recap/recap.router.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 
@@ -153,8 +144,6 @@ async function buildApp() {
   await app.register(searchRouter, { prefix: '/api/v1/search' });
   await app.register(activiteRouter, { prefix: '/api/v1/activites' });
   await app.register(tacheRouter, { prefix: '/api/v1/taches' });
-  await app.register(templateRouter, { prefix: '/api/v1/templates' });
-  await app.register(notificationRouter, { prefix: '/api/v1/notifications' });
   await app.register(dashboardRouter, { prefix: '/api/v1/dashboard' });
   await app.register(settingsRouter, { prefix: '/api/v1/settings' });
   await app.register(integrationRouter, { prefix: '/api/v1/integrations' });
@@ -163,26 +152,17 @@ async function buildApp() {
   await app.register(aiRouter, { prefix: '/api/v1/ai' });
   await app.register(calendarAiRouter, { prefix: '/api/v1/ai/calendar' });
   await app.register(pipelineAiRouter, { prefix: '/api/v1/ai/pipeline' });
-  await app.register(sequenceRouter, { prefix: '/api/v1/sequences' });
-  await app.register(sdrRouter, { prefix: '/api/v1/sdr' });
-  await app.register(adchaseRouter, { prefix: '/api/v1/adchase' });
   await app.register(adminRouter, { prefix: '/api/v1/admin' });
   await app.register(exportRouter, { prefix: '/api/v1/export' });
   await app.register(emailRouter, { prefix: '/api/v1/emails' });
-  await app.register(auditRouter, { prefix: '/api/v1/audit' });
-  await app.register(reminderRouter, { prefix: '/api/v1/reminders' });
   await app.register(documentRouter, { prefix: '/api/v1/documents' });
   await app.register(pipelineRouter, { prefix: '/api/v1/clients-pipeline' });
   await app.register(adminDashboardRouter, { prefix: '/api/v1/dashboard/admin' });
   await app.register(reportRouter, { prefix: '/api/v1/reports' });
   await app.register(statsRouter, { prefix: '/api/v1/stats' });
   await app.register(slackRouter, { prefix: '/api/v1/slack' });
-  await app.register(bookingPublicRouter, { prefix: '/api/public/booking' });
-  await app.register(bookingRouter, { prefix: '/api/v1/booking' });
-  await app.register(jobPublicRouter, { prefix: '/api/public/jobs' });
-  await app.register(jobRouter, { prefix: '/api/v1/jobs' });
-  await app.register(pushRouter, { prefix: '/api/v1/pushes' });
   await app.register(mcpLogsRouter, { prefix: '/api/v1/mcp-logs' });
+  await app.register(recapRouter, { prefix: '/api/v1/recap' });
 
   return app;
 }
@@ -205,10 +185,6 @@ if (isMainModule && process.env.NODE_ENV !== 'test') {
   start();
 
   if (process.env.NODE_ENV !== 'test') {
-    import('./jobs/feedback-reminder.job.js').then(({ startFeedbackWorker }) => {
-      startFeedbackWorker();
-    }).catch(err => console.error('Failed to start feedback worker:', err));
-
     import('./jobs/cron.js').then(({ startCronJobs }) => {
       startCronJobs();
     }).catch(err => console.error('Failed to start cron jobs:', err));

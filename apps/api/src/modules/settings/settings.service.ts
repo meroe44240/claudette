@@ -1,7 +1,7 @@
 import prisma from '../../lib/db.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../lib/errors.js';
 import { hashPassword } from '../../lib/password.js';
-import type { Role } from '@prisma/client';
+import type { Role, Fonction } from '@prisma/client';
 
 const userSelect = {
   id: true,
@@ -9,6 +9,8 @@ const userSelect = {
   nom: true,
   prenom: true,
   role: true,
+  fonction: true,
+  excludeFromTeamStats: true,
   lastLoginAt: true,
   createdAt: true,
 } as const;
@@ -32,6 +34,8 @@ export async function createUser(data: {
   nom: string;
   prenom?: string;
   role: Role;
+  fonction?: Fonction;
+  excludeFromTeamStats?: boolean;
   password: string;
 }) {
   const existing = await prisma.user.findUnique({ where: { email: data.email } });
@@ -47,6 +51,8 @@ export async function createUser(data: {
       nom: data.nom,
       prenom: data.prenom,
       role: data.role,
+      fonction: data.fonction ?? 'RECRUTEUR',
+      excludeFromTeamStats: data.excludeFromTeamStats ?? false,
       passwordHash,
       mustChangePassword: true,
     },
@@ -54,7 +60,16 @@ export async function createUser(data: {
   });
 }
 
-export async function updateUser(id: string, data: { nom?: string; prenom?: string; role?: Role }) {
+export async function updateUser(
+  id: string,
+  data: {
+    nom?: string;
+    prenom?: string;
+    role?: Role;
+    fonction?: Fonction;
+    excludeFromTeamStats?: boolean;
+  },
+) {
   const existing = await prisma.user.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError('Utilisateur', id);
 
@@ -62,6 +77,9 @@ export async function updateUser(id: string, data: { nom?: string; prenom?: stri
   if (data.nom !== undefined) updateData.nom = data.nom;
   if (data.prenom !== undefined) updateData.prenom = data.prenom;
   if (data.role !== undefined) updateData.role = data.role;
+  if (data.fonction !== undefined) updateData.fonction = data.fonction;
+  if (data.excludeFromTeamStats !== undefined)
+    updateData.excludeFromTeamStats = data.excludeFromTeamStats;
 
   return prisma.user.update({
     where: { id },

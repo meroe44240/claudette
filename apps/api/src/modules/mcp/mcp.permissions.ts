@@ -23,13 +23,11 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   get_my_tasks:                  { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_my_calendar:               { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_my_emails:                 { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  get_my_sequences:              { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  get_my_booking_links:          { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  list_relances_todo:            { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  plan_my_day:                   { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_call_brief:                { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   click_to_call:                 { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   suggest_candidates_for_mandate:{ level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  get_job_applications:          { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  get_sequence_details:          { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   // Admin only — lecture equipe
   get_team_stats:                { level: 'free', roles: ['ADMIN'] },
   get_team_brief:                { level: 'free', roles: ['ADMIN'] },
@@ -46,8 +44,6 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   create_task:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   create_rdv:                    { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   complete_task:                 { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  start_sequence:                { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  pause_sequence:                { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   add_note:                      { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   update_candidate:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   update_client:                 { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
@@ -56,16 +52,8 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   validate_call_analysis:        { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
   // ═══ PUSHES ═══
-  list_pushes:                   { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  get_push_gmail_status:         { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  get_push_stats:                { level: 'free', roles: ['ADMIN'] },
-  create_push:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  update_push_status:            { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
   // ═══ AUTO-PUSH (3-step flow) ═══
-  auto_push_scan:                { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  auto_push_enrich:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  auto_push_execute:             { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
   // ═══ ENRICHISSEMENT ═══
   enrich_contact:                { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },

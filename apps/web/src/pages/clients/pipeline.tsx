@@ -94,7 +94,7 @@ const STATUT_BG_COLORS: Record<StatutClient, string> = {
   BESOIN_QUALIFIE: '#FFF7ED',
   PROPOSITION_ENVOYEE: '#FFF7ED',
   MANDAT_SIGNE: '#ECFDF5',
-  RECURRENT: '#F5F3FF',
+  RECURRENT: '#f6f5fa',
   INACTIF: '#F9FAFB',
 };
 

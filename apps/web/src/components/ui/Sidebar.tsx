@@ -1,10 +1,8 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Building2, Briefcase, FileText, ClipboardList, Bell, Upload, Settings, User, ListChecks, BookOpen, Zap, Crosshair, Send, ChevronDown, ChevronsLeft, BarChart3, Megaphone, Mail, Rocket, Terminal } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Briefcase, FileText, Upload, Settings, User, Mail, ChevronDown, ChevronsLeft, BarChart3, Terminal } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
-import { api } from '../../lib/api-client';
 
 // ── Sidebar nav structure with grouped sections ─────────────────
 interface NavItem {
@@ -38,33 +36,19 @@ const navSections: NavSection[] = [
     label: 'Recrutement',
     items: [
       { to: '/mandats', icon: FileText, label: 'Mandats' },
-      { to: '/sequences', icon: Zap, label: 'Séquences' },
-      { to: '/pushes', icon: Rocket, label: 'Push CV' },
-    ],
-  },
-  {
-    label: 'Outils',
-    items: [
-      { to: '/job-board', icon: Megaphone, label: 'Job Board' },
-      { to: '/sdr', icon: Crosshair, label: 'SDR Manager' },
-      { to: '/adchase', icon: Send, label: 'Adchase' },
     ],
   },
   {
     label: 'Suivi',
     items: [
-      { to: '/activites', icon: ClipboardList, label: 'Activités' },
-      { to: '/taches', icon: ListChecks, label: 'Tâches' },
       { to: '/emails', icon: Mail, label: 'Emails' },
-      { to: '/stats', icon: BarChart3, label: 'Stats' },
-      { to: '/templates', icon: BookOpen, label: 'Templates' },
       { to: '/import', icon: Upload, label: 'Import' },
-      { to: '/notifications', icon: Bell, label: 'Notifications' },
     ],
   },
 ];
 
 const adminItems: NavItem[] = [
+  { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/settings', icon: Settings, label: 'Paramètres' },
   { to: '/mcp-logs', icon: Terminal, label: 'Logs MCP' },
 ];
@@ -74,11 +58,8 @@ const SHORTCUT_HINTS: Record<string, string> = {
   '/': 'd',
   '/candidats': 'c',
   '/mandats': 'm',
-  '/taches': 't',
   '/entreprises': 'e',
   '/clients': 'k',
-  '/activites': 'a',
-  '/stats': 's',
 };
 
 interface SidebarProps {
@@ -181,17 +162,6 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
   const { user } = useAuthStore();
   const initials = `${user?.prenom?.[0] || ''}${user?.nom?.[0] || ''}`.toUpperCase();
 
-  // Fetch pending task count for badge
-  const { data: taskCount } = useQuery({
-    queryKey: ['tasks', 'pending-count'],
-    queryFn: async () => {
-      const res = await api.get<{ data: { id: string }[]; meta: { total: number } }>('/activites?isTache=true&tacheTerminee=false&perPage=1');
-      return res.meta.total;
-    },
-    staleTime: 60_000,
-    refetchInterval: 120_000,
-  });
-
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
@@ -206,9 +176,13 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
   // Shared sidebar content (used by both desktop and mobile)
   const sidebarContent = (mobile: boolean) => (
     <>
-      {/* Logo */}
-      <div className="flex h-16 items-center gap-3 px-6">
-        <img src="/logo-icon.png" alt="HumanUp" className="h-9 w-auto shrink-0" />
+      {/* Logo — mark chartreuse on navy */}
+      <div className="flex h-16 items-center gap-3 px-5">
+        <img
+          src="/brand/logo-mark-cream.png"
+          alt="HumanUp"
+          className="h-9 w-auto shrink-0"
+        />
         <AnimatePresence>
           {(mobile || !collapsed) && (
             <motion.span
@@ -216,9 +190,10 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="text-lg font-bold text-white whitespace-nowrap"
+              className="whitespace-nowrap text-lg text-white"
+              style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em' }}
             >
-              HumanUp
+              HUMANUP
             </motion.span>
           )}
         </AnimatePresence>
@@ -236,7 +211,6 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
                 key={item.to}
                 item={item}
                 collapsed={mobile ? false : collapsed}
-                badge={item.to === '/taches' ? taskCount : undefined}
                 onNavigate={mobile ? onClose : undefined}
               />
             ))}
@@ -317,7 +291,7 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
       <motion.aside
         animate={{ width: collapsed ? 72 : 240 }}
         transition={{ type: 'spring' as const, stiffness: 200, damping: 30 }}
-        className="group/sidebar sticky top-0 hidden h-screen flex-col bg-[#1A1625] overflow-hidden md:flex"
+        className="group/sidebar sticky top-0 hidden h-screen flex-col bg-[#22177A] overflow-hidden md:flex"
       >
         {sidebarContent(false)}
       </motion.aside>
@@ -341,7 +315,7 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-              className="fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col bg-[#1A1625] shadow-2xl md:hidden"
+              className="fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col bg-[#22177A] shadow-2xl md:hidden"
               onClick={(e) => e.stopPropagation()}
             >
               {sidebarContent(true)}

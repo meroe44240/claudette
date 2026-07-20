@@ -11,15 +11,12 @@ import { registerClientTools } from './tools/clients.js';
 import { registerCompanyTools } from './tools/companies.js';
 import { registerMandateTools } from './tools/mandates.js';
 import { registerTaskTools } from './tools/tasks.js';
-import { registerSequenceTools } from './tools/sequences.js';
 import { registerEmailTools } from './tools/email.js';
 import { registerStatsTools } from './tools/stats.js';
 import { registerAiTools } from './tools/ai.js';
 import { registerNoteTools } from './tools/notes.js';
 import { registerBlockedTools } from './tools/blocked.js';
-import { registerPushTools } from './tools/pushes.js';
 import { registerEnrichTools } from './tools/enrich.js';
-import { registerAutoPushTools } from './tools/auto-push.js';
 import { registerKalentTools } from './tools/kalent.js';
 
 export type ToolHandler = (args: Record<string, unknown>) => Promise<{ content: Array<{ type: 'text'; text: string }> }>;
@@ -63,14 +60,11 @@ export function registerAllTools(server: McpServer) {
   registerCompanyTools(server);
   registerMandateTools(server);
   registerTaskTools(server);
-  registerSequenceTools(server);
   registerEmailTools(server);
   registerStatsTools(server);
   registerAiTools(server);
   registerNoteTools(server);
-  registerPushTools(server);
   registerEnrichTools(server);
-  registerAutoPushTools(server);
   registerKalentTools(server);
   registerBlockedTools(server);
 }

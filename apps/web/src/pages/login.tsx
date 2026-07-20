@@ -46,11 +46,14 @@ export default function LoginPage() {
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-96 w-96 rounded-full bg-primary-500/10 blur-3xl"
           />
         </div>
-        <div className="relative z-10 text-center text-white">
-          <img src="/logo-icon-lg.png" alt="humanup.io" className="mx-auto mb-6 h-20 w-auto drop-shadow-lg" />
-          <h1 className="text-4xl font-bold tracking-tight">humanup.io</h1>
-          <p className="mt-3 text-lg text-white/80">Votre plateforme de recrutement</p>
-          <p className="mt-1 text-sm text-white/60">ATS & CRM tout-en-un</p>
+        <div className="relative z-10 flex flex-col items-center text-center text-white">
+          <img
+            src="/brand/logo-mark-cream.png"
+            alt="HumanUp"
+            className="h-40 w-auto drop-shadow-2xl"
+          />
+          <h1 className="mt-6 text-4xl tracking-tight" style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em' }}>HUMANUP</h1>
+          <p className="mt-2 text-sm text-white/80" style={{ letterSpacing: '0.28em', textTransform: 'uppercase' }}>Recruitment Agency</p>
         </div>
       </div>
 
@@ -58,10 +61,14 @@ export default function LoginPage() {
       <div className="flex w-full items-center justify-center bg-bg p-8 lg:w-1/2">
         <div className="w-full max-w-md animate-fadeInUp">
           <div className="mb-8 lg:hidden text-center">
-            <img src="/logo-icon-lg.png" alt="humanup.io" className="mx-auto mb-4 h-14 w-auto" />
-            <h1 className="text-2xl font-bold gradient-text">humanup.io</h1>
+            <img
+              src="/brand/logo-mark-navy.png"
+              alt="HumanUp"
+              className="mx-auto mb-3 h-16 w-auto"
+            />
+            <h1 className="text-2xl" style={{ fontFamily: "'Archivo Black', sans-serif", color: '#22177A', letterSpacing: '-0.01em' }}>HUMANUP</h1>
           </div>
-          <h2 className="text-2xl font-bold text-neutral-900">Connexion</h2>
+          <h2 className="text-2xl text-neutral-900" style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em' }}>Connexion</h2>
           <p className="mt-2 text-sm text-neutral-500">Connectez-vous à votre espace de recrutement</p>
 
           <motion.form onSubmit={handleSubmit} className="mt-8 space-y-5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
@@ -77,7 +84,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-4 py-3 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.1)]"
+                className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-4 py-3 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
                 placeholder="vous@entreprise.com"
                 required
               />
@@ -89,7 +96,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-4 py-3 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.1)]"
+                className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-4 py-3 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
                 placeholder="••••••••"
                 required
               />
