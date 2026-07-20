@@ -43,8 +43,6 @@ const MandatKanbanPage = lazy(() => import('./pages/mandats/[id]-kanban'));
 const FastReviewPage = lazy(() => import('./pages/mandats/[id]-review'));
 const ActivitesPage = lazy(() => import('./pages/activites/index'));
 const TachesPage = lazy(() => import('./pages/taches/index'));
-const TemplatesPage = lazy(() => import('./pages/templates/index'));
-const TemplateDetailPage = lazy(() => import('./pages/templates/[id]'));
 const IntegrationsSettingsPage = lazy(() => import('./pages/settings/integrations'));
 const InterviewSchedulerPage = lazy(() => import('./pages/settings/interview-scheduler'));
 const ImportPage = lazy(() => import('./pages/import/index'));
@@ -118,8 +116,6 @@ export default function App() {
           <Route path="mandats/:id" element={<MandatDetailPage />} />
           <Route path="activites" element={<ActivitesPage />} />
           <Route path="taches" element={<TachesPage />} />
-          <Route path="templates" element={<TemplatesPage />} />
-          <Route path="templates/:id" element={<TemplateDetailPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
           <Route path="import" element={<ImportPage />} />
           <Route path="sequences" element={<SequencesPage />} />
