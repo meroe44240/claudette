@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Building2, Briefcase, FileText, Upload, Settings, User, Mail, ChevronDown, ChevronsLeft, BarChart3, Terminal } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Briefcase, FileText, Upload, Settings, User, Mail, ChevronDown, ChevronsLeft, BarChart3, Terminal, Target } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 
 // ── Sidebar nav structure with grouped sections ─────────────────
@@ -35,7 +35,8 @@ const navSections: NavSection[] = [
   {
     label: 'Recrutement',
     items: [
-      { to: '/mandats', icon: FileText, label: 'Mandats' },
+      { to: '/mes-mandats', icon: Target, label: 'Mes Mandats' },
+      { to: '/mandats', icon: FileText, label: 'Tous les mandats' },
     ],
   },
   {

@@ -53,6 +53,26 @@ export default async function mandatRouter(fastify: FastifyInstance) {
     },
   });
 
+  // GET /mine - Les mandats du user courant, split en ouverts vs fermes
+  fastify.get('/mine', {
+    schema: {
+      description: 'Lister mes mandats (ceux ou je suis assignedTo, sourceur, sales ou recruteur)',
+      tags: ['Mandats'],
+      querystring: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['open', 'closed'] },
+        },
+      },
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { status } = request.query as { status?: 'open' | 'closed' };
+      const scope = status === 'closed' ? 'closed' : 'open';
+      return mandatService.listMine(request.userId, scope);
+    },
+  });
+
   // POST / - Create mandat
   fastify.post('/', {
     schema: {
