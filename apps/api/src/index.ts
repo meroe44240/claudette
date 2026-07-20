@@ -30,7 +30,6 @@ import aiRouter from './modules/ai/ai.router.js';
 import calendarAiRouter from './modules/ai/calendar-ai.router.js';
 import pipelineAiRouter from './modules/ai/pipeline-ai.router.js';
 import sequenceRouter from './modules/sequences/sequence.router.js';
-import adchaseRouter from './modules/adchase/adchase.router.js';
 import adminRouter from './modules/admin/admin.router.js';
 import exportRouter from './modules/export/export.router.js';
 import emailRouter from './modules/email/email.router.js';
@@ -161,7 +160,6 @@ async function buildApp() {
   await app.register(calendarAiRouter, { prefix: '/api/v1/ai/calendar' });
   await app.register(pipelineAiRouter, { prefix: '/api/v1/ai/pipeline' });
   await app.register(sequenceRouter, { prefix: '/api/v1/sequences' });
-  await app.register(adchaseRouter, { prefix: '/api/v1/adchase' });
   await app.register(adminRouter, { prefix: '/api/v1/admin' });
   await app.register(exportRouter, { prefix: '/api/v1/export' });
   await app.register(emailRouter, { prefix: '/api/v1/emails' });
