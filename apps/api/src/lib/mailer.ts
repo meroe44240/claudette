@@ -10,12 +10,18 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-export async function sendEmail(to: string, subject: string, html: string): Promise<void> {
+export async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  text?: string,
+): Promise<void> {
   if (process.env.NODE_ENV === 'test') return;
   await transporter.sendMail({
     from: process.env.SMTP_FROM || 'noreply@humanup.io',
     to,
     subject,
     html,
+    text,
   });
 }
