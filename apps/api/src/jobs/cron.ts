@@ -16,6 +16,7 @@ const intervals: ReturnType<typeof setInterval>[] = [];
 // Track last execution to avoid double-runs
 let lastSlackReportDate = '';
 let lastBatchEnrichDate = '';
+let lastRecapDate = '';
 
 // ─── HELPERS ────────────────────────────────────────
 
@@ -229,6 +230,50 @@ async function runCalendarWatcherJob(): Promise<void> {
   }
 }
 
+// ─── RECAP BI-HEBDO (Monday & Friday 08:00 ICT) ─────
+
+async function checkRecap(): Promise<void> {
+  try {
+    const now = new Date();
+
+    // Time & weekday in Asia/Ho_Chi_Minh (ICT, UTC+7)
+    const ictHm = now.toLocaleString('en-GB', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const [ictHours, ictMinutes] = ictHm.split(':').map(Number);
+
+    const ictWeekdayStr = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      weekday: 'short',
+    }).format(now);
+    const ictDate = now
+      .toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' })
+      .slice(0, 10);
+
+    // Only Mon (1) or Fri (5)
+    const isRecapDay = ictWeekdayStr === 'Mon' || ictWeekdayStr === 'Fri';
+    if (!isRecapDay) return;
+
+    // Idempotence (this cron instance)
+    if (lastRecapDate === ictDate) return;
+
+    // Window: 08:00–08:01 ICT
+    if (ictHours !== 8 || ictMinutes > 1) return;
+
+    lastRecapDate = ictDate;
+    console.log(`[Cron] Recap trigger — ${ictWeekdayStr} ${ictDate} 08:00 ICT`);
+
+    const { runRecap } = await import('../modules/recap/recap.job.js');
+    const result = await runRecap();
+    console.log(`[Cron] Recap: ${result.message}`);
+  } catch (err) {
+    console.error('[Cron] Error in Recap check:', err);
+  }
+}
+
 // ─── BATCH ENRICHMENT (WEEKLY) ─────────────────────
 
 async function checkBatchEnrichment(): Promise<void> {
@@ -321,6 +366,10 @@ export function startCronJobs(): void {
   const batchEnrichInterval = setInterval(checkBatchEnrichment, 60 * 1000);
   intervals.push(batchEnrichInterval);
 
+  // Recap bi-hebdo check every 60 seconds (runs Mon/Fri 08:00 ICT only)
+  const recapInterval = setInterval(checkRecap, 60 * 1000);
+  intervals.push(recapInterval);
+
   console.log('[Cron] Scheduled jobs started:');
   console.log('  - Slack daily report: checked every 60s (sends Mon-Fri at configured time, Europe/Paris)');
   console.log('  - Calendar AI analysis: every 30 minutes');
@@ -331,6 +380,7 @@ export function startCronJobs(): void {
   console.log('  - Calendar watcher: every 15 minutes (Mon-Fri 8h-19h Paris, classify events)');
   console.log('  - Calendar push notifications: registered at startup, renewed every 6h');
   console.log('  - Batch enrichment: checked every 60s (runs Sunday 02:00 UTC — Pappers + CV re-parse)');
+  console.log('  - Recap bi-hebdo: checked every 60s (runs Mon/Fri 08:00 Asia/Ho_Chi_Minh)');
 }
 
 export function stopCronJobs(): void {
