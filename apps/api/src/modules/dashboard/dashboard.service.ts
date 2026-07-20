@@ -755,6 +755,8 @@ export async function getSpaData(
     rdvTodayCount,
     rdvWeekCount,
     candidatsEnProcessCount,
+    presentationsMonth,
+    placementsMonth,
     recentEmailsData,
     tachesRaw,
   ] = await Promise.all([
@@ -835,6 +837,30 @@ export async function getSpaData(
       where: {
         ...createdByFilter,
         stage: { notIn: ['REFUSE', 'PLACE'] },
+      },
+    }),
+
+    // Presentations this month (stage transitions to ENTRETIEN_CLIENT)
+    prisma.stageHistory.count({
+      where: {
+        toStage: 'ENTRETIEN_CLIENT',
+        changedAt: { gte: startOfMonth, lte: endOfMonth },
+        ...(isTeam ? {} : { OR: [
+          { changedById: userId },
+          { candidature: { mandat: { OR: [{ assignedToId: userId }, { sourceurId: userId }] } } },
+        ] }),
+      },
+    }),
+
+    // Placements this month (stage transitions to PLACE)
+    prisma.stageHistory.count({
+      where: {
+        toStage: 'PLACE',
+        changedAt: { gte: startOfMonth, lte: endOfMonth },
+        ...(isTeam ? {} : { OR: [
+          { changedById: userId },
+          { candidature: { mandat: { OR: [{ assignedToId: userId }, { sourceurId: userId }] } } },
+        ] }),
       },
     }),
 
@@ -1078,6 +1104,8 @@ export async function getSpaData(
       caMois: { value: caThisVal, delta: caDelta },
       appels: { today: appelsToday, week: appelsWeek, moyJour: moyAppelsJour },
       rdv: { today: rdvTodayCount, week: rdvWeekCount, confirmes: rdvConfirmes, enAttente: rdvEnAttente },
+      presentationsMois: presentationsMonth,
+      placementsMois: placementsMonth,
       candidatsEnProcess: candidatsEnProcessCount,
       pipePondere: { value: Math.round(pipeThisMonth), delta: pipeDelta },
     },

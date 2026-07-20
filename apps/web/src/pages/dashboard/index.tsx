@@ -48,6 +48,8 @@ interface KpisData {
   caMois: { value: number; delta: number | null };
   appels: { today: number; week: number; moyJour: number };
   rdv: { today: number; week: number; confirmes: number; enAttente: number };
+  presentationsMois: number;
+  placementsMois: number;
   candidatsEnProcess: number;
   pipePondere: { value: number; delta: number | null };
 }
@@ -595,31 +597,31 @@ function RecruiterDashboard() {
               </div>
             </motion.div>
 
-            {/* CANDIDATS EN PROCESS */}
+            {/* PRESENTATIONS MOIS */}
             <motion.div variants={fadeUp} className="flex-1 flex flex-col justify-center px-4 border-r border-neutral-100">
               <div className="flex items-center gap-1.5">
                 <Users size={13} className="text-pipeline-500" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Candidats</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Présentations</span>
               </div>
               <div className="flex items-baseline gap-1.5 mt-0.5">
                 <span className="text-[18px] font-bold text-pipeline-500 leading-none">
-                  <AnimatedCounter value={kpis?.candidatsEnProcess ?? 0} />
+                  <AnimatedCounter value={kpis?.presentationsMois ?? 0} />
                 </span>
-                <span className="text-[10px] text-neutral-400">en process</span>
+                <span className="text-[10px] text-neutral-400">ce mois</span>
               </div>
             </motion.div>
 
-            {/* PIPE PONDERE */}
+            {/* PLACEMENTS MOIS */}
             <motion.div variants={fadeUp} className="flex-1 flex flex-col justify-center px-4">
               <div className="flex items-center gap-1.5">
                 <TrendingUp size={13} className="text-brand-500" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Pipe Pondere</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Placements</span>
               </div>
-              <div className="flex items-baseline gap-2 mt-0.5">
+              <div className="flex items-baseline gap-1.5 mt-0.5">
                 <span className="text-[18px] font-bold text-brand-500 leading-none">
-                  <AnimatedCounter value={kpis?.pipePondere.value ?? 0} formatFn={formatCurrency} />
+                  <AnimatedCounter value={kpis?.placementsMois ?? 0} />
                 </span>
-                <TrendBadge value={kpis?.pipePondere.delta ?? null} />
+                <span className="text-[10px] text-neutral-400">ce mois</span>
               </div>
             </motion.div>
           </motion.div>
