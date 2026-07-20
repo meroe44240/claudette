@@ -195,7 +195,10 @@ export function registerStatsTools(server: McpServer) {
         prisma.recruiterObjective.findMany({ where: { userId: user.userId } }),
       ]);
 
-      // Relances TODO: candidats en pipeline actif sans activité depuis threshold
+      // Relances TODO: candidats en pipeline actif dont la candidature n'a pas
+      // bouge depuis threshold. On utilise updatedAt de la Candidature comme
+      // proxy (les activites sont polymorphes via entiteType/entiteId, donc
+      // pas de relation directe Candidat.activites cote Prisma).
       const relancesCandidates = await prisma.candidature.findMany({
         where: {
           mandat: {
@@ -203,9 +206,7 @@ export function registerStatsTools(server: McpServer) {
             statut: { in: ['OUVERT', 'EN_COURS'] },
           },
           stage: { notIn: ['REFUSE', 'PLACE', 'SOURCING'] },
-          candidat: {
-            activites: { none: { createdAt: { gte: relancesThreshold } } },
-          },
+          updatedAt: { lt: relancesThreshold },
         },
         select: {
           id: true,
@@ -312,7 +313,7 @@ export function registerStatsTools(server: McpServer) {
               statut: { in: ['OUVERT', 'EN_COURS'] },
             },
             stage: { notIn: ['REFUSE', 'PLACE', 'SOURCING'] },
-            candidat: { activites: { none: { createdAt: { gte: threshold } } } },
+            updatedAt: { lt: threshold },
           },
           select: {
             id: true,
@@ -344,7 +345,7 @@ export function registerStatsTools(server: McpServer) {
           where: {
             OR: [{ assignedToId: user.userId }, { createdById: user.userId }],
             statutClient: { notIn: ['INACTIF'] },
-            activites: { none: { createdAt: { gte: threshold } } },
+            updatedAt: { lt: threshold },
           },
           select: {
             id: true,
@@ -412,7 +413,7 @@ export function registerStatsTools(server: McpServer) {
               statut: { in: ['OUVERT', 'EN_COURS'] },
             },
             stage: { notIn: ['REFUSE', 'PLACE', 'SOURCING'] },
-            candidat: { activites: { none: { createdAt: { gte: relancesThreshold } } } },
+            updatedAt: { lt: relancesThreshold },
           },
         }),
       ]);
