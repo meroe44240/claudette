@@ -560,25 +560,15 @@ export function registerStatsTools(server: McpServer) {
       const dayEnd = new Date(dayStart);
       dayEnd.setDate(dayEnd.getDate() + 1);
 
-      const [meetings, bookings] = await Promise.all([
-        prisma.activite.findMany({
-          where: { userId: user.userId, type: 'MEETING', createdAt: { gte: dayStart, lt: dayEnd } },
-          select: { id: true, titre: true, contenu: true, createdAt: true, entiteType: true, entiteId: true },
-          orderBy: { createdAt: 'asc' },
-        }),
-        prisma.booking.findMany({
-          where: { userId: user.userId, bookingDate: { gte: dayStart, lt: dayEnd }, status: 'confirmed' },
-          select: { id: true, firstName: true, lastName: true, bookingDate: true, bookingTime: true, durationMinutes: true, entityType: true, candidatId: true, clientId: true },
-          orderBy: { bookingTime: 'asc' },
-        }),
-      ]);
+      const meetings = await prisma.activite.findMany({
+        where: { userId: user.userId, type: 'MEETING', createdAt: { gte: dayStart, lt: dayEnd } },
+        select: { id: true, titre: true, contenu: true, createdAt: true, entiteType: true, entiteId: true },
+        orderBy: { createdAt: 'asc' },
+      });
 
       return {
         date: date.toLocaleDateString('fr-FR'),
-        events: [
-          ...meetings.map(m => ({ type: 'meeting', title: m.titre, time: m.createdAt })),
-          ...bookings.map(b => ({ type: 'booking', title: `${b.firstName} ${b.lastName}`, date: b.bookingDate, time: b.bookingTime, duration: b.durationMinutes })),
-        ],
+        events: meetings.map(m => ({ type: 'meeting', title: m.titre, time: m.createdAt })),
       };
     }),
   );

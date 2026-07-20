@@ -12,14 +12,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
   api:
     build:
       context: ../apps/api
@@ -30,10 +22,8 @@ services:
     environment:
       TZ: Europe/Paris
       DATABASE_URL: postgresql://humanup:humanup_dev@postgres:5432/humanup_dev
-      REDIS_URL: redis://redis:6379
     depends_on:
       - postgres
-      - redis
 
   web:
     build:
@@ -61,6 +51,5 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
   caddy_data:
   caddy_config:

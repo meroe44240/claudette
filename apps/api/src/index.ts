@@ -31,8 +31,6 @@ import pipelineAiRouter from './modules/ai/pipeline-ai.router.js';
 import adminRouter from './modules/admin/admin.router.js';
 import exportRouter from './modules/export/export.router.js';
 import emailRouter from './modules/email/email.router.js';
-import auditRouter from './modules/audit/audit.router.js';
-import reminderRouter from './modules/reminders/reminder.router.js';
 import documentRouter from './modules/documents/document.router.js';
 import pipelineRouter from './modules/clients/pipeline.router.js';
 import adminDashboardRouter from './modules/dashboard/admin-dashboard.router.js';
@@ -156,8 +154,6 @@ async function buildApp() {
   await app.register(adminRouter, { prefix: '/api/v1/admin' });
   await app.register(exportRouter, { prefix: '/api/v1/export' });
   await app.register(emailRouter, { prefix: '/api/v1/emails' });
-  await app.register(auditRouter, { prefix: '/api/v1/audit' });
-  await app.register(reminderRouter, { prefix: '/api/v1/reminders' });
   await app.register(documentRouter, { prefix: '/api/v1/documents' });
   await app.register(pipelineRouter, { prefix: '/api/v1/clients-pipeline' });
   await app.register(adminDashboardRouter, { prefix: '/api/v1/dashboard/admin' });
