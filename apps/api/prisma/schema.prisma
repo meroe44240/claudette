@@ -26,6 +26,8 @@ model User {
   startDate          DateTime? @db.Timestamptz() // Date de début pour prorata
   calendlyUrl        String?   @db.VarChar(500)
   slackUserId        String?   @db.VarChar(30) // Slack user id (e.g. U0123ABC) for DMs
+  fonction             Fonction @default(RECRUTEUR)
+  excludeFromTeamStats Boolean  @default(false)
   createdAt          DateTime  @default(now()) @db.Timestamptz()
   updatedAt          DateTime  @updatedAt @db.Timestamptz()
 
@@ -39,6 +41,8 @@ model User {
   assignedClients     Client[]       @relation("ClientAssignedTo")
   assignedMandats     Mandat[]       @relation("MandatAssignedTo")
   sourcedMandats      Mandat[]       @relation("MandatSourceur")
+  salesMandats        Mandat[]       @relation("MandatSales")
+  recruteurMandats    Mandat[]       @relation("MandatRecruteur")
   auditLogs           AuditLog[]     @relation("AuditLogUser")
   reminders           Reminder[]     @relation("ReminderUser")
   calendarSuggestions AiCalendarSuggestion[] @relation("CalendarSuggestionUser")
@@ -55,6 +59,15 @@ enum Role {
   ADMIN
   MANAGER
   RECRUTEUR
+}
+
+// Fonction (metier) — distincte de Role (permission).
+// Un user peut etre SALES (chasse le mandat cote client), RECRUTEUR (source les
+// candidats), ou LES_DEUX (Meroe par exemple).
+enum Fonction {
+  SALES
+  RECRUTEUR
+  LES_DEUX
 }
 
 // ─── ENTREPRISES ─────────────────────────────────────
@@ -254,6 +267,14 @@ model Mandat {
   assignedTo       User?        @relation("MandatAssignedTo", fields: [assignedToId], references: [id])
   sourceurId       String?      @db.Uuid
   sourceur         User?        @relation("MandatSourceur", fields: [sourceurId], references: [id])
+  // Binome : Sales chasse le mandat cote client, Recruteur source les candidats.
+  // Backfill : salesId = assignedToId, recruteurId = sourceurId.
+  // assignedTo/sourceur restent pour compat mais salesId/recruteurId sont la
+  // source de verite pour le recap et les futures attributions CA/prime.
+  salesId          String?      @db.Uuid
+  sales            User?        @relation("MandatSales", fields: [salesId], references: [id])
+  recruteurId      String?      @db.Uuid
+  recruteur        User?        @relation("MandatRecruteur", fields: [recruteurId], references: [id])
   transcript           String?      @db.Text
   ficheDePoste         String?      @db.Text
   scorecard            Json?
@@ -701,4 +722,23 @@ model OAuthCode {
 
   @@index([code])
   @@map("oauth_codes")
+}
+
+// ─── RECAP EMAIL ─────────────────────────────────────
+//
+// Trace des envois du recap bi-hebdomadaire (lundi & vendredi 08:00 ICT).
+// Sert a :
+//  - Calculer la fenetre glissante (windowStart = sentAt du dernier run SENT).
+//  - Garantir l'idempotence : jamais deux envois SENT sur la meme date ICT.
+model RecapRun {
+  id          String   @id @default(uuid()) @db.Uuid
+  sentAt      DateTime @db.Timestamptz()
+  windowStart DateTime @db.Timestamptz()
+  windowEnd   DateTime @db.Timestamptz()
+  status      String   @db.VarChar(20) // SENT | FAILED
+  error       String?  @db.Text
+  createdAt   DateTime @default(now()) @db.Timestamptz()
+
+  @@index([sentAt])
+  @@map("recap_runs")
 }
