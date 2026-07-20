@@ -64,6 +64,7 @@ const JobBoardNewPage = lazy(() => import('./pages/jobs/new'));
 const JobBoardEditPage = lazy(() => import('./pages/jobs/edit'));
 const PushesPage = lazy(() => import('./pages/pushes/index'));
 const McpLogsPage = lazy(() => import('./pages/mcp-logs/index'));
+const AdminAnalyticsPage = lazy(() => import('./pages/admin/analytics'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuthStore();
@@ -140,6 +141,7 @@ export default function App() {
           <Route path="job-board/:id" element={<JobBoardEditPage />} />
           <Route path="pushes" element={<PushesPage />} />
           <Route path="mcp-logs" element={<McpLogsPage />} />
+          <Route path="admin/analytics" element={<AdminAnalyticsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
