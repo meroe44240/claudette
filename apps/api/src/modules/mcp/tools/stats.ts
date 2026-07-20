@@ -2,7 +2,6 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { wrapTool } from '../mcp.tools.js';
 import prisma from '../../../lib/db.js';
-import { getPushStatsForUsers } from '../../pushes/push.service.js';
 import * as calendarService from '../../integrations/calendar.service.js';
 import * as clientService from '../../clients/client.service.js';
 
@@ -713,23 +712,14 @@ export function registerStatsTools(server: McpServer) {
         select: { id: true, nom: true, prenom: true },
       });
 
-      const userIds = users.map(u => u.id);
-      const [teamStatsRaw, pushStats] = await Promise.all([
-        Promise.all(users.map(async (u) => {
-          const [calls, emails, placements] = await Promise.all([
-            prisma.activite.count({ where: { userId: u.id, type: 'APPEL', createdAt: { gte: startDate } } }),
-            prisma.activite.count({ where: { userId: u.id, type: 'EMAIL', direction: 'SORTANT', createdAt: { gte: startDate } } }),
-            prisma.candidature.count({ where: { createdById: u.id, stage: 'PLACE', updatedAt: { gte: startDate } } }),
-          ]);
-          return { id: u.id, name: `${u.prenom || ''} ${u.nom}`.trim(), calls, emails_sent: emails, placements };
-        })),
-        getPushStatsForUsers(userIds, startDate),
-      ]);
-
-      const teamStats = teamStatsRaw.map(u => {
-        const ps = pushStats.get(u.id) || { cv_pushed: 0, push_taux_reponse: 0, push_convertis: 0 };
-        return { name: u.name, calls: u.calls, emails_sent: u.emails_sent, placements: u.placements, ...ps };
-      });
+      const teamStats = await Promise.all(users.map(async (u) => {
+        const [calls, emails, placements] = await Promise.all([
+          prisma.activite.count({ where: { userId: u.id, type: 'APPEL', createdAt: { gte: startDate } } }),
+          prisma.activite.count({ where: { userId: u.id, type: 'EMAIL', direction: 'SORTANT', createdAt: { gte: startDate } } }),
+          prisma.candidature.count({ where: { createdById: u.id, stage: 'PLACE', updatedAt: { gte: startDate } } }),
+        ]);
+        return { name: `${u.prenom || ''} ${u.nom}`.trim(), calls, emails_sent: emails, placements };
+      }));
 
       return { period, team: teamStats };
     }),

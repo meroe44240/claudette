@@ -456,19 +456,6 @@ async function runDriveTranscriptScan(): Promise<void> {
   }
 }
 
-// ─── PUSH CV AUTO-DETECT ──────────────────────────
-
-async function runPushDetect(): Promise<void> {
-  try {
-    const { detectAllPushes } = await import(
-      '../modules/pushes/push-detect.service.js'
-    );
-    await detectAllPushes();
-  } catch (error) {
-    console.error('[Cron] Error in Push CV detection:', error);
-  }
-}
-
 // ─── CALENDAR WATCHER ─────────────────────────────
 
 async function runCalendarWatcherJob(): Promise<void> {
@@ -562,10 +549,6 @@ export function startCronJobs(): void {
   const alloSyncInterval = setInterval(runAlloSync, 10 * 60 * 1000);
   intervals.push(alloSyncInterval);
 
-  // Push CV auto-detect every 15 minutes
-  const pushDetectInterval = setInterval(runPushDetect, 15 * 60 * 1000);
-  intervals.push(pushDetectInterval);
-
   // Sequence due steps every 5 minutes
   const sequenceDueInterval = setInterval(runSequenceDueSteps, 5 * 60 * 1000);
   intervals.push(sequenceDueInterval);
@@ -610,7 +593,6 @@ export function startCronJobs(): void {
   console.log('  - Email auto-create: every 15 minutes (perso → candidat, pro → client)');
   console.log('  - Drive transcript scan: every 15 minutes (new transcripts/CR)');
   console.log('  - Allo auto-sync: every 10 minutes (calls + transcripts)');
-  console.log('  - Push CV auto-detect: every 15 minutes (sent emails → push detection)');
   console.log('  - Sequence due steps: every 5 minutes (execute next steps for due runs)');
   console.log('  - Calendar watcher: every 15 minutes (Mon-Fri 8h-19h Paris, classify events)');
   console.log('  - Calendar push notifications: registered at startup, renewed every 6h');

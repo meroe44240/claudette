@@ -42,7 +42,6 @@ import reportRouter from './modules/reports/report.router.js';
 import statsRouter from './modules/stats/stats.router.js';
 import slackRouter from './modules/slack/slack.router.js';
 import bookingRouter, { bookingPublicRouter } from './modules/booking/booking.router.js';
-import pushRouter from './modules/pushes/push.router.js';
 import mcpLogsRouter from './modules/mcp/mcp-logs.router.js';
 import mcpOAuthRouter from './modules/mcp/mcp.oauth.js';
 import mcpPlugin from './modules/mcp/mcp.plugin.js';
@@ -172,7 +171,6 @@ async function buildApp() {
   await app.register(slackRouter, { prefix: '/api/v1/slack' });
   await app.register(bookingPublicRouter, { prefix: '/api/public/booking' });
   await app.register(bookingRouter, { prefix: '/api/v1/booking' });
-  await app.register(pushRouter, { prefix: '/api/v1/pushes' });
   await app.register(mcpLogsRouter, { prefix: '/api/v1/mcp-logs' });
 
   return app;

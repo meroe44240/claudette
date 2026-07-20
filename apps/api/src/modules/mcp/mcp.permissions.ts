@@ -57,16 +57,8 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   validate_call_analysis:        { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
   // ═══ PUSHES ═══
-  list_pushes:                   { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  get_push_gmail_status:         { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  get_push_stats:                { level: 'free', roles: ['ADMIN'] },
-  create_push:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  update_push_status:            { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
   // ═══ AUTO-PUSH (3-step flow) ═══
-  auto_push_scan:                { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  auto_push_enrich:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  auto_push_execute:             { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
   // ═══ ENRICHISSEMENT ═══
   enrich_contact:                { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },

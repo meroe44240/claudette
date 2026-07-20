@@ -51,7 +51,6 @@ const RevenueForecastPage = lazy(() => import('./pages/stats/revenue-forecast'))
 const PipelineIntelligencePage = lazy(() => import('./pages/dashboard/pipeline-intelligence'));
 const AlertsPage = lazy(() => import('./pages/dashboard/alerts'));
 const EmailsPage = lazy(() => import('./pages/emails/index'));
-const PushesPage = lazy(() => import('./pages/pushes/index'));
 const McpLogsPage = lazy(() => import('./pages/mcp-logs/index'));
 const AdminAnalyticsPage = lazy(() => import('./pages/admin/analytics'));
 
@@ -117,7 +116,6 @@ export default function App() {
           <Route path="placements" element={<PlacementsPage />} />
           <Route path="revenue-forecast" element={<RevenueForecastPage />} />
           <Route path="emails" element={<EmailsPage />} />
-          <Route path="pushes" element={<PushesPage />} />
           <Route path="mcp-logs" element={<McpLogsPage />} />
           <Route path="admin/analytics" element={<AdminAnalyticsPage />} />
         </Route>
