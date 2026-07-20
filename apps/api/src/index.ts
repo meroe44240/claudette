@@ -40,7 +40,6 @@ import adminDashboardRouter from './modules/dashboard/admin-dashboard.router.js'
 import reportRouter from './modules/reports/report.router.js';
 import statsRouter from './modules/stats/stats.router.js';
 import slackRouter from './modules/slack/slack.router.js';
-import bookingRouter, { bookingPublicRouter } from './modules/booking/booking.router.js';
 import mcpLogsRouter from './modules/mcp/mcp-logs.router.js';
 import mcpOAuthRouter from './modules/mcp/mcp.oauth.js';
 import mcpPlugin from './modules/mcp/mcp.plugin.js';
@@ -167,8 +166,6 @@ async function buildApp() {
   await app.register(reportRouter, { prefix: '/api/v1/reports' });
   await app.register(statsRouter, { prefix: '/api/v1/stats' });
   await app.register(slackRouter, { prefix: '/api/v1/slack' });
-  await app.register(bookingPublicRouter, { prefix: '/api/public/booking' });
-  await app.register(bookingRouter, { prefix: '/api/v1/booking' });
   await app.register(mcpLogsRouter, { prefix: '/api/v1/mcp-logs' });
 
   return app;
@@ -192,10 +189,6 @@ if (isMainModule && process.env.NODE_ENV !== 'test') {
   start();
 
   if (process.env.NODE_ENV !== 'test') {
-    import('./jobs/feedback-reminder.job.js').then(({ startFeedbackWorker }) => {
-      startFeedbackWorker();
-    }).catch(err => console.error('Failed to start feedback worker:', err));
-
     import('./jobs/cron.js').then(({ startCronJobs }) => {
       startCronJobs();
     }).catch(err => console.error('Failed to start cron jobs:', err));

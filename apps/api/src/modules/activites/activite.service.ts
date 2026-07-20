@@ -90,18 +90,7 @@ export async function create(data: CreateActiviteInput, userId: string) {
     },
   });
 
-  // Schedule feedback reminder for meetings
   if (data.type === 'MEETING') {
-    import('../../jobs/feedback-reminder.job.js').then(({ scheduleFeedbackReminder }) => {
-      scheduleFeedbackReminder({
-        activiteId: result.id,
-        userId,
-        entiteType: data.entiteType,
-        entiteId: data.entiteId,
-        meetingTitle: data.titre || 'Meeting',
-      }).catch(err => console.error('Failed to schedule feedback reminder:', err));
-    }).catch(() => {});
-
     // Fire-and-forget Slack notification for new meetings
     (async () => {
       try {

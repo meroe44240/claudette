@@ -664,29 +664,6 @@ export function registerStatsTools(server: McpServer) {
     }),
   );
 
-  // ─── get_my_booking_links ─────────────────────────────
-  server.tool(
-    'get_my_booking_links',
-    "Recupere les liens de booking du recruteur (Calendly-like).",
-    {},
-    wrapTool('get_my_booking_links', async (_args, user) => {
-      const setting = await prisma.bookingSetting.findUnique({
-        where: { userId: user.userId },
-        include: { bookingTypes: true },
-      });
-      if (!setting) return { message: 'Aucun booking configure' };
-
-      const baseUrl = process.env.APP_URL || 'https://ats.propium.co';
-      return {
-        links: setting.bookingTypes.map(bt => ({
-          name: bt.label,
-          duration: bt.durationMinutes,
-          target_type: bt.targetType,
-          url: `${baseUrl}/booking/${setting.slug}/${bt.slug}`,
-        })),
-      };
-    }),
-  );
 
   // ─── get_team_stats (admin only) ──────────────────────
   server.tool(

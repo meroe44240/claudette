@@ -52,7 +52,6 @@ const sidebarItems: { id: SettingsSection; label: string; icon: React.ReactNode 
   { id: 'integrations', label: 'Intégrations', icon: <Puzzle size={16} /> },
   { id: 'pipeline', label: 'Pipeline', icon: <GitBranch size={16} /> },
   { id: 'notifications', label: 'Notifications', icon: <Bell size={16} /> },
-  { id: 'booking' as SettingsSection, label: 'Booking', icon: <CalendarCheck size={16} /> },
 ];
 
 export default function SettingsPage() {

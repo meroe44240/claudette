@@ -12,8 +12,6 @@ const ResetPasswordPage = lazy(() => import('./pages/reset-password'));
 const ChangePasswordPage = lazy(() => import('./pages/change-password'));
 
 // Public pages
-const PublicBookingPage = lazy(() => import('./pages/public-booking/index'));
-const BookingCancelPage = lazy(() => import('./pages/public-booking/cancel'));
 const DocsMcpPage = lazy(() => import('./pages/docs/mcp'));
 
 // Protected pages
@@ -40,7 +38,6 @@ const FastReviewPage = lazy(() => import('./pages/mandats/[id]-review'));
 const ActivitesPage = lazy(() => import('./pages/activites/index'));
 const TachesPage = lazy(() => import('./pages/taches/index'));
 const IntegrationsSettingsPage = lazy(() => import('./pages/settings/integrations'));
-const InterviewSchedulerPage = lazy(() => import('./pages/settings/interview-scheduler'));
 const ImportPage = lazy(() => import('./pages/import/index'));
 const ReportsPage = lazy(() => import('./pages/reports/index'));
 const StatsPage = lazy(() => import('./pages/stats/index'));
@@ -68,9 +65,6 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
-        <Route path="/book/cancel/:bookingId" element={<BookingCancelPage />} />
-        <Route path="/book/:slug/:mandatSlug" element={<PublicBookingPage />} />
-        <Route path="/book/:slug" element={<PublicBookingPage />} />
         <Route path="/docs/mcp" element={<DocsMcpPage />} />
         <Route
           element={
@@ -105,7 +99,6 @@ export default function App() {
           <Route path="import" element={<ImportPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/integrations" element={<IntegrationsSettingsPage />} />
-          <Route path="settings/interview-scheduler" element={<InterviewSchedulerPage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route path="stats" element={<StatsPage />} />
           <Route path="leaderboard" element={<LeaderboardPage />} />

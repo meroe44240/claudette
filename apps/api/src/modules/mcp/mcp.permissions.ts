@@ -23,7 +23,6 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   get_my_tasks:                  { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_my_calendar:               { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_my_emails:                 { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
-  get_my_booking_links:          { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   list_relances_todo:            { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   plan_my_day:                   { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_call_brief:                { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
