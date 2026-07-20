@@ -1,49 +1,30 @@
 /**
  * Recap bi-hebdomadaire — agregation.
  *
- * `buildRecap(windowStart, windowEnd)` retourne un `RecapPayload` structure,
- * consomme par le template email (chantier 3/7) et l'endpoint preview (4/7).
+ * `buildRecap(windowStart, windowEnd)` retourne un `RecapPayload` avec deux
+ * sections :
+ *   1. Mandats actifs : pipeline (count + anciennete par stage) + prez
+ *      prevues (MEETING futurs sur les candidats ou dateEntretienClient a venir).
+ *   2. Activite par personne (sales / recruteur / totaux).
  *
- * Perf : les requetes sont batchees. Le calcul d'anciennete par stage
- * necessite pour chaque candidature la date de sa derniere transition ;
- * on fait UNE seule passe `StageHistory` groupee, pas N+1.
+ * Perf : StageHistory batche en 1 passe sur toutes les candidatures actives.
  */
 
 import prisma from '../../lib/db.js';
 import type {
-  Blocages,
   Fonction,
-  HealthScore,
   MandatBase,
-  MandatBloc,
   MandatRecap,
-  Mouvement,
   ParPersonne,
   PipelineBucket,
-  ProchaineAction,
+  PresentationPrevue,
   RecapPayload,
   RecapTotaux,
-  SilencieuxBloc,
   Stage,
-  TacheBloc,
   UserBlocRecruteur,
   UserBlocSales,
   UserRef,
 } from './recap.types.js';
-
-// ─── Constantes ──────────────────────────────────────
-
-/** Seuil (jours) d'anciennete par stage — au-dela, le bucket est en alerte. */
-const STAGE_ALERT_DAYS: Record<Stage, number> = {
-  SOURCING: 5,
-  CONTACTE: 5,
-  ENTRETIEN_1: 5,
-  ENVOYE_CLIENT: 7,
-  ENTRETIEN_CLIENT: 7,
-  OFFRE: 10,
-  PLACE: 30,   // rarement affiche (PLACE = ferme cote pipeline)
-  REFUSE: 999, // n'apparait pas dans les buckets actifs
-};
 
 const ACTIVE_STAGES: Stage[] = [
   'SOURCING',
@@ -55,8 +36,6 @@ const ACTIVE_STAGES: Stage[] = [
 ];
 
 const DAY_MS = 1000 * 60 * 60 * 24;
-
-// ─── Helpers ─────────────────────────────────────────
 
 function daysBetween(a: Date, b: Date): number {
   return Math.floor((b.getTime() - a.getTime()) / DAY_MS);
@@ -82,7 +61,9 @@ function toUserRef(u: {
 // ─── Main ────────────────────────────────────────────
 
 export async function buildRecap(windowStart: Date, windowEnd: Date): Promise<RecapPayload> {
-  // ── 1. Fetch base : mandats actifs, users, tout en parallele ─────
+  const now = new Date();
+
+  // ── 1. Mandats actifs + users ─────────────────────────
   const [mandatsRaw, allUsers] = await Promise.all([
     prisma.mandat.findMany({
       where: { statut: { in: ['OUVERT', 'EN_COURS'] } },
@@ -114,6 +95,7 @@ export async function buildRecap(windowStart: Date, windowEnd: Date): Promise<Re
           },
         },
       },
+      orderBy: { createdAt: 'asc' },
     }),
     prisma.user.findMany({
       select: {
@@ -130,328 +112,87 @@ export async function buildRecap(windowStart: Date, windowEnd: Date): Promise<Re
   const userMap = new Map<string, UserRef>();
   for (const u of allUsers) userMap.set(u.id, toUserRef(u));
 
-  // ── 2. IDs derives ──────────────────────────────────
-  const mandatIds = mandatsRaw.map((m) => m.id);
   const candidatureIds = mandatsRaw.flatMap((m) => m.candidatures.map((c) => c.id));
   const candidatIds = mandatsRaw.flatMap((m) => m.candidatures.map((c) => c.candidat.id));
+  const mandatIds = mandatsRaw.map((m) => m.id);
 
-  // ── 3. StageHistory : UNE passe pour toutes les candidatures actives ──
-  const stageHistories =
-    candidatureIds.length > 0
-      ? await prisma.stageHistory.findMany({
-          where: { candidatureId: { in: candidatureIds } },
-          orderBy: { changedAt: 'desc' },
-          select: {
-            id: true,
-            candidatureId: true,
-            fromStage: true,
-            toStage: true,
-            changedById: true,
-            changedAt: true,
-          },
-        })
-      : [];
+  // ── 2. StageHistory (1 passe) — anciennete par candidature + totaux window ──
+  const [stageHistoriesActive, windowStageHistoriesAll, futureMeetings, windowMandatsCrees, activitesWindow] =
+    await Promise.all([
+      candidatureIds.length > 0
+        ? prisma.stageHistory.findMany({
+            where: { candidatureId: { in: candidatureIds } },
+            orderBy: { changedAt: 'desc' },
+            select: { candidatureId: true, changedAt: true },
+          })
+        : [],
 
-  // Derniere transition par candidature (max changedAt)
-  const latestStageChangeByCandidature = new Map<string, Date>();
-  for (const h of stageHistories) {
-    if (!latestStageChangeByCandidature.has(h.candidatureId)) {
-      latestStageChangeByCandidature.set(h.candidatureId, h.changedAt);
-    }
-  }
-
-  // Derniere transition vers ENTRETIEN_CLIENT par candidature (pour "clients silencieux")
-  const latestEntretienClientByCandidature = new Map<string, Date>();
-  for (const h of stageHistories) {
-    if (h.toStage !== 'ENTRETIEN_CLIENT') continue;
-    if (!latestEntretienClientByCandidature.has(h.candidatureId)) {
-      latestEntretienClientByCandidature.set(h.candidatureId, h.changedAt);
-    }
-  }
-
-  // ── 4. Activites dans la fenetre + tous les tacheDueDate en retard ──
-  const [
-    activitesWindow,
-    windowStageHistories,
-    windowMandatsCrees,
-    windowStageHistoriesAll,   // pour "nouveaux mandats" par salesId
-    tachesRetardRaw,
-    prochainRdvRaw,
-  ] = await Promise.all([
-    // Activites survenues dans la fenetre, rattachees aux mandats actifs ou leurs candidats
-    prisma.activite.findMany({
-      where: {
-        createdAt: { gte: windowStart, lte: windowEnd },
-        OR: [
-          { entiteType: 'MANDAT', entiteId: { in: mandatIds } },
-          { entiteType: 'CANDIDAT', entiteId: { in: candidatIds } },
-        ],
-      },
-      select: {
-        id: true,
-        type: true,
-        direction: true,
-        entiteType: true,
-        entiteId: true,
-        titre: true,
-        contenu: true,
-        userId: true,
-        metadata: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: 'asc' },
-    }),
-
-    // StageHistory changements dans la fenetre (pour la section "mouvements" par mandat)
-    candidatureIds.length > 0
-      ? prisma.stageHistory.findMany({
-          where: {
-            candidatureId: { in: candidatureIds },
-            changedAt: { gte: windowStart, lte: windowEnd },
-          },
-          select: {
-            candidatureId: true,
-            fromStage: true,
-            toStage: true,
-            changedById: true,
-            changedAt: true,
-          },
-          orderBy: { changedAt: 'asc' },
-        })
-      : [],
-
-    // Mandats crees dans la fenetre — pour "nouveaux mandats par sales"
-    prisma.mandat.findMany({
-      where: { createdAt: { gte: windowStart, lte: windowEnd } },
-      select: {
-        id: true,
-        salesId: true,
-      },
-    }),
-
-    // StageHistory (toutes candidatures, pas juste les actives) dans la fenetre — pour totaux equipe
-    prisma.stageHistory.findMany({
-      where: { changedAt: { gte: windowStart, lte: windowEnd } },
-      select: {
-        candidatureId: true,
-        toStage: true,
-        changedById: true,
-        candidature: {
-          select: {
-            createdById: true,
-            mandat: {
-              select: { salesId: true, recruteurId: true },
+      prisma.stageHistory.findMany({
+        where: { changedAt: { gte: windowStart, lte: windowEnd } },
+        select: {
+          toStage: true,
+          changedById: true,
+          candidature: {
+            select: {
+              mandat: { select: { salesId: true, recruteurId: true } },
             },
           },
         },
-      },
-    }),
+      }),
 
-    // Taches en retard > 2j
-    (async () => {
-      const cutoff = new Date(Date.now() - 2 * DAY_MS);
-      return prisma.activite.findMany({
+      // Futurs MEETING lies aux candidats des mandats actifs => prez a venir
+      candidatIds.length > 0
+        ? prisma.activite.findMany({
+            where: {
+              type: 'MEETING',
+              entiteType: 'CANDIDAT',
+              entiteId: { in: candidatIds },
+            },
+            select: {
+              titre: true,
+              entiteId: true,
+              metadata: true,
+            },
+          })
+        : [],
+
+      prisma.mandat.findMany({
+        where: { createdAt: { gte: windowStart, lte: windowEnd } },
+        select: { salesId: true },
+      }),
+
+      // Activites de la fenetre — pour compter appels/RDV par user
+      prisma.activite.findMany({
         where: {
-          isTache: true,
-          tacheCompleted: false,
-          tacheDueDate: { lt: cutoff },
+          createdAt: { gte: windowStart, lte: windowEnd },
+          type: { in: ['APPEL', 'MEETING'] },
         },
-        select: {
-          id: true,
-          titre: true,
-          tacheDueDate: true,
-          userId: true,
-          entiteType: true,
-          entiteId: true,
-        },
-        orderBy: { tacheDueDate: 'asc' },
-      });
-    })(),
+        select: { type: true, userId: true },
+      }),
+    ]);
 
-    // Prochains RDV (MEETING) apres windowEnd — pour "prochaine action"
-    prisma.activite.findMany({
-      where: {
-        type: 'MEETING',
-        entiteType: { in: ['MANDAT', 'CANDIDAT'] },
-        OR: [
-          { entiteType: 'MANDAT', entiteId: { in: mandatIds } },
-          { entiteType: 'CANDIDAT', entiteId: { in: candidatIds } },
-        ],
-      },
-      select: {
-        id: true,
-        titre: true,
-        entiteType: true,
-        entiteId: true,
-        userId: true,
-        metadata: true,
-      },
-    }),
-  ]);
-
-  // ── 5. Prochaines taches (a venir) par mandat — pour "prochaine action" ──
-  const futureTasksRaw = await prisma.activite.findMany({
-    where: {
-      isTache: true,
-      tacheCompleted: false,
-      tacheDueDate: { gte: windowEnd },
-      entiteType: { in: ['MANDAT', 'CANDIDAT'] },
-      OR: [
-        { entiteType: 'MANDAT', entiteId: { in: mandatIds } },
-        { entiteType: 'CANDIDAT', entiteId: { in: candidatIds } },
-      ],
-    },
-    select: {
-      id: true,
-      titre: true,
-      tacheDueDate: true,
-      userId: true,
-      entiteType: true,
-      entiteId: true,
-    },
-    orderBy: { tacheDueDate: 'asc' },
-  });
-
-  // ── 6. Derniere activite par mandat (pour "mandats geles") ──
-  const [directActs, candActsForFreeze] = await Promise.all([
-    prisma.activite.findMany({
-      where: { entiteType: 'MANDAT', entiteId: { in: mandatIds } },
-      select: { entiteId: true, createdAt: true },
-      orderBy: { createdAt: 'desc' },
-    }),
-    candidatIds.length > 0
-      ? prisma.activite.findMany({
-          where: { entiteType: 'CANDIDAT', entiteId: { in: candidatIds } },
-          select: { entiteId: true, createdAt: true },
-          orderBy: { createdAt: 'desc' },
-        })
-      : [],
-  ]);
-
-  // Map candidatId -> mandatId (via candidatures)
-  const candidatToMandat = new Map<string, string>();
-  for (const m of mandatsRaw) {
-    for (const c of m.candidatures) {
-      // Attention : plusieurs candidatures d'un meme candidat sur des mandats
-      // differents => on stocke la derniere seen, insuffisant pour attribution
-      // exacte. Ici on l'utilise juste pour "derniere activite du mandat",
-      // donc c'est ok (une meme activite candidat rafraichit le mandat courant).
-      candidatToMandat.set(c.candidat.id, m.id);
+  // Derniere transition par candidature (le premier vu dans orderBy desc)
+  const latestStageChange = new Map<string, Date>();
+  for (const h of stageHistoriesActive) {
+    if (!latestStageChange.has(h.candidatureId)) {
+      latestStageChange.set(h.candidatureId, h.changedAt);
     }
   }
 
-  const lastActivityByMandat = new Map<string, Date>();
-  for (const a of directActs) {
-    if (!a.entiteId) continue;
-    const prev = lastActivityByMandat.get(a.entiteId);
-    if (!prev || a.createdAt > prev) lastActivityByMandat.set(a.entiteId, a.createdAt);
-  }
-  for (const a of candActsForFreeze) {
-    if (!a.entiteId) continue;
-    const mId = candidatToMandat.get(a.entiteId);
-    if (!mId) continue;
-    const prev = lastActivityByMandat.get(mId);
-    if (!prev || a.createdAt > prev) lastActivityByMandat.set(mId, a.createdAt);
-  }
-
-  // Egalement : dernier mouvement stage par mandat (via stageHistories full)
-  const lastStageChangeByMandat = new Map<string, Date>();
-  const candidatureToMandat = new Map<string, string>();
-  for (const m of mandatsRaw) {
-    for (const c of m.candidatures) {
-      candidatureToMandat.set(c.id, m.id);
-    }
-  }
-  for (const h of stageHistories) {
-    const mId = candidatureToMandat.get(h.candidatureId);
-    if (!mId) continue;
-    const prev = lastStageChangeByMandat.get(mId);
-    if (!prev || h.changedAt > prev) lastStageChangeByMandat.set(mId, h.changedAt);
-  }
-
-  // ── 7. Construction des blocs ────────────────────────
-
-  const now = new Date();
-  const mandats: MandatRecap[] = [];
-  const mandatsGeles: MandatBloc[] = [];
-  const clientsSilencieux: SilencieuxBloc[] = [];
-  const mandatsSansRecruteur: MandatBase[] = [];
-  const mandatsPipelineVide: MandatBase[] = [];
-
-  // Grouper activites & stage-changes par mandat pour les "mouvements"
-  const movementsByMandat = new Map<string, Mouvement[]>();
-  for (const h of windowStageHistories) {
-    const mId = candidatureToMandat.get(h.candidatureId);
-    if (!mId) continue;
-    const arr = movementsByMandat.get(mId) ?? [];
-    arr.push({
-      type: 'STAGE',
-      at: h.changedAt,
-      label: `${h.fromStage ?? 'NEW'} → ${h.toStage}`,
-      user: h.changedById ? userMap.get(h.changedById) ?? null : null,
-    });
-    movementsByMandat.set(mId, arr);
-  }
-  for (const a of activitesWindow) {
-    if (!a.entiteId) continue;
-    const mId =
-      a.entiteType === 'MANDAT' ? a.entiteId : candidatToMandat.get(a.entiteId);
-    if (!mId) continue;
-    const arr = movementsByMandat.get(mId) ?? [];
-    arr.push({
-      type: a.type === 'NOTE' ? 'NOTE' : 'ACTIVITE',
-      at: a.createdAt,
-      label: a.titre ?? a.type,
-      detail: a.contenu ?? undefined,
-      user: a.userId ? userMap.get(a.userId) ?? null : null,
-    });
-    movementsByMandat.set(mId, arr);
-  }
-  for (const arr of movementsByMandat.values()) {
-    arr.sort((x, y) => x.at.getTime() - y.at.getTime());
-  }
-
-  // Prochaine action : par mandat, le RDV futur le plus proche ou la tache
-  const prochaineActionByMandat = new Map<string, ProchaineAction>();
-
-  function considerAction(mandatId: string, action: ProchaineAction) {
-    const existing = prochaineActionByMandat.get(mandatId);
-    if (!existing || action.at < existing.at) {
-      prochaineActionByMandat.set(mandatId, action);
-    }
-  }
-
-  for (const t of futureTasksRaw) {
-    if (!t.entiteId || !t.tacheDueDate) continue;
-    const mId =
-      t.entiteType === 'MANDAT' ? t.entiteId : candidatToMandat.get(t.entiteId);
-    if (!mId) continue;
-    considerAction(mId, {
-      type: 'TACHE',
-      at: t.tacheDueDate,
-      label: t.titre ?? 'Tache',
-      user: t.userId ? userMap.get(t.userId) ?? null : null,
-    });
-  }
-
-  for (const r of prochainRdvRaw) {
-    const startRaw = (r.metadata as { startTime?: string } | null)?.startTime;
-    if (!startRaw) continue;
-    const at = new Date(startRaw);
+  // ── 3. Grouper les futurs MEETINGs par candidat ──
+  const futureMeetingsByCandidat = new Map<string, Array<{ at: Date; label: string }>>();
+  for (const m of futureMeetings) {
+    const meta = m.metadata as { startTime?: string } | null;
+    if (!meta?.startTime || !m.entiteId) continue;
+    const at = new Date(meta.startTime);
     if (isNaN(at.getTime()) || at < now) continue;
-    if (!r.entiteId) continue;
-    const mId =
-      r.entiteType === 'MANDAT' ? r.entiteId : candidatToMandat.get(r.entiteId);
-    if (!mId) continue;
-    considerAction(mId, {
-      type: 'RDV',
-      at,
-      label: r.titre ?? 'RDV',
-      user: r.userId ? userMap.get(r.userId) ?? null : null,
-    });
+    const arr = futureMeetingsByCandidat.get(m.entiteId) ?? [];
+    arr.push({ at, label: m.titre ?? 'RDV' });
+    futureMeetingsByCandidat.set(m.entiteId, arr);
   }
 
-  // ── 7.b Iteration par mandat ─────────────────────────
+  // ── 4. Construction des mandats ──
+  const mandats: MandatRecap[] = [];
 
   for (const m of mandatsRaw) {
     const sales = m.salesId ? userMap.get(m.salesId) ?? null : null;
@@ -472,137 +213,76 @@ export async function buildRecap(windowStart: Date, windowEnd: Date): Promise<Re
       recruteur,
     };
 
-    // Pipeline buckets
+    // Pipeline buckets (count + oldestDays), stages actifs uniquement
     const bucketMap = new Map<Stage, { count: number; oldest: Date | null }>();
-    for (const stage of ACTIVE_STAGES) {
-      bucketMap.set(stage, { count: 0, oldest: null });
-    }
+    for (const s of ACTIVE_STAGES) bucketMap.set(s, { count: 0, oldest: null });
+
     for (const c of m.candidatures) {
       const stage = c.stage as Stage;
       if (!ACTIVE_STAGES.includes(stage)) continue;
       const b = bucketMap.get(stage)!;
       b.count += 1;
-      const anchor = latestStageChangeByCandidature.get(c.id) ?? c.createdAt;
+      const anchor = latestStageChange.get(c.id) ?? c.createdAt;
       if (!b.oldest || anchor < b.oldest) b.oldest = anchor;
     }
 
     const pipeline: PipelineBucket[] = ACTIVE_STAGES.map((stage) => {
       const b = bucketMap.get(stage)!;
       const oldestDays = b.oldest ? daysBetween(b.oldest, now) : null;
-      const alerte =
-        oldestDays !== null && b.count > 0 && oldestDays > STAGE_ALERT_DAYS[stage];
-      return { stage, count: b.count, oldestDays, alerte };
+      return { stage, count: b.count, oldestDays };
     });
 
     const totalActifs = pipeline.reduce((s, p) => s + p.count, 0);
 
-    // Health score
-    const lastAct = lastActivityByMandat.get(m.id) ?? null;
-    const lastStage = lastStageChangeByMandat.get(m.id) ?? null;
-    const lastAnyChange =
-      lastAct && lastStage
-        ? lastAct > lastStage
-          ? lastAct
-          : lastStage
-        : lastAct ?? lastStage;
-    const daysSinceAnyChange = lastAnyChange ? daysBetween(lastAnyChange, now) : null;
+    // Prez prevues : MEETING futurs sur les candidats + dateEntretienClient futur
+    const presentationsPrevues: PresentationPrevue[] = [];
+    for (const c of m.candidatures) {
+      const candidatLabel =
+        [c.candidat.prenom, c.candidat.nom].filter(Boolean).join(' ').trim() ||
+        '(candidat sans nom)';
 
-    let healthScore: HealthScore = 'GREEN';
-    if (
-      !recruteur ||
-      totalActifs === 0 ||
-      (daysSinceAnyChange !== null && daysSinceAnyChange > 10)
-    ) {
-      healthScore = 'RED';
-    } else if (
-      pipeline.some((p) => p.alerte) ||
-      (daysSinceAnyChange !== null && daysSinceAnyChange > 5)
-    ) {
-      healthScore = 'YELLOW';
+      // MEETINGs Google Calendar
+      const meets = futureMeetingsByCandidat.get(c.candidat.id) ?? [];
+      for (const meet of meets) {
+        presentationsPrevues.push({
+          candidatId: c.candidat.id,
+          candidatLabel,
+          at: meet.at,
+          source: 'RDV',
+          label: meet.label,
+        });
+      }
+
+      // dateEntretienClient dans le futur (independant des MEETINGs)
+      if (c.dateEntretienClient && c.dateEntretienClient > now) {
+        presentationsPrevues.push({
+          candidatId: c.candidat.id,
+          candidatLabel,
+          at: c.dateEntretienClient,
+          source: 'DATE_ENTRETIEN',
+        });
+      }
     }
-
-    // Prochaine action
-    const prochaineAction = prochaineActionByMandat.get(m.id) ?? null;
+    presentationsPrevues.sort((a, b) => a.at.getTime() - b.at.getTime());
 
     mandats.push({
       ...base,
       ageJours: daysBetween(m.createdAt, now),
-      healthScore,
       pipeline,
-      mouvements: movementsByMandat.get(m.id) ?? [],
-      prochaineAction,
+      totalActifs,
+      presentationsPrevues,
     });
-
-    // ── Alimenter les blocages ─────────────────────────
-
-    if (!m.recruteurId) mandatsSansRecruteur.push(base);
-    if (totalActifs === 0) mandatsPipelineVide.push(base);
-
-    if (lastAnyChange && daysSinceAnyChange !== null && daysSinceAnyChange > 7) {
-      mandatsGeles.push({
-        ...base,
-        joursSansActivite: daysSinceAnyChange,
-        lastActivityAt: lastAnyChange,
-      });
-    } else if (!lastAnyChange && daysBetween(m.createdAt, now) > 7) {
-      // Jamais touche & cree il y a plus de 7j
-      mandatsGeles.push({
-        ...base,
-        joursSansActivite: daysBetween(m.createdAt, now),
-        lastActivityAt: null,
-      });
-    }
-
-    // Clients silencieux : candidatures en ENTRETIEN_CLIENT avec date > 5j
-    for (const c of m.candidatures) {
-      if (c.stage !== 'ENTRETIEN_CLIENT') continue;
-      const anchor =
-        latestEntretienClientByCandidature.get(c.id) ??
-        c.dateEntretienClient ??
-        null;
-      if (!anchor) continue;
-      const jours = daysBetween(anchor, now);
-      if (jours > 5) {
-        const candidatLabel =
-          [c.candidat.prenom, c.candidat.nom].filter(Boolean).join(' ').trim() ||
-          '(candidat sans nom)';
-        clientsSilencieux.push({
-          ...base,
-          candidatId: c.candidat.id,
-          candidatLabel,
-          joursDepuisEntretienClient: jours,
-        });
-      }
-    }
   }
 
-  mandatsGeles.sort((a, b) => b.joursSansActivite - a.joursSansActivite);
-  clientsSilencieux.sort(
-    (a, b) => b.joursDepuisEntretienClient - a.joursDepuisEntretienClient,
-  );
+  // Tri : plus de candidats actifs d'abord, puis prez prevues, puis age decroissant
+  mandats.sort((a, b) => {
+    if (b.totalActifs !== a.totalActifs) return b.totalActifs - a.totalActifs;
+    if (b.presentationsPrevues.length !== a.presentationsPrevues.length)
+      return b.presentationsPrevues.length - a.presentationsPrevues.length;
+    return b.ageJours - a.ageJours;
+  });
 
-  // ── 8. Taches en retard ──────────────────────────────
-  const tachesEnRetard: TacheBloc[] = tachesRetardRaw
-    .filter((t) => t.tacheDueDate)
-    .map((t) => ({
-      id: t.id,
-      titre: t.titre ?? '(sans titre)',
-      dueDate: t.tacheDueDate!,
-      joursRetard: daysBetween(t.tacheDueDate!, now),
-      user: t.userId ? userMap.get(t.userId) ?? null : null,
-      entiteType: t.entiteType,
-      entiteId: t.entiteId,
-    }));
-
-  const blocages: Blocages = {
-    mandatsGeles,
-    clientsSilencieux,
-    mandatsSansRecruteur,
-    mandatsPipelineVide,
-    tachesEnRetard,
-  };
-
-  // ── 9. Activite par personne ─────────────────────────
+  // ── 5. Activite par personne ─────────────────────────
   const parPersonne = buildParPersonne({
     users: allUsers.map(toUserRef),
     activitesWindow,
@@ -615,26 +295,20 @@ export async function buildRecap(windowStart: Date, windowEnd: Date): Promise<Re
     windowStart,
     windowEnd,
     generatedAt: now,
-    blocages,
     mandats,
     parPersonne,
   };
 }
 
-// ─── Section 3 — activite par personne ───────────────
+// ─── Section 2 — activite par personne ───────────────
 
 function buildParPersonne(input: {
   users: UserRef[];
-  activitesWindow: Array<{
-    type: string;
-    userId: string | null;
-    entiteType: string | null;
-  }>;
+  activitesWindow: Array<{ type: string; userId: string | null }>;
   windowStageHistoriesAll: Array<{
     toStage: string;
     changedById: string | null;
     candidature: {
-      createdById: string | null;
       mandat: { salesId: string | null; recruteurId: string | null };
     };
   }>;
@@ -643,14 +317,13 @@ function buildParPersonne(input: {
 }): ParPersonne {
   const { users, activitesWindow, windowStageHistoriesAll, windowMandatsCrees } = input;
 
-  // Compteurs par user
   const appelsByUser = new Map<string, number>();
   const rdvByUser = new Map<string, number>();
-  const entretiensRByUser = new Map<string, number>();  // -> ENTRETIEN_1
-  const presentationsByUser = new Map<string, number>(); // -> ENVOYE_CLIENT (attribuee au recruteur)
-  const envoyesClientBySales = new Map<string, number>(); // -> ENVOYE_CLIENT attribue au sales
-  const entretiensClientBySales = new Map<string, number>(); // -> ENTRETIEN_CLIENT (attribue au sales)
-  const placementsBySales = new Map<string, number>(); // -> PLACE
+  const entretiensRByUser = new Map<string, number>();
+  const presentationsByUser = new Map<string, number>();
+  const envoyesClientBySales = new Map<string, number>();
+  const entretiensClientBySales = new Map<string, number>();
+  const placementsBySales = new Map<string, number>();
   const nouveauxMandatsBySales = new Map<string, number>();
 
   const inc = (map: Map<string, number>, key: string | null) => {
@@ -685,7 +358,6 @@ function buildParPersonne(input: {
 
   for (const m of windowMandatsCrees) inc(nouveauxMandatsBySales, m.salesId);
 
-  // Split sales / recruteurs
   const sales: UserBlocSales[] = users
     .filter((u) => u.fonction === 'SALES' || u.fonction === 'LES_DEUX')
     .map((u) => ({
@@ -707,7 +379,6 @@ function buildParPersonne(input: {
     }))
     .sort((a, b) => a.user.label.localeCompare(b.user.label));
 
-  // Totaux : equipe (exclut Meroe) vs grand total
   const sumForTeam = (map: Map<string, number>) => {
     let s = 0;
     for (const [uid, n] of map) {
