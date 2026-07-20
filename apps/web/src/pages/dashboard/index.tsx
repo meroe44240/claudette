@@ -40,7 +40,6 @@ interface BandeauData {
   emailsNonLus: number;
   mandatsDormants: { count: number; worst: { titre: string; jours: number } | null };
   tachesEnRetard: number;
-  sequenceReplies: number;
   rdvAujourdhui: number;
 }
 
@@ -426,7 +425,6 @@ function RecruiterDashboard() {
       items.push(`${bandeau.mandatsDormants.count} mandat${bandeau.mandatsDormants.count > 1 ? 's' : ''} dormant${bandeau.mandatsDormants.count > 1 ? 's' : ''}${worst ? ` (${worst.jours}j)` : ''}`);
     }
     if (bandeau.tachesEnRetard > 0) items.push(`${bandeau.tachesEnRetard} tache${bandeau.tachesEnRetard > 1 ? 's' : ''} en retard`);
-    if (bandeau.sequenceReplies > 0) items.push(`${bandeau.sequenceReplies} reponse${bandeau.sequenceReplies > 1 ? 's' : ''} sequence`);
     if (bandeau.rdvAujourdhui > 0) items.push(`${bandeau.rdvAujourdhui} RDV aujourd'hui`);
     return items;
   }, [bandeau]);

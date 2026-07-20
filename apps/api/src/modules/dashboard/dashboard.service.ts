@@ -747,7 +747,6 @@ export async function getSpaData(
   const [
     emailsNonLus,
     tachesEnRetard,
-    sequenceReplies,
     caThisMonth,
     caPrevMonth,
     appelsToday,
@@ -781,14 +780,6 @@ export async function getSpaData(
         isTache: true,
         tacheCompleted: false,
         tacheDueDate: { lt: startOfToday },
-      },
-    }),
-
-    // Sequence replies (paused_reply)
-    prisma.sequenceRun.count({
-      where: {
-        status: 'paused_reply',
-        ...(isTeam ? {} : { assignedToId: userId }),
       },
     }),
 
@@ -1097,7 +1088,6 @@ export async function getSpaData(
       emailsNonLus: emailsNonLus as number,
       mandatsDormants: { count: dormants.length, worst: worstDormant },
       tachesEnRetard,
-      sequenceReplies,
       rdvAujourdhui: rdvTodayCount,
     },
     kpis: {

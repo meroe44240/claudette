@@ -469,22 +469,6 @@ async function runCalendarWatcherJob(): Promise<void> {
   }
 }
 
-// ─── SEQUENCE DUE RUNS ────────────────────────────
-
-async function runSequenceDueSteps(): Promise<void> {
-  try {
-    const { processDueRuns } = await import(
-      '../modules/sequences/sequence.service.js'
-    );
-    const results = await processDueRuns();
-    if (results.length > 0) {
-      console.log(`[Cron] Sequence due runs: ${results.length} step(s) processed`);
-    }
-  } catch (error) {
-    console.error('[Cron] Error in Sequence due runs:', error);
-  }
-}
-
 // ─── BATCH ENRICHMENT (WEEKLY) ─────────────────────
 
 async function checkBatchEnrichment(): Promise<void> {
@@ -549,10 +533,6 @@ export function startCronJobs(): void {
   const alloSyncInterval = setInterval(runAlloSync, 10 * 60 * 1000);
   intervals.push(alloSyncInterval);
 
-  // Sequence due steps every 5 minutes
-  const sequenceDueInterval = setInterval(runSequenceDueSteps, 5 * 60 * 1000);
-  intervals.push(sequenceDueInterval);
-
   // Calendar watcher every 15 minutes (business hours check is inside the function)
   const calendarWatcherInterval = setInterval(runCalendarWatcherJob, 15 * 60 * 1000);
   intervals.push(calendarWatcherInterval);
@@ -593,7 +573,6 @@ export function startCronJobs(): void {
   console.log('  - Email auto-create: every 15 minutes (perso → candidat, pro → client)');
   console.log('  - Drive transcript scan: every 15 minutes (new transcripts/CR)');
   console.log('  - Allo auto-sync: every 10 minutes (calls + transcripts)');
-  console.log('  - Sequence due steps: every 5 minutes (execute next steps for due runs)');
   console.log('  - Calendar watcher: every 15 minutes (Mon-Fri 8h-19h Paris, classify events)');
   console.log('  - Calendar push notifications: registered at startup, renewed every 6h');
   console.log('  - Batch enrichment: checked every 60s (runs Sunday 02:00 UTC — Pappers + CV re-parse)');

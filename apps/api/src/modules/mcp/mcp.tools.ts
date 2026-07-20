@@ -11,7 +11,6 @@ import { registerClientTools } from './tools/clients.js';
 import { registerCompanyTools } from './tools/companies.js';
 import { registerMandateTools } from './tools/mandates.js';
 import { registerTaskTools } from './tools/tasks.js';
-import { registerSequenceTools } from './tools/sequences.js';
 import { registerEmailTools } from './tools/email.js';
 import { registerStatsTools } from './tools/stats.js';
 import { registerAiTools } from './tools/ai.js';
@@ -61,7 +60,6 @@ export function registerAllTools(server: McpServer) {
   registerCompanyTools(server);
   registerMandateTools(server);
   registerTaskTools(server);
-  registerSequenceTools(server);
   registerEmailTools(server);
   registerStatsTools(server);
   registerAiTools(server);
