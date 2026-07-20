@@ -82,20 +82,20 @@ const ACTIVITY_ICONS: Record<
 > = {
   APPEL: { icon: Phone, bg: '#EFF6FF', color: '#3B82F6', label: 'Appel' },
   EMAIL_SORTANT: { icon: Send, bg: '#EFF6FF', color: '#3B82F6', label: 'Email envoyé' },
-  EMAIL_ENTRANT: { icon: MailOpen, bg: '#F5F3FF', color: '#7C5CFC', label: 'Email reçu' },
+  EMAIL_ENTRANT: { icon: MailOpen, bg: '#f6f5fa', color: '#22177A', label: 'Email reçu' },
   EMAIL: { icon: Mail, bg: '#EFF6FF', color: '#3B82F6', label: 'Email' },
   MEETING: { icon: Calendar, bg: '#F0FDFA', color: '#14B8A6', label: 'RDV' },
   NOTE: { icon: StickyNote, bg: '#FFF7ED', color: '#F59E0B', label: 'Note' },
   TACHE: { icon: CheckCircle, bg: '#ECFDF5', color: '#059669', label: 'Tâche' },
-  TRANSCRIPT: { icon: Mic, bg: '#F5F3FF', color: '#7C5CFC', label: 'Transcript' },
-  SEQUENCE_STEP: { icon: Zap, bg: '#F5F3FF', color: '#7C5CFC', label: 'Séquence' },
-  DOCUMENT: { icon: FileText, bg: '#F8F8FC', color: '#6B7194', label: 'Document' },
+  TRANSCRIPT: { icon: Mic, bg: '#f6f5fa', color: '#22177A', label: 'Transcript' },
+  SEQUENCE_STEP: { icon: Zap, bg: '#f6f5fa', color: '#22177A', label: 'Séquence' },
+  DOCUMENT: { icon: FileText, bg: '#f6f5fa', color: '#6e6a85', label: 'Document' },
 };
 
 function getActivityConfig(type: string, direction?: string | null) {
   if (type === 'EMAIL' && direction === 'SORTANT') return ACTIVITY_ICONS.EMAIL_SORTANT;
   if (type === 'EMAIL' && direction === 'ENTRANT') return ACTIVITY_ICONS.EMAIL_ENTRANT;
-  return ACTIVITY_ICONS[type] ?? { icon: FileText, bg: '#F1F2F6', color: '#6B7194', label: type };
+  return ACTIVITY_ICONS[type] ?? { icon: FileText, bg: '#F1F2F6', color: '#6e6a85', label: type };
 }
 
 function formatDate(iso: string): string {

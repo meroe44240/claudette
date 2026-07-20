@@ -95,7 +95,7 @@ export default function CalendarAiSuggestions() {
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: 'spring', stiffness: 260, damping: 24 }}
-          className="rounded-2xl bg-white shadow-[0_1px_6px_rgba(124,92,252,0.10)] border border-violet-100/60 overflow-hidden"
+          className="rounded-2xl bg-white shadow-[0_1px_6px_rgba(34,23,122,0.10)] border border-violet-100/60 overflow-hidden"
         >
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-2.5">

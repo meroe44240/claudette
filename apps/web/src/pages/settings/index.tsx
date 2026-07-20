@@ -693,7 +693,7 @@ export default function SettingsPage() {
                           value={aiApiKey}
                           onChange={(e) => setAiApiKey(e.target.value)}
                           placeholder={aiConfigData?.data?.hasApiKey ? 'Cle deja configuree (laisser vide pour garder)' : 'Entrez votre cle API...'}
-                          className="w-full rounded-lg border-[1.5px] border-neutral-100 bg-white px-3 py-2.5 pr-10 text-sm outline-none transition-all placeholder:text-text-tertiary focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(124,92,252,0.1)]"
+                          className="w-full rounded-lg border-[1.5px] border-neutral-100 bg-white px-3 py-2.5 pr-10 text-sm outline-none transition-all placeholder:text-text-tertiary focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
                         />
                         <button
                           type="button"

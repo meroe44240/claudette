@@ -195,7 +195,7 @@ function getInitials(prenom: string | null, nom: string): string {
 /** Deterministic color from string */
 function initialsColor(name: string): string {
   const colors = [
-    '#7C5CFC', '#F59E0B', '#10B981', '#EF4444', '#3B82F6',
+    '#22177A', '#F59E0B', '#10B981', '#EF4444', '#3B82F6',
     '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#6366F1',
   ];
   let hash = 0;
@@ -262,7 +262,7 @@ function SortableKanbanCard({ candidature, onClick }: SortableCardProps) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`group cursor-pointer rounded-xl border border-neutral-100 bg-white p-3.5 shadow-[0_1px_2px_rgba(26,26,46,0.04)] transition-all duration-200 hover:shadow-[0_4px_16px_rgba(124,92,252,0.08)] hover:-translate-y-[1px] ${isDragging ? 'shadow-lg ring-2 ring-primary-300' : ''}`}
+      className={`group cursor-pointer rounded-xl border border-neutral-100 bg-white p-3.5 shadow-[0_1px_2px_rgba(26,26,46,0.04)] transition-all duration-200 hover:shadow-[0_4px_16px_rgba(34,23,122,0.08)] hover:-translate-y-[1px] ${isDragging ? 'shadow-lg ring-2 ring-primary-300' : ''}`}
       onClick={onClick}
     >
       <div className="flex items-start gap-2.5">
@@ -357,7 +357,7 @@ function DragOverlayCard({ candidature }: { candidature: KanbanCandidature }) {
   const avatarBg = initialsColor(fullName);
 
   return (
-    <div className="w-[260px] cursor-grabbing rounded-xl border border-primary-200 bg-white p-3.5 shadow-[0_12px_40px_rgba(124,92,252,0.2)] ring-2 ring-primary-400/50">
+    <div className="w-[260px] cursor-grabbing rounded-xl border border-primary-200 bg-white p-3.5 shadow-[0_12px_40px_rgba(34,23,122,0.2)] ring-2 ring-primary-400/50">
       <div className="flex items-start gap-2.5">
         <div className="mt-0.5 shrink-0 p-0.5 text-primary-400">
           <GripVertical size={14} />
@@ -1011,7 +1011,7 @@ export default function MandatKanbanPage() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl border border-violet-200 bg-white px-5 py-3.5 shadow-[0_8px_32px_rgba(124,92,252,0.15)]"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl border border-violet-200 bg-white px-5 py-3.5 shadow-[0_8px_32px_rgba(34,23,122,0.15)]"
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100">
               <ListTodo size={18} className="text-violet-600" />

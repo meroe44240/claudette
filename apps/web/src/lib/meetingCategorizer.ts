@@ -44,7 +44,7 @@ export const MEETING_COLORS = {
   commercial: { border: '#14B8A6', bg: 'rgba(20,184,166,0.06)', text: '#14B8A6', pill: '#ECFDF5' },
   weekly_client: { border: '#F59E0B', bg: 'rgba(245,158,11,0.06)', text: '#D97706', pill: '#FFF7ED' },
   nouveau_client: { border: '#EC4899', bg: 'rgba(236,72,153,0.06)', text: '#DB2777', pill: '#FDF2F8' },
-  other: { border: '#6B7194', bg: 'rgba(107,113,148,0.06)', text: '#6B7194', pill: '#F1F2F6' },
+  other: { border: '#6e6a85', bg: 'rgba(107,113,148,0.06)', text: '#6e6a85', pill: '#F1F2F6' },
 } as const;
 
 export const MEETING_LABELS: Record<MeetingType, string> = {

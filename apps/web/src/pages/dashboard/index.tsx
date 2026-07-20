@@ -167,9 +167,9 @@ const fadeUp = {
 // ─── PIPELINE STAGE LABELS ──────────────────────────
 
 const PIPELINE_STAGES = [
-  { key: 'SOURCING', label: 'Src', color: '#A78BFA' },
+  { key: 'SOURCING', label: 'Src', color: '#8e7cc3' },
   { key: 'CONTACTE', label: 'Cont', color: '#3B82F6' },
-  { key: 'ENTRETIEN_1', label: 'Entr', color: '#7C5CFC' },
+  { key: 'ENTRETIEN_1', label: 'Entr', color: '#22177A' },
   { key: 'ENVOYE_CLIENT', label: 'Env', color: '#F97316' },
   { key: 'ENTRETIEN_CLIENT', label: 'Client', color: '#14B8A6' },
   { key: 'OFFRE', label: 'Offre', color: '#F59E0B' },
@@ -190,7 +190,7 @@ function StageDots({ highestStage }: { highestStage: string }) {
                 className="h-[1.5px]"
                 style={{
                   width: 8,
-                  background: isReached ? stage.color : '#EEEEF4',
+                  background: isReached ? stage.color : '#eceaf2',
                 }}
               />
             )}
@@ -200,7 +200,7 @@ function StageDots({ highestStage }: { highestStage: string }) {
                 height: isCurrent ? 10 : 7,
                 borderRadius: '50%',
                 background: isReached ? stage.color : 'transparent',
-                border: !isReached ? '1.5px solid #EEEEF4' : isCurrent ? `2px solid ${stage.color}` : 'none',
+                border: !isReached ? '1.5px solid #eceaf2' : isCurrent ? `2px solid ${stage.color}` : 'none',
                 flexShrink: 0,
               }}
               title={stage.label}

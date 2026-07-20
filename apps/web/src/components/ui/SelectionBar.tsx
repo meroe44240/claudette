@@ -21,7 +21,7 @@ export interface SelectionBarProps {
 // ── Variant styles ───────────────────────────────────────────────
 const actionVariant: Record<string, string> = {
   primary:
-    'bg-[#7C5CFC] text-white hover:bg-[#6B4FE0] shadow-sm',
+    'bg-[#22177A] text-white hover:bg-[#6B4FE0] shadow-sm',
   secondary:
     'bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-50',
   ghost:
@@ -48,7 +48,7 @@ export default function SelectionBar({
         >
           {/* Left: count */}
           <div className="flex items-center gap-3">
-            <span className="inline-flex h-7 min-w-[28px] items-center justify-center rounded-full bg-[#7C5CFC] px-2 text-xs font-bold text-white">
+            <span className="inline-flex h-7 min-w-[28px] items-center justify-center rounded-full bg-[#22177A] px-2 text-xs font-bold text-white">
               {count}
             </span>
             <span className="text-sm font-medium text-neutral-700">

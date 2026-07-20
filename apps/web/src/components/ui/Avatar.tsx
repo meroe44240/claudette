@@ -17,7 +17,7 @@ const sizeStyles = {
 };
 
 const AVATAR_COLORS = [
-  '#7C5CFC',
+  '#22177A',
   '#10B981',
   '#F59E0B',
   '#3B82F6',
@@ -39,7 +39,7 @@ function getColorFromName(nom: string, prenom?: string | null): string {
 const statusColors: Record<string, string> = {
   online: '#10B981',
   away: '#F59E0B',
-  offline: '#6B7194',
+  offline: '#6e6a85',
 };
 
 export default function Avatar({ src, nom, prenom, size = 'md', className = '', ring, status }: AvatarProps) {

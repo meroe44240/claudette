@@ -62,17 +62,29 @@ function mandatTitle(m: MandatBase): string {
   return `${m.entreprise} — ${m.titrePoste}`;
 }
 
-// ─── Palette ─────────────────────────────────────────
+// ─── HumanUp brand palette ───────────────────────────
 
 const COLORS = {
-  bg: '#f7f7f7',
-  card: '#ffffff',
-  border: '#e5e7eb',
-  text: '#111827',
-  muted: '#6b7280',
-  accent: '#111827',
-  highlight: '#059669',
+  bg: '#FCFCF5',           // warm cream
+  card: '#FFFFFF',
+  border: '#eceaf2',
+  text: '#1A1533',         // dark navy
+  muted: '#6e6a85',
+  accent: '#22177A',       // brand primary navy
+  accentSoft: '#4b3fb0',
+  highlight: '#E6E9AF',    // chartreuse
+  highlightSoft: '#f0efc4',
 };
+
+const FONT_BODY =
+  "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif";
+const FONT_DISPLAY =
+  "'Archivo Black', 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif";
+
+// Google Fonts CSS — loads Manrope + Archivo Black on Gmail/Apple Mail/mobile,
+// silently falls back on Outlook desktop (which ignores web fonts anyway).
+const GOOGLE_FONTS_LINK =
+  '<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Archivo+Black&display=swap" rel="stylesheet">';
 
 // ─── HTML ────────────────────────────────────────────
 
@@ -87,10 +99,11 @@ export function renderRecapHtml(payload: RecapPayload, tz = 'Asia/Ho_Chi_Minh'):
 <head>
 <meta charset="utf-8">
 <title>${escapeHtml(heading)}</title>
+${GOOGLE_FONTS_LINK}
 </head>
-<body style="margin:0;padding:24px;background:${COLORS.bg};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:${COLORS.text};font-size:14px;line-height:1.5;">
+<body style="margin:0;padding:24px;background:${COLORS.bg};font-family:${FONT_BODY};color:${COLORS.text};font-size:14px;line-height:1.55;">
   <div style="max-width:720px;margin:0 auto;">
-    ${renderHeader(heading, windowLabel)}
+    ${renderBrandHeader(heading, windowLabel)}
     ${renderMandatsSection(mandats, tz)}
     ${renderParPersonneSection(parPersonne)}
     ${renderFooter(payload.generatedAt, tz)}
@@ -99,19 +112,28 @@ export function renderRecapHtml(payload: RecapPayload, tz = 'Asia/Ho_Chi_Minh'):
 </html>`;
 }
 
-function renderHeader(title: string, subtitle: string): string {
+function renderBrandHeader(title: string, subtitle: string): string {
   return `
-  <div style="padding:24px;background:${COLORS.card};border:1px solid ${COLORS.border};border-radius:12px;margin-bottom:16px;">
-    <h1 style="margin:0 0 6px 0;font-size:22px;font-weight:600;color:${COLORS.accent};">
-      ${escapeHtml(title)}
-    </h1>
-    <p style="margin:0;color:${COLORS.muted};font-size:13px;">${escapeHtml(subtitle)}</p>
+  <div style="padding:28px;background:${COLORS.accent};border-radius:16px;margin-bottom:16px;color:#fff;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+      <tr>
+        <td style="width:56px;vertical-align:middle;">
+          <div style="display:inline-block;padding:8px 12px;background:${COLORS.highlight};border-radius:10px;">
+            <span style="font-family:${FONT_DISPLAY};font-size:20px;color:${COLORS.accent};letter-spacing:-0.02em;line-height:1;">Up</span>
+          </div>
+        </td>
+        <td style="padding-left:16px;vertical-align:middle;">
+          <div style="font-family:${FONT_DISPLAY};font-size:22px;letter-spacing:-0.01em;line-height:1.1;">${escapeHtml(title)}</div>
+          <div style="margin-top:4px;font-family:${FONT_BODY};font-size:12px;color:${COLORS.highlight};opacity:0.9;">${escapeHtml(subtitle)}</div>
+        </td>
+      </tr>
+    </table>
   </div>`;
 }
 
 function renderFooter(generatedAt: Date, tz: string): string {
   return `
-  <p style="margin:16px 0 0 0;color:${COLORS.muted};font-size:12px;text-align:center;">
+  <p style="margin:16px 0 0 0;color:${COLORS.muted};font-size:12px;text-align:center;font-family:${FONT_BODY};">
     Genere le ${escapeHtml(formatDate(generatedAt, tz))} — HumanUp ATS
   </p>`;
 }
@@ -273,13 +295,19 @@ function renderParPersonneSection(p: RecapPayload['parPersonne']): string {
 
 function renderCard(title: string, subtitle: string, inner: string): string {
   return `
-  <div style="padding:20px;background:${COLORS.card};border:1px solid ${COLORS.border};border-radius:12px;margin-bottom:16px;">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;">
-      <h2 style="margin:0;font-size:16px;font-weight:600;color:${COLORS.accent};">
-        ${escapeHtml(title)}
-      </h2>
-      <span style="color:${COLORS.muted};font-size:12px;">${escapeHtml(subtitle)}</span>
-    </div>
+  <div style="padding:22px;background:${COLORS.card};border:1px solid ${COLORS.border};border-radius:16px;margin-bottom:16px;box-shadow:0 12px 34px -28px rgba(34,23,122,0.35);">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:14px;">
+      <tr>
+        <td style="vertical-align:baseline;">
+          <h2 style="margin:0;font-family:${FONT_DISPLAY};font-size:17px;letter-spacing:-0.01em;color:${COLORS.accent};">
+            ${escapeHtml(title)}
+          </h2>
+        </td>
+        <td style="text-align:right;vertical-align:baseline;">
+          <span style="color:${COLORS.muted};font-size:12px;">${escapeHtml(subtitle)}</span>
+        </td>
+      </tr>
+    </table>
     ${inner}
   </div>`;
 }

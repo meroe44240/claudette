@@ -51,21 +51,21 @@ interface ActivityJournalProps {
 const typeConfig: Record<string, { icon: React.ElementType; bg: string; color: string }> = {
   APPEL: { icon: Phone, bg: '#EFF6FF', color: '#3B82F6' },
   EMAIL_SORTANT: { icon: Send, bg: '#EFF6FF', color: '#3B82F6' },
-  EMAIL_ENTRANT: { icon: MailOpen, bg: '#F5F3FF', color: '#7C5CFC' },
+  EMAIL_ENTRANT: { icon: MailOpen, bg: '#f6f5fa', color: '#22177A' },
   EMAIL: { icon: Mail, bg: '#EFF6FF', color: '#3B82F6' },
   MEETING: { icon: Calendar, bg: '#F0FDFA', color: '#14B8A6' },
   NOTE: { icon: StickyNote, bg: '#FFF7ED', color: '#F59E0B' },
   TACHE: { icon: CheckCircle, bg: '#ECFDF5', color: '#059669' },
-  TRANSCRIPT: { icon: Mic, bg: '#F5F3FF', color: '#7C5CFC' },
+  TRANSCRIPT: { icon: Mic, bg: '#f6f5fa', color: '#22177A' },
   STATUS_CHANGE: { icon: ArrowRight, bg: '#ECFDF5', color: '#059669' },
-  SEQUENCE_STEP: { icon: Zap, bg: '#F5F3FF', color: '#7C5CFC' },
-  DOCUMENT: { icon: FileText, bg: '#F8F8FC', color: '#6B7194' },
+  SEQUENCE_STEP: { icon: Zap, bg: '#f6f5fa', color: '#22177A' },
+  DOCUMENT: { icon: FileText, bg: '#f6f5fa', color: '#6e6a85' },
 };
 
 function getTypeConfig(type: string, direction?: string | null) {
   if (type === 'EMAIL' && direction === 'SORTANT') return typeConfig.EMAIL_SORTANT;
   if (type === 'EMAIL' && direction === 'ENTRANT') return typeConfig.EMAIL_ENTRANT;
-  return typeConfig[type] ?? { icon: FileText, bg: '#F1F2F6', color: '#6B7194' };
+  return typeConfig[type] ?? { icon: FileText, bg: '#F1F2F6', color: '#6e6a85' };
 }
 
 // Keep backward compatibility for dot colors
@@ -75,7 +75,7 @@ const typeDotColors: Record<string, string> = {
   MEETING: '#14B8A6',
   NOTE: '#F59E0B',
   TACHE: '#059669',
-  TRANSCRIPT: '#7C5CFC',
+  TRANSCRIPT: '#22177A',
 };
 
 const sourceLabels: Record<string, string> = {
@@ -316,7 +316,7 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
             }}
             className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
               activeTab === tab.id
-                ? 'bg-[#7C5CFC] text-white shadow-sm'
+                ? 'bg-[#22177A] text-white shadow-sm'
                 : 'bg-transparent text-neutral-500 hover:bg-neutral-50'
             }`}
           >

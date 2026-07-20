@@ -24,7 +24,7 @@ export default function Tabs({ tabs, activeTab, onChange }: TabsProps) {
           {activeTab === tab.id && (
             <motion.div
               layoutId="active-tab"
-              className="absolute inset-0 rounded-full bg-[#7C5CFC]"
+              className="absolute inset-0 rounded-full bg-[#22177A]"
               transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             />
           )}

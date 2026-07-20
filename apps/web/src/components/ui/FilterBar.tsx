@@ -87,7 +87,7 @@ function FilterDropdown({
         onClick={() => setOpen(!open)}
         className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-all whitespace-nowrap ${
           active
-            ? 'border-[#C4B5FD] bg-[#F5F3FF] text-[#6D28D9]'
+            ? 'border-[#C4B5FD] bg-[#f6f5fa] text-[#6D28D9]'
             : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50'
         }`}
       >
@@ -157,7 +157,7 @@ function MultiSelectMenu({
             <span
               className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors ${
                 checked
-                  ? 'border-[#7C5CFC] bg-[#7C5CFC] text-white'
+                  ? 'border-[#22177A] bg-[#22177A] text-white'
                   : 'border-neutral-300 bg-white'
               }`}
             >
@@ -191,7 +191,7 @@ function SingleSelectMenu({
           key={opt.value}
           onClick={() => onSelect(opt.value)}
           className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs transition-colors hover:bg-neutral-50 ${
-            opt.value === selected ? 'font-semibold text-[#6D28D9] bg-[#F5F3FF]' : 'text-neutral-700'
+            opt.value === selected ? 'font-semibold text-[#6D28D9] bg-[#f6f5fa]' : 'text-neutral-700'
           }`}
         >
           <span className="flex-1 text-left truncate">{opt.label}</span>
@@ -219,13 +219,13 @@ function ToggleFilter({
       onClick={() => onChange(config.key, !value)}
       className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-all whitespace-nowrap ${
         value
-          ? 'border-[#C4B5FD] bg-[#F5F3FF] text-[#6D28D9]'
+          ? 'border-[#C4B5FD] bg-[#f6f5fa] text-[#6D28D9]'
           : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50'
       }`}
     >
       <span
         className={`h-2 w-2 rounded-full transition-colors ${
-          value ? 'bg-[#7C5CFC]' : 'bg-neutral-300'
+          value ? 'bg-[#22177A]' : 'bg-neutral-300'
         }`}
       />
       {config.label}
@@ -252,8 +252,8 @@ function TextFilter({
         placeholder={config.placeholder || config.label}
         className={`h-8 w-[160px] rounded-md border pl-7 pr-2 text-xs font-medium outline-none transition-all ${
           value
-            ? 'border-[#C4B5FD] bg-[#F5F3FF] text-[#6D28D9] placeholder:text-[#A78BFA]'
-            : 'border-neutral-200 bg-white text-neutral-600 placeholder:text-neutral-400 hover:border-neutral-300 focus:border-[#7C5CFC] focus:ring-1 focus:ring-[#7C5CFC]/20'
+            ? 'border-[#C4B5FD] bg-[#f6f5fa] text-[#6D28D9] placeholder:text-[#8e7cc3]'
+            : 'border-neutral-200 bg-white text-neutral-600 placeholder:text-neutral-400 hover:border-neutral-300 focus:border-[#22177A] focus:ring-1 focus:ring-[#22177A]/20'
         }`}
       />
       {value && (
@@ -319,7 +319,7 @@ export default function FilterBar({
 
         {/* Active filters count badge */}
         {activeCount > 0 && (
-          <span className="inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-md bg-[#F5F3FF] px-2.5 text-xs font-semibold text-[#6D28D9] border border-[#C4B5FD]">
+          <span className="inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-md bg-[#f6f5fa] px-2.5 text-xs font-semibold text-[#6D28D9] border border-[#C4B5FD]">
             {activeCount} filtre{activeCount > 1 ? 's' : ''}
           </span>
         )}

@@ -184,7 +184,7 @@ export default function SearchBar({ onSearch, onSelect, onCreate, placeholder = 
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="h-10 w-full rounded-lg border-[1.5px] border-transparent bg-neutral-50 py-2 pl-10 pr-10 text-[13px] outline-none transition-all placeholder:text-neutral-300 focus:border-primary-500 focus:bg-white focus:shadow-[0_0_0_3px_rgba(124,92,252,0.1)]"
+          className="h-10 w-full rounded-lg border-[1.5px] border-transparent bg-neutral-50 py-2 pl-10 pr-10 text-[13px] outline-none transition-all placeholder:text-neutral-300 focus:border-primary-500 focus:bg-white focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
         />
         {query && (
           <button onClick={() => { setQuery(''); setResults([]); setIsOpen(false); }} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-neutral-300 hover:text-neutral-700">

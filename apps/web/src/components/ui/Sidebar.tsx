@@ -176,9 +176,16 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
   // Shared sidebar content (used by both desktop and mobile)
   const sidebarContent = (mobile: boolean) => (
     <>
-      {/* Logo */}
+      {/* Logo — brand "Up" pill */}
       <div className="flex h-16 items-center gap-3 px-6">
-        <img src="/logo-icon.png" alt="HumanUp" className="h-9 w-auto shrink-0" />
+        <div className="flex h-9 w-11 shrink-0 items-center justify-center rounded-lg bg-highlight" style={{ backgroundColor: '#E6E9AF' }}>
+          <span
+            className="text-[15px] font-black leading-none"
+            style={{ fontFamily: "'Archivo Black', sans-serif", color: '#22177A', letterSpacing: '-0.02em' }}
+          >
+            Up
+          </span>
+        </div>
         <AnimatePresence>
           {(mobile || !collapsed) && (
             <motion.span
@@ -186,7 +193,8 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="text-lg font-bold text-white whitespace-nowrap"
+              className="whitespace-nowrap text-lg font-bold text-white"
+              style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em' }}
             >
               HumanUp
             </motion.span>
@@ -286,7 +294,7 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
       <motion.aside
         animate={{ width: collapsed ? 72 : 240 }}
         transition={{ type: 'spring' as const, stiffness: 200, damping: 30 }}
-        className="group/sidebar sticky top-0 hidden h-screen flex-col bg-[#1A1625] overflow-hidden md:flex"
+        className="group/sidebar sticky top-0 hidden h-screen flex-col bg-[#22177A] overflow-hidden md:flex"
       >
         {sidebarContent(false)}
       </motion.aside>
@@ -310,7 +318,7 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-              className="fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col bg-[#1A1625] shadow-2xl md:hidden"
+              className="fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col bg-[#22177A] shadow-2xl md:hidden"
               onClick={(e) => e.stopPropagation()}
             >
               {sidebarContent(true)}

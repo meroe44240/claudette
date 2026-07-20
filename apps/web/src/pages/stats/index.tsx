@@ -78,13 +78,13 @@ const COLORS = {
   activityBlue: '#3B82F6',
   revenueGreen: '#059669',
   revenueGreenDark: '#047857',
-  pipelineViolet: '#7C5CFC',
+  pipelineViolet: '#22177A',
   warningAmber: '#F59E0B',
   dangerRed: '#EF4444',
   commercialTeal: '#14B8A6',
   presentationViolet: '#8B5CF6',
   neutralBg: '#FAFAF9',
-  neutralText: '#6B7194',
+  neutralText: '#6e6a85',
 };
 
 const CARD_SHADOW = '0 2px 12px rgba(26,26,46,0.05)';
@@ -503,7 +503,7 @@ function FunnelChart({ data }: { data: StatsData['funnel'] }) {
               tickLine={false}
               width={110}
             />
-            <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(124,92,252,0.04)' }} />
+            <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(34,23,122,0.04)' }} />
             <Bar
               dataKey="count"
               name="Candidats"
@@ -933,7 +933,7 @@ function TeamComparisonChart({
               tickLine={false}
               allowDecimals={false}
             />
-            <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(124,92,252,0.04)' }} />
+            <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(34,23,122,0.04)' }} />
             <Legend
               iconType="circle"
               iconSize={8}

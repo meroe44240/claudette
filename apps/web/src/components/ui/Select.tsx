@@ -117,7 +117,7 @@ export default function Select({ options, value, onChange, placeholder = 'Sélec
         ref={buttonRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className={`flex h-10 w-full items-center justify-between rounded-lg border-[1.5px] bg-white px-3 py-2.5 text-sm outline-none transition-all ${error ? 'border-error' : 'border-neutral-100'} ${open ? 'border-primary-500 shadow-[0_0_0_3px_rgba(124,92,252,0.1)]' : ''}`}
+        className={`flex h-10 w-full items-center justify-between rounded-lg border-[1.5px] bg-white px-3 py-2.5 text-sm outline-none transition-all ${error ? 'border-error' : 'border-neutral-100'} ${open ? 'border-primary-500 shadow-[0_0_0_3px_rgba(34,23,122,0.1)]' : ''}`}
       >
         <span className={selected ? 'text-neutral-900' : 'text-neutral-300'}>{selected?.label || placeholder}</span>
         <ChevronDown size={16} className="text-neutral-300" />

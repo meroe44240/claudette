@@ -381,7 +381,7 @@ export default function ClientsPage() {
           type="checkbox"
           checked={allSelected}
           onChange={toggleSelectAll}
-          className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer"
+          className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer"
         />
       ) as unknown as string,
       render: (r: Client) => (
@@ -390,7 +390,7 @@ export default function ClientsPage() {
           checked={selectedIds.has(r.id)}
           onChange={(e) => { e.stopPropagation(); toggleSelect(r.id); }}
           onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer"
+          className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer"
         />
       ),
       className: 'w-10',
@@ -586,8 +586,8 @@ export default function ClientsPage() {
         onClick={() => navigate(`/clients/${client.id}`)}
         onMouseEnter={() => prefetchOnHover(['client', client.id], `/clients/${client.id}`)}
         onMouseLeave={cancelPrefetch}
-        className={`group relative cursor-pointer rounded-xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:border-[#7C5CFC]/30 ${
-          isSelected ? 'border-[#7C5CFC] ring-2 ring-[#7C5CFC]/20 shadow-md' : 'border-neutral-100 shadow-sm'
+        className={`group relative cursor-pointer rounded-xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:border-[#22177A]/30 ${
+          isSelected ? 'border-[#22177A] ring-2 ring-[#22177A]/20 shadow-md' : 'border-neutral-100 shadow-sm'
         } ${focusedIndex === index ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}`}
       >
         <div className="flex items-center gap-4 px-4 py-3">
@@ -597,7 +597,7 @@ export default function ClientsPage() {
             checked={isSelected}
             onChange={(e) => { e.stopPropagation(); toggleSelect(client.id); }}
             onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded border-neutral-300 text-[#7C5CFC] focus:ring-[#7C5CFC]/30 cursor-pointer flex-shrink-0"
+            className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer flex-shrink-0"
           />
 
           {/* Avatar */}
@@ -609,7 +609,7 @@ export default function ClientsPage() {
               {fullName}
             </p>
             {client.poste && (
-              <p className="mt-0.5 truncate text-[12px] font-medium text-[#7C5CFC]">
+              <p className="mt-0.5 truncate text-[12px] font-medium text-[#22177A]">
                 {client.poste}
               </p>
             )}
