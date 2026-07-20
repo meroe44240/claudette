@@ -47,7 +47,6 @@ const IntegrationsSettingsPage = lazy(() => import('./pages/settings/integration
 const InterviewSchedulerPage = lazy(() => import('./pages/settings/interview-scheduler'));
 const ImportPage = lazy(() => import('./pages/import/index'));
 const SequencesPage = lazy(() => import('./pages/sequences/index'));
-const SdrPage = lazy(() => import('./pages/sdr/index'));
 const AdchasePage = lazy(() => import('./pages/adchase/index'));
 const ReportsPage = lazy(() => import('./pages/reports/index'));
 const StatsPage = lazy(() => import('./pages/stats/index'));
@@ -119,7 +118,6 @@ export default function App() {
           <Route path="notifications" element={<NotificationsPage />} />
           <Route path="import" element={<ImportPage />} />
           <Route path="sequences" element={<SequencesPage />} />
-          <Route path="sdr" element={<SdrPage />} />
           <Route path="adchase" element={<AdchasePage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/integrations" element={<IntegrationsSettingsPage />} />
