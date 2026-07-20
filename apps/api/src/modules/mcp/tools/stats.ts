@@ -49,91 +49,463 @@ export function registerStatsTools(server: McpServer) {
   // ─── get_daily_brief ──────────────────────────────────
   server.tool(
     'get_daily_brief',
-    "Recupere le brief quotidien du recruteur : stats, RDV du jour, taches urgentes, alertes, objectifs. Appeler quand le recruteur dit bonjour, demande son programme, ou veut savoir quoi faire.",
+    "Brief matinal du recruteur : 5 KPIs (calls, prez, RDV, placements, CA), agenda du jour, kanban actif par mandat, relances a faire (>7j sans activite), taches. Appeler quand le recruteur dit bonjour, 'ma journee', 'brief du jour'.",
     {
       date: z.string().optional().describe('Date au format YYYY-MM-DD. Defaut: aujourd\'hui.'),
+      relances_threshold_days: z.number().optional().default(7).describe('Nombre de jours sans activite au-dela duquel on suggere une relance. Defaut 7.'),
     },
     wrapTool('get_daily_brief', async (args, user) => {
       const today = args.date ? new Date(args.date as string) : new Date();
       const dayStart = startOfDay(today);
       const dayEnd = new Date(dayStart);
       dayEnd.setDate(dayEnd.getDate() + 1);
+      const yesterdayStart = new Date(dayStart);
+      yesterdayStart.setDate(yesterdayStart.getDate() - 1);
       const weekStart = startOfWeek(today);
       const monthStart = startOfMonth(today);
       const quarterStart = startOfQuarter(today);
+      const relancesThreshold = new Date(dayStart);
+      relancesThreshold.setDate(relancesThreshold.getDate() - ((args.relances_threshold_days as number) || 7));
 
-      // Parallel data fetching
       const [
-        callsToday, callsWeek,
-        tasksOverdue, tasksToday,
-        mandatsActifs, candidaturesActives,
-        placementsQuarter, caMonth,
+        // KPIs cockpit
+        callsToday, callsYesterday, callsMonth,
+        presentationsToday, presentationsMonth,
+        rdvToday, rdvMonth,
+        placementsToday, placementsMonth, placementsQuarter,
+        caMonth, caQuarter,
+        // Agenda + tasks
+        meetingsToday, tasksOverdue, tasksToday,
+        // Pipeline actif
+        activeMandates,
+        // Alertes
         objectives,
       ] = await Promise.all([
-        // Calls today
+        // Calls
         prisma.activite.count({ where: { userId: user.userId, type: 'APPEL', createdAt: { gte: dayStart, lt: dayEnd } } }),
-        // Calls this week
-        prisma.activite.count({ where: { userId: user.userId, type: 'APPEL', createdAt: { gte: weekStart } } }),
+        prisma.activite.count({ where: { userId: user.userId, type: 'APPEL', createdAt: { gte: yesterdayStart, lt: dayStart } } }),
+        prisma.activite.count({ where: { userId: user.userId, type: 'APPEL', createdAt: { gte: monthStart } } }),
+        // Presentations (stage transitions to ENTRETIEN_CLIENT)
+        prisma.stageHistory.count({
+          where: {
+            toStage: 'ENTRETIEN_CLIENT',
+            changedAt: { gte: dayStart, lt: dayEnd },
+            OR: [
+              { changedById: user.userId },
+              { candidature: { mandat: { OR: [{ assignedToId: user.userId }, { sourceurId: user.userId }] } } },
+            ],
+          },
+        }),
+        prisma.stageHistory.count({
+          where: {
+            toStage: 'ENTRETIEN_CLIENT',
+            changedAt: { gte: monthStart },
+            OR: [
+              { changedById: user.userId },
+              { candidature: { mandat: { OR: [{ assignedToId: user.userId }, { sourceurId: user.userId }] } } },
+            ],
+          },
+        }),
+        // RDV (meetings type)
+        prisma.activite.count({ where: { userId: user.userId, type: 'MEETING', createdAt: { gte: dayStart, lt: dayEnd } } }),
+        prisma.activite.count({ where: { userId: user.userId, type: 'MEETING', createdAt: { gte: monthStart } } }),
+        // Placements (stage transitions to PLACE)
+        prisma.stageHistory.count({
+          where: {
+            toStage: 'PLACE',
+            changedAt: { gte: dayStart, lt: dayEnd },
+            OR: [
+              { changedById: user.userId },
+              { candidature: { mandat: { OR: [{ assignedToId: user.userId }, { sourceurId: user.userId }] } } },
+            ],
+          },
+        }),
+        prisma.stageHistory.count({
+          where: {
+            toStage: 'PLACE',
+            changedAt: { gte: monthStart },
+            OR: [
+              { changedById: user.userId },
+              { candidature: { mandat: { OR: [{ assignedToId: user.userId }, { sourceurId: user.userId }] } } },
+            ],
+          },
+        }),
+        prisma.stageHistory.count({
+          where: {
+            toStage: 'PLACE',
+            changedAt: { gte: quarterStart },
+            OR: [
+              { changedById: user.userId },
+              { candidature: { mandat: { OR: [{ assignedToId: user.userId }, { sourceurId: user.userId }] } } },
+            ],
+          },
+        }),
+        // CA (fees invoiced/paid)
+        prisma.mandat.aggregate({
+          where: {
+            OR: [{ assignedToId: user.userId }, { sourceurId: user.userId }],
+            feeStatut: { in: ['FACTURE', 'PAYE'] },
+            updatedAt: { gte: monthStart },
+          },
+          _sum: { feeMontantFacture: true },
+        }),
+        prisma.mandat.aggregate({
+          where: {
+            OR: [{ assignedToId: user.userId }, { sourceurId: user.userId }],
+            feeStatut: { in: ['FACTURE', 'PAYE'] },
+            updatedAt: { gte: quarterStart },
+          },
+          _sum: { feeMontantFacture: true },
+        }),
+        // Meetings today (agenda)
+        prisma.activite.findMany({
+          where: { userId: user.userId, type: 'MEETING', createdAt: { gte: dayStart, lt: dayEnd } },
+          select: { id: true, titre: true, createdAt: true, entiteType: true, entiteId: true, metadata: true },
+          orderBy: { createdAt: 'asc' },
+        }),
         // Overdue tasks
         prisma.activite.findMany({
           where: { userId: user.userId, isTache: true, tacheCompleted: false, tacheDueDate: { lt: dayStart } },
-          select: { id: true, titre: true, tacheDueDate: true, metadata: true, entiteType: true },
-          take: 10,
+          select: { id: true, titre: true, tacheDueDate: true, metadata: true, entiteType: true, entiteId: true },
+          take: 15,
           orderBy: { tacheDueDate: 'asc' },
         }),
         // Today tasks
         prisma.activite.findMany({
           where: { userId: user.userId, isTache: true, tacheCompleted: false, tacheDueDate: { gte: dayStart, lt: dayEnd } },
-          select: { id: true, titre: true, tacheDueDate: true, metadata: true, entiteType: true },
-          take: 10,
+          select: { id: true, titre: true, tacheDueDate: true, metadata: true, entiteType: true, entiteId: true },
+          take: 15,
         }),
-        // Active mandates
-        prisma.mandat.count({ where: { assignedToId: user.userId, statut: { in: ['OUVERT', 'EN_COURS'] } } }),
-        // Active candidatures
-        prisma.candidature.count({ where: { createdById: user.userId, stage: { notIn: ['REFUSE', 'PLACE'] } } }),
-        // Placements this quarter
-        prisma.candidature.count({ where: { createdById: user.userId, stage: 'PLACE', updatedAt: { gte: quarterStart } } }),
-        // CA this month (from fees)
-        prisma.mandat.aggregate({
-          where: { assignedToId: user.userId, feeStatut: { in: ['FACTURE', 'PAYE'] }, updatedAt: { gte: monthStart } },
-          _sum: { feeMontantFacture: true },
+        // Active mandates with candidature counts by stage
+        prisma.mandat.findMany({
+          where: {
+            OR: [{ assignedToId: user.userId }, { sourceurId: user.userId }],
+            statut: { in: ['OUVERT', 'EN_COURS'] },
+          },
+          select: {
+            id: true,
+            titrePoste: true,
+            entreprise: { select: { nom: true } },
+            candidatures: {
+              where: { stage: { notIn: ['REFUSE', 'PLACE'] } },
+              select: { stage: true },
+            },
+          },
         }),
         // Objectives
         prisma.recruiterObjective.findMany({ where: { userId: user.userId } }),
       ]);
 
-      // Format objectives
-      const objMap = new Map(objectives.map(o => [`${o.period}_${o.metric}`, o.target]));
-      const dailyObj = {
-        calls: { actual: callsToday, target: objMap.get('daily_calls') || 30 },
-        rdv: { actual: 0, target: objMap.get('daily_rdv') || 1 },
-      };
+      // Relances TODO: candidats en pipeline actif sans activité depuis threshold
+      const relancesCandidates = await prisma.candidature.findMany({
+        where: {
+          mandat: {
+            OR: [{ assignedToId: user.userId }, { sourceurId: user.userId }],
+            statut: { in: ['OUVERT', 'EN_COURS'] },
+          },
+          stage: { notIn: ['REFUSE', 'PLACE', 'SOURCING'] },
+          candidat: {
+            activites: { none: { createdAt: { gte: relancesThreshold } } },
+          },
+        },
+        select: {
+          id: true,
+          stage: true,
+          updatedAt: true,
+          candidat: { select: { id: true, nom: true, prenom: true } },
+          mandat: { select: { titrePoste: true, entreprise: { select: { nom: true } } } },
+        },
+        orderBy: { updatedAt: 'asc' },
+        take: 20,
+      });
 
       const user_ = await prisma.user.findUnique({ where: { id: user.userId }, select: { prenom: true, nom: true } });
+      const objMap = new Map(objectives.map((o) => [`${o.period}_${o.metric}`, o.target]));
+
+      // Pipeline kanban compact
+      const pipeline = activeMandates
+        .map((m) => {
+          const byStage: Record<string, number> = {};
+          for (const c of m.candidatures) {
+            byStage[c.stage] = (byStage[c.stage] || 0) + 1;
+          }
+          return {
+            titre: m.titrePoste,
+            entreprise: m.entreprise?.nom,
+            total_actifs: m.candidatures.length,
+            par_stage: byStage,
+          };
+        })
+        .filter((m) => m.total_actifs > 0)
+        .sort((a, b) => b.total_actifs - a.total_actifs)
+        .slice(0, 10);
 
       return {
         greeting: `Bonjour ${user_?.prenom || ''} !`,
         date: today.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-        stats: {
-          calls_today: callsToday,
-          calls_week: callsWeek,
-          mandats_actifs: mandatsActifs,
-          candidatures_actives: candidaturesActives,
-          placements_quarter: placementsQuarter,
-          ca_month: caMonth._sum?.feeMontantFacture || 0,
+        kpis: {
+          calls: { today: callsToday, yesterday: callsYesterday, month: callsMonth, target_daily: objMap.get('daily_calls') || 30 },
+          presentations: { today: presentationsToday, month: presentationsMonth },
+          rdv: { today: rdvToday, month: rdvMonth, target_daily: objMap.get('daily_rdv') || 1 },
+          placements: { today: placementsToday, month: placementsMonth, quarter: placementsQuarter },
+          ca: { month_eur: caMonth._sum?.feeMontantFacture || 0, quarter_eur: caQuarter._sum?.feeMontantFacture || 0 },
         },
-        daily_objectives: dailyObj,
+        agenda_today: meetingsToday.map((m) => ({
+          id: m.id,
+          title: m.titre,
+          time: m.createdAt,
+          entity_type: m.entiteType,
+          entity_id: m.entiteId,
+          location: (m.metadata as any)?.location || null,
+        })),
+        relances_todo: relancesCandidates.map((c) => ({
+          candidature_id: c.id,
+          stage: c.stage,
+          candidat: `${c.candidat.prenom || ''} ${c.candidat.nom}`.trim(),
+          candidat_id: c.candidat.id,
+          mandat: c.mandat.titrePoste,
+          entreprise: c.mandat.entreprise?.nom,
+          days_since_update: Math.floor((Date.now() - c.updatedAt.getTime()) / 86_400_000),
+        })),
+        pipeline_actif: pipeline,
         tasks: {
-          overdue: tasksOverdue.map(t => ({ id: t.id, title: t.titre, due: t.tacheDueDate, priority: (t.metadata as any)?.priority })),
-          today: tasksToday.map(t => ({ id: t.id, title: t.titre, due: t.tacheDueDate, priority: (t.metadata as any)?.priority })),
+          overdue: tasksOverdue.map((t) => ({ id: t.id, title: t.titre, due: t.tacheDueDate, entity_type: t.entiteType, entity_id: t.entiteId })),
+          today: tasksToday.map((t) => ({ id: t.id, title: t.titre, due: t.tacheDueDate, entity_type: t.entiteType, entity_id: t.entiteId })),
         },
-        instructions_for_claude: `Affiche le brief de maniere structuree:
-1. Salutation + date
-2. Objectifs du jour (appels, RDV) avec progression
-3. Taches en retard (si existantes, en rouge)
-4. Taches du jour
-5. Stats cles (mandats actifs, CA, placements)
-6. Suggestions proactives basees sur les donnees`,
+        instructions_for_claude: [
+          'Presente le brief dans cet ordre :',
+          '1. Salutation courte + date',
+          '2. 📊 KPIs du mois en une ligne (calls / prez / RDV / placements / CA)',
+          '3. 📅 Agenda du jour (heures + participants) si non vide',
+          '4. 🎯 Pipeline actif : top mandats + nombre de candidats par stage',
+          '5. 🔔 Relances à faire (bloc `relances_todo` — candidats sans activité depuis N jours)',
+          '6. ✅ Tâches en retard puis tâches du jour',
+          '7. Termine par UNE proposition de blocs horaires pour la journée (deep work + calls + relances + admin).',
+          'Sois concis, utilise des emojis, pas de bullshit motivational.',
+        ].join('\n'),
+      };
+    }),
+  );
+
+  // ─── list_relances_todo ────────────────────────────────
+  server.tool(
+    'list_relances_todo',
+    "Liste les candidats du recruteur sans activite depuis N jours (default 7), triés du plus urgent au moins urgent. Le recruteur ou Claude peut appeler pour construire une session de relance ciblee.",
+    {
+      days_since_last_activity: z.number().optional().default(7).describe('Seuil en jours au-dela duquel on considere une relance necessaire.'),
+      limit: z.number().optional().default(30).describe('Nombre max de resultats. Defaut 30.'),
+      entity_type: z.enum(['candidat', 'client', 'both']).optional().default('candidat').describe('Type de relance à retourner.'),
+    },
+    wrapTool('list_relances_todo', async (args, user) => {
+      const days = (args.days_since_last_activity as number) || 7;
+      const limit = (args.limit as number) || 30;
+      const entityType = (args.entity_type as string) || 'candidat';
+      const threshold = new Date();
+      threshold.setDate(threshold.getDate() - days);
+
+      const result: any = { threshold_date: threshold.toISOString(), days_since_last_activity: days };
+
+      if (entityType === 'candidat' || entityType === 'both') {
+        const candidatures = await prisma.candidature.findMany({
+          where: {
+            mandat: {
+              OR: [{ assignedToId: user.userId }, { sourceurId: user.userId }],
+              statut: { in: ['OUVERT', 'EN_COURS'] },
+            },
+            stage: { notIn: ['REFUSE', 'PLACE', 'SOURCING'] },
+            candidat: { activites: { none: { createdAt: { gte: threshold } } } },
+          },
+          select: {
+            id: true,
+            stage: true,
+            updatedAt: true,
+            candidat: { select: { id: true, nom: true, prenom: true, telephone: true, email: true } },
+            mandat: { select: { id: true, titrePoste: true, entreprise: { select: { nom: true } } } },
+          },
+          orderBy: { updatedAt: 'asc' },
+          take: limit,
+        });
+        result.candidates = candidatures.map((c) => ({
+          candidature_id: c.id,
+          candidat_id: c.candidat.id,
+          candidat: `${c.candidat.prenom || ''} ${c.candidat.nom}`.trim(),
+          telephone: c.candidat.telephone,
+          email: c.candidat.email,
+          stage: c.stage,
+          mandat: c.mandat.titrePoste,
+          entreprise: c.mandat.entreprise?.nom,
+          mandat_id: c.mandat.id,
+          days_since_last_activity: Math.floor((Date.now() - c.updatedAt.getTime()) / 86_400_000),
+          suggested_channel: c.candidat.telephone ? 'call' : 'email',
+        }));
+      }
+
+      if (entityType === 'client' || entityType === 'both') {
+        const clients = await prisma.client.findMany({
+          where: {
+            OR: [{ assignedToId: user.userId }, { createdById: user.userId }],
+            statutClient: { notIn: ['INACTIF'] },
+            activites: { none: { createdAt: { gte: threshold } } },
+          },
+          select: {
+            id: true,
+            nom: true,
+            prenom: true,
+            telephone: true,
+            email: true,
+            entreprise: { select: { nom: true } },
+            updatedAt: true,
+          },
+          orderBy: { updatedAt: 'asc' },
+          take: limit,
+        });
+        result.clients = clients.map((c) => ({
+          client_id: c.id,
+          nom: `${c.prenom || ''} ${c.nom}`.trim(),
+          telephone: c.telephone,
+          email: c.email,
+          entreprise: c.entreprise?.nom,
+          days_since_last_activity: Math.floor((Date.now() - c.updatedAt.getTime()) / 86_400_000),
+          suggested_channel: c.telephone ? 'call' : 'email',
+        }));
+      }
+
+      return result;
+    }),
+  );
+
+  // ─── plan_my_day ──────────────────────────────────────
+  server.tool(
+    'plan_my_day',
+    "Propose une organisation de journee en blocs horaires (deep work / calls / relances / admin) en tenant compte de l'agenda du recruteur, des taches urgentes et des relances a faire. Retourne les blocs proposes SANS les creer dans Google Calendar — le recruteur doit ensuite valider et Claude appellera create_rdv si besoin.",
+    {
+      date: z.string().optional().describe('Date au format YYYY-MM-DD. Defaut: aujourd\'hui.'),
+      start_hour: z.number().optional().default(9).describe("Heure de debut de journee (defaut 9)"),
+      end_hour: z.number().optional().default(18).describe("Heure de fin de journee (defaut 18)"),
+      lunch_start_hour: z.number().optional().default(12).describe("Debut pause dej (defaut 12)"),
+      lunch_duration_min: z.number().optional().default(60).describe("Duree pause dej en min (defaut 60)"),
+    },
+    wrapTool('plan_my_day', async (args, user) => {
+      const targetDate = args.date ? new Date(args.date as string) : new Date();
+      const dayStart = startOfDay(targetDate);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+      const startHour = (args.start_hour as number) || 9;
+      const endHour = (args.end_hour as number) || 18;
+      const lunchStart = (args.lunch_start_hour as number) || 12;
+      const lunchDurationMin = (args.lunch_duration_min as number) || 60;
+
+      const relancesThreshold = new Date(dayStart);
+      relancesThreshold.setDate(relancesThreshold.getDate() - 7);
+
+      const [meetings, overdueTasks, todayTasks, relances] = await Promise.all([
+        prisma.activite.findMany({
+          where: { userId: user.userId, type: 'MEETING', createdAt: { gte: dayStart, lt: dayEnd } },
+          select: { id: true, titre: true, createdAt: true, metadata: true },
+          orderBy: { createdAt: 'asc' },
+        }),
+        prisma.activite.count({ where: { userId: user.userId, isTache: true, tacheCompleted: false, tacheDueDate: { lt: dayStart } } }),
+        prisma.activite.count({ where: { userId: user.userId, isTache: true, tacheCompleted: false, tacheDueDate: { gte: dayStart, lt: dayEnd } } }),
+        prisma.candidature.count({
+          where: {
+            mandat: {
+              OR: [{ assignedToId: user.userId }, { sourceurId: user.userId }],
+              statut: { in: ['OUVERT', 'EN_COURS'] },
+            },
+            stage: { notIn: ['REFUSE', 'PLACE', 'SOURCING'] },
+            candidat: { activites: { none: { createdAt: { gte: relancesThreshold } } } },
+          },
+        }),
+      ]);
+
+      // Convert meetings to blocks (fixed) then fill the gaps.
+      const meetingBlocks = meetings.map((m) => {
+        const start = new Date(m.createdAt);
+        const duration = (m.metadata as any)?.dureeMinutes || 60;
+        const end = new Date(start.getTime() + duration * 60_000);
+        return {
+          type: 'meeting' as const,
+          title: m.titre,
+          start_iso: start.toISOString(),
+          end_iso: end.toISOString(),
+          fixed: true,
+        };
+      });
+
+      // Build free-time slots between meetings within work hours.
+      const dayStartWork = new Date(dayStart);
+      dayStartWork.setHours(startHour, 0, 0, 0);
+      const dayEndWork = new Date(dayStart);
+      dayEndWork.setHours(endHour, 0, 0, 0);
+      const lunchStartTime = new Date(dayStart);
+      lunchStartTime.setHours(lunchStart, 0, 0, 0);
+      const lunchEndTime = new Date(lunchStartTime.getTime() + lunchDurationMin * 60_000);
+
+      // Compose a suggested schedule (soft blocks) around meetings + lunch.
+      const softBlocks: Array<{ type: string; title: string; start_iso: string; end_iso: string; fixed: boolean }> = [];
+
+      // Morning deep work / callback prep (first free slot after startHour)
+      const firstMeetingStart = meetings[0]?.createdAt || dayEndWork;
+      if (firstMeetingStart > dayStartWork) {
+        const morningEnd = new Date(Math.min(firstMeetingStart.getTime(), lunchStartTime.getTime()));
+        softBlocks.push({
+          type: 'prep',
+          title: 'Deep work / prépa RDV du jour',
+          start_iso: dayStartWork.toISOString(),
+          end_iso: morningEnd.toISOString(),
+          fixed: false,
+        });
+      }
+
+      // Lunch
+      softBlocks.push({
+        type: 'lunch',
+        title: 'Pause déjeuner',
+        start_iso: lunchStartTime.toISOString(),
+        end_iso: lunchEndTime.toISOString(),
+        fixed: false,
+      });
+
+      // Afternoon: relances + admin
+      if (relances > 0) {
+        const afterLunchStart = new Date(lunchEndTime);
+        const afterLunchEnd = new Date(afterLunchStart.getTime() + 60 * 60_000);
+        softBlocks.push({
+          type: 'relances',
+          title: `Session relances (${relances} candidats en attente)`,
+          start_iso: afterLunchStart.toISOString(),
+          end_iso: afterLunchEnd.toISOString(),
+          fixed: false,
+        });
+      }
+
+      const adminBlockStart = new Date(dayEndWork.getTime() - 45 * 60_000);
+      softBlocks.push({
+        type: 'admin',
+        title: 'Admin, notes, ATS',
+        start_iso: adminBlockStart.toISOString(),
+        end_iso: dayEndWork.toISOString(),
+        fixed: false,
+      });
+
+      const allBlocks = [...meetingBlocks, ...softBlocks].sort((a, b) => a.start_iso.localeCompare(b.start_iso));
+
+      return {
+        date: targetDate.toLocaleDateString('fr-FR'),
+        context: {
+          meetings_count: meetings.length,
+          overdue_tasks: overdueTasks,
+          today_tasks: todayTasks,
+          relances_pending: relances,
+        },
+        proposed_blocks: allBlocks,
+        instructions_for_claude: [
+          'Presente les blocs proposes sous forme de tableau horaire.',
+          'Distingue les blocs fixes (meetings deja confirmes) des blocs souples (prep, relances, admin).',
+          'Demande au recruteur s\'il veut ajuster (deplacer un bloc, en ajouter, en retirer) ou tout valider.',
+          'Si validation → appelle create_rdv pour les blocs qu\'il souhaite materialiser dans Google Calendar.',
+          'Ne cree RIEN sans confirmation explicite.',
+        ].join('\n'),
       };
     }),
   );
