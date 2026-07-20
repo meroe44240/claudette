@@ -17,7 +17,6 @@ const DocsMcpPage = lazy(() => import('./pages/docs/mcp'));
 // Protected pages
 const DashboardPage = lazy(() => import('./pages/dashboard/index'));
 const MonEspacePage = lazy(() => import('./pages/mon-espace/index'));
-const NotificationsPage = lazy(() => import('./pages/notifications/index'));
 const SettingsPage = lazy(() => import('./pages/settings/index'));
 const CandidatsPage = lazy(() => import('./pages/candidats/index'));
 const CandidatDetailPage = lazy(() => import('./pages/candidats/[id]'));
@@ -95,7 +94,6 @@ export default function App() {
           <Route path="mandats/:id" element={<MandatDetailPage />} />
           <Route path="activites" element={<ActivitesPage />} />
           <Route path="taches" element={<TachesPage />} />
-          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="import" element={<ImportPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/integrations" element={<IntegrationsSettingsPage />} />

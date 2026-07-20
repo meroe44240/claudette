@@ -20,7 +20,6 @@ import candidatureRouter from './modules/candidatures/candidature.router.js';
 import searchRouter from './modules/search/search.router.js';
 import activiteRouter from './modules/activites/activite.router.js';
 import tacheRouter from './modules/taches/tache.router.js';
-import notificationRouter from './modules/notifications/notification.router.js';
 import dashboardRouter from './modules/dashboard/dashboard.router.js';
 import settingsRouter from './modules/settings/settings.router.js';
 import integrationRouter from './modules/integrations/integration.router.js';
@@ -146,7 +145,6 @@ async function buildApp() {
   await app.register(searchRouter, { prefix: '/api/v1/search' });
   await app.register(activiteRouter, { prefix: '/api/v1/activites' });
   await app.register(tacheRouter, { prefix: '/api/v1/taches' });
-  await app.register(notificationRouter, { prefix: '/api/v1/notifications' });
   await app.register(dashboardRouter, { prefix: '/api/v1/dashboard' });
   await app.register(settingsRouter, { prefix: '/api/v1/settings' });
   await app.register(integrationRouter, { prefix: '/api/v1/integrations' });

@@ -1,60 +1,18 @@
-import prisma from '../../lib/db.js';
-import { NotFoundError } from '../../lib/errors.js';
-import { paginatedResult, paginationToSkipTake } from '../../lib/pagination.js';
-import type { PaginationParams } from '../../lib/pagination.js';
 import type { TypeNotification, EntiteType } from '@prisma/client';
 
-export async function list(userId: string, params: PaginationParams, lue?: boolean) {
-  const where: any = { userId };
+/**
+ * In-app notifications feature was removed. Everything user-facing now goes
+ * through Slack DM (via `slackUserId`). This module keeps `create()` as a
+ * no-op stub so the ~14 callers spread across ai/call-summary, ai/call-brief,
+ * transcripts, gmail, allo, calendar don't need to be touched right now —
+ * they'll be cleaned in a follow-up refactor when we decide which pings
+ * should route through Slack.
+ *
+ * The whole file will disappear once every caller stops importing it.
+ */
 
-  if (lue !== undefined) {
-    where.lue = lue;
-  }
-
-  const { skip, take } = paginationToSkipTake(params);
-
-  const [data, total] = await Promise.all([
-    prisma.notification.findMany({
-      where,
-      skip,
-      take,
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.notification.count({ where }),
-  ]);
-
-  return paginatedResult(data, total, params);
-}
-
-export async function markAsRead(id: string, userId: string) {
-  const notification = await prisma.notification.findUnique({ where: { id } });
-
-  if (!notification || notification.userId !== userId) {
-    throw new NotFoundError('Notification', id);
-  }
-
-  return prisma.notification.update({
-    where: { id },
-    data: { lue: true },
-  });
-}
-
-export async function markAllAsRead(userId: string) {
-  return prisma.notification.updateMany({
-    where: { userId, lue: false },
-    data: { lue: true },
-  });
-}
-
-export async function getUnreadCount(userId: string) {
-  const count = await prisma.notification.count({
-    where: { userId, lue: false },
-  });
-
-  return { count };
-}
-
-export async function create(data: {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function create(_data: {
   userId: string;
   type: TypeNotification;
   titre: string;
@@ -62,14 +20,6 @@ export async function create(data: {
   entiteType?: EntiteType;
   entiteId?: string;
 }) {
-  return prisma.notification.create({
-    data: {
-      userId: data.userId,
-      type: data.type,
-      titre: data.titre,
-      contenu: data.contenu,
-      entiteType: data.entiteType,
-      entiteId: data.entiteId,
-    },
-  });
+  // No-op: in-app notifications are removed. See file header.
+  return null;
 }
