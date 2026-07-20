@@ -14,6 +14,8 @@ export const createMandatSchema = z.object({
   notes: z.string().optional(),
   assignedToId: z.string().uuid().optional(),
   sourceurId: z.string().uuid().nullable().optional(),
+  salesId: z.string().uuid().nullable().optional(),
+  recruteurId: z.string().uuid().nullable().optional(),
 });
 
 export const updateMandatSchema = z.object({
@@ -30,6 +32,8 @@ export const updateMandatSchema = z.object({
   notes: z.string().nullable().optional(),
   assignedToId: z.string().uuid().nullable().optional(),
   sourceurId: z.string().uuid().nullable().optional(),
+  salesId: z.string().uuid().nullable().optional(),
+  recruteurId: z.string().uuid().nullable().optional(),
   transcript: z.string().nullable().optional(),
   ficheDePoste: z.string().nullable().optional(),
   scorecard: z.any().optional(),
