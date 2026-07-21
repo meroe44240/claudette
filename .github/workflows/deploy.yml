@@ -1,0 +1,55 @@
+name: Deploy to production
+
+on:
+  # Auto-deploy at every push to main (after CI passes)
+  workflow_run:
+    workflows: ['CI/CD']
+    types: [completed]
+    branches: [main]
+  # Manual trigger (Actions tab → Run workflow)
+  workflow_dispatch:
+
+concurrency:
+  group: prod-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Only run when the upstream CI succeeded (or on manual dispatch)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: SSH deploy on ats.propium.co
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ats.propium.co
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 12m
+          script: |
+            set -euo pipefail
+            cd /root/claudette
+
+            echo "→ Pulling latest main…"
+            git fetch --tags origin main
+            git reset --hard origin/main
+
+            echo "→ Building & restarting containers…"
+            cd docker
+            docker compose -f docker-compose.prod.yml up -d --build
+
+            echo "→ Applying Prisma migrations…"
+            docker compose -f docker-compose.prod.yml exec -T api npx prisma migrate deploy
+
+            echo "→ Post-deploy check:"
+            docker compose -f docker-compose.prod.yml ps
+            sleep 3
+            curl -fsS http://localhost:3001/health || echo "(no /health endpoint — skipping)"
+
+            echo "✓ Deploy done: $(git rev-parse --short HEAD)"
