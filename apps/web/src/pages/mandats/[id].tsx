@@ -1239,13 +1239,14 @@ function ClientActivityCard({
   entrepriseNom: string;
   onOpenClient: () => void;
 }) {
-  const { data: activities } = useQuery({
+  const { data: activitiesResp } = useQuery({
     queryKey: ['activites', 'CLIENT', client.id, 5],
     queryFn: () =>
-      api.get<ClientActivity[]>(
-        `/activites?entiteType=CLIENT&entiteId=${client.id}&limit=5`,
+      api.get<{ data: ClientActivity[]; meta?: unknown }>(
+        `/activites?entiteType=CLIENT&entiteId=${client.id}&perPage=5`,
       ),
   });
+  const activities = activitiesResp?.data;
 
   const contactLabel =
     [client.prenom, client.nom].filter(Boolean).join(' ').trim() || 'Contact client';
