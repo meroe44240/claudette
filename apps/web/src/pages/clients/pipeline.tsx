@@ -298,20 +298,29 @@ export default function ClientPipelinePage() {
 
   return (
     <div>
+      {/* Eyebrow amber + h1 40px + description (aligné mock) */}
       <div className="mb-6">
-        <span
-          className="inline-block rounded-full bg-highlight px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
-          style={{ backgroundColor: '#E6E9AF', color: '#22177A' }}
-        >
-          Prospection commerciale
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ width: 24, height: 2, background: '#C9761A', borderRadius: 2 }} />
+          <span
+            style={{
+              fontSize: 11.5, fontWeight: 700, letterSpacing: '0.16em',
+              textTransform: 'uppercase', color: '#C9761A',
+            }}
+          >
+            Prospection commerciale
+          </span>
+        </div>
         <h1
-          className="mt-3 text-3xl text-neutral-900"
-          style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.02em' }}
+          style={{
+            fontFamily: "'Archivo Black', sans-serif",
+            fontSize: 40, letterSpacing: '-0.035em', color: '#1A1533',
+            marginTop: 12, lineHeight: 1,
+          }}
         >
           Pipeline de leads
         </h1>
-        <p className="mt-1 max-w-2xl text-sm text-neutral-500">
+        <p style={{ marginTop: 8, maxWidth: 720, fontSize: 14, color: '#6E6A85' }}>
           Chaque lead avance du premier contact jusqu'à la signature du mandat. Glisse une carte pour changer de stade. Un lead qui atteint « Mandat signé » devient un mandat côté recrutement.
         </p>
       </div>
@@ -344,44 +353,51 @@ export default function ClientPipelinePage() {
         }
       />
 
-      {/* Stats bar */}
+      {/* KPI row — 4 cards .kpi (Archivo Black navy + liseré hover, aligné mock) */}
       {pipelineStats && (
-        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl bg-white p-4 shadow-sm border border-border/30">
-            <div className="flex items-center gap-2 mb-1">
-              <Users size={14} className="text-blue-500" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Clients total</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+          <div className="kpi">
+            <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699' }}>
+              <Users size={12} style={{ color: '#22177A' }} />
+              <span>Leads actifs</span>
             </div>
-            <p className="text-[22px] font-bold text-neutral-900">{pipelineStats.totalClients}</p>
+            <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 29, letterSpacing: '-0.02em', color: '#1A1533', marginTop: 12, lineHeight: 1 }}>
+              {pipelineStats.totalClients}
+            </div>
+            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>en pipeline</div>
           </div>
-          <div className="rounded-xl bg-white p-4 shadow-sm border border-border/30">
-            <div className="flex items-center gap-2 mb-1">
-              <DollarSign size={14} className="text-emerald-500" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Pipe total</span>
+          <div className="kpi">
+            <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699' }}>
+              <Clock size={12} style={{ color: '#C9761A' }} />
+              <span>Relances à faire</span>
             </div>
-            <p className="text-[22px] font-bold text-emerald-600">{formatCurrency(pipelineStats.totalPipeValue)}</p>
-          </div>
-          <div className="rounded-xl bg-white p-4 shadow-sm border border-border/30">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingUp size={14} className="text-purple-500" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Conversion Lead&rarr;Mandat</span>
-            </div>
-            <p className="text-[22px] font-bold text-purple-600">
-              {pipelineStats.conversionRates.length >= 4
-                ? `${pipelineStats.conversionRates[3].rate}%`
-                : '--'}
-            </p>
-          </div>
-          <div className="rounded-xl bg-white p-4 shadow-sm border border-border/30">
-            <div className="flex items-center gap-2 mb-1">
-              <Clock size={14} className="text-orange-500" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Moy. jours/stage</span>
-            </div>
-            <p className="text-[22px] font-bold text-orange-600">
+            <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 29, letterSpacing: '-0.02em', color: '#C9761A', marginTop: 12, lineHeight: 1 }}>
               {pipelineStats.avgDaysPerStage.length > 0
-                ? `${Math.round(pipelineStats.avgDaysPerStage.filter(s => s.avgDays > 0).reduce((sum, s) => sum + s.avgDays, 0) / Math.max(pipelineStats.avgDaysPerStage.filter(s => s.avgDays > 0).length, 1))}j`
-                : '--'}
-            </p>
+                ? Math.round(pipelineStats.avgDaysPerStage.filter(s => s.avgDays > 0).reduce((sum, s) => sum + s.avgDays, 0) / Math.max(pipelineStats.avgDaysPerStage.filter(s => s.avgDays > 0).length, 1))
+                : 0}
+              <span style={{ fontSize: 15, marginLeft: 6, color: '#8A8699' }}>j moy</span>
+            </div>
+            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>par stage</div>
+          </div>
+          <div className="kpi">
+            <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699' }}>
+              <TrendingUp size={12} style={{ color: '#2C6B3F' }} />
+              <span>Conversion</span>
+            </div>
+            <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 29, letterSpacing: '-0.02em', color: '#2C6B3F', marginTop: 12, lineHeight: 1 }}>
+              {pipelineStats.conversionRates.length >= 4 ? `${pipelineStats.conversionRates[3].rate}%` : '—'}
+            </div>
+            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>Lead → Mandat</div>
+          </div>
+          <div className="kpi">
+            <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699' }}>
+              <DollarSign size={12} style={{ color: '#22177A' }} />
+              <span>Pipe total</span>
+            </div>
+            <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 29, letterSpacing: '-0.02em', color: '#22177A', marginTop: 12, lineHeight: 1 }}>
+              {formatCurrency(pipelineStats.totalPipeValue)}
+            </div>
+            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>ce mois</div>
           </div>
         </div>
       )}

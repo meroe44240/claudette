@@ -150,33 +150,71 @@ export default function ListPushPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <span
-          className="inline-block rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
-          style={{ backgroundColor: '#E6E9AF', color: '#22177A' }}
+      {/* Header mock-fidelity : kicker "REVERSE SOURCING" + h1 40px + description + Nouvelle liste */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, marginBottom: 24 }}>
+        <div style={{ maxWidth: 720 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ width: 24, height: 2, background: '#22177A', borderRadius: 2 }} />
+            <span
+              style={{
+                fontSize: 11.5, fontWeight: 700, letterSpacing: '0.16em',
+                textTransform: 'uppercase', color: '#22177A',
+              }}
+            >
+              Reverse Sourcing
+            </span>
+          </div>
+          <h1
+            style={{
+              fontFamily: "'Archivo Black', sans-serif",
+              fontSize: 40, letterSpacing: '-0.035em', color: '#1A1533',
+              marginTop: 12, lineHeight: 1,
+            }}
+          >
+            List Push
+          </h1>
+          <p style={{ marginTop: 8, fontSize: 14, color: '#6E6A85' }}>
+            Uploade des CV — HumanUp extrait les employeurs de chaque candidat et agrège les boîtes cibles pour ta campagne de prospection commerciale.
+          </p>
+        </div>
+        <button
+          onClick={() => setCreateOpen(true)}
+          className="btn-primary"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer', border: 'none', flexShrink: 0 }}
         >
-          Sourcing
-        </span>
-        <h1
-          className="mt-3 text-3xl text-neutral-900"
-          style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.02em' }}
-        >
-          List Push
-        </h1>
-        <p className="mt-1 max-w-2xl text-sm text-neutral-500">
-          Uploade des CV — HumanUp extrait les employeurs de chaque candidat et agrège les boîtes cibles pour ta campagne de prospection commerciale.
-        </p>
+          <Plus size={15} /> Nouvelle liste
+        </button>
       </div>
 
-      <PageHeader
-        title=""
-        breadcrumbs={[{ label: 'Sourcing' }, { label: 'List Push' }]}
-        actions={
-          <Button variant="primary" onClick={() => setCreateOpen(true)}>
-            <Plus size={16} /> Nouvelle liste
-          </Button>
-        }
-      />
+      {/* KPI row — 3 KPI cards (Listes / Établissements / CV traités) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
+        <div className="kpi">
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Target size={12} style={{ color: '#22177A' }} />
+            <span>Listes</span>
+          </div>
+          <div className="kpi-value" style={{ marginTop: 12 }}>{lists?.length ?? 0}</div>
+          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>en portefeuille</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Users size={12} style={{ color: '#22177A' }} />
+            <span>Établissements</span>
+          </div>
+          <div className="kpi-value" style={{ marginTop: 12 }}>
+            {(lists ?? []).reduce((sum, l) => sum + (l._count?.establishments ?? 0), 0)}
+          </div>
+          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>agrégés</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Upload size={12} style={{ color: '#22177A' }} />
+            <span>CV traités</span>
+          </div>
+          <div className="kpi-value" style={{ marginTop: 12 }}>—</div>
+          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>via bouton "Alimenter"</div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
         {/* Colonne gauche : mes listes */}

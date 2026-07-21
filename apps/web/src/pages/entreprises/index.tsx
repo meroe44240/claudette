@@ -620,40 +620,64 @@ export default function EntreprisesPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Entreprises"
-        breadcrumbs={[{ label: 'Entreprises' }]}
-        actions={
-          <div className="flex items-center gap-3">
-            {/* Counter badge */}
-            {!isLoading && (
-              <Badge variant="neutral" size="md">
-                {total} entreprise{total > 1 ? 's' : ''}
-              </Badge>
-            )}
-            {/* View toggle */}
-            <div className="flex items-center rounded-lg border border-border bg-bg-secondary p-0.5">
-              <button
-                onClick={() => setView('grid')}
-                className={`rounded-md p-1.5 transition-colors ${view === 'grid' ? 'bg-white text-accent shadow-sm' : 'text-text-tertiary hover:text-text-secondary'}`}
-                title="Vue grille"
-              >
-                <LayoutGrid size={16} />
-              </button>
-              <button
-                onClick={() => setView('table')}
-                className={`rounded-md p-1.5 transition-colors ${view === 'table' ? 'bg-white text-accent shadow-sm' : 'text-text-tertiary hover:text-text-secondary'}`}
-                title="Vue tableau"
-              >
-                <List size={16} />
-              </button>
-            </div>
-            <Button onClick={() => navigate('/entreprises/new')}>
-              <Plus size={16} /> Ajouter
-            </Button>
+      {/* Header mock-fidelity */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 38, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1 }}>
+            Entreprises
+          </h1>
+          {!isLoading && (
+            <span
+              style={{
+                background: '#fff', border: '1px solid rgba(34,23,122,0.12)',
+                borderRadius: 999, padding: '5px 13px', fontSize: 12.5, fontWeight: 700, color: '#22177A',
+              }}
+            >
+              {total} entreprise{total > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div
+            style={{
+              display: 'flex', alignItems: 'center', borderRadius: 10,
+              border: '1px solid rgba(34,23,122,0.14)', background: '#F7F7EF', padding: 3,
+            }}
+          >
+            <button
+              onClick={() => setView('grid')}
+              style={{
+                borderRadius: 7, padding: '6px 8px',
+                background: view === 'grid' ? '#fff' : 'transparent',
+                boxShadow: view === 'grid' ? '0 1px 2px rgba(34,23,122,0.08)' : 'none',
+                color: view === 'grid' ? '#22177A' : '#8A8699', border: 'none', cursor: 'pointer',
+              }}
+              title="Vue grille"
+            >
+              <LayoutGrid size={16} />
+            </button>
+            <button
+              onClick={() => setView('table')}
+              style={{
+                borderRadius: 7, padding: '6px 8px',
+                background: view === 'table' ? '#fff' : 'transparent',
+                boxShadow: view === 'table' ? '0 1px 2px rgba(34,23,122,0.08)' : 'none',
+                color: view === 'table' ? '#22177A' : '#8A8699', border: 'none', cursor: 'pointer',
+              }}
+              title="Vue tableau"
+            >
+              <List size={16} />
+            </button>
           </div>
-        }
-      />
+          <button
+            onClick={() => navigate('/entreprises/new')}
+            className="btn-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer', border: 'none' }}
+          >
+            <Plus size={15} /> Ajouter
+          </button>
+        </div>
+      </div>
 
       {/* Search + Filters (compact row) */}
       <div className="mb-3 flex items-start gap-3">

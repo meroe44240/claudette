@@ -408,15 +408,66 @@ export default function ClientDetailPage() {
   }
 
   const fullName = `${client.prenom || ''} ${client.nom}`.trim();
+  const initials = `${(client.prenom?.[0] ?? '').toUpperCase()}${(client.nom?.[0] ?? '').toUpperCase()}` || '·';
 
   return (
     <div>
+      {/* Breadcrumb */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5, color: '#9A96AE', fontWeight: 600 }}>
+        <a onClick={() => navigate('/clients')} style={{ color: '#8A8699', cursor: 'pointer' }}>Clients</a>
+        <span style={{ color: '#C4C1D0' }}>›</span>
+        <span style={{ color: '#22177A', fontWeight: 700 }}>{fullName}</span>
+      </div>
+
+      {/* Hero mock-fidelity : avatar rond + name/role/pills + actions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 12, marginBottom: 20 }}>
+        <div
+          style={{
+            width: 68, height: 68, borderRadius: '50%',
+            background: '#8E7CC3', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: "'Archivo Black', sans-serif", fontSize: 22,
+          }}
+        >
+          {initials}
+        </div>
+        <div style={{ flex: 1 }}>
+          <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 30, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1.05 }}>
+            {fullName}
+          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+            {client.poste && (
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#4A4568' }}>{client.poste}</span>
+            )}
+            {client.entreprise?.nom && (
+              <>
+                <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#C4C1D0' }} />
+                <span
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: '#6E6A85', cursor: 'pointer' }}
+                  onClick={() => navigate(`/entreprises/${client.entreprise!.id}`)}
+                >
+                  <Building2 size={13} color="#22177A" />
+                  {client.entreprise.nom}
+                </span>
+              </>
+            )}
+            {client.statutClient && (
+              <span
+                style={{
+                  fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '4px 11px',
+                  background: 'rgba(34,23,122,0.06)', color: '#22177A',
+                }}
+              >
+                {client.statutClient.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
       <PageHeader
-        title={fullName}
-        breadcrumbs={[
-          { label: 'Clients', href: '/clients' },
-          { label: fullName },
-        ]}
+        title=""
+        breadcrumbs={[]}
         actions={
           <div className="flex items-center gap-2">
             {isEditing ? (
