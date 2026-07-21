@@ -450,7 +450,7 @@ function RecruiterDashboard() {
   return (
     <div
       className="flex flex-col dash-root"
-      style={{ height: 'calc(100vh - 64px)', background: '#F8F8FA', overflow: 'hidden' }}
+      style={{ height: 'calc(100vh - 64px)', background: 'transparent', overflow: 'hidden' }}
     >
       <div className="shrink-0 px-6 pt-2">
         <PageHeader
@@ -538,54 +538,51 @@ function RecruiterDashboard() {
         </div>
       </div>
 
-      {/* ── KPI ROW (72px) ── */}
-      <div className="px-6 shrink-0" style={{ height: 68, marginTop: 2 }}>
+      {/* ── KPI ROW — 5 cards, .kpi (Archivo Black navy + liseré gradient hover) ── */}
+      <div className="px-6 shrink-0" style={{ marginTop: 4 }}>
         {isLoading ? (
-          <div className="flex gap-0 h-full">
-            {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-full flex-1 rounded-xl" />)}
+          <div className="grid grid-cols-5 gap-3.5">
+            {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-[92px] rounded-2xl" />)}
           </div>
         ) : (
-          <motion.div
-            className="flex h-full bg-white rounded-xl shadow-[0_1px_4px_rgba(26,26,46,0.05)] overflow-hidden"
-            variants={stagger} initial="hidden" animate="show"
-          >
+          <div className="grid grid-cols-5 gap-3.5">
             {/* CA MOIS */}
-            <motion.div variants={fadeUp} className="flex-1 flex flex-col justify-center px-4 border-r border-neutral-100">
-              <div className="flex items-center gap-1.5">
-                <DollarSign size={13} className="text-revenue-500" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">CA Mois</span>
+            <div className="kpi">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <DollarSign size={12} style={{ color: '#22177A' }} />
+                <span className="kpi-label">CA Mois</span>
               </div>
-              <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-[18px] font-bold text-revenue-500 leading-none">
+              <div className="flex items-baseline gap-2">
+                <span className="kpi-value">
                   <AnimatedCounter value={kpis?.caMois.value ?? 0} formatFn={formatCurrency} />
                 </span>
                 <TrendBadge value={kpis?.caMois.delta ?? null} />
               </div>
-            </motion.div>
+            </div>
 
             {/* APPELS */}
-            <motion.div variants={fadeUp} className="flex-1 flex flex-col justify-center px-4 border-r border-neutral-100">
-              <div className="flex items-center gap-1.5">
-                <Phone size={13} className="text-activity-500" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Appels</span>
+            <div className="kpi">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Phone size={12} style={{ color: '#22177A' }} />
+                <span className="kpi-label">Appels</span>
               </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-[18px] font-bold text-activity-500 leading-none">
+              <div className="flex items-baseline gap-1.5">
+                <span className="kpi-value">
                   <AnimatedCounter value={kpis?.appels.today ?? 0} />
                 </span>
                 <span className="text-[13px] font-semibold text-neutral-300">/ {kpis?.appels.week ?? 0}</span>
                 <span className="text-[10px] text-neutral-400 ml-1">Moy {kpis?.appels.moyJour ?? 0}/j</span>
               </div>
-            </motion.div>
+            </div>
 
             {/* RDV SEMAINE */}
-            <motion.div variants={fadeUp} className="flex-1 flex flex-col justify-center px-4 border-r border-neutral-100">
-              <div className="flex items-center gap-1.5">
-                <Calendar size={13} className="text-neutral-700" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">RDV Semaine</span>
+            <div className="kpi">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Calendar size={12} style={{ color: '#22177A' }} />
+                <span className="kpi-label">RDV Semaine</span>
               </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-[18px] font-bold text-neutral-900 leading-none">
+              <div className="flex items-baseline gap-1.5">
+                <span className="kpi-value">
                   <AnimatedCounter value={kpis?.rdv.today ?? 0} />
                 </span>
                 <span className="text-[13px] font-semibold text-neutral-300">/ {kpis?.rdv.week ?? 0}</span>
@@ -593,36 +590,36 @@ function RecruiterDashboard() {
               <div className="text-[10px] text-neutral-400 mt-0.5">
                 {kpis?.rdv.confirmes ?? 0} confirme{(kpis?.rdv.confirmes ?? 0) > 1 ? 's' : ''}, {kpis?.rdv.enAttente ?? 0} en attente
               </div>
-            </motion.div>
+            </div>
 
             {/* PRESENTATIONS MOIS */}
-            <motion.div variants={fadeUp} className="flex-1 flex flex-col justify-center px-4 border-r border-neutral-100">
-              <div className="flex items-center gap-1.5">
-                <Users size={13} className="text-pipeline-500" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Présentations</span>
+            <div className="kpi">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Users size={12} style={{ color: '#22177A' }} />
+                <span className="kpi-label">Présentations</span>
               </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-[18px] font-bold text-pipeline-500 leading-none">
+              <div className="flex items-baseline gap-1.5">
+                <span className="kpi-value">
                   <AnimatedCounter value={kpis?.presentationsMois ?? 0} />
                 </span>
                 <span className="text-[10px] text-neutral-400">ce mois</span>
               </div>
-            </motion.div>
+            </div>
 
             {/* PLACEMENTS MOIS */}
-            <motion.div variants={fadeUp} className="flex-1 flex flex-col justify-center px-4">
-              <div className="flex items-center gap-1.5">
-                <TrendingUp size={13} className="text-brand-500" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Placements</span>
+            <div className="kpi">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <TrendingUp size={12} style={{ color: '#22177A' }} />
+                <span className="kpi-label">Placements</span>
               </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-[18px] font-bold text-brand-500 leading-none">
+              <div className="flex items-baseline gap-1.5">
+                <span className="kpi-value">
                   <AnimatedCounter value={kpis?.placementsMois ?? 0} />
                 </span>
                 <span className="text-[10px] text-neutral-400">ce mois</span>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
       </div>
 
