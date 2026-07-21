@@ -34,7 +34,7 @@ jobs:
           command_timeout: 12m
           script: |
             set -euo pipefail
-            cd /root/claudette
+            cd /opt/humanup/app
 
             echo "→ Pulling latest main…"
             git fetch --tags origin main
