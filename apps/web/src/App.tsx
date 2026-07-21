@@ -14,6 +14,10 @@ const ChangePasswordPage = lazy(() => import('./pages/change-password'));
 // Public pages
 const DocsMcpPage = lazy(() => import('./pages/docs/mcp'));
 
+// Portail client (public, hors MainLayout)
+const PortalLoginPage = lazy(() => import('./pages/portail/login'));
+const PortalMandatPage = lazy(() => import('./pages/portail/mandat'));
+
 // Protected pages
 const DashboardPage = lazy(() => import('./pages/dashboard/index'));
 const MonEspacePage = lazy(() => import('./pages/mon-espace/index'));
@@ -66,6 +70,9 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
         <Route path="/docs/mcp" element={<DocsMcpPage />} />
+        {/* Portail client — public, hors MainLayout */}
+        <Route path="/portail/login" element={<PortalLoginPage />} />
+        <Route path="/portail/mandat/:mandatId" element={<PortalMandatPage />} />
         <Route
           element={
             <ProtectedRoute>

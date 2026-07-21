@@ -1142,6 +1142,8 @@ export default function MandatDetailPage() {
 
           <ContractCard mandat={mandat} />
 
+          <PortalAccessCard mandatId={mandat.id} clientId={mandat.client.id} clientEmail={mandat.client.email} />
+
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">Facturation</h2>
             <dl className="space-y-3 text-sm">
@@ -1342,6 +1344,229 @@ function activityColor(type: string): string {
     case 'TRANSCRIPT': return '#8e7cc3';
     default:           return '#c4c1d0';
   }
+}
+
+// ── Portal Access Card ───────────────────────────────
+// Gère les accès portail client d'un mandat (créer / lister / révoquer)
+// et affiche l'URL à envoyer au client.
+
+interface PortalAccessRow {
+  id: string;
+  email: string;
+  lastLoginAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  client: { id: string; nom: string; prenom: string | null };
+}
+
+function PortalAccessCard({
+  mandatId,
+  clientId,
+  clientEmail,
+}: {
+  mandatId: string;
+  clientId: string;
+  clientEmail: string | null;
+}) {
+  const qc = useQueryClient();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState(clientEmail ?? '');
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const { data: accesses } = useQuery({
+    queryKey: ['portal-accesses', mandatId],
+    queryFn: () => api.get<PortalAccessRow[]>(`/portal/mandat/${mandatId}/accesses`),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const password = generateRandomPassword();
+      const created = await api.post<PortalAccessRow>('/portal/access', {
+        mandatId,
+        clientId,
+        email: newEmail.trim(),
+        password,
+      });
+      return { created, password };
+    },
+    onSuccess: ({ password }) => {
+      setGeneratedPassword(password);
+      qc.invalidateQueries({ queryKey: ['portal-accesses', mandatId] });
+      toast('success', 'Accès portail créé');
+    },
+    onError: (err: any) => {
+      toast('error', err?.data?.message || "Erreur lors de la création");
+    },
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (accessId: string) => api.post(`/portal/access/${accessId}/revoke`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['portal-accesses', mandatId] });
+      toast('success', 'Accès révoqué');
+    },
+  });
+
+  const portalUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/portail/login?m=${mandatId}`;
+
+  const activeAccesses = (accesses ?? []).filter((a) => !a.revokedAt);
+
+  return (
+    <Card>
+      <div className="mb-3 flex items-start justify-between">
+        <h2 className="text-lg font-semibold text-text-primary">Accès portail client</h2>
+        <button
+          onClick={() => { setModalOpen(true); setGeneratedPassword(null); }}
+          className="rounded-md p-1 text-primary-800 hover:bg-primary-50"
+          title="Créer un accès"
+        >
+          <Plus size={16} strokeWidth={2} />
+        </button>
+      </div>
+
+      {activeAccesses.length === 0 ? (
+        <p className="text-[13px] italic text-text-tertiary">
+          Aucun accès actif. Crée un accès pour partager le kanban en lecture avec le client.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {activeAccesses.map((a) => (
+            <li key={a.id} className="flex items-start justify-between rounded-lg border border-neutral-100 p-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-medium text-text-primary">{a.email}</p>
+                <p className="mt-0.5 text-[11px] text-text-tertiary">
+                  {a.lastLoginAt
+                    ? `Dernière connexion : ${new Date(a.lastLoginAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}`
+                    : 'Jamais connecté'}
+                </p>
+              </div>
+              <button
+                onClick={() => revokeMutation.mutate(a.id)}
+                className="ml-2 shrink-0 rounded p-1 text-neutral-300 hover:bg-error-100 hover:text-error"
+                title="Révoquer"
+              >
+                <X size={14} strokeWidth={2} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {activeAccesses.length > 0 && (
+        <div className="mt-3 border-t border-neutral-100 pt-3">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
+            URL portail à envoyer
+          </p>
+          <div className="flex items-center gap-1 rounded-md bg-neutral-50 px-2 py-1.5">
+            <code className="flex-1 truncate text-[11px] text-text-secondary">{portalUrl}</code>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(portalUrl);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="rounded p-1 text-primary-800 hover:bg-white"
+              title="Copier"
+            >
+              {copied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2} />}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Création */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setModalOpen(false)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <h3 style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em' }} className="text-xl text-neutral-900">
+              Nouvel accès portail
+            </h3>
+            <p className="mt-1 text-sm text-neutral-500">
+              Un email + mot de passe pour permettre au contact client de voir le kanban en lecture.
+            </p>
+
+            {generatedPassword ? (
+              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4">
+                <p className="text-sm font-semibold text-green-800">Accès créé — copie ces credentials, ils ne seront plus affichés.</p>
+                <dl className="mt-3 space-y-2 text-sm">
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-wider text-green-700">URL</dt>
+                    <dd className="mt-0.5 truncate rounded bg-white px-2 py-1 font-mono text-[12px] text-green-900">{portalUrl}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-wider text-green-700">Email</dt>
+                    <dd className="mt-0.5 rounded bg-white px-2 py-1 font-mono text-[12px] text-green-900">{newEmail}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-wider text-green-700">Mot de passe (à envoyer manuellement)</dt>
+                    <dd className="mt-0.5 rounded bg-white px-2 py-1 font-mono text-[12px] text-green-900">{generatedPassword}</dd>
+                  </div>
+                </dl>
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      const text = `Portail HumanUp\n\nURL : ${portalUrl}\nEmail : ${newEmail}\nMot de passe : ${generatedPassword}`;
+                      navigator.clipboard.writeText(text);
+                      toast('success', 'Credentials copiés');
+                    }}
+                  >
+                    <Copy size={13} /> Copier les 3 lignes
+                  </Button>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <Button variant="ghost" onClick={() => { setModalOpen(false); setGeneratedPassword(null); setNewEmail(clientEmail ?? ''); }}>
+                    Fermer
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                    Email du contact
+                  </label>
+                  <input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="alice@acme.com"
+                    className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-3 py-2 text-sm outline-none focus:border-primary-800"
+                  />
+                  <p className="mt-1 text-[11px] text-neutral-400">
+                    Un mot de passe aléatoire sécurisé sera généré. Tu pourras le copier + envoyer au client manuellement (l'envoi email automatique arrive plus tard).
+                  </p>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" onClick={() => setModalOpen(false)}>Annuler</Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => createMutation.mutate()}
+                    disabled={!newEmail.trim() || createMutation.isPending}
+                  >
+                    {createMutation.isPending ? 'Création…' : "Créer l'accès"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function generateRandomPassword(length = 12): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789abcdefghjkmnpqrstuvwxyz';
+  let out = '';
+  const arr = new Uint8Array(length);
+  crypto.getRandomValues(arr);
+  for (let i = 0; i < length; i++) out += alphabet[arr[i] % alphabet.length];
+  return out;
 }
 
 // ── Contract Card + Modal ────────────────────────────

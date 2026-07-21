@@ -139,6 +139,7 @@ model Client {
   updatedAt    DateTime     @updatedAt @db.Timestamptz()
 
   mandats Mandat[]
+  portalAccesses PortalAccess[] @relation("PortalAccessClient")
 
   @@map("clients")
 }
@@ -297,6 +298,7 @@ model Mandat {
   candidatures        Candidature[]
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionMandat")
   contractApprovals   ContractApproval[]
+  portalAccesses      PortalAccess[]         @relation("PortalAccessMandat")
 
   @@map("mandats")
 }
@@ -333,6 +335,100 @@ enum ContractApprovalStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PORTAIL CLIENT (chantier 3) — accès externe multi-tenant, scope = 1 mandat
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Un compte d'accès au portail : (Client contact) x (Mandat).
+// Un même client peut avoir plusieurs accès sur plusieurs mandats.
+model PortalAccess {
+  id           String   @id @default(uuid()) @db.Uuid
+  mandatId     String   @db.Uuid
+  mandat       Mandat   @relation("PortalAccessMandat", fields: [mandatId], references: [id], onDelete: Cascade)
+  clientId     String   @db.Uuid
+  client       Client   @relation("PortalAccessClient", fields: [clientId], references: [id], onDelete: Cascade)
+  email        String   @db.VarChar(255)
+  passwordHash String   @db.VarChar(255)
+  lastLoginAt  DateTime? @db.Timestamptz()
+  revokedAt    DateTime? @db.Timestamptz()
+  createdAt    DateTime @default(now()) @db.Timestamptz()
+
+  events    PortalEvent[]    @relation("PortalEventAccess")
+  decisions PortalDecision[] @relation("PortalDecisionAccess")
+  comments  PortalComment[]  @relation("PortalCommentAccess")
+
+  @@unique([mandatId, email])
+  @@index([mandatId])
+  @@index([clientId])
+  @@map("portal_accesses")
+}
+
+// Bus temps réel : chaque action client (login, view profil, decision,
+// comment) écrit ici. Alimente la sidebar "Activité client" de la fiche
+// mandat + le dashboard "Activité client".
+model PortalEvent {
+  id             String            @id @default(uuid()) @db.Uuid
+  portalAccessId String            @db.Uuid
+  portalAccess   PortalAccess      @relation("PortalEventAccess", fields: [portalAccessId], references: [id], onDelete: Cascade)
+  mandatId       String            @db.Uuid  // dénormalisé pour indexer les queries dashboard
+  type           PortalEventType
+  candidatureId  String?           @db.Uuid  // renseigne quand l'event concerne un candidat spécifique
+  payload        Json              @default("{}")
+  createdAt      DateTime          @default(now()) @db.Timestamptz()
+
+  @@index([mandatId, createdAt])
+  @@index([portalAccessId])
+  @@index([candidatureId])
+  @@map("portal_events")
+}
+
+enum PortalEventType {
+  LOGIN
+  VIEW_PROFILE
+  MOVE
+  DECISION
+  COMMENT
+}
+
+// Décision client sur une candidature (dénormalisée à part pour requêtes
+// rapides "combien de rencontrer / à discuter / écarter par mandat").
+model PortalDecision {
+  id             String                 @id @default(uuid()) @db.Uuid
+  portalAccessId String                 @db.Uuid
+  portalAccess   PortalAccess           @relation("PortalDecisionAccess", fields: [portalAccessId], references: [id], onDelete: Cascade)
+  candidatureId  String                 @db.Uuid
+  candidature    Candidature            @relation("PortalDecisionCandidature", fields: [candidatureId], references: [id], onDelete: Cascade)
+  decision       PortalDecisionType
+  reason         String?                @db.Text
+  createdAt      DateTime               @default(now()) @db.Timestamptz()
+
+  @@index([candidatureId])
+  @@index([portalAccessId])
+  @@map("portal_decisions")
+}
+
+enum PortalDecisionType {
+  RENCONTRER
+  A_DISCUTER
+  ECARTER
+}
+
+// Commentaire client identifié sur une candidature ou un mandat.
+model PortalComment {
+  id             String       @id @default(uuid()) @db.Uuid
+  portalAccessId String       @db.Uuid
+  portalAccess   PortalAccess @relation("PortalCommentAccess", fields: [portalAccessId], references: [id], onDelete: Cascade)
+  candidatureId  String?      @db.Uuid
+  candidature    Candidature? @relation("PortalCommentCandidature", fields: [candidatureId], references: [id], onDelete: SetNull)
+  mandatId       String       @db.Uuid
+  content        String       @db.Text
+  createdAt      DateTime     @default(now()) @db.Timestamptz()
+
+  @@index([candidatureId])
+  @@index([mandatId, createdAt])
+  @@map("portal_comments")
 }
 
 enum FeeStatut {
@@ -380,6 +476,8 @@ model Candidature {
 
   stageHistory        StageHistory[]
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionCandidature")
+  portalDecisions     PortalDecision[]       @relation("PortalDecisionCandidature")
+  portalComments      PortalComment[]        @relation("PortalCommentCandidature")
 
   @@unique([mandatId, candidatId])
   @@map("candidatures")

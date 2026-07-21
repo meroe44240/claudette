@@ -42,6 +42,7 @@ import mcpOAuthRouter from './modules/mcp/mcp.oauth.js';
 import mcpPlugin from './modules/mcp/mcp.plugin.js';
 import recapRouter from './modules/recap/recap.router.js';
 import contractRouter from './modules/contracts/contract.router.js';
+import portalRouter from './modules/portal/portal.router.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 
@@ -165,6 +166,7 @@ async function buildApp() {
   await app.register(mcpLogsRouter, { prefix: '/api/v1/mcp-logs' });
   await app.register(recapRouter, { prefix: '/api/v1/recap' });
   await app.register(contractRouter, { prefix: '/api/v1/contracts' });
+  await app.register(portalRouter, { prefix: '/api/v1/portal' });
 
   return app;
 }
