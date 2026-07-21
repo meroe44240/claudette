@@ -1020,5 +1020,52 @@ export async function notifyNewMeeting(data: {
   }
 }
 
+// ─── CONTRACT APPROVAL NOTIFICATION ────────────────
+
+/**
+ * DM Slack aux ADMINs quand un recruteur demande la validation d'un
+ * fee sous le plancher 18%. Envoi via webhook général (les admins ont
+ * un canal Slack dédié).
+ */
+export async function notifyContractApprovalRequest(data: {
+  mandatTitre: string;
+  entrepriseNom: string;
+  feeRequested: number;
+  reason: string;
+  requestedByPrenom: string | null;
+  approvalId: string;
+}): Promise<void> {
+  const config = await getSlackConfig();
+  if (!config || !config.enabled) return;
+
+  const asker = data.requestedByPrenom || 'Un recruteur';
+  const payload = {
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: [
+            `⚠️ *Validation contrat requise*`,
+            ``,
+            `${asker} demande un fee de *${data.feeRequested}%* (sous le plancher 18%).`,
+            `📋 ${data.entrepriseNom} — ${data.mandatTitre}`,
+            ``,
+            `_Raison_ : ${data.reason}`,
+            ``,
+            `À valider dans l'ATS (Admin > Demandes de contrat).`,
+          ].join('\n'),
+        },
+      },
+    ],
+  };
+
+  try {
+    await sendToWebhook(config.webhookUrl, payload);
+  } catch (err) {
+    console.error('[Slack] Failed to send contract-approval notif:', err);
+  }
+}
+
 // ─── PUSH CV NOTIFICATION ──────────────────────────
 

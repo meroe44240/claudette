@@ -284,13 +284,55 @@ model Mandat {
   // "Aperçu client" du kanban. Par défaut : les étapes où le client a du
   // contexte à voir (envoyés, entretien client, offre, placé).
   visibleStages    StageCandidature[] @default([ENVOYE_CLIENT, ENTRETIEN_CLIENT, OFFRE, PLACE])
+  // Contrat mandat (envoi signature). Placeholder tant qu'aucun provider
+  // (DocuSign/Yousign) n'est branché — trace en base seulement.
+  contractStatus   ContractStatus @default(DRAFT)
+  contractSentAt   DateTime?    @db.Timestamptz()
+  contractSignedAt DateTime?    @db.Timestamptz()
+  paymentTerms     String?      @db.VarChar(50)     // "reception", "30j", "45j_fdm", "60j", "signature"
+  applicableCountry String?     @db.VarChar(2)      // ISO-3166-1 alpha-2 (FR, GB, HK…)
   createdAt        DateTime     @default(now()) @db.Timestamptz()
   updatedAt        DateTime     @updatedAt @db.Timestamptz()
 
   candidatures        Candidature[]
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionMandat")
+  contractApprovals   ContractApproval[]
 
   @@map("mandats")
+}
+
+enum ContractStatus {
+  DRAFT
+  SENT
+  SIGNED
+  EXPIRED
+}
+
+// Demande de validation admin quand un contrat propose un feePourcentage
+// sous le plancher (18%). Bloque l'envoi tant qu'un admin n'a pas approuvé.
+model ContractApproval {
+  id             String                 @id @default(uuid()) @db.Uuid
+  mandatId       String                 @db.Uuid
+  mandat         Mandat                 @relation(fields: [mandatId], references: [id], onDelete: Cascade)
+  requestedById  String                 @db.Uuid
+  feeRequested   Decimal                @db.Decimal(5, 2)  // ex: 15.00 (%)
+  reason         String                 @db.Text
+  status         ContractApprovalStatus @default(PENDING)
+  approvedById   String?                @db.Uuid
+  approvedAt     DateTime?              @db.Timestamptz()
+  rejectionNote  String?                @db.Text
+  createdAt      DateTime               @default(now()) @db.Timestamptz()
+  updatedAt      DateTime               @updatedAt @db.Timestamptz()
+
+  @@index([mandatId])
+  @@index([status])
+  @@map("contract_approvals")
+}
+
+enum ContractApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum FeeStatut {

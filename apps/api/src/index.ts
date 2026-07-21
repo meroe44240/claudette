@@ -41,6 +41,7 @@ import mcpLogsRouter from './modules/mcp/mcp-logs.router.js';
 import mcpOAuthRouter from './modules/mcp/mcp.oauth.js';
 import mcpPlugin from './modules/mcp/mcp.plugin.js';
 import recapRouter from './modules/recap/recap.router.js';
+import contractRouter from './modules/contracts/contract.router.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 
@@ -163,6 +164,7 @@ async function buildApp() {
   await app.register(slackRouter, { prefix: '/api/v1/slack' });
   await app.register(mcpLogsRouter, { prefix: '/api/v1/mcp-logs' });
   await app.register(recapRouter, { prefix: '/api/v1/recap' });
+  await app.register(contractRouter, { prefix: '/api/v1/contracts' });
 
   return app;
 }

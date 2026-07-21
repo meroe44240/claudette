@@ -80,6 +80,12 @@ interface MandatDetail {
   sales: { id: string; nom: string; prenom: string | null } | null;
   recruteurId: string | null;
   recruteur: { id: string; nom: string; prenom: string | null } | null;
+  // Contrat (chantier 4)
+  contractStatus?: 'DRAFT' | 'SENT' | 'SIGNED' | 'EXPIRED';
+  contractSentAt?: string | null;
+  contractSignedAt?: string | null;
+  paymentTerms?: string | null;
+  applicableCountry?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1134,6 +1140,8 @@ export default function MandatDetailPage() {
             </dl>
           </Card>
 
+          <ContractCard mandat={mandat} />
+
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">Facturation</h2>
             <dl className="space-y-3 text-sm">
@@ -1334,4 +1342,344 @@ function activityColor(type: string): string {
     case 'TRANSCRIPT': return '#8e7cc3';
     default:           return '#c4c1d0';
   }
+}
+
+// ── Contract Card + Modal ────────────────────────────
+
+const FEE_FLOOR = 18;
+const FEE_OPTIONS = [25, 24, 22, 20, 18] as const;
+const PAYMENT_OPTIONS = [
+  { value: 'reception', label: 'À réception' },
+  { value: 'signature', label: 'À la signature' },
+  { value: '30j',       label: '30 jours' },
+  { value: '45j_fdm',   label: '45 jours FDM' },
+  { value: '60j',       label: '60 jours' },
+] as const;
+const COUNTRY_OPTIONS = [
+  { value: 'FR', label: '🇫🇷 France' },
+  { value: 'GB', label: '🇬🇧 Royaume-Uni' },
+  { value: 'HK', label: '🇭🇰 Hong Kong' },
+  { value: 'US', label: '🇺🇸 États-Unis' },
+  { value: 'BE', label: '🇧🇪 Belgique' },
+  { value: 'CH', label: '🇨🇭 Suisse' },
+] as const;
+
+const CONTRACT_STATUS_LABEL: Record<string, string> = {
+  DRAFT:  'Brouillon',
+  SENT:   'Envoyé pour signature',
+  SIGNED: 'Signé',
+  EXPIRED: 'Expiré',
+};
+const CONTRACT_STATUS_TONE: Record<string, { bg: string; fg: string }> = {
+  DRAFT:   { bg: '#f6f5fa', fg: '#4a4568' },
+  SENT:    { bg: '#eef4fb', fg: '#2a6bd8' },
+  SIGNED:  { bg: '#eaf3ec', fg: '#3b9a54' },
+  EXPIRED: { bg: '#f9ece9', fg: '#b0361f' },
+};
+
+function ContractCard({ mandat }: { mandat: MandatDetail }) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const qc = useQueryClient();
+  const status = mandat.contractStatus ?? 'DRAFT';
+  const tone = CONTRACT_STATUS_TONE[status];
+
+  return (
+    <>
+      <Card>
+        <div className="flex items-start justify-between">
+          <h2 className="text-lg font-semibold text-text-primary">Contrat</h2>
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+            style={{ background: tone.bg, color: tone.fg }}
+          >
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone.fg }} />
+            {CONTRACT_STATUS_LABEL[status] || status}
+          </span>
+        </div>
+        <dl className="mt-3 space-y-2.5 text-sm">
+          <div className="flex items-baseline justify-between">
+            <dt className="text-text-tertiary">Fee</dt>
+            <dd className="font-semibold text-text-primary tabular-nums">
+              {Number(mandat.feePourcentage)}%
+              {Number(mandat.feePourcentage) < FEE_FLOOR && (
+                <span
+                  className="ml-1.5 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase"
+                  style={{ background: '#fbf3e7', color: '#b47814' }}
+                >
+                  Sous plancher
+                </span>
+              )}
+            </dd>
+          </div>
+          {mandat.paymentTerms && (
+            <div className="flex items-baseline justify-between">
+              <dt className="text-text-tertiary">Conditions paiement</dt>
+              <dd className="font-medium text-text-primary">
+                {PAYMENT_OPTIONS.find((p) => p.value === mandat.paymentTerms)?.label ?? mandat.paymentTerms}
+              </dd>
+            </div>
+          )}
+          {mandat.applicableCountry && (
+            <div className="flex items-baseline justify-between">
+              <dt className="text-text-tertiary">Droit applicable</dt>
+              <dd className="font-medium text-text-primary">
+                {COUNTRY_OPTIONS.find((c) => c.value === mandat.applicableCountry)?.label ?? mandat.applicableCountry}
+              </dd>
+            </div>
+          )}
+          {mandat.contractSentAt && (
+            <div className="flex items-baseline justify-between">
+              <dt className="text-text-tertiary">Envoyé le</dt>
+              <dd className="font-medium text-text-primary">
+                {new Date(mandat.contractSentAt).toLocaleDateString('fr-FR', {
+                  day: '2-digit', month: 'short', year: 'numeric',
+                })}
+              </dd>
+            </div>
+          )}
+        </dl>
+
+        {status === 'DRAFT' && (
+          <Button variant="primary" onClick={() => setModalOpen(true)} className="mt-4 w-full">
+            <Sparkles size={14} /> Envoyer pour signature
+          </Button>
+        )}
+        {status === 'SENT' && (
+          <p className="mt-4 text-xs text-text-tertiary">
+            En attente de signature du client. Le webhook signature (à brancher) marquera automatiquement en <strong>SIGNED</strong>.
+          </p>
+        )}
+      </Card>
+
+      <ContractSendModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        mandat={mandat}
+        onSuccess={() => {
+          qc.invalidateQueries({ queryKey: ['mandat', mandat.id] });
+          setModalOpen(false);
+        }}
+      />
+    </>
+  );
+}
+
+function ContractSendModal({
+  isOpen,
+  onClose,
+  mandat,
+  onSuccess,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  mandat: MandatDetail;
+  onSuccess: () => void;
+}) {
+  const [fee, setFee] = useState<number>(Number(mandat.feePourcentage) || 20);
+  const [customFee, setCustomFee] = useState('');
+  const [paymentTerms, setPaymentTerms] = useState<string>(mandat.paymentTerms || '30j');
+  const [country, setCountry] = useState<string>(mandat.applicableCountry || 'FR');
+  const [approvalReason, setApprovalReason] = useState('');
+
+  const effectiveFee = customFee.trim() ? Number(customFee) : fee;
+  const needsApproval = effectiveFee > 0 && effectiveFee < FEE_FLOOR;
+
+  // Query : y a-t-il déjà une approval APPROVED pour ce mandat au fee demandé ?
+  const { data: pendingApprovals } = useQuery({
+    queryKey: ['contract-approvals', mandat.id],
+    queryFn: () => api.get<Array<{ id: string; status: string; feeRequested: string }>>('/contracts/pending'),
+    enabled: isOpen && needsApproval,
+  });
+  const approvalMatch = pendingApprovals?.find(
+    (a) => a.status === 'PENDING' && Number(a.feeRequested) === effectiveFee,
+  );
+
+  const requestApprovalMutation = useMutation({
+    mutationFn: () =>
+      api.post('/contracts/request-approval', {
+        mandatId: mandat.id,
+        feeRequested: effectiveFee,
+        reason: approvalReason.trim(),
+      }),
+    onSuccess: () => {
+      toast('success', 'Demande envoyée aux admins via Slack. On te ping dès validation.');
+      onClose();
+    },
+    onError: (err: any) => {
+      toast('error', err?.data?.message || 'Erreur lors de la demande');
+    },
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: () =>
+      api.post(`/contracts/mandat/${mandat.id}/send`, {
+        feePourcentage: effectiveFee,
+        paymentTerms,
+        applicableCountry: country,
+      }),
+    onSuccess: () => {
+      toast('success', 'Contrat envoyé pour signature — trace posée sur la fiche.');
+      onSuccess();
+    },
+    onError: (err: any) => {
+      toast('error', err?.data?.message || "Erreur lors de l'envoi");
+    },
+  });
+
+  return (
+    <div>{isOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
+        >
+          <div className="mb-4 flex items-start justify-between">
+            <div>
+              <h3 style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em' }} className="text-xl text-neutral-900">
+                Envoyer le contrat
+              </h3>
+              <p className="mt-1 text-sm text-neutral-500">
+                {mandat.entreprise.nom} — {mandat.titrePoste}
+              </p>
+            </div>
+            <button onClick={onClose} className="rounded-md p-1 text-neutral-400 hover:bg-neutral-100">
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {/* Fee */}
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Success fee (%)
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {FEE_OPTIONS.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => { setFee(f); setCustomFee(''); }}
+                    className={`rounded-lg border px-3 py-1.5 text-sm font-semibold tabular-nums ${
+                      fee === f && !customFee
+                        ? 'border-primary-800 bg-primary-50 text-primary-800'
+                        : 'border-neutral-200 text-neutral-600 hover:border-primary-300'
+                    }`}
+                  >
+                    {f}%
+                  </button>
+                ))}
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={customFee}
+                    onChange={(e) => setCustomFee(e.target.value)}
+                    placeholder="Autre"
+                    className="w-20 rounded-lg border border-neutral-200 px-2 py-1.5 text-sm outline-none focus:border-primary-800"
+                  />
+                  <span className="text-sm text-neutral-500">%</span>
+                </div>
+              </div>
+              <p className="mt-1.5 text-[11px] text-neutral-400">
+                Défaut 20% · plancher <strong>{FEE_FLOOR}%</strong> · sous ce plancher : validation admin requise.
+              </p>
+            </div>
+
+            {/* Sous plancher : demande d'approbation */}
+            {needsApproval && !approvalMatch && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-sm font-semibold text-amber-800">
+                  Fee sous le plancher {FEE_FLOOR}% — validation admin requise
+                </p>
+                <p className="mt-1 text-xs text-amber-700">
+                  Explique pourquoi (contexte client, volume mandat, exception…). Les admins reçoivent une notif Slack.
+                </p>
+                <textarea
+                  value={approvalReason}
+                  onChange={(e) => setApprovalReason(e.target.value)}
+                  rows={3}
+                  placeholder="Ex : Client historique, 4 mandats déjà signés sur l'année. Il pousse pour 15%."
+                  className="mt-2 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-amber-400 focus:border-amber-500"
+                />
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    variant="primary"
+                    onClick={() => requestApprovalMutation.mutate()}
+                    disabled={!approvalReason.trim() || requestApprovalMutation.isPending}
+                  >
+                    Demander la validation
+                  </Button>
+                </div>
+              </div>
+            )}
+            {needsApproval && approvalMatch && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                Demande en attente d'approbation admin — envoi bloqué jusqu'à validation.
+              </div>
+            )}
+
+            {/* Conditions de paiement */}
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Conditions de paiement
+              </label>
+              <select
+                value={paymentTerms}
+                onChange={(e) => setPaymentTerms(e.target.value)}
+                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary-800"
+              >
+                {PAYMENT_OPTIONS.map((p) => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Droit applicable */}
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Droit applicable
+              </label>
+              <select
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary-800"
+              >
+                {COUNTRY_OPTIONS.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-neutral-400">
+                La clause « Litiges » du contrat sera adaptée au pays choisi.
+              </p>
+            </div>
+
+            {/* Send */}
+            <div className="flex items-center justify-between border-t border-neutral-100 pt-4">
+              <p className="text-[12px] text-neutral-400">
+                Aucun provider de signature branché — cet envoi trace en base et log une activité sur la fiche.
+              </p>
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={onClose}>Annuler</Button>
+                <Button
+                  variant="primary"
+                  onClick={() => sendMutation.mutate()}
+                  disabled={
+                    sendMutation.isPending ||
+                    !effectiveFee ||
+                    !paymentTerms ||
+                    !country ||
+                    needsApproval  // sous plancher : bloque
+                  }
+                >
+                  {sendMutation.isPending ? 'Envoi…' : 'Envoyer pour signature'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}</div>
+  );
 }
