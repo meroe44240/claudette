@@ -14,21 +14,25 @@ services:
 
   api:
     build:
-      context: ../apps/api
-      dockerfile: Dockerfile
+      context: ../
+      dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     ports:
       - "3001:3001"
     environment:
+      NODE_ENV: development
       TZ: Europe/Paris
       DATABASE_URL: postgresql://humanup:humanup_dev@postgres:5432/humanup_dev
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-access-secret-not-for-prod}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-not-for-prod}
+      API_PORT: 3001
     depends_on:
       - postgres
 
   web:
     build:
-      context: ../apps/web
-      dockerfile: Dockerfile
+      context: ../
+      dockerfile: apps/web/Dockerfile
     restart: unless-stopped
     ports:
       - "5173:80"
