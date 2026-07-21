@@ -1,5 +1,5 @@
 import prisma from '../../lib/db.js';
-import { NotFoundError, ForbiddenError } from '../../lib/errors.js';
+import { NotFoundError, ForbiddenError, ValidationError } from '../../lib/errors.js';
 import {
   type PaginationParams,
   paginationToSkipTake,
@@ -222,6 +222,83 @@ export async function getById(id: string) {
   });
 
   return { ...client, lastActivityAt: lastActivity?.createdAt ?? null };
+}
+
+/**
+ * Quick-create d'un lead depuis le kanban commercial : cree l'entreprise
+ * (find-or-create par nom, insensible a la casse) + le client avec
+ * statutClient=LEAD, tout en une seule operation.
+ *
+ * Retourne le client cree + entreprise (existante ou nouvelle) + un flag
+ * `entrepriseCreated` pour que le front puisse afficher une confirmation
+ * differente ("nouvelle entreprise ajoutee au CRM" vs "ajoutee a une
+ * entreprise existante").
+ */
+export async function quickLead(
+  data: {
+    entrepriseNom: string;
+    contactNom: string;
+    contactPrenom?: string;
+    poste?: string;
+    email?: string;
+    telephone?: string;
+    note?: string;
+  },
+  createdById: string,
+) {
+  const entrepriseNom = data.entrepriseNom.trim();
+  const contactNom = data.contactNom.trim();
+  if (!entrepriseNom) throw new ValidationError("Le nom de l'entreprise est requis");
+  if (!contactNom) throw new ValidationError("Le nom du contact est requis");
+
+  // Find-or-create entreprise
+  let entreprise = await prisma.entreprise.findFirst({
+    where: { nom: { equals: entrepriseNom, mode: 'insensitive' } },
+    select: { id: true, nom: true },
+  });
+  const entrepriseCreated = !entreprise;
+  if (!entreprise) {
+    entreprise = await prisma.entreprise.create({
+      data: {
+        nom: entrepriseNom,
+        createdById,
+      },
+      select: { id: true, nom: true },
+    });
+  }
+
+  const client = await prisma.client.create({
+    data: {
+      nom: contactNom,
+      prenom: data.contactPrenom?.trim() || null,
+      poste: data.poste?.trim() || null,
+      email: data.email?.trim() || null,
+      telephone: data.telephone?.trim() || null,
+      entrepriseId: entreprise.id,
+      statutClient: 'LEAD',
+      typeClient: 'OUTBOUND',
+      createdById,
+      assignedToId: createdById,
+    },
+    include: { entreprise: { select: { id: true, nom: true } } },
+  });
+
+  // Optional first-touch note
+  if (data.note?.trim()) {
+    await prisma.activite.create({
+      data: {
+        type: 'NOTE',
+        titre: 'Premier contact',
+        contenu: data.note.trim(),
+        entiteType: 'CLIENT',
+        entiteId: client.id,
+        userId: createdById,
+        source: 'MANUEL',
+      },
+    });
+  }
+
+  return { client, entrepriseCreated };
 }
 
 export async function create(data: CreateClientInput, createdById: string) {
