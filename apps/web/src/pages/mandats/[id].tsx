@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Sparkles, Loader2, ChevronDown, ChevronUp, Plus, AlertTriangle, ClipboardList, MessageSquare, Target, Copy, Zap, Star, Search } from 'lucide-react';
+import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Sparkles, Loader2, ChevronDown, ChevronUp, Plus, AlertTriangle, ClipboardList, MessageSquare, Target, Copy, Zap, Star, Search, Phone, Mail as MailIcon, Clock } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import PageHeader from '../../components/ui/PageHeader';
@@ -1085,6 +1085,13 @@ export default function MandatDetailPage() {
 
         {/* Sidebar */}
         <motion.div className="space-y-6" variants={detailItem}>
+          {/* Contact + Activité client — remonté en tête de sidebar */}
+          <ClientActivityCard
+            client={mandat.client}
+            entrepriseNom={mandat.entreprise.nom}
+            onOpenClient={() => navigate(`/clients/${mandat.client.id}`)}
+          />
+
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">Détails</h2>
             <dl className="space-y-3 text-sm">
@@ -1187,4 +1194,144 @@ export default function MandatDetailPage() {
       />
     </div>
   );
+}
+
+// ── Client Activity Card ─────────────────────────────
+//
+// Widget en tete de sidebar sur la fiche mandat : contact client + last
+// 5 activites liees a ce contact (source Activite entiteType=CLIENT).
+// Placeholder pour les evenements portail a venir (chantier 3 :
+// LOGIN | VIEW_PROFILE | MOVE | DECISION | COMMENT).
+
+interface ClientContact {
+  id: string;
+  nom: string;
+  prenom: string | null;
+  email: string | null;
+  telephone: string | null;
+}
+
+interface ClientActivity {
+  id: string;
+  type: string;
+  titre: string | null;
+  contenu: string | null;
+  source: string;
+  createdAt: string;
+}
+
+function ClientActivityCard({
+  client,
+  entrepriseNom,
+  onOpenClient,
+}: {
+  client: ClientContact;
+  entrepriseNom: string;
+  onOpenClient: () => void;
+}) {
+  const { data: activities } = useQuery({
+    queryKey: ['activites', 'CLIENT', client.id, 5],
+    queryFn: () =>
+      api.get<ClientActivity[]>(
+        `/activites?entiteType=CLIENT&entiteId=${client.id}&limit=5`,
+      ),
+  });
+
+  const contactLabel =
+    [client.prenom, client.nom].filter(Boolean).join(' ').trim() || 'Contact client';
+  const initials = `${(client.prenom || '')[0] ?? ''}${(client.nom || '')[0] ?? ''}`
+    .toUpperCase() || '?';
+
+  return (
+    <Card>
+      <div className="flex items-start gap-3">
+        <div
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold"
+          style={{ background: '#E6E9AF', color: '#22177A', fontFamily: "'Archivo Black', sans-serif" }}
+        >
+          {initials}
+        </div>
+        <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={onOpenClient}
+            className="text-left text-[15px] font-semibold text-text-primary hover:text-primary-800 hover:underline"
+          >
+            {contactLabel}
+          </button>
+          <p className="text-xs text-text-secondary">{entrepriseNom}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-col gap-1.5 text-[13px]">
+        {client.email && (
+          <a
+            href={`mailto:${client.email}`}
+            className="inline-flex items-center gap-1.5 text-text-secondary hover:text-primary-800"
+          >
+            <MailIcon size={13} strokeWidth={2} className="text-text-tertiary" />
+            <span className="truncate">{client.email}</span>
+          </a>
+        )}
+        {client.telephone && (
+          <a
+            href={`tel:${client.telephone}`}
+            className="inline-flex items-center gap-1.5 text-text-secondary hover:text-primary-800"
+          >
+            <Phone size={13} strokeWidth={2} className="text-text-tertiary" />
+            <span>{client.telephone}</span>
+          </a>
+        )}
+      </div>
+
+      <div className="mt-4 border-t border-border pt-3">
+        <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+          <Clock size={11} strokeWidth={2} /> Activité client
+        </h3>
+        {!activities ? (
+          <Skeleton className="h-12 w-full" />
+        ) : activities.length === 0 ? (
+          <p className="text-[12px] italic text-text-tertiary">
+            Aucune activité sur ce contact. Le portail client (à venir) remontera ici
+            les connexions, déplacements de cartes et commentaires.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {activities.slice(0, 5).map((a) => (
+              <li key={a.id} className="flex items-start gap-2 text-[12px]">
+                <span
+                  className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ background: activityColor(a.type) }}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-text-primary">{a.titre ?? a.type}</p>
+                  <p className="text-[11px] text-text-tertiary">
+                    {new Date(a.createdAt).toLocaleDateString('fr-FR', {
+                      day: '2-digit',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                    {a.source && a.source !== 'MANUEL' && ` · ${a.source.toLowerCase()}`}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function activityColor(type: string): string {
+  switch (type) {
+    case 'APPEL':      return '#2a6bd8';
+    case 'EMAIL':      return '#22177A';
+    case 'MEETING':    return '#3b9a54';
+    case 'NOTE':       return '#6e6a85';
+    case 'TACHE':      return '#b47814';
+    case 'TRANSCRIPT': return '#8e7cc3';
+    default:           return '#c4c1d0';
+  }
 }

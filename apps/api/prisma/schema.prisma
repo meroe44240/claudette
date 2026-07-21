@@ -280,6 +280,10 @@ model Mandat {
   scorecard            Json?
   scorecardGeneratedAt DateTime?    @db.Timestamptz()
   sourceLead       String?      @db.VarChar(255)
+  // Stages visibles côté client via le portail (chantier 3) et le bouton
+  // "Aperçu client" du kanban. Par défaut : les étapes où le client a du
+  // contexte à voir (envoyés, entretien client, offre, placé).
+  visibleStages    StageCandidature[] @default([ENVOYE_CLIENT, ENTRETIEN_CLIENT, OFFRE, PLACE])
   createdAt        DateTime     @default(now()) @db.Timestamptz()
   updatedAt        DateTime     @updatedAt @db.Timestamptz()
 

@@ -22,7 +22,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useDroppable } from '@dnd-kit/core';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, LayoutGrid, Search, UserPlus, Loader2, GripVertical, Zap, Phone, Mail, CheckCircle2, ListTodo, X } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Search, UserPlus, Loader2, GripVertical, Zap, Phone, Mail, CheckCircle2, ListTodo, X, Eye, EyeOff } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
@@ -83,6 +83,7 @@ interface MandatInfo {
   id: string;
   titrePoste: string;
   entreprise: { id: string; nom: string };
+  visibleStages?: StageCandidature[];
 }
 
 interface SearchCandidatResult {
@@ -229,9 +230,11 @@ const columnItem = {
 interface SortableCardProps {
   candidature: KanbanCandidature;
   onClick: () => void;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }
 
-function SortableKanbanCard({ candidature, onClick }: SortableCardProps) {
+function SortableKanbanCard({ candidature, onClick, selected = false, onToggleSelect }: SortableCardProps) {
   const {
     attributes,
     listeners,
@@ -262,10 +265,32 @@ function SortableKanbanCard({ candidature, onClick }: SortableCardProps) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`group cursor-pointer rounded-xl border border-neutral-100 bg-white p-3.5 shadow-[0_1px_2px_rgba(26,26,46,0.04)] transition-all duration-200 hover:shadow-[0_4px_16px_rgba(34,23,122,0.08)] hover:-translate-y-[1px] ${isDragging ? 'shadow-lg ring-2 ring-primary-300' : ''}`}
+      className={`group cursor-pointer rounded-xl border bg-white p-3.5 shadow-[0_1px_2px_rgba(26,26,46,0.04)] transition-all duration-200 hover:shadow-[0_4px_16px_rgba(34,23,122,0.08)] hover:-translate-y-[1px] ${
+        selected ? 'border-primary-800 ring-2 ring-primary-100' : 'border-neutral-100'
+      } ${isDragging ? 'shadow-lg ring-2 ring-primary-300' : ''}`}
       onClick={onClick}
     >
       <div className="flex items-start gap-2.5">
+        {/* Selection checkbox (visible on hover ou si selected) */}
+        {onToggleSelect && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect();
+            }}
+            className={`mt-0.5 shrink-0 rounded p-0.5 transition-opacity ${
+              selected ? 'opacity-100 text-primary-800' : 'opacity-0 text-neutral-400 group-hover:opacity-100'
+            }`}
+            title={selected ? 'Désélectionner' : 'Sélectionner'}
+          >
+            {selected ? (
+              <CheckCircle2 size={16} strokeWidth={2} className="fill-primary-800 text-white" />
+            ) : (
+              <div className="h-4 w-4 rounded-full border-[1.5px] border-neutral-300" />
+            )}
+          </button>
+        )}
         {/* Drag handle */}
         <button
           className="mt-0.5 shrink-0 cursor-grab rounded p-0.5 text-neutral-300 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
@@ -401,9 +426,22 @@ interface DroppableColumnProps {
   items: KanbanCandidature[];
   isOver: boolean;
   children: React.ReactNode;
+  /** Peut être visible par le client (utilisé pour l'aperçu + le portail à venir). */
+  visibleToClient?: boolean;
+  /** Affiche le bouton œil qui permet de toggler visibleToClient. */
+  showVisibilityToggle?: boolean;
+  onToggleVisibility?: () => void;
 }
 
-function DroppableColumn({ stage, items, isOver, children }: DroppableColumnProps) {
+function DroppableColumn({
+  stage,
+  items,
+  isOver,
+  children,
+  visibleToClient = true,
+  showVisibilityToggle = false,
+  onToggleVisibility,
+}: DroppableColumnProps) {
   const { setNodeRef } = useDroppable({
     id: stage,
     data: { type: 'column', stage },
@@ -430,6 +468,20 @@ function DroppableColumn({ stage, items, isOver, children }: DroppableColumnProp
         }`}>
           {items.length}
         </span>
+        {showVisibilityToggle && (
+          <button
+            type="button"
+            onClick={onToggleVisibility}
+            title={visibleToClient ? 'Masquer cette étape au client' : 'Rendre cette étape visible au client'}
+            className={`ml-auto rounded-md p-1 transition-colors ${
+              visibleToClient
+                ? 'text-primary-800 hover:bg-primary-50'
+                : 'text-neutral-300 hover:bg-neutral-100'
+            }`}
+          >
+            {visibleToClient ? <Eye size={14} strokeWidth={2} /> : <EyeOff size={14} strokeWidth={2} />}
+          </button>
+        )}
       </div>
       <div
         ref={setNodeRef}
@@ -464,7 +516,11 @@ export default function MandatKanbanPage() {
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
 
-  // Refusal modal state
+  // Refusal modal state — motif + optional notifs candidat/client
+  const [refusalNotifyCandidate, setRefusalNotifyCandidate] = useState(false);
+  const [refusalNotifyClient, setRefusalNotifyClient] = useState(false);
+  const [refusalMessageToClient, setRefusalMessageToClient] = useState('');
+  const [refusalMotifDetail, setRefusalMotifDetail] = useState('');
   const [refusalModal, setRefusalModal] = useState<{
     open: boolean;
     candidatureId: string | null;
@@ -495,6 +551,24 @@ export default function MandatKanbanPage() {
   const [candidatSearch, setCandidatSearch] = useState('');
   const [debouncedCandidatSearch, setDebouncedCandidatSearch] = useState('');
   const [showConfetti, setShowConfetti] = useState(false);
+  // Aperçu client : quand true, seules les colonnes dont le stage est dans
+  // mandat.visibleStages sont affichees. + petit oeil sur chaque colonne
+  // pour toggler l'appartenance a visibleStages (persist via PATCH).
+  const [clientPreview, setClientPreview] = useState(false);
+  // Multi-selection des cartes pour le bulk "Présenter au client"
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [presentModal, setPresentModal] = useState(false);
+  const [presentMessage, setPresentMessage] = useState('');
+  const [presentNotify, setPresentNotify] = useState(true);
+  const toggleSelectCandidature = (candidatureId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(candidatureId)) next.delete(candidatureId);
+      else next.add(candidatureId);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedIds(new Set());
 
   // Debounce the candidate search input
   useEffect(() => {
@@ -560,6 +634,47 @@ export default function MandatKanbanPage() {
     },
   });
 
+  // Bulk "Présenter au client" — passe toutes les sélections en ENVOYE_CLIENT
+  // + envoie 1 email agrégé au contact client (si notifyClient).
+  const bulkPresentMutation = useMutation({
+    mutationFn: (payload: { ids: string[]; notifyClient: boolean; message: string }) =>
+      api.post('/candidatures/bulk-stage', {
+        ids: payload.ids,
+        stage: 'ENVOYE_CLIENT',
+        notifyClient: payload.notifyClient,
+        messageToClient: payload.message.trim() || undefined,
+      }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['mandat-kanban', id] });
+      toast('success', `${variables.ids.length} candidat${variables.ids.length > 1 ? 's' : ''} présenté${variables.ids.length > 1 ? 's' : ''} au client`);
+      clearSelection();
+      setPresentModal(false);
+      setPresentMessage('');
+      setPresentNotify(true);
+    },
+    onError: () => {
+      toast('error', 'Erreur lors de la présentation au client');
+    },
+  });
+
+  // Toggle a stage in mandat.visibleStages (persist via PUT /mandats/:id)
+  // Utilisé par le bouton œil sur chaque colonne du kanban en mode Aperçu client.
+  const toggleVisibleStageMutation = useMutation({
+    mutationFn: async (stage: StageCandidature) => {
+      const current = mandat?.visibleStages ?? [];
+      const next = current.includes(stage)
+        ? current.filter((s) => s !== stage)
+        : [...current, stage];
+      return api.put(`/mandats/${id}`, { visibleStages: next });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mandat', id] });
+    },
+    onError: () => {
+      toast('error', 'Erreur lors de la mise à jour de la visibilité');
+    },
+  });
+
   // Create follow-up task mutation
   const createTaskMutation = useMutation({
     mutationFn: (data: { titre: string; entiteType: string; entiteId: string; tacheDueDate: string }) =>
@@ -599,6 +714,7 @@ export default function MandatKanbanPage() {
       candidatureId: string;
       stage: StageCandidature;
       motifRefus?: MotifRefus;
+      motifRefusDetail?: string;
       candidatId?: string;
       candidatName?: string;
       sourceStage?: StageCandidature;
@@ -606,14 +722,21 @@ export default function MandatKanbanPage() {
       dateDemarrage?: string;
       sourcePlacement?: string;
       sourceLead?: string;
+      notifyCandidate?: boolean;
+      notifyClient?: boolean;
+      messageToClient?: string;
     }) =>
       api.put(`/candidatures/${params.candidatureId}`, {
         stage: params.stage,
         ...(params.motifRefus ? { motifRefus: params.motifRefus } : {}),
+        ...(params.motifRefusDetail ? { motifRefusDetail: params.motifRefusDetail } : {}),
         ...(params.feeMontantFacture !== undefined ? { feeMontantFacture: params.feeMontantFacture } : {}),
         ...(params.dateDemarrage ? { dateDemarrage: params.dateDemarrage } : {}),
         ...(params.sourcePlacement ? { sourcePlacement: params.sourcePlacement } : {}),
         ...(params.sourceLead ? { sourceLead: params.sourceLead } : {}),
+        ...(params.notifyCandidate ? { notifyCandidate: true } : {}),
+        ...(params.notifyClient ? { notifyClient: true } : {}),
+        ...(params.messageToClient ? { messageToClient: params.messageToClient } : {}),
       }),
     onMutate: async (variables) => {
       // Cancel any in-flight queries for this kanban
@@ -731,10 +854,14 @@ export default function MandatKanbanPage() {
     const sourceStage = findStageForCandidature(kanban, candidatureId);
     if (!sourceStage || sourceStage === targetStage) return;
 
-    // If moving to REFUSE, show the refusal modal
+    // If moving to REFUSE, show the refusal modal (reset all fields first)
     if (targetStage === 'REFUSE') {
       setRefusalModal({ open: true, candidatureId, sourceStage });
       setSelectedMotif('');
+      setRefusalMotifDetail('');
+      setRefusalNotifyCandidate(false);
+      setRefusalNotifyClient(false);
+      setRefusalMessageToClient('');
       return;
     }
 
@@ -789,17 +916,28 @@ export default function MandatKanbanPage() {
       candidatureId: refusalModal.candidatureId,
       stage: 'REFUSE',
       motifRefus: selectedMotif as MotifRefus,
+      motifRefusDetail: refusalMotifDetail.trim() || undefined,
       sourceStage: refusalModal.sourceStage || undefined,
+      notifyCandidate: refusalNotifyCandidate,
+      notifyClient: refusalNotifyClient,
+      messageToClient: refusalNotifyClient ? refusalMessageToClient.trim() || undefined : undefined,
     });
 
-    setRefusalModal({ open: false, candidatureId: null, sourceStage: null });
-    setSelectedMotif('');
+    resetRefusalModal();
   }
 
   // Cancel refusal
   function handleCancelRefusal() {
+    resetRefusalModal();
+  }
+
+  function resetRefusalModal() {
     setRefusalModal({ open: false, candidatureId: null, sourceStage: null });
     setSelectedMotif('');
+    setRefusalMotifDetail('');
+    setRefusalNotifyCandidate(false);
+    setRefusalNotifyClient(false);
+    setRefusalMessageToClient('');
   }
 
   // Confirm placement (PLACE)
@@ -879,6 +1017,14 @@ export default function MandatKanbanPage() {
         ]}
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              variant={clientPreview ? 'primary' : 'secondary'}
+              onClick={() => setClientPreview((v) => !v)}
+              title={clientPreview ? 'Revenir en vue interne' : "Voir ce que le client verra dans le portail"}
+            >
+              {clientPreview ? <Eye size={16} /> : <EyeOff size={16} />}
+              {clientPreview ? 'Aperçu client (actif)' : 'Aperçu client'}
+            </Button>
             <Button variant="primary" onClick={() => setAddCandidatOpen(true)}>
               <UserPlus size={16} /> Ajouter un candidat
             </Button>
@@ -896,6 +1042,24 @@ export default function MandatKanbanPage() {
           </div>
         }
       />
+
+      {/* Aperçu client — banner de contexte */}
+      {clientPreview && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-primary-100 bg-primary-50/50 px-4 py-2.5">
+          <div className="flex items-center gap-2 text-sm text-primary-800">
+            <Eye size={16} strokeWidth={2} />
+            <span className="font-semibold">Aperçu client</span>
+            <span className="text-primary-700">— tu vois ce que le client verra dans le portail. Bascule off pour voir toutes les colonnes.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setClientPreview(false)}
+            className="rounded-md p-1 text-primary-800 hover:bg-white/80"
+          >
+            <X size={14} strokeWidth={2} />
+          </button>
+        </div>
+      )}
 
       {/* Summary bar */}
       {stageCounts && stageCounts.total > 0 && (
@@ -959,9 +1123,15 @@ export default function MandatKanbanPage() {
           initial="hidden"
           animate="show"
         >
-          {STAGES.map((stage) => {
+          {STAGES.filter((stage) => {
+            // En mode "Aperçu client", masque les colonnes non-visibles au client.
+            if (!clientPreview) return true;
+            const visible = mandat?.visibleStages ?? [];
+            return visible.includes(stage);
+          }).map((stage) => {
             const items = filteredKanban[stage] || [];
             const itemIds = items.map((c) => c.id);
+            const isVisibleToClient = (mandat?.visibleStages ?? []).includes(stage);
 
             return (
               <motion.div key={stage} variants={columnItem} className="snap-start min-w-[280px]">
@@ -969,6 +1139,9 @@ export default function MandatKanbanPage() {
                   stage={stage}
                   items={items}
                   isOver={overColumnId === stage && activeDragId !== null}
+                  visibleToClient={isVisibleToClient}
+                  showVisibilityToggle={!clientPreview}
+                  onToggleVisibility={() => toggleVisibleStageMutation.mutate(stage)}
                 >
                   <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
                     {items.map((candidature) => (
@@ -976,6 +1149,10 @@ export default function MandatKanbanPage() {
                         key={candidature.id}
                         candidature={candidature}
                         onClick={() => navigate(`/candidats/${candidature.candidat.id}`)}
+                        selected={selectedIds.has(candidature.id)}
+                        onToggleSelect={
+                          clientPreview ? undefined : () => toggleSelectCandidature(candidature.id)
+                        }
                       />
                     ))}
                   </SortableContext>
@@ -1058,16 +1235,112 @@ export default function MandatKanbanPage() {
         candidatName={placementModal.candidatName}
       />
 
+      {/* Selection Bar (bottom fixed) — visible only when candidates are selected */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-2xl border border-neutral-100 bg-white px-4 py-3 shadow-[0_20px_60px_-20px_rgba(34,23,122,0.35)]"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white"
+                  style={{ background: '#22177A' }}
+                >
+                  {selectedIds.size}
+                </span>
+                <span className="text-sm font-medium text-neutral-700">
+                  candidat{selectedIds.size > 1 ? 's' : ''} sélectionné{selectedIds.size > 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="h-6 w-px bg-neutral-100" />
+              <Button variant="primary" onClick={() => setPresentModal(true)}>
+                <Mail size={14} /> Présenter au client
+              </Button>
+              <Button variant="ghost" onClick={clearSelection}>
+                <X size={14} /> Désélectionner
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Present-to-client Modal */}
+      <Modal
+        isOpen={presentModal}
+        onClose={() => setPresentModal(false)}
+        title="Présenter au client"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-text-secondary">
+            <strong>{selectedIds.size} candidat{selectedIds.size > 1 ? 's' : ''}</strong> passera{selectedIds.size > 1 ? 'ont' : ''} en <span className="font-semibold text-neutral-800">Envoyé client</span>. Le client sera notifié par un email agrégé.
+          </p>
+          <div className="rounded-xl border border-neutral-100 p-3">
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                checked={presentNotify}
+                onChange={(e) => setPresentNotify(e.target.checked)}
+                className="mt-0.5 h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-800 focus:ring-primary-800"
+              />
+              <div className="flex-1">
+                <span className="text-sm font-medium text-neutral-800">Notifier le client par email</span>
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  Un seul email au contact client du mandat listant les {selectedIds.size} profil{selectedIds.size > 1 ? 's' : ''}.
+                </p>
+              </div>
+            </label>
+            {presentNotify && (
+              <div className="mt-3 pl-6">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Mot au client (optionnel)
+                </label>
+                <textarea
+                  value={presentMessage}
+                  onChange={(e) => setPresentMessage(e.target.value)}
+                  rows={3}
+                  placeholder="Ex : Voici la première salve — le premier profil est disponible pour un entretien dès la semaine prochaine."
+                  className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-3 py-2 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-800 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
+                />
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" onClick={() => setPresentModal(false)}>
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() =>
+                bulkPresentMutation.mutate({
+                  ids: Array.from(selectedIds),
+                  notifyClient: presentNotify,
+                  message: presentMessage,
+                })
+              }
+              disabled={bulkPresentMutation.isPending || selectedIds.size === 0}
+            >
+              {bulkPresentMutation.isPending ? 'Envoi…' : `Présenter ${selectedIds.size} candidat${selectedIds.size > 1 ? 's' : ''}`}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Refusal Modal */}
       <Modal
         isOpen={refusalModal.open}
         onClose={handleCancelRefusal}
         title="Motif de refus"
-        size="sm"
+        size="md"
       >
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
-            Veuillez sélectionner le motif de refus pour cette candidature.
+            Sélectionne le motif du refus, puis choisis si on prévient le candidat et/ou le client.
           </p>
           <Select
             label="Motif de refus"
@@ -1076,6 +1349,69 @@ export default function MandatKanbanPage() {
             onChange={setSelectedMotif}
             placeholder="Sélectionner un motif..."
           />
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Détail (optionnel)
+            </label>
+            <textarea
+              value={refusalMotifDetail}
+              onChange={(e) => setRefusalMotifDetail(e.target.value)}
+              rows={2}
+              placeholder="Ex : Attente d'un autre profil plus senior, timing pas bon…"
+              className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-3 py-2 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-800 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
+            />
+          </div>
+
+          {/* Notifier candidat */}
+          <div className="rounded-xl border border-neutral-100 p-3">
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                checked={refusalNotifyCandidate}
+                onChange={(e) => setRefusalNotifyCandidate(e.target.checked)}
+                className="mt-0.5 h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-800 focus:ring-primary-800"
+              />
+              <div>
+                <span className="text-sm font-medium text-neutral-800">Envoyer un email de refus au candidat</span>
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  Message court + branding HumanUp. Le candidat reçoit un mail auto tout de suite.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* Notifier client */}
+          <div className="rounded-xl border border-neutral-100 p-3">
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                checked={refusalNotifyClient}
+                onChange={(e) => setRefusalNotifyClient(e.target.checked)}
+                className="mt-0.5 h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-800 focus:ring-primary-800"
+              />
+              <div className="flex-1">
+                <span className="text-sm font-medium text-neutral-800">Notifier le client par email</span>
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  Informer le contact client du mandat.
+                </p>
+              </div>
+            </label>
+            {refusalNotifyClient && (
+              <div className="mt-3 pl-6">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Mot au client (optionnel)
+                </label>
+                <textarea
+                  value={refusalMessageToClient}
+                  onChange={(e) => setRefusalMessageToClient(e.target.value)}
+                  rows={3}
+                  placeholder="Ex : Profil trop junior, on continue à sourcer sur votre besoin."
+                  className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-3 py-2 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-800 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
+                />
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={handleCancelRefusal}>
               Annuler
