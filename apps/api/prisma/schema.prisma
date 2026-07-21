@@ -431,6 +431,58 @@ model PortalComment {
   @@map("portal_comments")
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// LIST PUSH (chantier 5) — reverse-sourcing par etablissement
+// On ingere des CV, on aggrege les entreprises employeurs cibles pour une
+// campagne de prospection commerciale.
+// ═══════════════════════════════════════════════════════════════════════════
+
+model MarketList {
+  id                String                     @id @default(uuid()) @db.Uuid
+  name              String                     @db.VarChar(255)
+  sectorTags        String[]                   @default([])  // metier(s) ciblé(s)
+  zones             String[]                   @default([])  // départements/villes/régions
+  excludedCompanies String[]                   @default([])  // sociétés a ne pas prospecter
+  createdById       String?                    @db.Uuid
+  createdAt         DateTime                   @default(now()) @db.Timestamptz()
+  updatedAt         DateTime                   @updatedAt @db.Timestamptz()
+
+  establishments MarketListEstablishment[]
+
+  @@index([createdById])
+  @@map("market_lists")
+}
+
+model MarketListEstablishment {
+  id            String                  @id @default(uuid()) @db.Uuid
+  marketListId  String                  @db.Uuid
+  marketList    MarketList              @relation(fields: [marketListId], references: [id], onDelete: Cascade)
+  // Etablissement identifie via les CV ingerés
+  name          String                  @db.VarChar(255)
+  city          String?                 @db.VarChar(120)
+  sector        String?                 @db.VarChar(120)
+  effectif      String?                 @db.VarChar(60)
+  titles        String[]                @default([])  // intitulés de postes trouvés dans les CV
+  frequency     Int                     @default(1)    // combien de candidats ingérés ont travaillé ici
+  status        MarketEstablishmentStatus @default(NEW)
+  // Lien optionnel vers l'Entreprise du CRM si créée
+  entrepriseId  String?                 @db.Uuid
+  createdAt     DateTime                @default(now()) @db.Timestamptz()
+  updatedAt     DateTime                @updatedAt @db.Timestamptz()
+
+  @@unique([marketListId, name])
+  @@index([marketListId])
+  @@index([status])
+  @@map("market_list_establishments")
+}
+
+enum MarketEstablishmentStatus {
+  NEW              // Vient d'etre trouve
+  EXCLUDED         // Retire manuellement de la campagne
+  PROSPECTION      // Un lead / mandat a ete cree dessus
+  CLIENT_EXISTING  // Déjà client dans le CRM
+}
+
 enum FeeStatut {
   NON_FACTURE
   FACTURE
