@@ -966,7 +966,39 @@ export default function MandatDetailPage() {
         />
       </div>
 
-      <motion.div className="grid grid-cols-1 gap-6 lg:grid-cols-3" variants={detailStagger} initial="hidden" animate="show">
+      {/* ══════════════════════════════════════════════════
+       * BODY : mock-fidelity 3-column layout (1.45fr / 1fr / 1fr)
+       * ══════════════════════════════════════════════════ */}
+      {!isEditing && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1.45fr 1fr 1fr', gap: 14, marginTop: 14, alignItems: 'start' }}>
+          {/* ── COL 1 · LE POSTE ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <LeBriefCard mandat={mandat} onStartEdit={handleStartEdit} />
+            <ProcessRecrutementCard mandat={mandat} onOpenKanban={() => navigate(`/mandats/${id}/kanban`)} />
+          </div>
+
+          {/* ── COL 2 · NOTES + CLIENT ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <NotesInternesCard mandat={mandat} onSave={(notes) => updateMutation.mutate({ notes })} saving={updateMutation.isPending} />
+            <ContactClientCardMock client={mandat.client} entrepriseNom={mandat.entreprise.nom} onOpen={() => navigate(`/clients/${mandat.client.id}`)} />
+          </div>
+
+          {/* ── COL 3 · ACTIVITÉ ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <ClientActivityCard
+              client={mandat.client}
+              entrepriseNom={mandat.entreprise.nom}
+              onOpenClient={() => navigate(`/clients/${mandat.client.id}`)}
+            />
+            <ActiviteInterneMockCard mandatId={mandat.id} />
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════
+       * ADVANCED SECTIONS (stackées sous le body — préservées)
+       * ══════════════════════════════════════════════════ */}
+      <motion.div className="grid grid-cols-1 gap-6 lg:grid-cols-3 mt-8" variants={detailStagger} initial="hidden" animate="show">
         {/* Main info */}
         <motion.div className="lg:col-span-2 space-y-6" variants={detailItem}>
           <Card>
@@ -1243,13 +1275,6 @@ export default function MandatDetailPage() {
 
         {/* Sidebar */}
         <motion.div className="space-y-6" variants={detailItem}>
-          {/* Contact + Activité client — remonté en tête de sidebar */}
-          <ClientActivityCard
-            client={mandat.client}
-            entrepriseNom={mandat.entreprise.nom}
-            onOpenClient={() => navigate(`/clients/${mandat.client.id}`)}
-          />
-
           <Card>
             <h2 className="mb-4 text-lg font-semibold text-text-primary">Détails</h2>
             <dl className="space-y-3 text-sm">
@@ -2095,4 +2120,385 @@ function StatsCell({
 
 function StatsCellDivider() {
   return <div style={{ width: 1, background: 'rgba(34,23,122,0.08)' }} />;
+}
+
+// ═════════════════════════════════════════════════════════════════
+// MOCK-FIDELITY BODY COMPONENTS (fiche mandat 3-col body)
+// ═════════════════════════════════════════════════════════════════
+
+// ── COL 1 · Le brief ─────────────────────────────────
+
+function LeBriefCard({ mandat, onStartEdit }: { mandat: MandatDetail; onStartEdit: () => void }) {
+  const skills: string[] = mandat.scorecard?.competencesCles?.map((c) => c.nom) ?? [];
+  const localisation = mandat.localisation ?? '—';
+  return (
+    <div
+      className="rise"
+      style={{
+        background: '#fff', border: '1px solid rgba(34,23,122,0.08)',
+        borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 2px rgba(34,23,122,0.04)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 16, color: '#1A1533' }}>Le brief</div>
+        <button
+          onClick={onStartEdit}
+          className="chip"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            fontSize: 11.5, fontWeight: 700, color: '#22177A',
+            background: '#F7F7EF', border: '1px solid rgba(34,23,122,0.12)',
+            borderRadius: 9, padding: '5px 11px', cursor: 'pointer',
+          }}
+        >
+          <Pencil size={12} /> Éditer
+        </button>
+      </div>
+
+      <p style={{ fontSize: 14.5, lineHeight: 1.68, color: '#4A4568', marginTop: 12, whiteSpace: 'pre-wrap' }}>
+        {mandat.description || 'Pas de brief renseigné. Clique sur Éditer pour ajouter la description du poste.'}
+      </p>
+
+      <div
+        style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px',
+          marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(34,23,122,0.07)',
+        }}
+      >
+        <BriefField label="Localisation" value={localisation} />
+        <BriefField label="Contrat" value="CDI · temps plein" />
+        <BriefField label="Expérience" value="—" />
+        <BriefField label="Télétravail" value={mandat.localisation?.toLowerCase().includes('remote') ? 'Oui' : '—'} />
+      </div>
+
+      {skills.length > 0 && (
+        <>
+          <div
+            style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+              textTransform: 'uppercase', color: '#8A8699', marginTop: 18,
+            }}
+          >
+            Compétences clés
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 11 }}>
+            {skills.map((s, i) => (
+              <span
+                key={i}
+                style={{
+                  fontSize: 12.5, fontWeight: 600, borderRadius: 999,
+                  padding: '6px 12px', background: 'rgba(34,23,122,0.06)', color: '#22177A',
+                }}
+              >
+                {s}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+
+      {mandat.ficheDePoste && (
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            marginTop: 18, padding: '11px 13px',
+            background: '#FCFCF5', border: '1px solid rgba(34,23,122,0.1)',
+            borderRadius: 12, cursor: 'pointer',
+          }}
+        >
+          <span
+            style={{
+              width: 38, height: 38, borderRadius: 10, background: '#F1EDF9',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}
+          >
+            <ClipboardList size={17} color="#8E7CC3" />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#1A1533' }}>Fiche de poste</div>
+            <div style={{ fontSize: 12, color: '#9A96AE' }}>Texte importé · Brief IA</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BriefField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#9A96AE' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 13.5, fontWeight: 600, color: '#1A1533', marginTop: 3 }}>{value}</div>
+    </div>
+  );
+}
+
+// ── COL 1 · Process de recrutement ───────────────────
+
+function ProcessRecrutementCard({ mandat, onOpenKanban }: { mandat: MandatDetail; onOpenKanban: () => void }) {
+  const stageDefs: Array<{ key: string; label: string; color: string }> = [
+    { key: 'SOURCING',         label: 'Sourcing',        color: '#8E7CC3' },
+    { key: 'CONTACTE',         label: 'Contacté',        color: '#3B6FE0' },
+    { key: 'ENTRETIEN_1',      label: 'Entretien 1',     color: '#22177A' },
+    { key: 'ENVOYE_CLIENT',    label: 'Envoyé client',   color: '#E08A2B' },
+    { key: 'ENTRETIEN_CLIENT', label: 'Entretien client', color: '#C9A227' },
+    { key: 'OFFRE',            label: 'Offre',           color: '#3B9A54' },
+    { key: 'PLACE',            label: 'Placé',           color: '#2C9A47' },
+  ];
+  const counts: Record<string, number> = {};
+  for (const c of mandat.candidatures) counts[c.stage] = (counts[c.stage] ?? 0) + 1;
+  const total = mandat.candidatures.length;
+  const max = Math.max(1, ...stageDefs.map((s) => counts[s.key] ?? 0));
+
+  return (
+    <div
+      className="rise"
+      style={{
+        background: '#fff', border: '1px solid rgba(34,23,122,0.08)',
+        borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 2px rgba(34,23,122,0.04)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <a
+          onClick={onOpenKanban}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+            textDecoration: 'none', fontFamily: "'Archivo Black', sans-serif",
+            fontSize: 15, color: '#1A1533',
+          }}
+        >
+          Process de recrutement
+          <ArrowLeft size={14} strokeWidth={2.4} color="#22177A" style={{ transform: 'rotate(180deg)' }} />
+        </a>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: '#9A96AE' }}>{total} candidat{total > 1 ? 's' : ''}</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginTop: 15 }}>
+        {stageDefs.map((s) => {
+          const c = counts[s.key] ?? 0;
+          const pct = Math.round((c / max) * 100);
+          return (
+            <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: 13, color: '#4A4568' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color, flexShrink: 0 }} />
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 600 }}>{s.label}</span>
+                  </span>
+                  <strong style={{ color: s.color, flexShrink: 0 }}>{c}</strong>
+                </div>
+                <div style={{ height: 6, borderRadius: 999, background: 'rgba(34,23,122,0.08)', marginTop: 6 }}>
+                  <div style={{ width: `${pct}%`, height: '100%', borderRadius: 999, background: s.color, transition: 'width 0.6s cubic-bezier(.16,1,.3,1)' }} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── COL 2 · Notes internes ───────────────────────────
+
+function NotesInternesCard({ mandat, onSave, saving }: { mandat: MandatDetail; onSave: (notes: string) => void; saving: boolean }) {
+  const [draft, setDraft] = useState(mandat.notes ?? '');
+  useEffect(() => {
+    setDraft(mandat.notes ?? '');
+  }, [mandat.notes]);
+  const dirty = draft !== (mandat.notes ?? '');
+  return (
+    <div
+      className="rise"
+      style={{
+        background: '#fff', border: '1px solid rgba(34,23,122,0.08)',
+        borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 2px rgba(34,23,122,0.04)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Pencil size={15} color="#22177A" strokeWidth={2} />
+        <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 15, color: '#1A1533' }}>Notes internes</span>
+      </div>
+      <textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder="Ajoutez une note sur ce mandat : contexte, exigences du client, points d'attention…"
+        style={{
+          width: '100%', minHeight: 110, resize: 'vertical',
+          marginTop: 12, fontFamily: "'Manrope', sans-serif",
+          fontSize: 13.5, lineHeight: 1.55, padding: '12px 14px',
+          borderRadius: 12, border: '1.5px solid rgba(34,23,122,0.14)',
+          background: '#FCFCF5', color: '#1A1533', outline: 'none',
+        }}
+      />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10 }}>
+        <span style={{ fontSize: 11.5, color: '#9A96AE' }}>Visible par l'équipe HumanUp uniquement.</span>
+        <button
+          onClick={() => onSave(draft)}
+          disabled={saving || !dirty}
+          style={{
+            fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 13,
+            background: dirty ? '#22177A' : 'rgba(34,23,122,0.35)',
+            color: '#E6E9AF', border: 'none', borderRadius: 10,
+            padding: '9px 18px', cursor: dirty && !saving ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {saving ? 'Enregistrement…' : 'Enregistrer'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── COL 2 · Contact client ───────────────────────────
+
+function ContactClientCardMock({
+  client, entrepriseNom, onOpen,
+}: {
+  client: { id: string; nom: string; prenom: string | null; email: string | null; telephone: string | null };
+  entrepriseNom: string;
+  onOpen: () => void;
+}) {
+  const initials = `${client.prenom?.[0] ?? ''}${client.nom?.[0] ?? ''}`.toUpperCase() || '·';
+  return (
+    <a
+      className="rise clk"
+      onClick={onOpen}
+      style={{
+        background: '#fff', border: '1px solid rgba(34,23,122,0.08)',
+        borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 2px rgba(34,23,122,0.04)',
+        textDecoration: 'none', display: 'block', cursor: 'pointer',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 15, color: '#1A1533' }}>Contact client</div>
+        <ArrowLeft size={15} strokeWidth={2.4} color="#22177A" style={{ transform: 'rotate(180deg)' }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
+        <span
+          style={{
+            width: 44, height: 44, borderRadius: '50%',
+            background: '#8E7CC3', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: "'Archivo Black', sans-serif", fontSize: 14,
+          }}
+        >
+          {initials}
+        </span>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#1A1533' }}>
+            {[client.prenom, client.nom].filter(Boolean).join(' ')}
+          </div>
+          <div style={{ fontSize: 12.5, color: '#8A8699' }}>{entrepriseNom}</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(34,23,122,0.07)' }}>
+        {client.email && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13, color: '#4A4568' }}>
+            <MailIcon size={14} color="#22177A" strokeWidth={2} />
+            {client.email}
+          </span>
+        )}
+        {client.telephone && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13, color: '#4A4568' }}>
+            <Phone size={14} color="#22177A" strokeWidth={2} />
+            {client.telephone}
+          </span>
+        )}
+        {!client.email && !client.telephone && (
+          <span style={{ fontSize: 12.5, color: '#9A96AE' }}>Aucun contact renseigné</span>
+        )}
+      </div>
+    </a>
+  );
+}
+
+// ── COL 3 · Activité interne (timeline verticale) ────
+
+interface InternalActivity {
+  id: string;
+  type: string;
+  titre: string | null;
+  contenu: string | null;
+  source: string;
+  createdAt: string;
+  auteur?: { prenom: string | null; nom: string } | null;
+}
+
+function ActiviteInterneMockCard({ mandatId }: { mandatId: string }) {
+  const { data } = useQuery({
+    queryKey: ['activites', 'MANDAT', mandatId, 'internal'],
+    queryFn: () => api.get<{ data: InternalActivity[]; meta?: unknown }>(`/activites?entiteType=MANDAT&entiteId=${mandatId}&perPage=8`),
+  });
+  const items = data?.data ?? [];
+
+  const dotColor = (type: string): string => {
+    if (type.startsWith('EMAIL')) return '#3B6FE0';
+    if (type.startsWith('CALL') || type.includes('APPEL')) return '#22177A';
+    if (type.includes('CREATED') || type.includes('CREE')) return '#3B9A54';
+    if (type.includes('DEPLACE') || type.includes('MOVE') || type.includes('STAGE')) return '#E08A2B';
+    return '#8E7CC3';
+  };
+
+  const rel = (t: string): string => {
+    const then = new Date(t).getTime();
+    const now = Date.now();
+    const s = Math.floor((now - then) / 1000);
+    if (s < 60) return 'à l’instant';
+    if (s < 3600) return `il y a ${Math.floor(s / 60)} min`;
+    if (s < 86400) return `il y a ${Math.floor(s / 3600)} h`;
+    const d = new Date(then);
+    return `le ${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
+  };
+
+  return (
+    <div
+      className="rise"
+      style={{
+        background: '#fff', border: '1px solid rgba(34,23,122,0.08)',
+        borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 2px rgba(34,23,122,0.04)',
+      }}
+    >
+      <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 15, color: '#1A1533' }}>Activité interne</div>
+      <div style={{ marginTop: 15, display: 'flex', flexDirection: 'column' }}>
+        {items.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: '#9A96AE' }}>Aucune activité pour le moment.</div>
+        ) : (
+          items.map((ev, i) => {
+            const isLast = i === items.length - 1;
+            const authorName = ev.auteur ? [ev.auteur.prenom, ev.auteur.nom].filter(Boolean).join(' ') : null;
+            return (
+              <div
+                key={ev.id}
+                style={{
+                  display: 'flex', gap: 14,
+                  paddingBottom: isLast ? 0 : 15,
+                  borderLeft: isLast ? 'none' : '2px solid rgba(34,23,122,0.12)',
+                  marginLeft: 5, paddingLeft: 16, position: 'relative',
+                }}
+              >
+                <span
+                  style={{
+                    position: 'absolute', left: -6, top: 2,
+                    width: 10, height: 10, borderRadius: '50%',
+                    background: dotColor(ev.type),
+                  }}
+                />
+                <div>
+                  <div style={{ fontSize: 12.5, color: '#1A1533' }}>
+                    {ev.titre || ev.type}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#9A96AE', marginTop: 2 }}>
+                    {rel(ev.createdAt)}
+                    {authorName ? ` · ${authorName}` : ''}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
 }
