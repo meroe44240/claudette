@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Building2, Briefcase, FileText, Upload, Settings, User, Mail, ChevronDown, ChevronsLeft, BarChart3, Terminal, Target, Radar } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Briefcase, FileText, Upload, Settings, User, Mail, ChevronDown, ChevronsLeft, BarChart3, Terminal, Zap, Activity, Radar } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 
 interface NavItem {
@@ -17,9 +17,9 @@ interface NavSection {
 
 const navSections: NavSection[] = [
   {
-    label: 'DASHBOARD',
+    // Top items — Dashboard + Mon Espace posés sans header section (fidèle mock)
     items: [
-      { to: '/', icon: LayoutDashboard, label: 'Vue d’ensemble' },
+      { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
       { to: '/mon-espace', icon: User, label: 'Mon Espace' },
     ],
   },
@@ -34,8 +34,9 @@ const navSections: NavSection[] = [
   {
     label: 'RECRUTEMENT',
     items: [
-      { to: '/mes-mandats', icon: Target, label: 'Mes Mandats' },
-      { to: '/mandats', icon: FileText, label: 'Tous les mandats' },
+      { to: '/clients/pipeline', icon: Activity, label: 'Leads' },
+      { to: '/mandats', icon: FileText, label: 'Mandats' },
+      { to: '/mes-mandats', icon: Zap, label: 'Outil Recruteurs' },
       { to: '/list-push', icon: Radar, label: 'List Push' },
     ],
   },

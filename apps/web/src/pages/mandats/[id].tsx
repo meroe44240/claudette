@@ -242,6 +242,21 @@ function formatDate(dateStr: string): string {
   });
 }
 
+function formatDateShort(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
+function daysBetween(from: string, to?: string): number {
+  const start = new Date(from).getTime();
+  const end = to ? new Date(to).getTime() : Date.now();
+  return Math.max(0, Math.floor((end - start) / (24 * 60 * 60 * 1000)));
+}
+
+function formatEuros(n: number | null | undefined): string {
+  if (n == null) return '—';
+  return `${n.toLocaleString('fr-FR')} €`;
+}
+
 const detailStagger = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.06 } },
@@ -763,56 +778,193 @@ export default function MandatDetailPage() {
     );
   }
 
+  const statutColor: Record<StatutMandat, { bg: string; fg: string; dot: string }> = {
+    OUVERT:  { bg: 'rgba(59,154,84,0.12)', fg: '#2C6B3F', dot: '#3B9A54' },
+    EN_COURS:{ bg: 'rgba(180,120,20,0.12)', fg: '#8A6A2E', dot: '#B47814' },
+    GAGNE:   { bg: 'rgba(59,154,84,0.12)', fg: '#2C6B3F', dot: '#3B9A54' },
+    PERDU:   { bg: 'rgba(179,38,30,0.12)',  fg: '#B3261E', dot: '#B0361F' },
+    ANNULE:  { bg: 'rgba(179,38,30,0.12)',  fg: '#B3261E', dot: '#B0361F' },
+    CLOTURE: { bg: 'rgba(34,23,122,0.06)',  fg: '#5A5470', dot: '#8A8699' },
+  };
+  const st = statutColor[mandat.statut];
+
+  const daysOpen = daysBetween(mandat.dateOuverture);
+  const candidatsCount = mandat.candidatures?.length ?? 0;
+  const salaireMax = mandat.salaireMax ?? mandat.salaireMin ?? 0;
+  const feePercent = Number(mandat.feePourcentage || '0');
+
   return (
-    <div>
-      <PageHeader
-        title={mandat.titrePoste}
-        breadcrumbs={[
-          { label: 'Mandats', href: '/mandats' },
-          { label: mandat.titrePoste },
-        ]}
-        actions={
-          <div className="flex items-center gap-2">
-            {isEditing ? (
-              <>
-                <Button variant="primary" size="sm" onClick={handleSave} loading={updateMutation.isPending}>
-                  <Save size={14} /> Enregistrer
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleCancelEdit} disabled={updateMutation.isPending}>
-                  <X size={14} /> Annuler
-                </Button>
-              </>
-            ) : (
-              <>
-                <Badge variant={statutVariant[mandat.statut]} className="text-sm">
-                  {statutLabels[mandat.statut]}
-                </Badge>
-                {bookingSettings?.isActive && bookingSettings?.slug && mandat.slug && (
-                  <Button variant="secondary" size="sm" onClick={handleCopyBookingLink}>
-                    {bookingCopied ? <Check size={14} className="text-green-500" /> : <Link2 size={14} />}
-                    {bookingCopied ? 'Copie !' : 'Lien booking'}
-                  </Button>
-                )}
-                <Button variant="secondary" size="sm" onClick={handleStartEdit}>
-                  <Pencil size={14} /> Modifier
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => cloneMutation.mutate()} disabled={cloneMutation.isPending}>
-                  <Copy size={14} /> {cloneMutation.isPending ? 'Duplication...' : 'Dupliquer'}
-                </Button>
-                <Button variant="danger" size="sm" onClick={() => setShowDeleteModal(true)}>
-                  <Trash2 size={14} /> Supprimer
-                </Button>
-                <Button variant="secondary" onClick={() => navigate(`/mandats/${id}/kanban`)}>
-                  <LayoutGrid size={16} /> Vue Kanban
-                </Button>
-                <Button variant="ghost" onClick={() => navigate('/mandats')}>
-                  <ArrowLeft size={16} /> Retour
-                </Button>
-              </>
-            )}
+    <div className="rise-stagger">
+      {/* ── BREADCRUMB ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5, color: '#9A96AE', fontWeight: 600 }}>
+        <a onClick={() => navigate('/mandats')} style={{ color: '#8A8699', cursor: 'pointer' }}>Mandats</a>
+        <span style={{ color: '#C4C1D0' }}>›</span>
+        <span style={{ color: '#22177A', fontWeight: 700 }}>{mandat.titrePoste}</span>
+      </div>
+
+      {/* ── HEADER : titre + chips + actions ── */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', marginTop: 8 }}>
+        <div>
+          <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 30, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1.05 }}>
+            {mandat.titrePoste}
+          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginTop: 8, flexWrap: 'wrap' }}>
+            <span
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: '#4A4568', cursor: 'pointer' }}
+              onClick={() => navigate(`/entreprises/${mandat.entreprise.id}`)}
+            >
+              <Building2 size={14} color="#22177A" strokeWidth={2} />
+              {mandat.entreprise.nom}
+            </span>
+            <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#C4C1D0' }} />
+            <span
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '4px 11px',
+                background: st.bg, color: st.fg,
+              }}
+            >
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.dot }} />
+              {statutLabels[mandat.statut]}
+            </span>
+            <span
+              style={{
+                fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '4px 11px',
+                background: 'rgba(34,23,122,0.06)', color: '#5A5470',
+              }}
+            >
+              Priorité {prioriteLabels[mandat.priorite].toLowerCase()}
+            </span>
           </div>
-        }
-      />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          {isEditing ? (
+            <>
+              <button
+                onClick={handleSave}
+                disabled={updateMutation.isPending}
+                className="btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer', border: 'none' }}
+              >
+                <Save size={15} />
+                Enregistrer
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                disabled={updateMutation.isPending}
+                className="btn-secondary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer' }}
+              >
+                <X size={15} />
+                Annuler
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => navigate(`/mandats/${id}/kanban`)}
+                className="btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer', border: 'none' }}
+              >
+                <LayoutGrid size={15} />
+                Voir le Kanban
+              </button>
+              {bookingSettings?.isActive && bookingSettings?.slug && mandat.slug && (
+                <button
+                  onClick={handleCopyBookingLink}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 700,
+                    background: '#F0EFC4', color: '#22177A', border: '1px solid transparent',
+                    borderRadius: 11, padding: '10px 15px', cursor: 'pointer',
+                  }}
+                >
+                  {bookingCopied ? <Check size={15} className="text-green-500" /> : <Link2 size={15} />}
+                  {bookingCopied ? 'Copié !' : 'Lien booking'}
+                </button>
+              )}
+              <button
+                onClick={handleStartEdit}
+                title="Modifier"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 40, height: 40, background: '#fff', color: '#4A4568',
+                  border: '1px solid rgba(34,23,122,0.16)', borderRadius: 11, cursor: 'pointer',
+                }}
+              >
+                <Pencil size={15} />
+              </button>
+              <button
+                onClick={() => cloneMutation.mutate()}
+                disabled={cloneMutation.isPending}
+                title="Dupliquer"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 40, height: 40, background: '#fff', color: '#4A4568',
+                  border: '1px solid rgba(34,23,122,0.16)', borderRadius: 11, cursor: 'pointer',
+                }}
+              >
+                <Copy size={15} />
+              </button>
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                title="Supprimer"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 40, height: 40, background: '#fff', color: '#B3261E',
+                  border: '1px solid rgba(179,38,30,0.2)', borderRadius: 11, cursor: 'pointer',
+                }}
+              >
+                <Trash2 size={15} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── STATS BAR : 5 KPI horizontaux (Fee/Salaire/Candidats/Ouvert depuis/Échéance) ── */}
+      <div
+        style={{
+          display: 'flex', alignItems: 'stretch',
+          background: '#fff', border: '1px solid rgba(34,23,122,0.08)',
+          borderRadius: 14, boxShadow: '0 1px 2px rgba(34,23,122,0.04)',
+          marginTop: 12, overflow: 'hidden',
+        }}
+      >
+        <StatsCell
+          label="Fee estimé"
+          value={formatEuros(mandat.feeMontantEstime)}
+          valueColor="#22177A"
+          foot={feePercent > 0 ? `${feePercent} % du package` : '—'}
+        />
+        <StatsCellDivider />
+        <StatsCell
+          label="Salaire"
+          value={salaireMax ? formatEuros(salaireMax) : '—'}
+          valueColor="#1A1533"
+          foot="package annuel"
+        />
+        <StatsCellDivider />
+        <StatsCell
+          label="Candidats"
+          value={String(candidatsCount)}
+          valueColor="#1A1533"
+          foot="en pipeline"
+        />
+        <StatsCellDivider />
+        <StatsCell
+          label="Ouvert depuis"
+          value={`${daysOpen} j`}
+          valueColor="#1A1533"
+          foot={`créé le ${formatDateShort(mandat.dateOuverture)}`}
+        />
+        <StatsCellDivider />
+        <StatsCell
+          label="Échéance"
+          value={mandat.dateCloture ? formatDateShort(mandat.dateCloture) : '—'}
+          valueColor={mandat.dateCloture ? '#B4791A' : '#8A8699'}
+          foot={mandat.dateCloture ? `deadline` : 'pas de deadline'}
+        />
+      </div>
 
       <motion.div className="grid grid-cols-1 gap-6 lg:grid-cols-3" variants={detailStagger} initial="hidden" animate="show">
         {/* Main info */}
@@ -1908,4 +2060,39 @@ function ContractSendModal({
       </div>
     )}</div>
   );
+}
+
+// ─── Stats bar cell (fiche mandat header) ──────────
+
+function StatsCell({
+  label, value, valueColor, foot,
+}: {
+  label: string;
+  value: string;
+  valueColor: string;
+  foot?: string;
+}) {
+  return (
+    <div style={{ flex: 1, padding: '12px 18px' }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#8A8699' }}>
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: "'Archivo Black', sans-serif",
+          fontSize: 19,
+          color: valueColor,
+          marginTop: 5,
+          lineHeight: 1.1,
+        }}
+      >
+        {value}
+      </div>
+      {foot && <div style={{ fontSize: 11, color: '#9A96AE', marginTop: 1 }}>{foot}</div>}
+    </div>
+  );
+}
+
+function StatsCellDivider() {
+  return <div style={{ width: 1, background: 'rgba(34,23,122,0.08)' }} />;
 }
