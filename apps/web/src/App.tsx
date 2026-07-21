@@ -14,9 +14,15 @@ const ChangePasswordPage = lazy(() => import('./pages/change-password'));
 // Public pages
 const DocsMcpPage = lazy(() => import('./pages/docs/mcp'));
 
+// Portail client (public, hors MainLayout)
+const PortalLoginPage = lazy(() => import('./pages/portail/login'));
+const PortalMandatPage = lazy(() => import('./pages/portail/mandat'));
+
 // Protected pages
 const DashboardPage = lazy(() => import('./pages/dashboard/index'));
 const MonEspacePage = lazy(() => import('./pages/mon-espace/index'));
+const MesMandatsPage = lazy(() => import('./pages/mes-mandats/index'));
+const ListPushPage = lazy(() => import('./pages/list-push/index'));
 const SettingsPage = lazy(() => import('./pages/settings/index'));
 const CandidatsPage = lazy(() => import('./pages/candidats/index'));
 const CandidatDetailPage = lazy(() => import('./pages/candidats/[id]'));
@@ -65,6 +71,9 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
         <Route path="/docs/mcp" element={<DocsMcpPage />} />
+        {/* Portail client — public, hors MainLayout */}
+        <Route path="/portail/login" element={<PortalLoginPage />} />
+        <Route path="/portail/mandat/:mandatId" element={<PortalMandatPage />} />
         <Route
           element={
             <ProtectedRoute>
@@ -76,6 +85,8 @@ export default function App() {
         >
           <Route index element={<DashboardPage />} />
           <Route path="mon-espace" element={<MonEspacePage />} />
+          <Route path="mes-mandats" element={<MesMandatsPage />} />
+          <Route path="list-push" element={<ListPushPage />} />
           <Route path="candidats" element={<CandidatsPage />} />
           <Route path="candidats/new" element={<CandidatNewPage />} />
           <Route path="candidats/duplicates" element={<CandidatDuplicatesPage />} />

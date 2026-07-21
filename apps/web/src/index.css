@@ -307,6 +307,212 @@ h1, h2, h3, .heading {
   animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+ * DESIGN FIDELITY — Values verbatim from .dc.html mockups
+ * Single easing curve: cubic-bezier(.16,1,.3,1)
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/* Entrance animation — staggered rise (canonical) */
+@keyframes atsRise {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: none; }
+}
+.rise { animation: atsRise .72s cubic-bezier(.16,1,.3,1) both; }
+
+/* Staggered delays applied to direct children of a `.rise-stagger` container */
+.rise-stagger > * { animation: atsRise .72s cubic-bezier(.16,1,.3,1) both; }
+.rise-stagger > *:nth-child(1)  { animation-delay: .06s; }
+.rise-stagger > *:nth-child(2)  { animation-delay: .11s; }
+.rise-stagger > *:nth-child(3)  { animation-delay: .16s; }
+.rise-stagger > *:nth-child(4)  { animation-delay: .21s; }
+.rise-stagger > *:nth-child(5)  { animation-delay: .26s; }
+.rise-stagger > *:nth-child(6)  { animation-delay: .31s; }
+.rise-stagger > *:nth-child(7)  { animation-delay: .36s; }
+.rise-stagger > *:nth-child(8)  { animation-delay: .41s; }
+.rise-stagger > *:nth-child(9)  { animation-delay: .46s; }
+.rise-stagger > *:nth-child(10) { animation-delay: .50s; }
+.rise-stagger > *:nth-child(n+11) { animation-delay: .50s; }
+
+/* Chart bar reveal */
+@keyframes atsBarFill { from { width: 0; } }
+@keyframes atsGrow    { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.bar-fill { animation: atsBarFill .9s cubic-bezier(.16,1,.3,1) both; }
+.bar-grow { transform-origin: bottom; animation: atsGrow .9s cubic-bezier(.16,1,.3,1) both; }
+
+/* Sidebar item slide-in */
+@keyframes atsSlideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+.slide-in { animation: atsSlideIn .5s cubic-bezier(.16,1,.3,1) both; }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001s !important;
+    transition-duration: 0.001s !important;
+  }
+}
+
+/* ── KPI cards (spec: liseré gradient au hover, hover-lift) ── */
+.kpi {
+  position: relative;
+  border-radius: 16px;
+  padding: 18px 20px;
+  background: #FFFFFF;
+  border: 1px solid rgba(34,23,122,0.08);
+  box-shadow: 0 1px 2px rgba(34,23,122,0.04);
+  transition:
+    transform .28s cubic-bezier(.16,1,.3,1),
+    box-shadow .28s ease,
+    border-color .28s ease;
+  overflow: hidden;
+}
+.kpi::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #22177A, #E6E9AF);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform .35s cubic-bezier(.16,1,.3,1);
+}
+.kpi:hover::after { transform: scaleX(1); }
+.kpi:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 26px 50px -30px rgba(34,23,122,0.5);
+  border-color: rgba(34,23,122,0.18);
+}
+.kpi-value {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #1A1533;
+}
+.kpi-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #6E6A85;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ── Card depth (rest + hover-lift per spec) ── */
+.card-depth {
+  background: #FFFFFF;
+  border: 1px solid rgba(34,23,122,0.08);
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(34,23,122,0.04);
+  transition:
+    transform .28s cubic-bezier(.16,1,.3,1),
+    box-shadow .28s ease,
+    border-color .28s ease;
+}
+.card-depth:hover {
+  box-shadow: 0 30px 60px -42px rgba(34,23,122,0.45);
+  border-color: rgba(34,23,122,0.12);
+}
+
+/* ── Row hover (list items) ── */
+.row-hover {
+  transition: background-color .2s ease;
+}
+.row-hover:hover {
+  background: #FAFAF2;
+  border-radius: 10px;
+}
+
+/* ── Sidebar decorative overlays ── */
+.sidebar-grid-texture {
+  background-image:
+    linear-gradient(rgba(230,233,175,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(230,233,175,0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+.sidebar-glow {
+  background: radial-gradient(circle, rgba(230,233,175,0.08), transparent 70%);
+}
+
+/* ── Topbar area lime halo ── */
+.main-halo {
+  background: radial-gradient(ellipse at top right, rgba(230,233,175,0.5), transparent 62%);
+}
+
+/* ── Primary button (navy + lime text per spec) ── */
+.btn-primary {
+  background: #22177A;
+  color: #E6E9AF;
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-weight: 700;
+  transition:
+    transform .2s cubic-bezier(.16,1,.3,1),
+    box-shadow .28s ease,
+    background-color .2s ease;
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 26px -14px rgba(34,23,122,0.5);
+}
+.btn-primary:active { transform: scale(.97); }
+
+/* ── Secondary button ── */
+.btn-secondary {
+  background: #FFFFFF;
+  border: 1.5px solid rgba(34,23,122,0.2);
+  color: #22177A;
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-weight: 700;
+  transition:
+    border-color .2s ease,
+    background-color .2s ease,
+    transform .2s cubic-bezier(.16,1,.3,1);
+}
+.btn-secondary:hover {
+  border-color: rgba(34,23,122,0.4);
+  background: #FAFAF2;
+}
+.btn-secondary:active { transform: scale(.97); }
+
+/* ── Status pills (sémantiques) ── */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.pill::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.9;
+}
+.pill-open    { background: #EAF3EC; color: #2C6B3F; }
+.pill-won     { background: #EAF3EC; color: #2C6B3F; }
+.pill-lost    { background: #F5DED9; color: #B3261E; }
+.pill-offer   { background: #E8EEF9; color: #2A6BD8; }
+.pill-qualify { background: #F0EFC4; color: #C9A227; }
+.pill-new     { background: #EDEAF9; color: #8E7CC3; }
+.pill-inprog  { background: #EDEAF9; color: #22177A; }
+
+/* ── Chips (lime & lavender) ── */
+.chip-lime   { background: #EEF0C9; color: #22177A; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 600; }
+.chip-lavender { background: #EDEAF9; color: #5B4B9E; border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 600; }
+
+/* ── Thin scrollbar (spec: 8px) — scoped ── */
+.thin-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: rgba(34,23,122,0.16);
+  border-radius: 999px;
+  border: none;
+}
+.thin-scroll::-webkit-scrollbar-thumb:hover { background: rgba(34,23,122,0.28); }
+
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.5; }

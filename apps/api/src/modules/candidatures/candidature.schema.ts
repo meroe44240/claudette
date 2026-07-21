@@ -24,6 +24,11 @@ export const updateCandidatureSchema = z.object({
   feeMontantFacture: z.number().int().nonnegative().optional(),
   sourcePlacement: z.string().max(255).optional(),
   sourceLead: z.string().max(255).optional(),
+  // Ces flags declenchent des envois d'email cote service, ils ne sont pas
+  // persistes en base.
+  notifyCandidate: z.boolean().optional(),
+  notifyClient: z.boolean().optional(),
+  messageToClient: z.string().max(2000).optional(),
 });
 
 export type CreateCandidatureInput = z.infer<typeof createCandidatureSchema>;

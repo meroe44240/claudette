@@ -44,6 +44,44 @@ async function recalculateTypeClient(clientId: string) {
   }
 }
 
+export async function listMine(userId: string, scope: 'open' | 'closed') {
+  const OPEN_STATUTS = ['OUVERT', 'EN_COURS'] as const;
+  const CLOSED_STATUTS = ['GAGNE', 'PERDU', 'ANNULE', 'CLOTURE'] as const;
+  const statuts = scope === 'closed' ? CLOSED_STATUTS : OPEN_STATUTS;
+
+  return prisma.mandat.findMany({
+    where: {
+      statut: { in: statuts as any },
+      OR: [
+        { assignedToId: userId },
+        { sourceurId: userId },
+        { salesId: userId },
+        { recruteurId: userId },
+      ],
+    },
+    select: {
+      id: true,
+      titrePoste: true,
+      statut: true,
+      priorite: true,
+      feeMontantEstime: true,
+      feeMontantFacture: true,
+      dateOuverture: true,
+      dateCloture: true,
+      createdAt: true,
+      updatedAt: true,
+      entreprise: { select: { id: true, nom: true } },
+      client: { select: { id: true, nom: true, prenom: true } },
+      sales: { select: { id: true, nom: true, prenom: true } },
+      recruteur: { select: { id: true, nom: true, prenom: true } },
+      candidatures: {
+        select: { id: true, stage: true },
+      },
+    },
+    orderBy: scope === 'closed' ? { dateCloture: 'desc' } : { updatedAt: 'desc' },
+  });
+}
+
 export async function list(
   params: PaginationParams,
   search?: string,

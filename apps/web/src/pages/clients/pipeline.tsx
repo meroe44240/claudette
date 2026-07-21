@@ -2,13 +2,16 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
-import { ArrowLeft, LayoutGrid, Search, TrendingUp, DollarSign, Clock, Users } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Search, TrendingUp, DollarSign, Clock, Users, Plus, Archive } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import KanbanColumn from '../../components/ui/KanbanColumn';
 import KanbanCard from '../../components/ui/KanbanCard';
 import Button from '../../components/ui/Button';
+import Modal from '../../components/ui/Modal';
+import Input from '../../components/ui/Input';
 import Skeleton from '../../components/ui/Skeleton';
+import { toast } from '../../components/ui/Toast';
 
 // ── Types ────────────────────────────────────────────
 
@@ -78,24 +81,27 @@ const STATUT_LABELS: Record<StatutClient, string> = {
   INACTIF: 'Inactif',
 };
 
+// Palette navy — Lead = accent chartreuse (nouveau), plus la column progresse
+// plus on tire vers le vert MANDAT_SIGNE. Archivage (Récurrent/Inactif) reste
+// neutre.
 const STATUT_COLORS: Record<StatutClient, string> = {
-  LEAD: '#3B82F6',           // Blue
-  PREMIER_CONTACT: '#60A5FA', // Light blue
-  BESOIN_QUALIFIE: '#F59E0B', // Orange/Amber
-  PROPOSITION_ENVOYEE: '#F97316', // Deep orange
-  MANDAT_SIGNE: '#10B981',   // Green
-  RECURRENT: '#8B5CF6',      // Purple
-  INACTIF: '#9CA3AF',        // Gray
+  LEAD:                '#8e7cc3',   // primary-500 (lavande)
+  PREMIER_CONTACT:     '#4b3fb0',   // primary-700
+  BESOIN_QUALIFIE:     '#b47814',   // amber
+  PROPOSITION_ENVOYEE: '#22177A',   // primary-800 (brand)
+  MANDAT_SIGNE:        '#3b9a54',   // success green
+  RECURRENT:           '#6e6a85',   // muted
+  INACTIF:             '#9a96ae',   // muted-2
 };
 
 const STATUT_BG_COLORS: Record<StatutClient, string> = {
-  LEAD: '#EFF6FF',
-  PREMIER_CONTACT: '#DBEAFE',
-  BESOIN_QUALIFIE: '#FFF7ED',
-  PROPOSITION_ENVOYEE: '#FFF7ED',
-  MANDAT_SIGNE: '#ECFDF5',
-  RECURRENT: '#f6f5fa',
-  INACTIF: '#F9FAFB',
+  LEAD:                '#eceaf2',
+  PREMIER_CONTACT:     '#eceaf2',
+  BESOIN_QUALIFIE:     '#fbf3e7',
+  PROPOSITION_ENVOYEE: '#f6f5fa',
+  MANDAT_SIGNE:        '#eaf3ec',
+  RECURRENT:           '#f6f5fa',
+  INACTIF:             '#f6f5fa',
 };
 
 // ── Helpers ──────────────────────────────────────────
@@ -126,10 +132,34 @@ function formatDaysAgo(dateStr: string | null | undefined): string {
   return `Il y a ${days}j`;
 }
 
+// Colonnes principales du kanban commercial (LEAD → MANDAT_SIGNE)
+// RECURRENT + INACTIF vont dans "archivés" toggle-able
+const PRIMARY_STATUTS: StatutClient[] = [
+  'LEAD',
+  'PREMIER_CONTACT',
+  'BESOIN_QUALIFIE',
+  'PROPOSITION_ENVOYEE',
+  'MANDAT_SIGNE',
+];
+const ARCHIVED_STATUTS: StatutClient[] = ['RECURRENT', 'INACTIF'];
+
 export default function ClientPipelinePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+  const [newLeadOpen, setNewLeadOpen] = useState(false);
+  const [newLead, setNewLead] = useState({
+    entrepriseNom: '',
+    contactNom: '',
+    contactPrenom: '',
+    poste: '',
+    email: '',
+    telephone: '',
+    note: '',
+  });
+  const resetNewLead = () =>
+    setNewLead({ entrepriseNom: '', contactNom: '', contactPrenom: '', poste: '', email: '', telephone: '', note: '' });
 
   // Fetch pipeline data
   const { data: pipeline, isLoading } = useQuery({
@@ -147,8 +177,35 @@ export default function ClientPipelinePage() {
   const updateStatutMutation = useMutation({
     mutationFn: (params: { clientId: string; statutClient: StatutClient }) =>
       api.put(`/clients/${params.clientId}`, { statutClient: params.statutClient }),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['clients-pipeline'] });
+      // Passage en MANDAT_SIGNE = le client signe → il faut ouvrir un mandat.
+      // Le contrat modal (chantier 4) automatisera ça ; pour l'instant on
+      // toast un rappel actionnable.
+      if (variables.statutClient === 'MANDAT_SIGNE') {
+        toast('success', 'Lead signé — pense à créer le mandat associé (bouton "Nouveau" sur /mandats).');
+      }
+    },
+  });
+
+  // Mutation for quick-create lead (Client + Entreprise en un shot)
+  const quickLeadMutation = useMutation({
+    mutationFn: (payload: typeof newLead) =>
+      api.post<{ client: PipelineClient; entrepriseCreated: boolean }>('/clients/quick-lead', payload),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['clients-pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['clients-pipeline-stats'] });
+      toast(
+        'success',
+        data.entrepriseCreated
+          ? `Lead créé : ${data.client.nom} chez ${data.client.entreprise.nom} (nouvelle entreprise)`
+          : `Lead créé : ${data.client.nom} chez ${data.client.entreprise.nom}`,
+      );
+      resetNewLead();
+      setNewLeadOpen(false);
+    },
+    onError: () => {
+      toast('error', 'Erreur lors de la création du lead');
     },
   });
 
@@ -237,10 +294,39 @@ export default function ClientPipelinePage() {
     );
   }
 
+  const visibleStatuts = showArchived ? [...PRIMARY_STATUTS, ...ARCHIVED_STATUTS] : PRIMARY_STATUTS;
+
   return (
     <div>
+      {/* Eyebrow amber + h1 40px + description (aligné mock) */}
+      <div className="mb-6">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ width: 24, height: 2, background: '#C9761A', borderRadius: 2 }} />
+          <span
+            style={{
+              fontSize: 11.5, fontWeight: 700, letterSpacing: '0.16em',
+              textTransform: 'uppercase', color: '#C9761A',
+            }}
+          >
+            Prospection commerciale
+          </span>
+        </div>
+        <h1
+          style={{
+            fontFamily: "'Archivo Black', sans-serif",
+            fontSize: 40, letterSpacing: '-0.035em', color: '#1A1533',
+            marginTop: 12, lineHeight: 1,
+          }}
+        >
+          Pipeline de leads
+        </h1>
+        <p style={{ marginTop: 8, maxWidth: 720, fontSize: 14, color: '#6E6A85' }}>
+          Chaque lead avance du premier contact jusqu'à la signature du mandat. Glisse une carte pour changer de stade. Un lead qui atteint « Mandat signé » devient un mandat côté recrutement.
+        </p>
+      </div>
+
       <PageHeader
-        title="Pipeline Clients"
+        title=""
         breadcrumbs={[
           { label: 'Clients', href: '/clients' },
           { label: 'Pipeline' },
@@ -250,51 +336,68 @@ export default function ClientPipelinePage() {
             <Button variant="ghost" onClick={() => navigate('/clients')}>
               <ArrowLeft size={16} /> Liste
             </Button>
+            <Button
+              variant={showArchived ? 'secondary' : 'ghost'}
+              onClick={() => setShowArchived((v) => !v)}
+              title={showArchived ? 'Masquer les colonnes archivées' : 'Voir Récurrent + Inactif'}
+            >
+              <Archive size={16} /> {showArchived ? 'Cacher archivés' : 'Voir archivés'}
+            </Button>
             <Button variant="secondary" disabled>
               <LayoutGrid size={16} /> Pipeline
+            </Button>
+            <Button variant="primary" onClick={() => setNewLeadOpen(true)}>
+              <Plus size={16} /> Nouveau lead
             </Button>
           </div>
         }
       />
 
-      {/* Stats bar */}
+      {/* KPI row — 4 cards .kpi (Archivo Black navy + liseré hover, aligné mock) */}
       {pipelineStats && (
-        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl bg-white p-4 shadow-sm border border-border/30">
-            <div className="flex items-center gap-2 mb-1">
-              <Users size={14} className="text-blue-500" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Clients total</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+          <div className="kpi">
+            <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699' }}>
+              <Users size={12} style={{ color: '#22177A' }} />
+              <span>Leads actifs</span>
             </div>
-            <p className="text-[22px] font-bold text-neutral-900">{pipelineStats.totalClients}</p>
+            <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 29, letterSpacing: '-0.02em', color: '#1A1533', marginTop: 12, lineHeight: 1 }}>
+              {pipelineStats.totalClients}
+            </div>
+            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>en pipeline</div>
           </div>
-          <div className="rounded-xl bg-white p-4 shadow-sm border border-border/30">
-            <div className="flex items-center gap-2 mb-1">
-              <DollarSign size={14} className="text-emerald-500" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Pipe total</span>
+          <div className="kpi">
+            <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699' }}>
+              <Clock size={12} style={{ color: '#C9761A' }} />
+              <span>Relances à faire</span>
             </div>
-            <p className="text-[22px] font-bold text-emerald-600">{formatCurrency(pipelineStats.totalPipeValue)}</p>
-          </div>
-          <div className="rounded-xl bg-white p-4 shadow-sm border border-border/30">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingUp size={14} className="text-purple-500" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Conversion Lead&rarr;Mandat</span>
-            </div>
-            <p className="text-[22px] font-bold text-purple-600">
-              {pipelineStats.conversionRates.length >= 4
-                ? `${pipelineStats.conversionRates[3].rate}%`
-                : '--'}
-            </p>
-          </div>
-          <div className="rounded-xl bg-white p-4 shadow-sm border border-border/30">
-            <div className="flex items-center gap-2 mb-1">
-              <Clock size={14} className="text-orange-500" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Moy. jours/stage</span>
-            </div>
-            <p className="text-[22px] font-bold text-orange-600">
+            <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 29, letterSpacing: '-0.02em', color: '#C9761A', marginTop: 12, lineHeight: 1 }}>
               {pipelineStats.avgDaysPerStage.length > 0
-                ? `${Math.round(pipelineStats.avgDaysPerStage.filter(s => s.avgDays > 0).reduce((sum, s) => sum + s.avgDays, 0) / Math.max(pipelineStats.avgDaysPerStage.filter(s => s.avgDays > 0).length, 1))}j`
-                : '--'}
-            </p>
+                ? Math.round(pipelineStats.avgDaysPerStage.filter(s => s.avgDays > 0).reduce((sum, s) => sum + s.avgDays, 0) / Math.max(pipelineStats.avgDaysPerStage.filter(s => s.avgDays > 0).length, 1))
+                : 0}
+              <span style={{ fontSize: 15, marginLeft: 6, color: '#8A8699' }}>j moy</span>
+            </div>
+            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>par stage</div>
+          </div>
+          <div className="kpi">
+            <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699' }}>
+              <TrendingUp size={12} style={{ color: '#2C6B3F' }} />
+              <span>Conversion</span>
+            </div>
+            <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 29, letterSpacing: '-0.02em', color: '#2C6B3F', marginTop: 12, lineHeight: 1 }}>
+              {pipelineStats.conversionRates.length >= 4 ? `${pipelineStats.conversionRates[3].rate}%` : '—'}
+            </div>
+            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>Lead → Mandat</div>
+          </div>
+          <div className="kpi">
+            <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699' }}>
+              <DollarSign size={12} style={{ color: '#22177A' }} />
+              <span>Pipe total</span>
+            </div>
+            <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 29, letterSpacing: '-0.02em', color: '#22177A', marginTop: 12, lineHeight: 1 }}>
+              {formatCurrency(pipelineStats.totalPipeValue)}
+            </div>
+            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>ce mois</div>
           </div>
         </div>
       )}
@@ -386,7 +489,7 @@ export default function ClientPipelinePage() {
 
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {STATUTS.map((statut) => {
+          {visibleStatuts.map((statut) => {
             const column = filteredPipeline[statut] || { count: 0, clients: [] };
 
             return (
@@ -431,6 +534,91 @@ export default function ClientPipelinePage() {
           })}
         </div>
       </DragDropContext>
+
+      {/* Modal Nouveau lead — quick-create Client + Entreprise en un shot */}
+      <Modal
+        isOpen={newLeadOpen}
+        onClose={() => setNewLeadOpen(false)}
+        title="Nouveau lead"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-text-secondary">
+            Entrée en tête de colonne « Lead ». Si l'entreprise n'existe pas encore dans le CRM, elle est créée automatiquement.
+          </p>
+          <Input
+            label="Entreprise"
+            placeholder="ACME Corp"
+            value={newLead.entrepriseNom}
+            onChange={(e) => setNewLead((p) => ({ ...p, entrepriseNom: e.target.value }))}
+            required
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Prénom"
+              placeholder="Alice"
+              value={newLead.contactPrenom}
+              onChange={(e) => setNewLead((p) => ({ ...p, contactPrenom: e.target.value }))}
+            />
+            <Input
+              label="Nom"
+              placeholder="Martin"
+              value={newLead.contactNom}
+              onChange={(e) => setNewLead((p) => ({ ...p, contactNom: e.target.value }))}
+              required
+            />
+          </div>
+          <Input
+            label="Poste ciblé / rôle contact"
+            placeholder="Head of Sales, Chief People Officer…"
+            value={newLead.poste}
+            onChange={(e) => setNewLead((p) => ({ ...p, poste: e.target.value }))}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Email (optionnel)"
+              type="email"
+              placeholder="alice@acme.com"
+              value={newLead.email}
+              onChange={(e) => setNewLead((p) => ({ ...p, email: e.target.value }))}
+            />
+            <Input
+              label="Téléphone (optionnel)"
+              placeholder="+33 6…"
+              value={newLead.telephone}
+              onChange={(e) => setNewLead((p) => ({ ...p, telephone: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Premier contact (optionnel)
+            </label>
+            <textarea
+              value={newLead.note}
+              onChange={(e) => setNewLead((p) => ({ ...p, note: e.target.value }))}
+              rows={3}
+              placeholder="Ex : Rencontré via LinkedIn, cherche 2 SDR pour Q3."
+              className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-3 py-2 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-800 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" onClick={() => setNewLeadOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => quickLeadMutation.mutate(newLead)}
+              disabled={
+                !newLead.entrepriseNom.trim() ||
+                !newLead.contactNom.trim() ||
+                quickLeadMutation.isPending
+              }
+            >
+              {quickLeadMutation.isPending ? 'Création…' : 'Créer le lead'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

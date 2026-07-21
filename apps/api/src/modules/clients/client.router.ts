@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { createClientSchema, updateClientSchema } from './client.schema.js';
 import * as clientService from './client.service.js';
 import { checkClientOwnershipExpiry } from './client-ownership.service.js';
@@ -117,6 +118,32 @@ export default async function clientRouter(fastify: FastifyInstance) {
       const client = await clientService.create(data, request.userId);
       reply.status(201);
       return client;
+    },
+  });
+
+  // POST /quick-lead - Quick-create d'un lead depuis le kanban commercial
+  fastify.post('/quick-lead', {
+    schema: {
+      description: 'Cree en un shot Entreprise (find-or-create par nom) + Client statutClient=LEAD',
+      tags: ['Clients'],
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const input = z.object({
+        entrepriseNom: z.string().min(1),
+        contactNom: z.string().min(1),
+        contactPrenom: z.string().optional(),
+        poste: z.string().optional(),
+        email: z.string().email().optional().or(z.literal('')),
+        telephone: z.string().optional(),
+        note: z.string().max(2000).optional(),
+      }).parse(request.body);
+      const result = await clientService.quickLead(
+        { ...input, email: input.email || undefined },
+        request.userId,
+      );
+      reply.status(201);
+      return result;
     },
   });
 

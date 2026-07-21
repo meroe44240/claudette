@@ -7,6 +7,7 @@ import {
   Calendar, Send, Pencil, Trash2, Save, X, FileText, Loader2,
   Upload, Copy, Check, Sparkles, ChevronDown, ChevronUp, Bot,
   Link2, CalendarPlus, Search, Plus, User, Download, Eye, Rocket,
+  Star, Clock, Banknote,
 } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
@@ -596,19 +597,102 @@ export default function CandidatDetailPage() {
     );
   }
 
+  const fullName = `${candidat.prenom || ''} ${candidat.nom}`.trim();
+  const currentStage = candidat.candidatures[0]?.stage;
+
   return (
     <div>
+      {/* Breadcrumb mock-fidelity */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5, color: '#9A96AE', fontWeight: 600 }}>
+        <a onClick={() => navigate('/candidats')} style={{ color: '#8A8699', cursor: 'pointer' }}>Candidats</a>
+        <span style={{ color: '#C4C1D0' }}>›</span>
+        <span style={{ color: '#22177A', fontWeight: 700 }}>{fullName}</span>
+      </div>
+
+      {/* Hero row : avatar 74px + name/role/chips + actions right */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, marginTop: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+          <div style={{ width: 74, height: 74, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
+            <Avatar src={candidat.photoUrl} nom={candidat.nom} prenom={candidat.prenom} size="xl" />
+          </div>
+          <div>
+            <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 30, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1.05 }}>
+              {fullName}
+            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+              {candidat.posteActuel && (
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#4A4568' }}>
+                  {candidat.posteActuel}
+                  {candidat.entrepriseActuelle && <span style={{ color: '#8A8699' }}> · {candidat.entrepriseActuelle}</span>}
+                </span>
+              )}
+              {candidat.localisation && (
+                <>
+                  <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#C4C1D0' }} />
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: '#6E6A85' }}>
+                    <MapPin size={13} color="#22177A" />
+                    {candidat.localisation}
+                  </span>
+                </>
+              )}
+              {currentStage && (
+                <span
+                  style={{
+                    fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '4px 11px',
+                    background: 'rgba(34,23,122,0.06)', color: '#22177A',
+                  }}
+                >
+                  {stageLabels[currentStage] || currentStage}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>{/* Actions preserved */}</div>
+      </div>
+
+      {/* KPI row 4 cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+        <div className="kpi">
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Star size={12} style={{ color: '#22177A' }} /><span>Candidatures</span>
+          </div>
+          <div className="kpi-value" style={{ marginTop: 12 }}>{candidat.candidatures.length}</div>
+          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>en pipeline</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Briefcase size={12} style={{ color: '#22177A' }} /><span>Étape actuelle</span>
+          </div>
+          <div className="kpi-value" style={{ marginTop: 12, fontSize: 22 }}>
+            {currentStage ? (stageLabels[currentStage] || currentStage) : '—'}
+          </div>
+          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>{candidat.candidatures[0]?.mandat?.titrePoste ?? ''}</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Clock size={12} style={{ color: '#22177A' }} /><span>Disponibilité</span>
+          </div>
+          <div className="kpi-value" style={{ marginTop: 12, fontSize: 22 }}>
+            {candidat.disponibilite || '—'}
+          </div>
+          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>déclarée</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Banknote size={12} style={{ color: '#22177A' }} /><span>Prétentions</span>
+          </div>
+          <div className="kpi-value" style={{ marginTop: 12 }}>
+            {candidat.salaireSouhaite ? `${Math.round(candidat.salaireSouhaite / 1000)}k€` : '—'}
+          </div>
+          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>package annuel</div>
+        </div>
+      </div>
+
+      {/* Actions row + PageHeader préservé — préserve toutes les fonctionnalités */}
       <PageHeader
-        title={
-          <span className="inline-flex items-center gap-3">
-            <Avatar src={candidat.photoUrl} nom={candidat.nom} prenom={candidat.prenom} size="lg" />
-            {`${candidat.prenom || ''} ${candidat.nom}`.trim()}
-          </span>
-        }
-        breadcrumbs={[
-          { label: 'Candidats', href: '/candidats' },
-          { label: `${candidat.prenom || ''} ${candidat.nom}`.trim() },
-        ]}
+        title=""
+        breadcrumbs={[]}
         actions={
           <div className="flex items-center gap-2">
             {isEditing ? (

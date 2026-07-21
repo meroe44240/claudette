@@ -8,6 +8,95 @@ import {
   notifyCloseWon,
 } from '../slack/slack.service.js';
 import { logActivity } from '../../lib/activity-logger.js';
+import { sendEmail, renderBrandedEmail } from '../../lib/mailer.js';
+
+/**
+ * Envoie un email au candidat (refus) et/ou au contact client du mandat
+ * (notification presentation, refus, etc.) suite a un changement de stage,
+ * si l'appelant l'a demande (flags notifyCandidate/notifyClient dans le
+ * payload). Fire-and-forget — n'echoue pas la mutation si l'envoi echoue.
+ *
+ * Le corps utilise le meme wrapper brand que reset-password / recap.
+ */
+async function fireStageNotificationEmails(
+  candidatureId: string,
+  newStage: StageCandidature,
+  opts: { notifyCandidate?: boolean; notifyClient?: boolean; messageToClient?: string },
+): Promise<void> {
+  if (!opts.notifyCandidate && !opts.notifyClient) return;
+
+  const c = await prisma.candidature.findUnique({
+    where: { id: candidatureId },
+    include: {
+      candidat: { select: { email: true, prenom: true, nom: true } },
+      mandat: {
+        select: {
+          titrePoste: true,
+          entreprise: { select: { nom: true } },
+          client: { select: { email: true, prenom: true, nom: true } },
+        },
+      },
+    },
+  });
+  if (!c) return;
+
+  const candidatName = [c.candidat.prenom, c.candidat.nom].filter(Boolean).join(' ').trim();
+  const mandatLabel = `${c.mandat.entreprise?.nom ?? ''} — ${c.mandat.titrePoste}`.trim();
+
+  // Email au candidat (refus)
+  if (opts.notifyCandidate && newStage === 'REFUSE' && c.candidat.email) {
+    const prenom = c.candidat.prenom || c.candidat.nom;
+    try {
+      await sendEmail(
+        c.candidat.email,
+        `Votre candidature pour ${c.mandat.titrePoste}`,
+        renderBrandedEmail({
+          title: 'Votre candidature',
+          bodyHtml: `
+            <p>Bonjour ${prenom},</p>
+            <p>Merci pour l'intérêt que vous avez porté au poste de <strong>${c.mandat.titrePoste}</strong> chez <strong>${c.mandat.entreprise?.nom ?? 'notre client'}</strong>.</p>
+            <p>Après échange avec l'entreprise, votre profil n'a pas été retenu à ce stade. Ce n'est jamais une décision facile à annoncer — nous gardons votre profil en base et reviendrons vers vous si une opportunité mieux alignée se présente.</p>
+            <p>Nous vous souhaitons le meilleur pour la suite.</p>
+          `,
+          signature: `L'équipe HumanUp`,
+        }),
+      );
+    } catch (err) {
+      console.error(`[candidature] email candidat REFUSE failed for ${c.candidat.email}:`, err);
+    }
+  }
+
+  // Email au contact client (notification presentation / refus / autres)
+  if (opts.notifyClient && c.mandat.client?.email) {
+    const prenom = c.mandat.client.prenom || c.mandat.client.nom;
+    const subject = newStage === 'ENVOYE_CLIENT'
+      ? `Nouveau profil pour ${c.mandat.titrePoste}`
+      : `Mise à jour candidature — ${c.mandat.titrePoste}`;
+    const body = newStage === 'ENVOYE_CLIENT'
+      ? `<p>Bonjour ${prenom},</p><p>Nous vous présentons <strong>${candidatName}</strong> pour le poste de <strong>${c.mandat.titrePoste}</strong>.</p>`
+      : `<p>Bonjour ${prenom},</p><p>Le candidat <strong>${candidatName}</strong> sur le mandat <strong>${mandatLabel}</strong> a été marqué comme <strong>${newStage.toLowerCase().replace('_', ' ')}</strong>.</p>`;
+    const userMessage = opts.messageToClient
+      ? `<p style="border-left:3px solid #E6E9AF;padding-left:12px;margin:16px 0;color:#4a4568;">${escapeHtmlLite(opts.messageToClient)}</p>`
+      : '';
+    try {
+      await sendEmail(
+        c.mandat.client.email,
+        subject,
+        renderBrandedEmail({
+          title: subject,
+          bodyHtml: body + userMessage,
+          signature: `L'équipe HumanUp`,
+        }),
+      );
+    } catch (err) {
+      console.error(`[candidature] email client failed for ${c.mandat.client.email}:`, err);
+    }
+  }
+}
+
+function escapeHtmlLite(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+}
 
 /**
  * Fetch full context for a candidature (candidat, mandat, entreprise, client, recruteur)
@@ -299,6 +388,13 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
     // Fire-and-forget Slack notification for key stage changes
     const dateEntretien = data.dateEntretienClient ? new Date(data.dateEntretienClient) : null;
     fireSlackStageNotification(id, data.stage, dateEntretien).catch(() => {});
+
+    // Fire-and-forget email notifications (candidat refuse + client) si demande
+    fireStageNotificationEmails(id, data.stage as StageCandidature, {
+      notifyCandidate: data.notifyCandidate,
+      notifyClient: data.notifyClient,
+      messageToClient: data.messageToClient,
+    }).catch(() => {});
   }
 
   return candidature;
@@ -327,7 +423,8 @@ export async function bulkUpdateStage(
   stage: string,
   changedById: string,
   motifRefus?: string,
-  motifRefusDetail?: string
+  motifRefusDetail?: string,
+  notif?: { notifyClient?: boolean; messageToClient?: string },
 ) {
   if (stage === 'REFUSE' && !motifRefus) {
     throw new ValidationError('Le motif de refus est requis pour le stage REFUSE');
@@ -382,5 +479,85 @@ export async function bulkUpdateStage(
 
     results.push(updated);
   }
+
+  // Email agrege au client si demande (typique : "Présenter au client" =
+  // bulk-move vers ENVOYE_CLIENT). Un seul mail avec la liste des candidats,
+  // pas N mails individuels.
+  if (notif?.notifyClient && results.length > 0) {
+    fireBulkClientNotification(results.map((r) => r.id), stage as StageCandidature, notif.messageToClient)
+      .catch((err) => console.error('[candidature] bulk email client failed:', err));
+  }
+
   return { updated: results.length, results };
+}
+
+/**
+ * Envoie UN seul email au contact client du mandat listant tous les candidats
+ * concernes par un bulk stage change. Suppose que toutes les candidatures
+ * appartiennent au meme mandat (cas typique du kanban : "Présenter au client").
+ * Si plusieurs mandats sont touches, un email par mandat.
+ */
+async function fireBulkClientNotification(
+  candidatureIds: string[],
+  stage: StageCandidature,
+  messageToClient?: string,
+): Promise<void> {
+  const rows = await prisma.candidature.findMany({
+    where: { id: { in: candidatureIds } },
+    include: {
+      candidat: { select: { nom: true, prenom: true } },
+      mandat: {
+        select: {
+          titrePoste: true,
+          entreprise: { select: { nom: true } },
+          client: { select: { email: true, prenom: true, nom: true } },
+        },
+      },
+    },
+  });
+
+  // Group by mandat (au cas ou)
+  const byMandat = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const key = r.mandatId;
+    if (!byMandat.has(key)) byMandat.set(key, []);
+    byMandat.get(key)!.push(r);
+  }
+
+  for (const list of byMandat.values()) {
+    if (list.length === 0) continue;
+    const first = list[0];
+    if (!first.mandat.client?.email) continue;
+
+    const prenom = first.mandat.client.prenom || first.mandat.client.nom;
+    const listHtml = list
+      .map((c) => `<li>${escapeHtmlLite([c.candidat.prenom, c.candidat.nom].filter(Boolean).join(' '))}</li>`)
+      .join('');
+    const subject = stage === 'ENVOYE_CLIENT'
+      ? `${list.length} profil${list.length > 1 ? 's' : ''} à découvrir — ${first.mandat.titrePoste}`
+      : `Mise à jour candidatures — ${first.mandat.titrePoste}`;
+    const userMessage = messageToClient
+      ? `<p style="border-left:3px solid #E6E9AF;padding-left:12px;margin:16px 0;color:#4a4568;">${escapeHtmlLite(messageToClient)}</p>`
+      : '';
+
+    try {
+      await sendEmail(
+        first.mandat.client.email,
+        subject,
+        renderBrandedEmail({
+          title: subject,
+          bodyHtml: `
+            <p>Bonjour ${prenom},</p>
+            <p>Voici ${list.length > 1 ? 'les profils' : 'le profil'} que nous vous présentons pour le poste <strong>${first.mandat.titrePoste}</strong> chez <strong>${first.mandat.entreprise?.nom ?? 'vous'}</strong> :</p>
+            <ul style="margin:12px 0;padding-left:20px;">${listHtml}</ul>
+            <p>Le détail des CV est accessible depuis votre portail HumanUp.</p>
+            ${userMessage}
+          `,
+          signature: `L'équipe HumanUp`,
+        }),
+      );
+    } catch (err) {
+      console.error(`[candidature] bulk email client failed for ${first.mandat.client.email}:`, err);
+    }
+  }
 }

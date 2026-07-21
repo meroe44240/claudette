@@ -51,8 +51,17 @@ export default async function candidatureRouter(fastify: FastifyInstance) {
         stage: z.enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE']),
         motifRefus: z.string().optional(),
         motifRefusDetail: z.string().optional(),
+        notifyClient: z.boolean().optional(),
+        messageToClient: z.string().max(2000).optional(),
       }).parse(request.body);
-      return candidatureService.bulkUpdateStage(input.ids, input.stage, request.userId, input.motifRefus, input.motifRefusDetail);
+      return candidatureService.bulkUpdateStage(
+        input.ids,
+        input.stage,
+        request.userId,
+        input.motifRefus,
+        input.motifRefusDetail,
+        { notifyClient: input.notifyClient, messageToClient: input.messageToClient },
+      );
     },
   });
 

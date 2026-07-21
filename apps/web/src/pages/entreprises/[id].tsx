@@ -296,38 +296,69 @@ export default function EntrepriseDetailPage() {
     );
   }
 
+  const logoSrc = entreprise.logoUrl || (entreprise.siteWeb ? (() => {
+    try {
+      const h = new URL(entreprise.siteWeb.startsWith('http') ? entreprise.siteWeb : `https://${entreprise.siteWeb}`).hostname;
+      return h && h !== 'localhost' ? `https://www.google.com/s2/favicons?domain=${h}&sz=128` : null;
+    } catch { return null; }
+  })() : null);
+
   return (
     <div>
-      <PageHeader
-        title={
-          <div className="flex items-center gap-3">
-            {(() => {
-              const logoSrc = entreprise.logoUrl || (entreprise.siteWeb ? (() => {
-                try {
-                  const h = new URL(entreprise.siteWeb.startsWith('http') ? entreprise.siteWeb : `https://${entreprise.siteWeb}`).hostname;
-                  return h && h !== 'localhost' ? `https://www.google.com/s2/favicons?domain=${h}&sz=128` : null;
-                } catch { return null; }
-              })() : null);
-              return logoSrc ? (
-                <img
-                  src={logoSrc}
-                  alt={entreprise.nom}
-                  className="h-10 w-10 rounded-lg object-contain border border-neutral-100 bg-white p-0.5"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              ) : (
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-neutral-50 border border-neutral-100">
-                  <Building size={20} className="text-neutral-400" />
-                </div>
-              );
-            })()}
-            <span>{entreprise.nom}</span>
+      {/* Breadcrumb */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5, color: '#9A96AE', fontWeight: 600 }}>
+        <a onClick={() => navigate('/entreprises')} style={{ color: '#8A8699', cursor: 'pointer' }}>Entreprises</a>
+        <span style={{ color: '#C4C1D0' }}>›</span>
+        <span style={{ color: '#22177A', fontWeight: 700 }}>{entreprise.nom}</span>
+      </div>
+
+      {/* Hero mock-fidelity : logo carré arrondi + nom + chips secteur/ville/taille */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 12, marginBottom: 20 }}>
+        {logoSrc ? (
+          <img
+            src={logoSrc}
+            alt={entreprise.nom}
+            style={{ height: 68, width: 68, borderRadius: 14, objectFit: 'contain', border: '1px solid rgba(34,23,122,0.1)', background: '#fff', padding: 4 }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        ) : (
+          <div
+            style={{
+              height: 68, width: 68, borderRadius: 14,
+              background: '#F0EFC4', border: '1px solid rgba(34,23,122,0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Building size={30} color="#22177A" />
           </div>
-        }
-        breadcrumbs={[
-          { label: 'Entreprises', href: '/entreprises' },
-          { label: entreprise.nom },
-        ]}
+        )}
+        <div style={{ flex: 1 }}>
+          <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 30, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1.05 }}>
+            {entreprise.nom}
+          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+            {entreprise.secteur && (
+              <span style={{ fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '4px 11px', background: 'rgba(34,23,122,0.06)', color: '#22177A' }}>
+                {entreprise.secteur}
+              </span>
+            )}
+            {entreprise.localisation && (
+              <span style={{ fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '4px 11px', background: 'rgba(34,23,122,0.06)', color: '#22177A' }}>
+                {entreprise.localisation}
+              </span>
+            )}
+            {entreprise.taille && (
+              <span style={{ fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '4px 11px', background: '#F0EFC4', color: '#22177A' }}>
+                {tailleLabels[entreprise.taille as TailleEntreprise] ?? entreprise.taille}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <PageHeader
+        title=""
+        breadcrumbs={[]}
         actions={
           <div className="flex items-center gap-2">
             {isEditing ? (

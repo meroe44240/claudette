@@ -195,40 +195,52 @@ export default function MonEspacePage() {
     : '?';
 
   return (
-    <motion.div className="font-['Plus_Jakarta_Sans']" variants={sectionStagger} initial="hidden" animate="show">
-      <PageHeader
-        title="Mon espace"
-        breadcrumbs={[{ label: 'Mon espace' }]}
-      />
-      {/* Header: Avatar + User info */}
-      <motion.div className="mb-6 flex items-center gap-5" variants={sectionItem}>
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#22177A] to-[#8e7cc3] text-[22px] font-bold text-white shadow-lg">
+    <motion.div variants={sectionStagger} initial="hidden" animate="show">
+      {/* Titre h1 40px + hero profile (mock-fidelity) */}
+      <h1
+        style={{
+          fontFamily: "'Archivo Black', sans-serif",
+          fontSize: 40, letterSpacing: '-0.035em', color: '#1A1533', lineHeight: 1,
+        }}
+      >
+        Mon espace
+      </h1>
+      <motion.div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 20 }} variants={sectionItem}>
+        <div
+          style={{
+            width: 90, height: 90, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #22177A, #8e7cc3)',
+            color: '#fff', fontFamily: "'Archivo Black', sans-serif",
+            fontSize: 30, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 10px 24px -12px rgba(34,23,122,0.45)',
+          }}
+        >
           {initials}
         </div>
         <div>
-          <h1 className="text-[28px] font-bold text-neutral-900">
+          <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 26, color: '#1A1533', letterSpacing: '-0.02em' }}>
             {user?.prenom} {user?.nom}
-          </h1>
-          <p className="text-[15px] text-neutral-500">
-            {roleLabels[user?.role || ''] || user?.role || ''}
-          </p>
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <span
+              style={{
+                display: 'inline-block',
+                fontSize: 12, fontWeight: 700,
+                background: '#F0EFC4', color: '#22177A',
+                borderRadius: 999, padding: '4px 12px',
+              }}
+            >
+              {roleLabels[user?.role || ''] || user?.role || ''}
+            </span>
+          </div>
         </div>
       </motion.div>
 
-      {/* Mini KPI pills */}
-      <motion.div className="mb-8 flex flex-wrap items-center gap-3" variants={sectionItem}>
-        <div className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 shadow-sm">
-          <Briefcase size={16} className="text-[#22177A]" />
-          <span className="text-sm font-semibold text-neutral-700">{mandatsCount} mandats actifs</span>
-        </div>
-        <div className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 shadow-sm">
-          <Users size={16} className="text-[#3B82F6]" />
-          <span className="text-sm font-semibold text-neutral-700">{totalCandidats} candidats en cours</span>
-        </div>
-        <div className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 shadow-sm">
-          <ListChecks size={16} className="text-[#10B981]" />
-          <span className="text-sm font-semibold text-neutral-700">{tachesCount} tâches</span>
-        </div>
+      {/* 3 stat chips row (mock) — icon square lime + big number Archivo Black + label */}
+      <motion.div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginTop: 24, marginBottom: 24 }} variants={sectionItem}>
+        <StatChip icon={<Briefcase size={20} color="#22177A" />} value={mandatsCount} label="Mandats actifs" />
+        <StatChip icon={<Users size={20} color="#22177A" />} value={totalCandidats} label="Candidats en cours" />
+        <StatChip icon={<ListChecks size={20} color="#22177A" />} value={tachesCount} label="Tâches" />
       </motion.div>
 
       {/* Mes Mandats */}
@@ -484,5 +496,38 @@ export default function MonEspacePage() {
         </div>
       </motion.section>
     </motion.div>
+  );
+}
+
+// ─── StatChip (mock : icon lime square + Archivo Black value + uppercase label) ──
+
+function StatChip({ icon, value, label }: { icon: React.ReactNode; value: number; label: string }) {
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', gap: 14,
+        background: '#fff', border: '1px solid rgba(34,23,122,0.08)',
+        borderRadius: 16, padding: '14px 18px',
+        boxShadow: '0 1px 2px rgba(34,23,122,0.04)',
+      }}
+    >
+      <div
+        style={{
+          width: 44, height: 44, borderRadius: 12,
+          background: '#F0EFC4',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}
+      >
+        {icon}
+      </div>
+      <div>
+        <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 26, color: '#1A1533', letterSpacing: '-0.02em', lineHeight: 1 }}>
+          {value}
+        </div>
+        <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699', marginTop: 4 }}>
+          {label}
+        </div>
+      </div>
+    </div>
   );
 }

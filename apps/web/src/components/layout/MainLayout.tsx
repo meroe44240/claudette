@@ -59,8 +59,22 @@ export default function MainLayout() {
     <div className="flex h-screen app-bg">
       <Sidebar isAdmin={user?.role === 'ADMIN'} collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(c => !c)} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between shadow-[0_1px_0_rgba(0,0,0,0.05)] bg-white/70 backdrop-blur-xl backdrop-saturate-[1.8] px-4 md:px-6">
+      <div className="relative flex flex-1 flex-col overflow-hidden">
+        {/* Halo lime top-right (aria-hidden, pointer-events none) */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute main-halo z-0"
+          style={{ top: 0, right: 0, width: '680px', height: '520px' }}
+        />
+        <header
+          className="relative z-10 sticky top-0 flex h-16 items-center justify-between px-4 md:px-[34px]"
+          style={{
+            background: 'rgba(252,252,245,0.82)',
+            backdropFilter: 'blur(14px) saturate(1.6)',
+            WebkitBackdropFilter: 'blur(14px) saturate(1.6)',
+            borderBottom: '1px solid rgba(34,23,122,0.08)',
+          }}
+        >
           <button
             onClick={() => setSidebarOpen(true)}
             className="mr-2 flex h-10 w-10 items-center justify-center rounded-lg text-neutral-600 hover:bg-neutral-100 transition-colors md:hidden"
@@ -96,8 +110,8 @@ export default function MainLayout() {
         </header>
 
         <OfflineBanner />
-        <main className="flex-1 overflow-auto p-4 md:p-8">
-          <div className="mx-auto max-w-[1280px]">
+        <main className="relative z-[1] flex-1 overflow-auto p-4 md:px-[34px] md:py-7">
+          <div className="mx-auto max-w-[1320px]">
             <AnimatePresence mode="wait">
               <motion.div
                 key={location.pathname}
