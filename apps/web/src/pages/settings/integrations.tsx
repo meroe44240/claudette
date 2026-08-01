@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Phone, Mail, Calendar, Link, Unlink, ExternalLink, Shield, RefreshCw, X, Check, MessageSquare, Send, Save, Building2 } from 'lucide-react';
+import { Phone, Mail, Calendar, Link, Unlink, ExternalLink, Shield, RefreshCw, X, Check, MessageSquare, Send, Save, Building2, HardDrive, Folder } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
@@ -44,6 +44,7 @@ export default function IntegrationsSettingsPage() {
   const queryClient = useQueryClient();
   const [alloModalOpen, setAlloModalOpen] = useState(false);
   const [alloApiKey, setAlloApiKey] = useState('');
+  const [driveFolderId, setDriveFolderId] = useState('');
 
   // Slack state
   const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
@@ -171,6 +172,36 @@ export default function IntegrationsSettingsPage() {
     },
   });
 
+  // Google Drive rides the same Google OAuth as Gmail (scope drive.readonly).
+  const watchDriveMutation = useMutation({
+    mutationFn: (folderId: string) => api.put('/transcripts/watch', { folderId }),
+    onSuccess: () => {
+      toast('success', 'Dossier Drive surveillé');
+    },
+    onError: () => {
+      toast('error', 'Dossier Drive introuvable ou accès refusé');
+    },
+  });
+
+  const scanDriveMutation = useMutation({
+    mutationFn: () => api.post<{ processed?: number; message?: string }>('/transcripts/scan-folder'),
+    onSuccess: (result) => {
+      toast('success', result?.message || 'Dossier Drive scanné');
+    },
+    onError: () => {
+      toast('error', 'Erreur lors du scan du dossier Drive');
+    },
+  });
+
+  const handleConnectDrive = async () => {
+    try {
+      const data = await api.get<AuthUrlResponse>('/integrations/gmail/auth-url');
+      window.open(data.url, '_blank');
+    } catch {
+      toast('error', "Erreur lors de la récupération de l'URL d'authentification Google");
+    }
+  };
+
   const handleConnectGmail = async () => {
     try {
       const data = await api.get<AuthUrlResponse>('/integrations/gmail/auth-url');
@@ -221,6 +252,8 @@ export default function IntegrationsSettingsPage() {
       </div>
     );
   }
+
+  const googleConnected = !!(integrations?.gmail?.connected || integrations?.calendar?.connected);
 
   return (
     <div>
@@ -488,6 +521,86 @@ export default function IntegrationsSettingsPage() {
               </Button>
             )}
           </div>
+        </Card>
+
+        {/* Google Drive Card */}
+        <Card>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-yellow-50">
+                <HardDrive size={18} className="text-yellow-600" />
+              </div>
+              <div>
+                <h3 className="text-[18px] font-semibold text-neutral-900">Google Drive</h3>
+                <p className="mt-0.5 text-[13px] text-neutral-500">
+                  Importez CV et comptes-rendus depuis un dossier Drive
+                </p>
+              </div>
+            </div>
+            <Badge variant={googleConnected ? 'success' : 'default'}>
+              {googleConnected ? 'Connecté' : 'Déconnecté'}
+            </Badge>
+          </div>
+
+          {googleConnected ? (
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center gap-2 text-sm text-neutral-500">
+                <Shield size={14} className="text-neutral-300" />
+                <span>
+                  Accès via votre compte Google
+                  {integrations?.gmail?.email && (
+                    <span className="font-medium text-neutral-900"> ({integrations.gmail.email})</span>
+                  )}
+                </span>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[13px] font-medium text-neutral-700">
+                  Dossier Drive à surveiller
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={driveFolderId}
+                    onChange={(e) => setDriveFolderId(e.target.value)}
+                    placeholder="ID du dossier Drive (ex: 1a2B3c...)"
+                    className="w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => watchDriveMutation.mutate(driveFolderId)}
+                    disabled={!driveFolderId.trim() || watchDriveMutation.isPending}
+                  >
+                    <Folder size={14} />
+                    {watchDriveMutation.isPending ? '...' : 'Surveiller'}
+                  </Button>
+                </div>
+                <p className="mt-1.5 text-xs text-neutral-400">
+                  CV et comptes-rendus déposés dans ce dossier sont importés automatiquement.
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full"
+                onClick={() => scanDriveMutation.mutate()}
+                disabled={scanDriveMutation.isPending}
+              >
+                <RefreshCw size={14} className={scanDriveMutation.isPending ? 'animate-spin' : ''} />
+                {scanDriveMutation.isPending ? 'Scan en cours...' : 'Scanner le dossier maintenant'}
+              </Button>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-neutral-300">
+                Connectez votre compte Google pour accéder à Drive (import de CV et comptes-rendus).
+              </p>
+              <Button size="sm" className="w-full" onClick={handleConnectDrive}>
+                <Link size={14} />
+                Connecter Google Drive
+                <ExternalLink size={12} />
+              </Button>
+            </div>
+          )}
         </Card>
 
         {/* Slack Card */}
