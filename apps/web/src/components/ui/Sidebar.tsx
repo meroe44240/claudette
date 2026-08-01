@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Building2, Briefcase, FileText, Upload, Settings, User, Mail, ChevronDown, ChevronsLeft, BarChart3, Terminal, Zap, Activity, Radar } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 
 interface NavItem {
@@ -17,10 +17,8 @@ interface NavSection {
 
 const navSections: NavSection[] = [
   {
-    // Top items — Dashboard + Mon Espace posés sans header section (fidèle mock)
     items: [
       { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-      { to: '/mon-espace', icon: User, label: 'Mon Espace' },
     ],
   },
   {
@@ -36,24 +34,19 @@ const navSections: NavSection[] = [
     items: [
       { to: '/clients/pipeline', icon: Activity, label: 'Leads' },
       { to: '/mandats', icon: FileText, label: 'Mandats' },
-      { to: '/mes-mandats', icon: Zap, label: 'Outil Recruteurs' },
       { to: '/list-push', icon: Radar, label: 'List Push' },
     ],
   },
   {
-    label: 'SUIVI',
+    label: 'PILOTAGE',
     items: [
-      { to: '/emails', icon: Mail, label: 'Emails' },
-      { to: '/import', icon: Upload, label: 'Import' },
+      { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
     ],
   },
 ];
 
-const adminItems: NavItem[] = [
-  { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
-  { to: '/settings', icon: Settings, label: 'Paramètres' },
-  { to: '/mcp-logs', icon: Terminal, label: 'Logs MCP' },
-];
+// Paramètres — utilitaire posé en bas du bandeau
+const paramItem: NavItem = { to: '/settings', icon: Settings, label: 'Paramètres' };
 
 const SHORTCUT_HINTS: Record<string, string> = {
   '/': 'd',
@@ -171,7 +164,7 @@ function NavItemLink({ item, collapsed, badge, onNavigate }: { item: NavItem; co
   );
 }
 
-export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCollapse, isOpen = false, onClose }: SidebarProps) {
+export default function Sidebar({ collapsed = false, onToggleCollapse, isOpen = false, onClose }: SidebarProps) {
   const { user } = useAuthStore();
   const initials = `${user?.prenom?.[0] || ''}${user?.nom?.[0] || ''}`.toUpperCase();
 
@@ -238,15 +231,12 @@ export default function Sidebar({ isAdmin = false, collapsed = false, onToggleCo
           </div>
         ))}
 
-        {isAdmin && (
-          <>
-            <SectionLabel label="ADMIN" collapsed={mobile ? false : collapsed} />
-            {adminItems.map((item) => (
-              <NavItemLink key={item.to} item={item} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
-            ))}
-          </>
-        )}
       </nav>
+
+      {/* Paramètres — en bas, séparé */}
+      <div style={{ borderTop: '1px solid rgba(230,233,175,0.12)', paddingTop: 4 }}>
+        <NavItemLink item={paramItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
+      </div>
 
       {!mobile && (
         <button
