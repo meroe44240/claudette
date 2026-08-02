@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar, Wrench } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 
 interface NavItem {
@@ -34,6 +34,7 @@ const navSections: NavSection[] = [
     items: [
       { to: '/leads', icon: Activity, label: 'Leads' },
       { to: '/mandats', icon: FileText, label: 'Mandats' },
+      { to: '/outils', icon: Wrench, label: 'Outil Recruteurs' },
       { to: '/list-push', icon: Radar, label: 'List Push' },
     ],
   },
