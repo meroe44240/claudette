@@ -22,7 +22,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useDroppable } from '@dnd-kit/core';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, LayoutGrid, Search, UserPlus, Loader2, GripVertical, Zap, Phone, Mail, CheckCircle2, ListTodo, X, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Search, UserPlus, Loader2, GripVertical, Zap, Phone, Mail, CheckCircle2, ListTodo, X, Eye, EyeOff, Calendar } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
@@ -115,12 +115,12 @@ const STAGES: StageCandidature[] = [
 const STAGE_LABELS: Record<StageCandidature, string> = {
   SOURCING: 'Sourcing',
   CONTACTE: 'Contacté',
-  ENTRETIEN_1: 'Entretien 1',
-  ENVOYE_CLIENT: '⏳ Envoyé client',
-  ENTRETIEN_CLIENT: 'Entretien Client',
+  ENTRETIEN_1: 'Entretien RH',
+  ENVOYE_CLIENT: 'Envoyé client',
+  ENTRETIEN_CLIENT: 'Entretien client',
   OFFRE: 'Offre',
   PLACE: 'Placé',
-  REFUSE: 'Refusé',
+  REFUSE: 'Perdu',
 };
 
 const STAGE_COLORS: Record<StageCandidature, string> = {
@@ -537,6 +537,17 @@ export default function MandatKanbanPage() {
     candidatName: string | null;
   }>({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null });
 
+  // Entretien client modal state (ENTRETIEN_CLIENT transition exige date + heure)
+  const [entretienModal, setEntretienModal] = useState<{
+    open: boolean;
+    candidatureId: string | null;
+    sourceStage: StageCandidature | null;
+    candidatId: string | null;
+    candidatName: string | null;
+  }>({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null });
+  const [entretienDate, setEntretienDate] = useState('');
+  const [entretienTime, setEntretienTime] = useState('');
+
   // Task suggestion after stage change
   const [taskSuggestion, setTaskSuggestion] = useState<{
     candidatId: string;
@@ -720,6 +731,7 @@ export default function MandatKanbanPage() {
       sourceStage?: StageCandidature;
       feeMontantFacture?: number;
       dateDemarrage?: string;
+      dateEntretienClient?: string;
       sourcePlacement?: string;
       sourceLead?: string;
       notifyCandidate?: boolean;
@@ -732,6 +744,7 @@ export default function MandatKanbanPage() {
         ...(params.motifRefusDetail ? { motifRefusDetail: params.motifRefusDetail } : {}),
         ...(params.feeMontantFacture !== undefined ? { feeMontantFacture: params.feeMontantFacture } : {}),
         ...(params.dateDemarrage ? { dateDemarrage: params.dateDemarrage } : {}),
+        ...(params.dateEntretienClient ? { dateEntretienClient: params.dateEntretienClient } : {}),
         ...(params.sourcePlacement ? { sourcePlacement: params.sourcePlacement } : {}),
         ...(params.sourceLead ? { sourceLead: params.sourceLead } : {}),
         ...(params.notifyCandidate ? { notifyCandidate: true } : {}),
@@ -870,6 +883,14 @@ export default function MandatKanbanPage() {
     if (!movedItem) return;
     const candidatName = `${movedItem.candidat.prenom || ''} ${movedItem.candidat.nom}`.trim();
 
+    // If moving to ENTRETIEN_CLIENT, require an interview date + time first.
+    if (targetStage === 'ENTRETIEN_CLIENT') {
+      setEntretienModal({ open: true, candidatureId, sourceStage, candidatId: movedItem.candidat.id, candidatName });
+      setEntretienDate('');
+      setEntretienTime('');
+      return;
+    }
+
     // If moving to PLACE, ask for invoice amount + start date before committing.
     if (targetStage === 'PLACE') {
       setPlacementModal({
@@ -938,6 +959,21 @@ export default function MandatKanbanPage() {
     setRefusalNotifyCandidate(false);
     setRefusalNotifyClient(false);
     setRefusalMessageToClient('');
+  }
+
+  // Confirm entretien client (date + heure obligatoires)
+  function handleConfirmEntretien() {
+    if (!entretienModal.candidatureId || !entretienDate) return;
+    const iso = new Date(`${entretienDate}T${entretienTime || '09:00'}:00`).toISOString();
+    updateStageMutation.mutate({
+      candidatureId: entretienModal.candidatureId,
+      stage: 'ENTRETIEN_CLIENT',
+      sourceStage: entretienModal.sourceStage || undefined,
+      candidatId: entretienModal.candidatId || undefined,
+      candidatName: entretienModal.candidatName || undefined,
+      dateEntretienClient: iso,
+    });
+    setEntretienModal({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null });
   }
 
   // Confirm placement (PLACE)
@@ -1234,6 +1270,26 @@ export default function MandatKanbanPage() {
         isPending={updateStageMutation.isPending}
         candidatName={placementModal.candidatName}
       />
+
+      {/* Entretien client modal — date + heure obligatoires */}
+      {entretienModal.open && (
+        <div className="fixed inset-0 z-[93] flex items-center justify-center" style={{ background: 'rgba(26,21,51,.42)' }} onClick={() => setEntretienModal({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null })}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 480, maxWidth: '94vw', background: '#fff', borderRadius: 22, boxShadow: '0 44px 96px -40px rgba(0,0,0,.55)', padding: '26px 28px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 12, background: '#FBF3E7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Calendar size={18} color="#E08A2B" /></span>
+              <div><div style={{ fontWeight: 800, fontSize: 17.5, letterSpacing: '-.015em', color: '#1A1533' }}>Entretien client</div><div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{entretienModal.candidatName} — planifiez la date de l'entretien</div></div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12, marginTop: 20 }}>
+              <div><label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 6 }}>Date</label><input type="date" value={entretienDate} onChange={(e) => setEntretienDate(e.target.value)} style={{ width: '100%', fontSize: 13.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} /></div>
+              <div><label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 6 }}>Heure</label><input type="time" value={entretienTime} onChange={(e) => setEntretienTime(e.target.value)} style={{ width: '100%', fontSize: 13.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} /></div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
+              <button onClick={() => setEntretienModal({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null })} style={{ flex: 1, fontSize: 14, fontWeight: 700, background: '#F5F4EA', color: '#4A4568', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Annuler</button>
+              <button disabled={!entretienDate} onClick={handleConfirmEntretien} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: entretienDate ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 12, cursor: entretienDate ? 'pointer' : 'default' }}>Confirmer l'entretien</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Selection Bar (bottom fixed) — visible only when candidates are selected */}
       <AnimatePresence>
