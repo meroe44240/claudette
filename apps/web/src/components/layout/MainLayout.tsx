@@ -110,21 +110,28 @@ export default function MainLayout() {
         </header>
 
         <OfflineBanner />
-        <main className="relative z-[1] flex-1 overflow-auto p-4 md:px-[34px] md:py-7">
-          <div className="mx-auto max-w-[1320px]">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={location.pathname}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ type: 'spring' as const, stiffness: 300, damping: 30 }}
-              >
-                <Outlet />
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </main>
+        {/^\/mandats\/[^/]+$/.test(location.pathname) && !location.pathname.endsWith('/new') ? (
+          // Fiche mandat (full-bleed) — gère sa propre mise en page bord à bord avec rail
+          <main className="relative z-[1] flex-1 overflow-hidden">
+            <Outlet />
+          </main>
+        ) : (
+          <main className="relative z-[1] flex-1 overflow-auto p-4 md:px-[34px] md:py-7">
+            <div className="mx-auto max-w-[1320px]">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={location.pathname}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ type: 'spring' as const, stiffness: 300, damping: 30 }}
+                >
+                  <Outlet />
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </main>
+        )}
       </div>
 
       {/* Keyboard Shortcuts Help */}
