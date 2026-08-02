@@ -1,22 +1,38 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Building2, User, MapPin, Calendar, Euro, LayoutGrid, Pencil, Trash2, Save, X, Link2, Check, Sparkles, Loader2, ChevronDown, ChevronUp, Plus, AlertTriangle, ClipboardList, MessageSquare, Target, Copy, Zap, Star, Search, Phone, Mail as MailIcon, Clock } from 'lucide-react';
+import { Globe, Users, Trash2, ArrowRight, Pencil, Check, X, FileText, RefreshCw, ChevronDown, Loader2, Info, Mail } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import PageHeader from '../../components/ui/PageHeader';
-import Card from '../../components/ui/Card';
-import Badge from '../../components/ui/Badge';
-import Button from '../../components/ui/Button';
 import Input, { Textarea } from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Skeleton, { SkeletonCard } from '../../components/ui/Skeleton';
-import ActivityJournal from '../../components/activity/ActivityJournal';
 import MandatTimeline from '../../components/activity/MandatTimeline';
 import DeleteConfirmModal from '../../components/ui/DeleteConfirmModal';
 import { toast } from '../../components/ui/Toast';
 
+// ─── BRAND TOKENS ───────────────────────────────────
+const NAVY = '#22177A';
+const LIME = '#E6E9AF';
+const INK = '#1A1533';
+const SECONDARY = '#4A4568';
+const MUTED = '#8A8699';
+const FAINT = '#9A96AE';
+const TERTIARY = '#6E6A85';
+const CARD_BORDER = '1px solid rgba(34,23,122,0.08)';
+const CARD_SHADOW = '0 1px 2px rgba(34,23,122,0.04)';
+const ARCHIVO = "'Archivo Black', sans-serif";
+const MANROPE = "'Manrope', sans-serif";
+
+function rgba(hex: string, a: number): string {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// ─── TYPES ──────────────────────────────────────────
 type StatutMandat = 'OUVERT' | 'EN_COURS' | 'GAGNE' | 'PERDU' | 'ANNULE' | 'CLOTURE';
 type Priorite = 'BASSE' | 'NORMALE' | 'HAUTE' | 'URGENTE';
 type FeeStatut = 'NON_FACTURE' | 'FACTURE' | 'PAYE';
@@ -39,6 +55,12 @@ interface Candidature {
   notes: string | null;
   candidat: CandidatureCandidat;
   createdAt: string;
+}
+
+interface UserRef {
+  id: string;
+  nom: string;
+  prenom: string | null;
 }
 
 interface MandatDetail {
@@ -71,66 +93,12 @@ interface MandatDetail {
     email: string | null;
     telephone: string | null;
   };
+  am?: UserRef | null;
+  recruteur?: UserRef | null;
   candidatures: Candidature[];
-  transcript: string | null;
   ficheDePoste: string | null;
-  scorecard: Scorecard | null;
-  scorecardGeneratedAt: string | null;
-  salesId: string | null;
-  sales: { id: string; nom: string; prenom: string | null } | null;
-  recruteurId: string | null;
-  recruteur: { id: string; nom: string; prenom: string | null } | null;
-  // Contrat (chantier 4)
-  contractStatus?: 'DRAFT' | 'SENT' | 'SIGNED' | 'EXPIRED';
-  contractSentAt?: string | null;
-  contractSignedAt?: string | null;
-  paymentTerms?: string | null;
-  applicableCountry?: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-interface TeamMember {
-  id: string;
-  nom: string;
-  prenom: string | null;
-}
-
-interface ScorecardCompetence {
-  nom: string;
-  poids: number;
-  description: string;
-}
-
-interface ScorecardCritere {
-  nom: string;
-  obligatoire?: boolean;
-  description?: string;
-}
-
-interface ScorecardQuestion {
-  question: string;
-  competenceVisee: string;
-}
-
-interface Scorecard {
-  competencesCles: ScorecardCompetence[];
-  criteresTechniques: ScorecardCritere[];
-  criteresComportementaux: ScorecardCritere[];
-  questionsEntretien: ScorecardQuestion[];
-  profilIdeal: string;
-  redFlags: string[];
-}
-
-interface AiMatch {
-  candidatId: string;
-  nom: string;
-  prenom: string | null;
-  score: number;
-  reasons: string[];
-  posteActuel: string | null;
-  entrepriseActuelle: string | null;
-  localisation: string | null;
 }
 
 interface EditForm {
@@ -143,10 +111,35 @@ interface EditForm {
   priorite: string;
   statut: string;
   notes: string;
-  salesId: string;
-  recruteurId: string;
 }
 
+interface AccessContact {
+  name: string;
+  email: string;
+  role: string;
+  pwd: string;
+  sentAt: number | null;
+}
+
+interface JForm {
+  jRef: string;
+  jSector: string;
+  jTitle: string;
+  jCompany: string;
+  jContract: string;
+  jLoc: string;
+  jSen: string;
+  jRemote: string;
+  jFix: string;
+  jVar: string;
+  jStart: string;
+  jIntro: string;
+  jMissions: string;
+  jProfile: string;
+  jProcess: string;
+}
+
+// ─── MAPS ───────────────────────────────────────────
 const statutLabels: Record<StatutMandat, string> = {
   OUVERT: 'Ouvert',
   EN_COURS: 'En cours',
@@ -156,13 +149,13 @@ const statutLabels: Record<StatutMandat, string> = {
   CLOTURE: 'Clôturé',
 };
 
-const statutVariant: Record<StatutMandat, 'default' | 'info' | 'warning' | 'success' | 'error'> = {
-  OUVERT: 'info',
-  EN_COURS: 'warning',
-  GAGNE: 'success',
-  PERDU: 'error',
-  ANNULE: 'error',
-  CLOTURE: 'default',
+const statutPill: Record<StatutMandat, { bg: string; fg: string; dot: string }> = {
+  OUVERT: { bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  EN_COURS: { bg: '#FBF0DE', fg: '#B4791A', dot: '#E08A2B' },
+  GAGNE: { bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  PERDU: { bg: '#FDECEA', fg: '#B3261E', dot: '#B3261E' },
+  ANNULE: { bg: '#FDECEA', fg: '#B3261E', dot: '#B3261E' },
+  CLOTURE: { bg: '#EFEEF4', fg: '#5A5470', dot: '#8A8699' },
 };
 
 const statutOptions = [
@@ -181,13 +174,6 @@ const prioriteLabels: Record<Priorite, string> = {
   URGENTE: 'Urgente',
 };
 
-const prioriteVariant: Record<Priorite, 'default' | 'info' | 'warning' | 'error'> = {
-  BASSE: 'default',
-  NORMALE: 'info',
-  HAUTE: 'warning',
-  URGENTE: 'error',
-};
-
 const prioriteOptions = [
   { value: 'BASSE', label: 'Basse' },
   { value: 'NORMALE', label: 'Normale' },
@@ -195,76 +181,81 @@ const prioriteOptions = [
   { value: 'URGENTE', label: 'Urgente' },
 ];
 
-const feeStatutLabels: Record<FeeStatut, string> = {
-  NON_FACTURE: 'Non facturé',
-  FACTURE: 'Facturé',
-  PAYE: 'Payé',
-};
-
-const feeStatutVariant: Record<FeeStatut, 'default' | 'warning' | 'success'> = {
-  NON_FACTURE: 'default',
-  FACTURE: 'warning',
-  PAYE: 'success',
-};
-
-const stageBadgeVariant: Record<string, 'sourcing' | 'contacte' | 'entretien1' | 'envoyeClient' | 'entretienClient' | 'offre' | 'place' | 'refuse'> = {
-  SOURCING: 'sourcing',
-  CONTACTE: 'contacte',
-  ENTRETIEN_1: 'entretien1',
-  ENVOYE_CLIENT: 'envoyeClient',
-  ENTRETIEN_CLIENT: 'entretienClient',
-  OFFRE: 'offre',
-  PLACE: 'place',
-  REFUSE: 'refuse',
-};
-
 const stageLabels: Record<string, string> = {
   SOURCING: 'Sourcing',
   CONTACTE: 'Contacté',
   ENTRETIEN_1: 'Entretien 1',
-  ENVOYE_CLIENT: 'Envoyé client',
   ENTRETIEN_CLIENT: 'Entretien Client',
   OFFRE: 'Offre',
   PLACE: 'Placé',
   REFUSE: 'Refusé',
 };
 
-function formatSalary(value: number | null): string {
-  if (!value) return '\u2014';
-  return `${(value / 1000).toFixed(0)}k\u20ac`;
+const stageColors: Record<string, string> = {
+  SOURCING: '#8E7CC3',
+  CONTACTE: '#3B6FE0',
+  ENTRETIEN_1: '#22177A',
+  ENTRETIEN_CLIENT: '#E08A2B',
+  OFFRE: '#C9A227',
+  PLACE: '#3B9A54',
+  REFUSE: '#B3261E',
+};
+
+const pipelineOrder = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE'];
+
+const PIPE_AV: [string, string][] = [['#22177A', '#E6E9AF'], ['#E6E9AF', '#22177A'], ['#8E7CC3', '#fff']];
+
+const COM_OPTIONS = ['Thomas Bernard', 'Sofia Marchetti', 'Léa Martin'];
+const REC_OPTIONS = ['Meroe Nguimbi', 'Sofia Marchetti', 'Hugo Blanchard'];
+const ROLE_OPTIONS = ['Hiring manager', 'Talent Acquisition', 'DRH', 'Autre'];
+const SEN_OPTIONS = ['Confirmé', 'Senior', 'Manager', 'Direction'];
+
+// ─── HELPERS ────────────────────────────────────────
+function formatEuro(value: number | null): string {
+  if (value == null) return '—';
+  return `${value.toLocaleString('fr-FR')} €`;
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('fr-FR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-function formatDateShort(dateStr: string): string {
+function formatShortDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
-function daysBetween(from: string, to?: string): number {
-  const start = new Date(from).getTime();
-  const end = to ? new Date(to).getTime() : Date.now();
-  return Math.max(0, Math.floor((end - start) / (24 * 60 * 60 * 1000)));
+function getInitials(prenom?: string | null, nom?: string | null): string {
+  const i = `${(prenom || '').charAt(0)}${(nom || '').charAt(0)}`.toUpperCase();
+  return i || '?';
 }
 
-function formatEuros(n: number | null | undefined): string {
-  if (n == null) return '—';
-  return `${n.toLocaleString('fr-FR')} €`;
+function nameInitials(name: string): string {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '—';
+  const first = parts[0].charAt(0);
+  const last = parts.length > 1 ? parts[parts.length - 1].charAt(0) : '';
+  return (first + last).toUpperCase() || '—';
 }
 
-const detailStagger = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
-};
-const detailItem = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 260, damping: 24 } },
-};
+function companyInitials(nom: string): string {
+  const parts = (nom || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function withCurrent(opts: string[], current: string): string[] {
+  const list = [...opts];
+  if (current && !list.includes(current)) list.unshift(current);
+  return list;
+}
+
+function genPwd(): string {
+  const a = 'abcdefghijkmnpqrstuvwxyz23456789';
+  let p = '';
+  for (let i = 0; i < 8; i++) p += a[Math.floor(Math.random() * a.length)];
+  return p;
+}
 
 function buildEditForm(mandat: MandatDetail): EditForm {
   return {
@@ -277,304 +268,65 @@ function buildEditForm(mandat: MandatDetail): EditForm {
     priorite: mandat.priorite || 'NORMALE',
     statut: mandat.statut || 'OUVERT',
     notes: mandat.notes || '',
-    salesId: mandat.salesId || '',
-    recruteurId: mandat.recruteurId || '',
   };
 }
 
-// ─── BRIEF CLIENT + SCORECARD SECTION ────────────────
+function computeSalaireLabel(min: number | null, max: number | null): string {
+  return min || max
+    ? [min ? formatEuro(min) : null, max ? formatEuro(max) : null].filter(Boolean).join(' – ')
+    : '—';
+}
 
-function BriefClientSection({
-  mandatId,
-  transcript: initialTranscript,
-  ficheDePoste: initialFicheDePoste,
-  scorecard: initialScorecard,
-  scorecardGeneratedAt,
-}: {
-  mandatId: string;
-  transcript: string | null;
-  ficheDePoste: string | null;
-  scorecard: Scorecard | null;
-  scorecardGeneratedAt: string | null;
-}) {
-  const queryClient = useQueryClient();
-  const [briefOpen, setBriefOpen] = useState(true);
-  const [scorecardOpen, setScorecardOpen] = useState(true);
-  const [transcript, setTranscript] = useState(initialTranscript || '');
-  const [ficheDePoste, setFicheDePoste] = useState(initialFicheDePoste || '');
-  const [saving, setSaving] = useState(false);
-  const [generating, setGenerating] = useState(false);
-
-  // Save transcript/fiche de poste
-  const handleSaveBrief = async () => {
-    setSaving(true);
-    try {
-      await api.put(`/mandats/${mandatId}`, { transcript, ficheDePoste });
-      queryClient.invalidateQueries({ queryKey: ['mandat', mandatId] });
-      toast('success', 'Brief sauvegardé');
-    } catch (err: any) {
-      toast('error', err?.message || 'Erreur lors de la sauvegarde');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Generate scorecard
-  const handleGenerateScorecard = async () => {
-    if (!transcript.trim() && !ficheDePoste.trim()) {
-      toast('error', 'Ajoutez un transcript ou une fiche de poste avant de générer');
-      return;
-    }
-    setGenerating(true);
-    try {
-      await api.post(`/ai/mandat/${mandatId}/generate-scorecard`, {
-        transcript: transcript || undefined,
-        ficheDePoste: ficheDePoste || undefined,
-      });
-      queryClient.invalidateQueries({ queryKey: ['mandat', mandatId] });
-      toast('success', 'Scorecard générée avec succès');
-    } catch (err: any) {
-      toast('error', err?.data?.message || err?.message || 'Erreur lors de la génération');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast('success', 'Copié dans le presse-papier');
-  };
-
+// ─── SMALL COMPONENTS ───────────────────────────────
+function PlainSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
   return (
-    <>
-      {/* Brief Client */}
-      <Card>
-        <button
-          onClick={() => setBriefOpen(!briefOpen)}
-          className="flex w-full items-center justify-between"
-        >
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
-            <MessageSquare size={18} /> Brief Client
-          </h2>
-          {briefOpen ? <ChevronUp size={18} className="text-text-tertiary" /> : <ChevronDown size={18} className="text-text-tertiary" />}
-        </button>
-
-        {briefOpen && (
-          <div className="mt-4 space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-text-primary">Transcript du call</label>
-              <textarea
-                value={transcript}
-                onChange={(e) => setTranscript(e.target.value)}
-                rows={6}
-                className="w-full resize-y rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-                placeholder="Collez le transcript de votre call avec le client ici..."
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-text-primary">Fiche de poste</label>
-              <textarea
-                value={ficheDePoste}
-                onChange={(e) => setFicheDePoste(e.target.value)}
-                rows={6}
-                className="w-full resize-y rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-                placeholder="Collez la fiche de poste / job description ici..."
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleSaveBrief}
-                disabled={saving}
-                className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-primary transition-all hover:bg-primary-50 disabled:opacity-50"
-              >
-                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                Sauvegarder
-              </button>
-              <button
-                onClick={handleGenerateScorecard}
-                disabled={generating || (!transcript.trim() && !ficheDePoste.trim())}
-                className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 px-4 py-2 text-sm font-medium text-white transition-all hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                Générer la scorecard IA
-              </button>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {/* Scorecard */}
-      {initialScorecard && (
-        <Card>
-          <button
-            onClick={() => setScorecardOpen(!scorecardOpen)}
-            className="flex w-full items-center justify-between"
-          >
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
-              <Target size={18} /> Scorecard
-              {scorecardGeneratedAt && (
-                <span className="text-xs font-normal text-text-tertiary">
-                  — générée le {new Date(scorecardGeneratedAt).toLocaleDateString('fr-FR')}
-                </span>
-              )}
-            </h2>
-            {scorecardOpen ? <ChevronUp size={18} className="text-text-tertiary" /> : <ChevronDown size={18} className="text-text-tertiary" />}
-          </button>
-
-          {scorecardOpen && (
-            <div className="mt-4 space-y-6">
-              {/* Profil Idéal */}
-              <div className="rounded-lg border border-primary-200 bg-primary-50 p-4">
-                <h3 className="mb-2 text-sm font-semibold text-primary-700 flex items-center gap-1.5">
-                  <User size={14} /> Profil idéal
-                </h3>
-                <p className="text-sm text-primary-800">{initialScorecard.profilIdeal}</p>
-              </div>
-
-              {/* Compétences clés */}
-              <div>
-                <h3 className="mb-3 text-sm font-semibold text-text-primary">Compétences clés</h3>
-                <div className="space-y-2">
-                  {initialScorecard.competencesCles.map((comp, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-text-primary">{comp.nom}</span>
-                          <span className="text-xs text-text-tertiary">{comp.poids}/5</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-neutral-100">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-blue-400 to-indigo-500 transition-all"
-                            style={{ width: `${(comp.poids / 5) * 100}%` }}
-                          />
-                        </div>
-                        <p className="mt-0.5 text-xs text-text-tertiary">{comp.description}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Critères techniques */}
-              <div>
-                <h3 className="mb-3 text-sm font-semibold text-text-primary">Critères techniques</h3>
-                <div className="flex flex-wrap gap-2">
-                  {initialScorecard.criteresTechniques.map((crit, i) => (
-                    <span
-                      key={i}
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${
-                        crit.obligatoire
-                          ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
-                          : 'bg-neutral-100 text-neutral-600'
-                      }`}
-                    >
-                      {crit.nom}
-                      {crit.obligatoire && ' *'}
-                    </span>
-                  ))}
-                </div>
-                <p className="mt-1 text-[11px] text-text-tertiary">* = obligatoire</p>
-              </div>
-
-              {/* Critères comportementaux */}
-              <div>
-                <h3 className="mb-3 text-sm font-semibold text-text-primary">Critères comportementaux</h3>
-                <div className="space-y-2">
-                  {initialScorecard.criteresComportementaux.map((crit, i) => (
-                    <div key={i} className="rounded-md border border-border p-3">
-                      <span className="text-sm font-medium text-text-primary">{crit.nom}</span>
-                      {crit.description && (
-                        <p className="mt-0.5 text-xs text-text-tertiary">{crit.description}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Questions d'entretien */}
-              <div>
-                <h3 className="mb-3 text-sm font-semibold text-text-primary flex items-center gap-1.5">
-                  <ClipboardList size={14} /> Questions d'entretien suggérées
-                </h3>
-                <div className="space-y-2">
-                  {initialScorecard.questionsEntretien.map((q, i) => (
-                    <div key={i} className="group flex items-start gap-2 rounded-md border border-border p-3 hover:bg-primary-50/30 transition-colors">
-                      <span className="text-xs font-bold text-text-tertiary mt-0.5">{i + 1}.</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-text-primary">{q.question}</p>
-                        <p className="text-xs text-text-tertiary mt-0.5">Compétence visée : {q.competenceVisee}</p>
-                      </div>
-                      <button
-                        onClick={() => copyToClipboard(q.question)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-text-tertiary hover:text-primary-500"
-                        title="Copier"
-                      >
-                        <Copy size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Red Flags */}
-              <div>
-                <h3 className="mb-3 text-sm font-semibold text-text-primary flex items-center gap-1.5">
-                  <AlertTriangle size={14} className="text-red-500" /> Red Flags
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {initialScorecard.redFlags.map((flag, i) => (
-                    <span
-                      key={i}
-                      className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700 ring-1 ring-red-200"
-                    >
-                      {flag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Regenerate button */}
-              <div className="border-t border-border pt-4">
-                <button
-                  onClick={handleGenerateScorecard}
-                  disabled={generating}
-                  className="flex items-center gap-2 text-sm font-medium text-primary-500 hover:text-primary-600 transition-colors disabled:opacity-50"
-                >
-                  {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  Regénérer la scorecard
-                </button>
-              </div>
-            </div>
-          )}
-        </Card>
-      )}
-    </>
+    <div style={{ position: 'relative' }}>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', width: '100%', fontFamily: MANROPE, fontSize: 13, fontWeight: 700, padding: '8px 30px 8px 12px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,0.14)', background: '#FCFCF5', color: INK, outline: 'none', cursor: 'pointer' }}
+      >
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+      <ChevronDown size={13} color="#8A8699" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+    </div>
   );
 }
 
+const modalInputStyle: React.CSSProperties = { width: '100%', fontFamily: MANROPE, fontSize: 14, padding: '11px 14px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,0.14)', background: '#FCFCF5', color: INK, outline: 'none' };
+const pubLabelStyle: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: MUTED, marginBottom: 5 };
+const pubInputStyle: React.CSSProperties = { width: '100%', fontFamily: MANROPE, fontSize: 13.5, padding: '10px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,0.14)', background: '#fff', color: INK, outline: 'none' };
+
+// ─── PAGE ───────────────────────────────────────────
 export default function MandatDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // Brief edit
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
+  // Delete
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [bookingCopied, setBookingCopied] = useState(false);
-  const [showMatching, setShowMatching] = useState(false);
-  const [matchResults, setMatchResults] = useState<AiMatch[]>([]);
-  const [showAddCandidat, setShowAddCandidat] = useState(false);
-  const [candidatSearch, setCandidatSearch] = useState('');
-  const [candidatResults, setCandidatResults] = useState<{ id: string; nom: string; prenom: string | null; posteActuel: string | null; entrepriseActuelle: string | null }[]>([]);
-  const [candidatSearchLoading, setCandidatSearchLoading] = useState(false);
-  const addCandidatDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Fetch booking settings to get current user's slug
-  const { data: bookingSettings } = useQuery({
-    queryKey: ['booking', 'settings'],
-    queryFn: () => api.get<{ slug: string; isActive: boolean }>('/booking/settings'),
-    retry: false,
-    staleTime: 5 * 60 * 1000,
-  });
+  // Rail
+  const [railTab, setRailTab] = useState<'brief' | 'notes' | 'int' | 'cli'>('brief');
+  const [notesDraft, setNotesDraft] = useState('');
+  const [refreshTick, setRefreshTick] = useState(0);
+  // Team (local demo state)
+  const [team, setTeam] = useState<{ commercial: string; recruteur: string; signed: boolean } | null>(null);
+  const [editTeam, setEditTeam] = useState(false);
+  // Access modal
+  const [accessOpen, setAccessOpen] = useState(false);
+  const [access, setAccess] = useState<AccessContact[]>([]);
+  const [cName, setCName] = useState('');
+  const [cEmail, setCEmail] = useState('');
+  const [cRole, setCRole] = useState('Hiring manager');
+  const [inviteMail, setInviteMail] = useState(true);
+  // Publish modal
+  const [pubOpen, setPubOpen] = useState(false);
+  const [published, setPublished] = useState(false);
+  const [pubDraft, setPubDraft] = useState(true);
+  const [jForm, setJForm] = useState<JForm | null>(null);
 
   const { data: mandat, isLoading } = useQuery({
     queryKey: ['mandat', id],
@@ -582,25 +334,10 @@ export default function MandatDetailPage() {
     enabled: !!id,
   });
 
-  const { data: teamMembers } = useQuery({
-    queryKey: ['settings', 'team'],
-    queryFn: () => api.get<TeamMember[]>('/settings/team'),
-    staleTime: 10 * 60 * 1000,
-  });
-
-  const teamOptions = [
-    { value: '', label: '—' },
-    ...(teamMembers ?? []).map((t) => ({
-      value: t.id,
-      label: [t.prenom, t.nom].filter(Boolean).join(' ') || t.nom,
-    })),
-  ];
-
   usePageTitle(mandat ? `${mandat.titrePoste} — ${mandat.entreprise.nom}` : 'Mandat');
 
   const updateMutation = useMutation({
-    mutationFn: (payload: Record<string, unknown>) =>
-      api.put<MandatDetail>(`/mandats/${id}`, payload),
+    mutationFn: (payload: Record<string, unknown>) => api.put<MandatDetail>(`/mandats/${id}`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mandat', id] });
       toast('success', 'Modifications enregistrées');
@@ -623,145 +360,239 @@ export default function MandatDetailPage() {
     },
   });
 
-  const cloneMutation = useMutation({
-    mutationFn: () => api.post<{ id: string }>(`/mandats/${id}/clone`, {}),
-    onSuccess: (data) => {
-      toast('success', 'Mandat dupliqué !');
-      navigate(`/mandats/${data.id}`);
-    },
-    onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de la duplication');
-    },
-  });
-
-  const matchingMutation = useMutation({
-    mutationFn: () => api.post<{ matches: AiMatch[] }>(`/ai/matching/${id}`, {}),
-    onSuccess: (data) => {
-      const matches = data?.matches || [];
-      setMatchResults(matches);
-      setShowMatching(true);
-      toast('success', `${matches.length} candidats trouvés`);
-    },
-    onError: (error: any) => {
-      toast('error', error?.message || 'Erreur lors du matching IA');
-    },
-  });
-
-  // --- Add candidat to mandat ---
-  const existingCandidatIds = new Set(mandat?.candidatures.map((c) => c.candidat.id) || []);
-
-  const addCandidatMutation = useMutation({
-    mutationFn: (candidatId: string) =>
-      api.post('/candidatures', { candidatId, mandatId: id, stage: 'SOURCING' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['mandat', id] });
-      toast('success', 'Candidat ajouté au mandat !');
-      setShowAddCandidat(false);
-      setCandidatSearch('');
-      setCandidatResults([]);
-    },
-    onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de l\'ajout');
-    },
-  });
-
-  // Search candidats with debounce
-  useEffect(() => {
-    if (!candidatSearch || candidatSearch.length < 2) {
-      setCandidatResults([]);
-      return;
+  // Client activity (portail) — recomputed when refreshTick changes
+  const clientActivity = useMemo(() => {
+    void refreshTick;
+    let evs: { type: string; who?: string; at: number }[] = [];
+    try {
+      const raw = localStorage.getItem('hu_client_events');
+      evs = raw ? JSON.parse(raw) : [];
+    } catch {
+      evs = [];
     }
-    setCandidatSearchLoading(true);
-    const timeout = setTimeout(async () => {
-      try {
-        const res = await api.get<{ data: any[] }>(`/candidats?search=${encodeURIComponent(candidatSearch)}&perPage=10&scope=all`);
-        const results = (res.data || []).filter((c: any) => !existingCandidatIds.has(c.id));
-        setCandidatResults(results);
-      } catch {
-        setCandidatResults([]);
-      } finally {
-        setCandidatSearchLoading(false);
-      }
-    }, 300);
-    return () => clearTimeout(timeout);
-  }, [candidatSearch]);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!showAddCandidat) return;
-    const handler = (e: MouseEvent) => {
-      if (addCandidatDropdownRef.current && !addCandidatDropdownRef.current.contains(e.target as Node)) {
-        setShowAddCandidat(false);
-        setCandidatSearch('');
-        setCandidatResults([]);
-      }
+    const now = Date.now();
+    const rel = (t: number) => {
+      const s = Math.floor((now - t) / 1000);
+      if (s < 60) return "à l'instant";
+      if (s < 3600) return `il y a ${Math.floor(s / 60)} min`;
+      if (s < 86400) return `il y a ${Math.floor(s / 3600)} h`;
+      return `le ${new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showAddCandidat]);
+    const hhmm = (t: number) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const items = evs.slice().reverse().slice(0, 4).map((e) => {
+      let label: string;
+      let dot: string;
+      let detail = e.who || '';
+      if (e.type === 'login') { label = "S'est connecté"; dot = '#2C6B3F'; detail = ''; }
+      else if (e.type === 'view') { label = 'A consulté un profil'; dot = '#22177A'; }
+      else if (e.type === 'comment') { label = 'A laissé un commentaire'; dot = '#8E7CC3'; }
+      else if (e.type && e.type.indexOf('move:') === 0) { label = 'A déplacé un profil'; dot = '#E08A2B'; }
+      else if (e.type === 'decision:meet') { label = 'Souhaite le/la rencontrer'; dot = '#2C6B3F'; }
+      else if (e.type === 'decision:talk') { label = 'À discuter'; dot = '#B4791A'; }
+      else if (e.type === 'decision:pass') { label = 'A écarté un profil'; dot = '#B3261E'; }
+      else if (e.type === 'invite') { label = e.who || 'Action portail'; dot = '#8E7CC3'; detail = ''; }
+      else { label = e.type || 'Action'; dot = '#8A8699'; }
+      return { label, dot, detail, hasDetail: !!detail, time: hhmm(e.at) };
+    });
+    const last = evs.length ? evs[evs.length - 1].at : 0;
+    const online = !!last && (now - last) < 10 * 60 * 1000;
+    return {
+      items,
+      statusLabel: online ? 'En ligne' : 'Hors ligne',
+      statusColor: online ? '#2C9A47' : '#B4B0C4',
+      lastSeen: last ? `Vu ${rel(last)}` : 'Jamais connecté',
+    };
+  }, [refreshTick]);
 
-  const handleStartEdit = () => {
-    if (mandat) {
-      setEditForm(buildEditForm(mandat));
-      setIsEditing(true);
+  // Init team once mandat is loaded
+  useEffect(() => {
+    if (!id || !mandat || team) return;
+    try {
+      const raw = localStorage.getItem(`hu_mandat_team_${id}`);
+      if (raw) { setTeam(JSON.parse(raw)); return; }
+    } catch { /* noop */ }
+    const com = mandat.am ? `${mandat.am.prenom || ''} ${mandat.am.nom}`.trim() : '';
+    const rec = mandat.recruteur ? `${mandat.recruteur.prenom || ''} ${mandat.recruteur.nom}`.trim() : '';
+    setTeam({ commercial: com || 'Thomas Bernard', recruteur: rec, signed: false });
+  }, [id, mandat, team]);
+
+  // Init access list + published + jForm
+  useEffect(() => {
+    if (!id) return;
+    try {
+      const raw = localStorage.getItem(`hu_mandat_access_${id}`);
+      if (raw) setAccess(JSON.parse(raw));
+    } catch { /* noop */ }
+    try {
+      const ref = `HU-${id.slice(0, 4)}`.toUpperCase();
+      const raw = localStorage.getItem('hu_joboffers_v1');
+      const arr = raw ? JSON.parse(raw) : [];
+      const live = arr.some((o: any) => (o.ref === ref || o.mandatId === ref) && o.live);
+      setPublished(live);
+    } catch { /* noop */ }
+  }, [id]);
+
+  useEffect(() => {
+    if (!mandat || !id || jForm) return;
+    const ref = `HU-${id.slice(0, 4)}`.toUpperCase();
+    setJForm({
+      jRef: ref,
+      jSector: mandat.entreprise.secteur || 'Industrie',
+      jTitle: mandat.titrePoste,
+      jCompany: 'Groupe industriel · 240 personnes · Lyon',
+      jContract: 'CDI',
+      jLoc: mandat.localisation || '',
+      jSen: 'Confirmé',
+      jRemote: 'Non',
+      jFix: computeSalaireLabel(mandat.salaireMin, mandat.salaireMax),
+      jVar: "+ primes d'astreinte · 13e mois",
+      jStart: 'ASAP',
+      jIntro: "Notre client, groupe industriel en croissance, renforce son équipe maintenance sur son site de production. Vous prenez en charge la mise en service et la fiabilisation de lignes automatisées.",
+      jMissions: 'Assurer la mise en service des lignes automatisées.\nDiagnostiquer et résoudre les pannes sur automates Siemens.\nAméliorer la fiabilité des équipements existants.\nFormer les opérateurs aux bonnes pratiques.',
+      jProfile: 'BTS CRSA ou équivalent\n3 ans minimum en environnement industriel\nSiemens TIA Portal\nHabilitation électrique',
+      jProcess: "Échange HumanUp :: 30 min. On vous dévoile l'entreprise.\nEntretien technique :: Sur votre expertise automatisme.\nVisite de site :: Rencontre de l'équipe et du responsable.\nOffre :: Closing accompagné jusqu'à la signature.",
+    });
+  }, [mandat, id, jForm]);
+
+  // Sync notesDraft when mandat notes change
+  useEffect(() => {
+    if (mandat) setNotesDraft(mandat.notes || '');
+  }, [mandat?.notes]);
+
+  // ─── Team handlers ────────────────────────────────
+  const persistTeam = (t: { commercial: string; recruteur: string; signed: boolean }) => {
+    try { localStorage.setItem(`hu_mandat_team_${id}`, JSON.stringify(t)); } catch { /* noop */ }
+  };
+  const setCommercial = (v: string) => {
+    setTeam((prev) => {
+      const next = { ...(prev || { recruteur: '', signed: false }), commercial: v } as { commercial: string; recruteur: string; signed: boolean };
+      persistTeam(next);
+      return next;
+    });
+  };
+  const setRecruteur = (v: string) => {
+    setTeam((prev) => {
+      const next = { ...(prev || { commercial: '', signed: false }), recruteur: v } as { commercial: string; recruteur: string; signed: boolean };
+      persistTeam(next);
+      return next;
+    });
+  };
+  const toggleSigned = () => {
+    if (!team) return;
+    const nextSigned = !team.signed;
+    const next = { ...team, signed: nextSigned };
+    setTeam(next);
+    persistTeam(next);
+    if (nextSigned) {
+      if (!team.recruteur) { setEditTeam(true); toast('success', 'Contrat signé — assigne le recruteur'); }
+      else toast('success', 'Contrat signé');
+    } else {
+      toast('info', 'Signature annulée');
     }
   };
 
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setEditForm(null);
+  // ─── Brief edit ───────────────────────────────────
+  const handleStartEdit = () => {
+    if (mandat) { setEditForm(buildEditForm(mandat)); setIsEditing(true); }
   };
-
-  const handleCopyBookingLink = useCallback(() => {
-    if (!bookingSettings?.slug || !mandat?.slug) return;
-    const link = `https://ats.propium.co/book/${bookingSettings.slug}/${mandat.slug}`;
-    navigator.clipboard.writeText(link).then(() => {
-      toast('success', 'Lien booking copie !');
-      setBookingCopied(true);
-      setTimeout(() => setBookingCopied(false), 2000);
-    });
-  }, [bookingSettings?.slug, mandat?.slug]);
-
+  const handleCancelEdit = () => { setIsEditing(false); setEditForm(null); };
+  const setField = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setEditForm((prev) => (prev ? { ...prev, [field]: e.target.value } : prev));
+  };
   const handleSave = () => {
     if (!editForm) return;
     const payload: Record<string, unknown> = {};
     if (editForm.titrePoste.trim()) payload.titrePoste = editForm.titrePoste.trim();
-    if (editForm.description.trim()) payload.description = editForm.description.trim();
-    else payload.description = null;
-    if (editForm.localisation.trim()) payload.localisation = editForm.localisation.trim();
-    else payload.localisation = null;
-    if (editForm.salaireMin) payload.salaireMin = parseInt(editForm.salaireMin, 10);
-    else payload.salaireMin = null;
-    if (editForm.salaireMax) payload.salaireMax = parseInt(editForm.salaireMax, 10);
-    else payload.salaireMax = null;
+    payload.description = editForm.description.trim() || null;
+    payload.localisation = editForm.localisation.trim() || null;
+    payload.salaireMin = editForm.salaireMin ? parseInt(editForm.salaireMin, 10) : null;
+    payload.salaireMax = editForm.salaireMax ? parseInt(editForm.salaireMax, 10) : null;
     if (editForm.feePourcentage) payload.feePourcentage = parseFloat(editForm.feePourcentage);
     if (editForm.priorite) payload.priorite = editForm.priorite;
     if (editForm.statut) payload.statut = editForm.statut;
-    if (editForm.notes.trim()) payload.notes = editForm.notes.trim();
-    else payload.notes = null;
-    payload.salesId = editForm.salesId || null;
-    payload.recruteurId = editForm.recruteurId || null;
-
+    payload.notes = editForm.notes.trim() || null;
     updateMutation.mutate(payload);
   };
 
-  const setField = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setEditForm((prev) => prev ? { ...prev, [field]: e.target.value } : prev);
+  // ─── Access handlers ──────────────────────────────
+  const persistAccess = (list: AccessContact[]) => {
+    try { localStorage.setItem(`hu_mandat_access_${id}`, JSON.stringify(list)); } catch { /* noop */ }
+  };
+  const logClientEvent = (type: string, who: string) => {
+    try {
+      const raw = localStorage.getItem('hu_client_events');
+      const arr = raw ? JSON.parse(raw) : [];
+      arr.push({ type, who, at: Date.now() });
+      localStorage.setItem('hu_client_events', JSON.stringify(arr));
+    } catch { /* noop */ }
+  };
+  const addContact = () => {
+    const n = cName.trim();
+    const e = cEmail.trim().toLowerCase();
+    if (!n || !e) { toast('error', 'Nom et email requis'); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { toast('error', 'Email invalide'); return; }
+    const BLOCK = ['gmail.', 'yahoo.', 'hotmail.', 'outlook.', 'live.', 'icloud.', 'free.fr', 'orange.fr'];
+    if (BLOCK.some((b) => e.indexOf(b) !== -1)) { toast('error', 'Email professionnel requis'); return; }
+    const sendMail = inviteMail;
+    const c: AccessContact = { name: n, email: e, role: cRole, pwd: genPwd(), sentAt: sendMail ? Date.now() : null };
+    const next = [...access, c];
+    setAccess(next);
+    persistAccess(next);
+    setCName('');
+    setCEmail('');
+    if (sendMail) { logClientEvent('invite', `Invitation portail envoyée à ${n} (${e})`); toast('success', `Accès créé — invitation envoyée à ${e}`); }
+    else toast('success', 'Accès créé — identifiants à transmettre');
+  };
+  const resendInvite = (i: number) => {
+    const next = access.slice();
+    next[i] = { ...next[i], sentAt: Date.now() };
+    setAccess(next);
+    persistAccess(next);
+    logClientEvent('invite', `Invitation portail renvoyée à ${next[i].name}`);
+    toast('success', `Invitation renvoyée à ${next[i].email}`);
+  };
+  const revokeAccess = (i: number) => {
+    const next = access.slice();
+    next.splice(i, 1);
+    setAccess(next);
+    persistAccess(next);
+    toast('info', 'Accès révoqué');
   };
 
+  // ─── Publish handlers ─────────────────────────────
+  const setJField = (field: keyof JForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setJForm((prev) => (prev ? { ...prev, [field]: e.target.value } : prev));
+  };
+  const savePub = () => {
+    if (!jForm) return;
+    const on = pubDraft;
+    const offer = {
+      mandatId: jForm.jRef, live: on, ref: jForm.jRef, secteur: jForm.jSector, title: jForm.jTitle,
+      company: jForm.jCompany, contract: jForm.jContract, loc: jForm.jLoc, senior: jForm.jSen,
+      remote: jForm.jRemote, fix: jForm.jFix, variable: jForm.jVar, start: jForm.jStart, intro: jForm.jIntro,
+      missions: jForm.jMissions, profile: jForm.jProfile, process: jForm.jProcess, at: Date.now(),
+    };
+    try {
+      const raw = localStorage.getItem('hu_joboffers_v1');
+      const arr = raw ? JSON.parse(raw) : [];
+      const kept = arr.filter((o: any) => o.ref !== offer.ref && o.mandatId !== offer.mandatId);
+      kept.unshift(offer);
+      localStorage.setItem('hu_joboffers_v1', JSON.stringify(kept));
+    } catch { /* noop */ }
+    setPublished(on);
+    setPubOpen(false);
+    logClientEvent('invite', on ? 'Offre publiée sur le job board' : 'Offre retirée du job board');
+    toast('success', on ? 'Offre publiée — candidatures ouvertes' : 'Offre retirée du site');
+  };
+
+  // ─── Loading / not found ──────────────────────────
   if (isLoading) {
     return (
-      <div>
+      <div style={{ padding: '30px 36px' }}>
         <Skeleton className="h-8 w-64 mb-6" />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            <SkeletonCard />
-            <SkeletonCard />
-          </div>
-          <div className="space-y-6">
-            <SkeletonCard />
-            <SkeletonCard />
-          </div>
+          <div className="lg:col-span-2 space-y-6"><SkeletonCard /><SkeletonCard /></div>
+          <div className="space-y-6"><SkeletonCard /><SkeletonCard /></div>
         </div>
       </div>
     );
@@ -769,609 +600,577 @@ export default function MandatDetailPage() {
 
   if (!mandat) {
     return (
-      <div className="text-center py-16">
-        <p className="text-text-secondary">Mandat introuvable.</p>
-        <Button variant="ghost" onClick={() => navigate('/mandats')} className="mt-4">
+      <div className="text-center" style={{ padding: '64px 0' }}>
+        <p style={{ color: SECONDARY }}>Mandat introuvable.</p>
+        <button onClick={() => navigate('/mandats')} style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 7, fontWeight: 700, fontSize: 13.5, background: '#fff', color: NAVY, border: '1px solid rgba(34,23,122,0.16)', borderRadius: 11, padding: '9px 14px', cursor: 'pointer' }}>
           Retour aux mandats
-        </Button>
+        </button>
       </div>
     );
   }
 
-  const statutColor: Record<StatutMandat, { bg: string; fg: string; dot: string }> = {
-    OUVERT:  { bg: 'rgba(59,154,84,0.12)', fg: '#2C6B3F', dot: '#3B9A54' },
-    EN_COURS:{ bg: 'rgba(180,120,20,0.12)', fg: '#8A6A2E', dot: '#B47814' },
-    GAGNE:   { bg: 'rgba(59,154,84,0.12)', fg: '#2C6B3F', dot: '#3B9A54' },
-    PERDU:   { bg: 'rgba(179,38,30,0.12)',  fg: '#B3261E', dot: '#B0361F' },
-    ANNULE:  { bg: 'rgba(179,38,30,0.12)',  fg: '#B3261E', dot: '#B0361F' },
-    CLOTURE: { bg: 'rgba(34,23,122,0.06)',  fg: '#5A5470', dot: '#8A8699' },
+  // ─── Derived ──────────────────────────────────────
+  const daysOpen = Math.max(0, Math.floor((Date.now() - new Date(mandat.dateOuverture).getTime()) / 86400000));
+  const salaireLabel = computeSalaireLabel(mandat.salaireMin, mandat.salaireMax);
+  const sPill = statutPill[mandat.statut] || statutPill.CLOTURE;
+  const teamView = team || { commercial: '', recruteur: '', signed: false };
+  const needsRecruteur = teamView.signed && !teamView.recruteur;
+
+  const contract = (() => {
+    try { const raw = localStorage.getItem('hu_mandat_contract'); return raw ? JSON.parse(raw) : null; } catch { return null; }
+  })();
+
+  const kpis = [
+    { label: 'Fee estimé', value: formatEuro(mandat.feeMontantEstime), note: `${Number(mandat.feePourcentage)} % du package`, color: NAVY },
+    { label: 'Salaire', value: salaireLabel, note: 'package annuel brut', color: INK },
+    { label: 'Candidats', value: String(mandat.candidatures.length), note: 'en pipeline', color: INK },
+    { label: 'Ouvert depuis', value: `${daysOpen} j`, note: `créé le ${formatShortDate(mandat.dateOuverture)}`, color: INK },
+  ];
+
+  const railTabsDef: [typeof railTab, string][] = [
+    ['brief', 'Le brief'], ['notes', 'Notes'], ['int', 'Activité interne'], ['cli', 'Activité client'],
+  ];
+
+  const signedBtnStyle: React.CSSProperties = {
+    fontFamily: MANROPE, fontWeight: 700, fontSize: 11.5, borderRadius: 999, padding: '5px 12px', cursor: 'pointer', border: 'none',
+    background: teamView.signed ? '#EAF3EC' : '#F0EFC4', color: teamView.signed ? '#2C6B3F' : '#8A6A2E',
   };
-  const st = statutColor[mandat.statut];
+  const editTeamBtnStyle: React.CSSProperties = {
+    fontFamily: MANROPE, fontWeight: 700, fontSize: 11.5, borderRadius: 999, padding: '4px 12px', cursor: 'pointer', border: 'none', display: 'inline-flex', alignItems: 'center', gap: 5,
+    background: editTeam ? NAVY : '#F0EFC4', color: editTeam ? LIME : NAVY,
+  };
 
-  const daysOpen = daysBetween(mandat.dateOuverture);
-  const candidatsCount = mandat.candidatures?.length ?? 0;
-  const salaireMax = mandat.salaireMax ?? mandat.salaireMin ?? 0;
-  const feePercent = Number(mandat.feePourcentage || '0');
+  const inviteSubject = `Votre espace de suivi — ${mandat.titrePoste}`;
+  const inviteBody =
+    `Bonjour ${(cName.trim().split(/\s+/).slice(-1)[0] || '[Nom]')},\n\n`
+    + `Comme convenu, voici votre espace de suivi pour le recrutement du poste de ${mandat.titrePoste}.\n\n`
+    + 'Vous y consultez les profils que nous vous présentons, et vous nous dites en un clic si vous souhaitez les rencontrer.\n\n'
+    + 'Accès : humanup.io/portail\n'
+    + `Identifiant : ${(cEmail.trim() || '[email]')}\n`
+    + 'Mot de passe : sera généré à la création\n\n'
+    + 'Deux profils vous attendent déjà.\n\n'
+    + 'Bien à vous,\nMeroe Nguimbi — HumanUp';
 
+  // ─── Publish preview derived ──────────────────────
+  const jMissionList = jForm ? jForm.jMissions.split('\n').map((x) => x.trim()).filter(Boolean).map((t, i) => ({ n: String(i + 1).padStart(2, '0'), t })) : [];
+  const jProfileList = jForm ? jForm.jProfile.split('\n').map((x) => x.trim()).filter(Boolean) : [];
+  const jProcessList = jForm ? jForm.jProcess.split('\n').map((x) => x.trim()).filter(Boolean).map((l, i) => { const p = l.split('::'); return { n: String(i + 1).padStart(2, '0'), t: (p[0] || '').trim(), d: (p[1] || '').trim() }; }) : [];
+  const jChips = jForm ? [jForm.jContract || 'CDI', jForm.jLoc || '—', `Séniorité : ${jForm.jSen || 'Confirmé'}`, 'Maintenance'].filter(Boolean).map((v, i) => ({ v, bg: i === 1 ? LIME : '#fff', fg: NAVY, bd: i === 1 ? 'transparent' : 'rgba(34,23,122,0.16)' })) : [];
+  const jFacts = jForm ? [
+    { k: 'Localisation', v: jForm.jLoc || '—' },
+    { k: 'Contrat', v: jForm.jContract || 'CDI' },
+    { k: 'Télétravail', v: jForm.jRemote || 'Non' },
+    { k: 'Prise de poste', v: jForm.jStart || 'ASAP' },
+  ] : [];
+
+  // ─── Render ───────────────────────────────────────
   return (
-    <div className="rise-stagger">
-      {/* ── BREADCRUMB ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5, color: '#9A96AE', fontWeight: 600 }}>
-        <a onClick={() => navigate('/mandats')} style={{ color: '#8A8699', cursor: 'pointer' }}>Mandats</a>
-        <span style={{ color: '#C4C1D0' }}>›</span>
-        <span style={{ color: '#22177A', fontWeight: 700 }}>{mandat.titrePoste}</span>
-      </div>
+    <div className="fiche-root" style={{ position: 'relative', fontFamily: MANROPE, height: '100%', display: 'flex', overflow: 'hidden', background: 'radial-gradient(1100px 460px at 82% -12%, rgba(230,233,175,.5), transparent 60%), radial-gradient(680px 380px at 4% 2%, rgba(34,23,122,.05), transparent 60%), #F4F4EA' }}>
+      {/* ═══════════ MAIN ═══════════ */}
+      <main className="scrollcol" style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden', padding: '30px 36px 26px' }}>
+        {/* Breadcrumb */}
+        <div className="rise" style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5, color: FAINT, fontWeight: 600, animationDelay: '.02s' }}>
+          <span onClick={() => navigate('/mandats')} style={{ color: MUTED, cursor: 'pointer' }}>Mandats</span>
+          <span style={{ color: '#C4C1D0' }}>›</span>
+          <span style={{ color: NAVY, fontWeight: 700 }}>{mandat.titrePoste}</span>
+        </div>
 
-      {/* ── HEADER : titre + chips + actions ── */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap', marginTop: 8 }}>
-        <div>
-          <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 30, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1.05 }}>
-            {mandat.titrePoste}
-          </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginTop: 8, flexWrap: 'wrap' }}>
-            <span
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: '#4A4568', cursor: 'pointer' }}
-              onClick={() => navigate(`/entreprises/${mandat.entreprise.id}`)}
-            >
-              <Building2 size={14} color="#22177A" strokeWidth={2} />
-              {mandat.entreprise.nom}
-            </span>
-            <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#C4C1D0' }} />
-            <span
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '4px 11px',
-                background: st.bg, color: st.fg,
-              }}
-            >
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.dot }} />
-              {statutLabels[mandat.statut]}
-            </span>
-            <span
-              style={{
-                fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '4px 11px',
-                background: 'rgba(34,23,122,0.06)', color: '#5A5470',
-              }}
-            >
-              Priorité {prioriteLabels[mandat.priorite].toLowerCase()}
-            </span>
+        {/* Hero */}
+        <div className="rise" style={{ display: 'flex', alignItems: 'flex-start', gap: 20, marginTop: 10, animationDelay: '.06s' }}>
+          <span style={{ flexShrink: 0, width: 64, height: 64, borderRadius: 18, background: '#F2F3D8', border: '1px solid rgba(34,23,122,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: ARCHIVO, fontSize: 19, letterSpacing: '-.02em', color: NAVY }}>
+            {companyInitials(mandat.entreprise.nom)}
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <h1 style={{ fontFamily: ARCHIVO, fontSize: 29, letterSpacing: '-.035em', color: INK, lineHeight: 1.05 }}>{mandat.titrePoste}</h1>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11.5, fontWeight: 800, borderRadius: 999, padding: '5px 12px', background: sPill.bg, color: sPill.fg }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: sPill.dot }} />{statutLabels[mandat.statut]}
+              </span>
+              <span style={{ fontSize: 11.5, fontWeight: 700, borderRadius: 6, padding: '4px 10px', background: '#EDEAF9', color: '#5B4B9E' }}>Priorité {prioriteLabels[mandat.priorite].toLowerCase()}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 6, fontSize: 14, color: TERTIARY, flexWrap: 'wrap' }}>
+              <a onClick={() => navigate(`/entreprises/${mandat.entreprise.id}`)} style={{ color: NAVY, fontWeight: 700, borderBottom: '1.5px solid rgba(34,23,122,.25)', cursor: 'pointer' }}>{mandat.entreprise.nom}</a>
+              {mandat.localisation && (<><span style={{ width: 3, height: 3, borderRadius: '50%', background: '#C4C1D0' }} /><span>{mandat.localisation}</span></>)}
+              {mandat.entreprise.secteur && (<><span style={{ width: 3, height: 3, borderRadius: '50%', background: '#C4C1D0' }} /><span>{mandat.entreprise.secteur}</span></>)}
+            </div>
+          </div>
+          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button className="btn" onClick={() => setPubOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, background: published ? '#EAF3EC' : '#fff', color: published ? '#2C6B3F' : SECONDARY, border: `1px solid ${published ? 'rgba(59,154,84,.3)' : 'rgba(34,23,122,0.16)'}`, borderRadius: 10, padding: '9px 13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <Globe size={13} /> {published ? 'Publiée' : 'Publier'}
+            </button>
+            <button className="btn" onClick={() => setAccessOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, background: '#F0EFC4', color: NAVY, border: '1px solid transparent', borderRadius: 10, padding: '9px 13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <Users size={13} /> Gérer l'accès
+            </button>
+            <button className="btn" onClick={() => setShowDeleteModal(true)} title="Supprimer le mandat" style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 10, border: '1px solid rgba(179,38,30,.18)', background: '#fff', color: '#B3261E', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Trash2 size={15} />
+            </button>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          {isEditing ? (
+
+        {/* KPI tiles */}
+        <div className="rise" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 11, marginTop: 20, animationDelay: '.1s' }}>
+          {kpis.map((k) => (
+            <div key={k.label} className="kpi" style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 14, padding: '15px 17px', boxShadow: CARD_SHADOW }}>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: FAINT }}>{k.label}</div>
+              <div style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 23, letterSpacing: '-.035em', color: k.color, marginTop: 7, whiteSpace: 'nowrap' }}>{k.value}</div>
+              <div style={{ fontSize: 11, color: FAINT, marginTop: 2 }}>{k.note}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Segmented people bar */}
+        <div className="rise" style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap', background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 14, boxShadow: CARD_SHADOW, marginTop: 11, padding: 4, animationDelay: '.14s' }}>
+          {/* Contact client */}
+          <div className="row" onClick={() => navigate(`/clients/${mandat.client.id}`)} style={{ flex: '1 1 220px', minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 13px', borderRadius: 11, cursor: 'pointer' }}>
+            <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: '50%', background: '#8E7CC3', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MANROPE, fontWeight: 800, fontSize: 10.5 }}>{getInitials(mandat.client.prenom, mandat.client.nom)}</span>
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: 9.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: FAINT }}>Contact client</span>
+              <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: INK, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${mandat.client.prenom || ''} ${mandat.client.nom}`.trim()}</span>
+            </span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C4C1D0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginLeft: 'auto' }}><path d="m9 6 6 6-6 6" /></svg>
+          </div>
+          <span style={{ width: 1, height: 28, background: 'rgba(34,23,122,.09)' }} />
+
+          {!editTeam ? (
             <>
-              <button
-                onClick={handleSave}
-                disabled={updateMutation.isPending}
-                className="btn-primary"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer', border: 'none' }}
-              >
-                <Save size={15} />
-                Enregistrer
-              </button>
-              <button
-                onClick={handleCancelEdit}
-                disabled={updateMutation.isPending}
-                className="btn-secondary"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer' }}
-              >
-                <X size={15} />
-                Annuler
-              </button>
+              {/* Commercial */}
+              <div className="row" onClick={() => setEditTeam(true)} style={{ flex: '1 1 200px', minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 13px', borderRadius: 11, cursor: 'pointer' }}>
+                <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: '50%', background: NAVY, color: LIME, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MANROPE, fontWeight: 800, fontSize: 10.5 }}>{nameInitials(teamView.commercial)}</span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 9.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: FAINT }}>Commercial</span>
+                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: INK, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{teamView.commercial || 'Non assigné'}</span>
+                </span>
+              </div>
+              <span style={{ width: 1, height: 28, background: 'rgba(34,23,122,.09)' }} />
+              {/* Recruteur */}
+              <div className="row" onClick={() => setEditTeam(true)} style={{ flex: '1 1 200px', minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 13px', borderRadius: 11, cursor: 'pointer', background: needsRecruteur ? '#FBF3E7' : undefined }}>
+                <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: '50%', background: teamView.recruteur ? '#8E7CC3' : 'rgba(142,124,195,.25)', color: teamView.recruteur ? '#fff' : '#8E7CC3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MANROPE, fontWeight: 800, fontSize: 10.5 }}>{teamView.recruteur ? nameInitials(teamView.recruteur) : '—'}</span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 9.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: FAINT }}>Recruteur{needsRecruteur ? <span style={{ color: '#B47814' }}> · à assigner</span> : null}</span>
+                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: teamView.recruteur ? INK : (needsRecruteur ? '#8A6A2E' : FAINT), marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{teamView.recruteur || 'Non assigné'}</span>
+                </span>
+              </div>
             </>
           ) : (
-            <>
-              <button
-                onClick={() => navigate(`/mandats/${id}/kanban`)}
-                className="btn-primary"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer', border: 'none' }}
-              >
-                <LayoutGrid size={15} />
-                Voir le Kanban
-              </button>
-              {bookingSettings?.isActive && bookingSettings?.slug && mandat.slug && (
-                <button
-                  onClick={handleCopyBookingLink}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 700,
-                    background: '#F0EFC4', color: '#22177A', border: '1px solid transparent',
-                    borderRadius: 11, padding: '10px 15px', cursor: 'pointer',
-                  }}
-                >
-                  {bookingCopied ? <Check size={15} className="text-green-500" /> : <Link2 size={15} />}
-                  {bookingCopied ? 'Copié !' : 'Lien booking'}
-                </button>
+            <div style={{ flex: '1 1 420px', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 13px', flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 170 }}>
+                <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: FAINT, marginBottom: 4 }}>Commercial</div>
+                <PlainSelect value={teamView.commercial} onChange={setCommercial} options={withCurrent(COM_OPTIONS, teamView.commercial)} />
+              </div>
+              <div style={{ minWidth: 170 }}>
+                <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: needsRecruteur ? '#B47814' : FAINT, marginBottom: 4 }}>Recruteur{needsRecruteur ? ' · à assigner' : ''}</div>
+                <PlainSelect value={teamView.recruteur} onChange={setRecruteur} options={withCurrent(REC_OPTIONS, teamView.recruteur || '')} />
+              </div>
+            </div>
+          )}
+
+          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, paddingRight: 9, marginLeft: 'auto' }}>
+            <button onClick={toggleSigned} style={signedBtnStyle}>{teamView.signed ? 'Signé' : 'Non signé'}</button>
+            <button onClick={() => setEditTeam((v) => !v)} style={editTeamBtnStyle}>
+              {editTeam ? <><Check size={12} /> Terminé</> : <><Pencil size={12} /> Éditer</>}
+            </button>
+          </div>
+        </div>
+
+        {/* Pipeline candidats */}
+        <div className="rise" style={{ background: '#fff', border: '1px solid rgba(34,23,122,0.08)', borderRadius: 18, padding: '22px 24px', boxShadow: '0 1px 2px rgba(34,23,122,0.04), 0 20px 44px -36px rgba(34,23,122,.5)', marginTop: 14, animationDelay: '.2s' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <a onClick={() => navigate(`/mandats/${id}/kanban`)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: MANROPE, fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: INK }}>
+              Pipeline candidats <ArrowRight size={14} color={NAVY} />
+            </a>
+            <button onClick={() => navigate(`/mandats/${id}/kanban`)} style={{ fontFamily: MANROPE, fontWeight: 700, fontSize: 11.5, borderRadius: 999, padding: '6px 13px', cursor: 'pointer', border: 'none', background: '#F0EFC4', color: NAVY }}>Voir le Kanban</button>
+          </div>
+
+          <div className="scrollcol" style={{ overflowX: 'auto', marginTop: 14, paddingBottom: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(0,1fr))', gap: 12, minWidth: 1180, alignItems: 'start' }}>
+              {pipelineOrder.map((stage) => {
+                const cands = mandat.candidatures.filter((c) => c.stage === stage);
+                const active = cands.length > 0;
+                const shown = cands.slice(0, 6);
+                const more = Math.max(0, cands.length - shown.length);
+                return (
+                  <div key={stage} style={{ background: active ? '#FCFCF5' : 'rgba(252,252,245,.5)', border: `1px solid ${active ? 'rgba(34,23,122,.11)' : 'rgba(34,23,122,.06)'}`, borderRadius: 14, padding: '14px 13px 16px', minHeight: 520 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 5 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: stageColors[stage], flexShrink: 0 }} />
+                        <span style={{ fontFamily: MANROPE, fontSize: 10, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: TERTIARY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stageLabels[stage]}</span>
+                      </span>
+                      <span style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 13, color: active ? INK : '#C4C1D0', flexShrink: 0 }}>{cands.length}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 11 }}>
+                      {shown.map((c, j) => {
+                        const [avBg, avFg] = PIPE_AV[j % 3];
+                        return (
+                          <div key={c.id} className="kcard" onClick={() => navigate(`/candidats/${c.candidat.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 9, background: '#fff', border: '1px solid rgba(34,23,122,.1)', borderRadius: 11, padding: '11px 12px', boxShadow: '0 1px 2px rgba(34,23,122,.05)', cursor: 'grab' }}>
+                            <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: '50%', background: avBg, color: avFg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MANROPE, fontWeight: 800, fontSize: 11 }}>{getInitials(c.candidat.prenom, c.candidat.nom)}</span>
+                            <span style={{ minWidth: 0, flex: 1 }}>
+                              <span style={{ display: 'block', fontSize: 13, fontWeight: 800, color: INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${c.candidat.prenom || ''} ${c.candidat.nom}`.trim()}</span>
+                              <span style={{ display: 'block', fontSize: 11, color: '#8A8699', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.candidat.posteActuel || 'Poste non renseigné'}</span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {more > 0 && <span style={{ fontSize: 10, fontWeight: 800, color: '#8A8699', paddingLeft: 3 }}>+{more} autres</span>}
+                      {!active && <span style={{ display: 'block', height: 56, border: '1px dashed rgba(34,23,122,.14)', borderRadius: 11 }} />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* ═══════════ RAIL ═══════════ */}
+      <aside data-rail className="rail" style={{ width: 400, flexShrink: 0, borderLeft: '1px solid rgba(34,23,122,.1)', background: '#fff', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ flexShrink: 0, display: 'flex', gap: 5, padding: '16px 18px 13px', borderBottom: '1px solid rgba(34,23,122,.09)', overflowX: 'auto' }}>
+          {railTabsDef.map(([k, l]) => (
+            <button key={k} onClick={() => setRailTab(k)} style={{ fontFamily: MANROPE, fontWeight: 700, fontSize: 12.5, padding: '7px 14px', borderRadius: 999, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', ...(railTab === k ? { background: NAVY, color: LIME } : { background: 'transparent', color: MUTED }) }}>{l}</button>
+          ))}
+        </div>
+
+        <div className="scrollcol" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 18px 22px' }}>
+          {/* Le brief */}
+          {railTab === 'brief' && (
+            <div className="rise">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ fontFamily: ARCHIVO, fontSize: 16, color: INK }}>Le brief</div>
+                {!isEditing ? (
+                  <button onClick={handleStartEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: NAVY, background: '#F7F7EF', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 9, padding: '5px 11px', cursor: 'pointer' }}><Pencil size={12} /> Éditer</button>
+                ) : (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={handleSave} disabled={updateMutation.isPending} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: LIME, background: NAVY, border: 'none', borderRadius: 9, padding: '5px 11px', cursor: 'pointer', opacity: updateMutation.isPending ? 0.6 : 1 }}>{updateMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Enregistrer</button>
+                    <button onClick={handleCancelEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: MUTED, background: '#F5F4EA', border: 'none', borderRadius: 9, padding: '5px 11px', cursor: 'pointer' }}><X size={12} /> Annuler</button>
+                  </div>
+                )}
+              </div>
+
+              {isEditing && editForm ? (
+                <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <Input label="Titre du poste" value={editForm.titrePoste} onChange={setField('titrePoste')} placeholder="Titre du poste" />
+                  <Textarea label="Description" value={editForm.description} onChange={setField('description')} placeholder="Description du poste..." />
+                  <Input label="Localisation" value={editForm.localisation} onChange={setField('localisation')} placeholder="Lyon (69)" />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <Input label="Salaire min (EUR)" type="number" value={editForm.salaireMin} onChange={setField('salaireMin')} placeholder="45000" />
+                    <Input label="Salaire max (EUR)" type="number" value={editForm.salaireMax} onChange={setField('salaireMax')} placeholder="65000" />
+                  </div>
+                  <Input label="Fee %" type="number" value={editForm.feePourcentage} onChange={setField('feePourcentage')} placeholder="20" />
+                  <Select label="Priorité" options={prioriteOptions} value={editForm.priorite} onChange={(val) => setEditForm((prev) => (prev ? { ...prev, priorite: val } : prev))} />
+                  <Select label="Statut" options={statutOptions} value={editForm.statut} onChange={(val) => setEditForm((prev) => (prev ? { ...prev, statut: val } : prev))} />
+                </div>
+              ) : (
+                <>
+                  {mandat.description ? (
+                    <p style={{ fontSize: 14.5, lineHeight: 1.68, color: SECONDARY, marginTop: 12, whiteSpace: 'pre-wrap' }}>{mandat.description}</p>
+                  ) : (
+                    <p style={{ fontSize: 13.5, color: FAINT, marginTop: 12 }}>Aucune description renseignée.</p>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '10px 20px', marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(34,23,122,0.07)' }}>
+                    <div><div style={fieldLabel}>Localisation</div><div style={fieldValue}>{mandat.localisation || '—'}</div></div>
+                    <div><div style={fieldLabel}>Secteur</div><div style={fieldValue}>{mandat.entreprise.secteur || '—'}</div></div>
+                    <div><div style={fieldLabel}>Ouvert le</div><div style={fieldValue}>{formatDate(mandat.dateOuverture)}</div></div>
+                    <div><div style={fieldLabel}>Salaire</div><div style={fieldValue}>{salaireLabel}</div></div>
+                  </div>
+
+                  {mandat.ficheDePoste && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18, padding: '11px 13px', background: '#FCFCF5', border: '1px solid rgba(34,23,122,0.1)', borderRadius: 12, cursor: 'pointer' }}>
+                      <span style={{ width: 38, height: 38, borderRadius: 10, background: '#F1EDF9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FileText size={17} color="#8E7CC3" /></span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Fiche de poste</div>
+                        <div style={{ fontSize: 12, color: FAINT }}>Document joint</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {contract && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, padding: '11px 13px', background: '#FCFCF5', border: '1px solid rgba(34,23,122,0.1)', borderRadius: 12, cursor: 'pointer' }}>
+                      <span style={{ width: 38, height: 38, borderRadius: 10, background: contract.status === 'signed' ? '#EAF3EC' : '#FBF0DE', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FileText size={17} color={contract.status === 'signed' ? '#3B9A54' : '#B4791A'} /></span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{contract.name}</div>
+                        <div style={{ fontSize: 12, color: FAINT }}>Contrat de mandat · {contract.status === 'signed' ? `Signé le ${new Date(contract.at).toLocaleDateString('fr-FR')}` : `Envoyé le ${new Date(contract.at).toLocaleDateString('fr-FR')}`}</div>
+                      </div>
+                      <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: '3px 9px', background: contract.status === 'signed' ? '#EAF3EC' : '#FBF0DE', color: contract.status === 'signed' ? '#2C6B3F' : '#B4791A' }}>{contract.status === 'signed' ? 'Signé' : 'En attente'}</span>
+                    </div>
+                  )}
+                </>
               )}
-              <button
-                onClick={handleStartEdit}
-                title="Modifier"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: 40, height: 40, background: '#fff', color: '#4A4568',
-                  border: '1px solid rgba(34,23,122,0.16)', borderRadius: 11, cursor: 'pointer',
-                }}
-              >
-                <Pencil size={15} />
-              </button>
-              <button
-                onClick={() => cloneMutation.mutate()}
-                disabled={cloneMutation.isPending}
-                title="Dupliquer"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: 40, height: 40, background: '#fff', color: '#4A4568',
-                  border: '1px solid rgba(34,23,122,0.16)', borderRadius: 11, cursor: 'pointer',
-                }}
-              >
-                <Copy size={15} />
-              </button>
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                title="Supprimer"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: 40, height: 40, background: '#fff', color: '#B3261E',
-                  border: '1px solid rgba(179,38,30,0.2)', borderRadius: 11, cursor: 'pointer',
-                }}
-              >
-                <Trash2 size={15} />
-              </button>
-            </>
+            </div>
+          )}
+
+          {/* Notes */}
+          {railTab === 'notes' && (
+            <div className="rise">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Pencil size={15} color={NAVY} />
+                <span style={{ fontFamily: ARCHIVO, fontSize: 15, color: INK }}>Notes internes</span>
+              </div>
+              <textarea
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+                placeholder="Ajoutez une note sur ce mandat : contexte, exigences du client, points d'attention…"
+                style={{ width: '100%', minHeight: 110, resize: 'vertical', marginTop: 12, fontFamily: MANROPE, fontSize: 13.5, lineHeight: 1.55, padding: '12px 14px', borderRadius: 12, border: '1.5px solid rgba(34,23,122,0.14)', background: '#FCFCF5', color: INK, outline: 'none' }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10 }}>
+                <span style={{ fontSize: 11.5, color: FAINT }}>Visible par l'équipe HumanUp uniquement.</span>
+                <button onClick={() => updateMutation.mutate({ notes: notesDraft.trim() || null })} disabled={updateMutation.isPending} style={{ fontFamily: MANROPE, fontWeight: 700, fontSize: 13, background: NAVY, color: LIME, border: 'none', borderRadius: 10, padding: '9px 18px', cursor: 'pointer', opacity: updateMutation.isPending ? 0.6 : 1 }}>Enregistrer</button>
+              </div>
+            </div>
+          )}
+
+          {/* Activité interne */}
+          {railTab === 'int' && (
+            <div className="rise">
+              <div style={{ fontFamily: ARCHIVO, fontSize: 15, color: INK, marginBottom: 8 }}>Activité interne</div>
+              <MandatTimeline mandatId={mandat.id} />
+            </div>
+          )}
+
+          {/* Activité client */}
+          {railTab === 'cli' && (
+            <div className="rise">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ fontFamily: ARCHIVO, fontSize: 15, color: INK }}>Activité client</div>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, color: clientActivity.statusColor }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: clientActivity.statusColor }} />{clientActivity.statusLabel}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginTop: 13 }}>
+                <span style={{ width: 36, height: 36, borderRadius: '50%', background: '#8E7CC3', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: ARCHIVO, fontSize: 12 }}>{getInitials(mandat.client.prenom, mandat.client.nom)}</span>
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 800, color: INK }}>{`${mandat.client.prenom || ''} ${mandat.client.nom}`.trim()}</div>
+                  <div style={{ fontSize: 11.5, color: '#8A8699' }}>{clientActivity.lastSeen}</div>
+                </div>
+              </div>
+              {clientActivity.items.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginTop: 13, paddingTop: 13, borderTop: '1px solid rgba(34,23,122,0.07)' }}>
+                  {clientActivity.items.map((ev, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 10 }}>
+                      <span style={{ flexShrink: 0, width: 8, height: 8, borderRadius: '50%', background: ev.dot, marginTop: 5 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: INK }}>{ev.label}</span>
+                          <span style={{ fontSize: 11, color: FAINT, flexShrink: 0 }}>{ev.time}</span>
+                        </div>
+                        {ev.hasDetail && <div style={{ fontSize: 11.5, color: TERTIARY, marginTop: 1 }}>{ev.detail}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ marginTop: 13, paddingTop: 13, borderTop: '1px solid rgba(34,23,122,0.07)', fontSize: 12, color: FAINT }}>Le client n'a pas encore ouvert son espace.</div>
+              )}
+              <button onClick={() => setRefreshTick((t) => t + 1)} style={{ width: '100%', marginTop: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontFamily: MANROPE, fontWeight: 700, fontSize: 12, color: NAVY, background: 'transparent', border: '1px solid rgba(34,23,122,0.16)', borderRadius: 10, padding: 8, cursor: 'pointer' }}><RefreshCw size={13} /> Rafraîchir</button>
+            </div>
           )}
         </div>
-      </div>
+      </aside>
 
-      {/* ── STATS BAR : 5 KPI horizontaux (Fee/Salaire/Candidats/Ouvert depuis/Échéance) ── */}
-      <div
-        style={{
-          display: 'flex', alignItems: 'stretch',
-          background: '#fff', border: '1px solid rgba(34,23,122,0.08)',
-          borderRadius: 14, boxShadow: '0 1px 2px rgba(34,23,122,0.04)',
-          marginTop: 12, overflow: 'hidden',
-        }}
-      >
-        <StatsCell
-          label="Fee estimé"
-          value={formatEuros(mandat.feeMontantEstime)}
-          valueColor="#22177A"
-          foot={feePercent > 0 ? `${feePercent} % du package` : '—'}
-        />
-        <StatsCellDivider />
-        <StatsCell
-          label="Salaire"
-          value={salaireMax ? formatEuros(salaireMax) : '—'}
-          valueColor="#1A1533"
-          foot="package annuel"
-        />
-        <StatsCellDivider />
-        <StatsCell
-          label="Candidats"
-          value={String(candidatsCount)}
-          valueColor="#1A1533"
-          foot="en pipeline"
-        />
-        <StatsCellDivider />
-        <StatsCell
-          label="Ouvert depuis"
-          value={`${daysOpen} j`}
-          valueColor="#1A1533"
-          foot={`créé le ${formatDateShort(mandat.dateOuverture)}`}
-        />
-        <StatsCellDivider />
-        <StatsCell
-          label="Échéance"
-          value={mandat.dateCloture ? formatDateShort(mandat.dateCloture) : '—'}
-          valueColor={mandat.dateCloture ? '#B4791A' : '#8A8699'}
-          foot={mandat.dateCloture ? `deadline` : 'pas de deadline'}
-        />
-      </div>
+      {/* ═══════════ MODAL · GÉRER L'ACCÈS ═══════════ */}
+      {accessOpen && (
+        <div onClick={() => setAccessOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(26,21,51,.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 520, maxWidth: '100%', maxHeight: '88vh', overflowY: 'auto', background: '#fff', borderRadius: 20, boxShadow: '0 40px 90px -40px rgba(26,21,51,0.6)', padding: 26 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ fontFamily: ARCHIVO, fontSize: 20, letterSpacing: '-0.02em', color: INK }}>Gérer l'accès client</div>
+                <div style={{ fontSize: 13, color: '#8A8699', marginTop: 4 }}>Plusieurs contacts de {mandat.entreprise.nom} peuvent suivre ce mandat, chacun avec son login.</div>
+              </div>
+              <button onClick={() => setAccessOpen(false)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer', flexShrink: 0 }}>✕</button>
+            </div>
 
-      {/* ══════════════════════════════════════════════════
-       * BODY : mock-fidelity 3-column layout (1.45fr / 1fr / 1fr)
-       * ══════════════════════════════════════════════════ */}
-      {!isEditing && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.45fr 1fr 1fr', gap: 14, marginTop: 14, alignItems: 'start' }}>
-          {/* ── COL 1 · LE POSTE ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <LeBriefCard mandat={mandat} onStartEdit={handleStartEdit} />
-            <ProcessRecrutementCard mandat={mandat} onOpenKanban={() => navigate(`/mandats/${id}/kanban`)} />
-          </div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8699', marginTop: 22 }}>Contacts avec accès</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 12 }}>
+              {access.length === 0 && <div style={{ fontSize: 13, color: FAINT }}>Aucun contact n'a encore d'accès.</div>}
+              {access.map((c, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', border: '1px solid rgba(34,23,122,0.1)', borderRadius: 13 }}>
+                  <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: '50%', background: '#8E7CC3', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: ARCHIVO, fontSize: 12 }}>{nameInitials(c.name)}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>{c.name} <span style={{ fontSize: 11, fontWeight: 700, color: NAVY, background: '#F2F3D8', borderRadius: 999, padding: '2px 8px', marginLeft: 4 }}>{c.role}</span></div>
+                    <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{c.email} · mdp : <strong style={{ color: NAVY, fontFamily: 'monospace' }}>{c.pwd}</strong></div>
+                  </div>
+                  <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: '4px 10px', background: c.sentAt ? '#EAF3EC' : '#FBF3E7', color: c.sentAt ? '#2C6B3F' : '#8A6A2E', whiteSpace: 'nowrap' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: c.sentAt ? '#3B9A54' : '#E08A2B' }} />{c.sentAt ? `invité ${new Date(c.sentAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}` : 'non invité'}</span>
+                    <button onClick={() => resendInvite(i)} title="Renvoyer l'invitation" style={{ width: 30, height: 30, borderRadius: 9, color: NAVY, background: '#fff', border: '1px solid rgba(34,23,122,0.16)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><RefreshCw size={13} /></button>
+                    <button onClick={() => revokeAccess(i)} style={{ fontSize: 12.5, fontWeight: 700, color: '#B3261E', background: 'transparent', border: '1px solid rgba(179,38,30,0.25)', borderRadius: 9, padding: '7px 12px', cursor: 'pointer' }}>Révoquer</button>
+                  </div>
+                </div>
+              ))}
+            </div>
 
-          {/* ── COL 2 · NOTES + CLIENT ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <NotesInternesCard mandat={mandat} onSave={(notes) => updateMutation.mutate({ notes })} saving={updateMutation.isPending} />
-            <ContactClientCardMock client={mandat.client} entrepriseNom={mandat.entreprise.nom} onOpen={() => navigate(`/clients/${mandat.client.id}`)} />
-          </div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8699', marginTop: 22 }}>Inviter un contact</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10, marginTop: 12 }}>
+              <input value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Nom & prénom" style={modalInputStyle} />
+              <div style={{ position: 'relative' }}>
+                <select value={cRole} onChange={(e) => setCRole(e.target.value)} style={{ ...modalInputStyle, appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', paddingRight: 34, cursor: 'pointer' }}>
+                  {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <ChevronDown size={14} color="#8A8699" style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+              </div>
+              <input value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="Email professionnel" style={{ ...modalInputStyle, gridColumn: '1 / -1' }} />
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, padding: '11px 13px', background: '#FCFCF5', border: '1px solid rgba(34,23,122,0.1)', borderRadius: 11, cursor: 'pointer' }}>
+              <span onClick={() => setInviteMail((v) => !v)} style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: `1.5px solid ${inviteMail ? NAVY : 'rgba(34,23,122,.25)'}`, background: inviteMail ? LIME : '#fff' }}>{inviteMail && <Check size={12} color={NAVY} strokeWidth={3.2} />}</span>
+              <Mail size={15} color="#5B4B9E" />
+              <span style={{ fontSize: 13, color: SECONDARY }}>Envoyer l'<strong style={{ color: INK }}>email d'invitation</strong> avec le lien et les identifiants</span>
+            </label>
 
-          {/* ── COL 3 · ACTIVITÉ ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <ClientActivityCard
-              client={mandat.client}
-              entrepriseNom={mandat.entreprise.nom}
-              onOpenClient={() => navigate(`/clients/${mandat.client.id}`)}
-            />
-            <ActiviteInterneMockCard mandatId={mandat.id} />
+            {inviteMail ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, margin: '14px 0 6px' }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.11em', textTransform: 'uppercase', color: '#8A8699' }}>Aperçu de l'email</span>
+                  <span style={{ fontSize: 11, color: FAINT, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 260 }}>objet : {inviteSubject}</span>
+                </div>
+                <pre style={{ maxHeight: 150, overflowY: 'auto', margin: 0, fontFamily: MANROPE, fontSize: 12.5, lineHeight: 1.62, color: SECONDARY, whiteSpace: 'pre-wrap', background: '#FCFCF5', border: '1px solid rgba(34,23,122,0.11)', borderRadius: 12, padding: '13px 15px' }}>{inviteBody}</pre>
+              </>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 11, fontSize: 12, color: '#8A8699' }}><Info size={14} /> L'accès est créé mais rien n'est envoyé — à vous de transmettre les identifiants.</div>
+            )}
+            <button onClick={addContact} style={{ width: '100%', marginTop: 16, fontFamily: MANROPE, fontWeight: 700, fontSize: 15, background: NAVY, color: LIME, border: 'none', borderRadius: 12, padding: 14, cursor: 'pointer' }}>{inviteMail ? "Créer l'accès & envoyer l'invitation" : "Créer l'accès"}</button>
           </div>
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════
-       * ADVANCED SECTIONS (stackées sous le body — préservées)
-       * ══════════════════════════════════════════════════ */}
-      <motion.div className="grid grid-cols-1 gap-6 lg:grid-cols-3 mt-8" variants={detailStagger} initial="hidden" animate="show">
-        {/* Main info */}
-        <motion.div className="lg:col-span-2 space-y-6" variants={detailItem}>
-          <Card>
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">Informations du mandat</h2>
-            {isEditing && editForm ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <Input label="Titre du poste" value={editForm.titrePoste} onChange={setField('titrePoste')} placeholder="Titre du poste" />
-                </div>
-                <Input label="Localisation" value={editForm.localisation} onChange={setField('localisation')} placeholder="Paris, France" />
-                <Input label="Salaire min (EUR)" type="number" value={editForm.salaireMin} onChange={setField('salaireMin')} placeholder="45000" />
-                <Input label="Salaire max (EUR)" type="number" value={editForm.salaireMax} onChange={setField('salaireMax')} placeholder="65000" />
-                <Input label="Fee %" type="number" value={editForm.feePourcentage} onChange={setField('feePourcentage')} placeholder="20" />
-                <Select
-                  label="Priorité"
-                  options={prioriteOptions}
-                  value={editForm.priorite}
-                  onChange={(val) => setEditForm((prev) => prev ? { ...prev, priorite: val } : prev)}
-                />
-                <Select
-                  label="Statut"
-                  options={statutOptions}
-                  value={editForm.statut}
-                  onChange={(val) => setEditForm((prev) => prev ? { ...prev, statut: val } : prev)}
-                />
-                <Select
-                  label="Sales (chasse le mandat)"
-                  options={teamOptions}
-                  value={editForm.salesId}
-                  onChange={(val) => setEditForm((prev) => prev ? { ...prev, salesId: val } : prev)}
-                />
-                <Select
-                  label="Recruteur (source les candidats)"
-                  options={teamOptions}
-                  value={editForm.recruteurId}
-                  onChange={(val) => setEditForm((prev) => prev ? { ...prev, recruteurId: val } : prev)}
-                />
-                <div className="sm:col-span-2">
-                  <Textarea
-                    label="Description"
-                    value={editForm.description}
-                    onChange={setField('description')}
-                    placeholder="Description du poste..."
-                  />
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Building2 size={14} className="text-text-tertiary" />
-                    <span className="text-text-tertiary">Entreprise : </span>
-                    <span
-                      className="text-accent hover:underline cursor-pointer"
-                      onClick={() => navigate(`/entreprises/${mandat.entreprise.id}`)}
-                    >
-                      {mandat.entreprise.nom}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <User size={14} className="text-text-tertiary" />
-                    <span className="text-text-tertiary">Client : </span>
-                    <span
-                      className="text-accent hover:underline cursor-pointer"
-                      onClick={() => navigate(`/clients/${mandat.client.id}`)}
-                    >
-                      {mandat.client.prenom} {mandat.client.nom}
-                    </span>
-                  </div>
-                  {mandat.localisation && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <MapPin size={14} className="text-text-tertiary" />
-                      <span className="text-text-primary">{mandat.localisation}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar size={14} className="text-text-tertiary" />
-                    <span className="text-text-primary">Ouvert le {formatDate(mandat.dateOuverture)}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <User size={14} className="text-text-tertiary" />
-                    <span className="text-text-tertiary">Sales : </span>
-                    <span className="text-text-primary">
-                      {mandat.sales
-                        ? [mandat.sales.prenom, mandat.sales.nom].filter(Boolean).join(' ')
-                        : '—'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <User size={14} className="text-text-tertiary" />
-                    <span className="text-text-tertiary">Recruteur : </span>
-                    <span className="text-text-primary">
-                      {mandat.recruteur
-                        ? [mandat.recruteur.prenom, mandat.recruteur.nom].filter(Boolean).join(' ')
-                        : '—'}
-                    </span>
-                  </div>
-                </div>
-
-                {mandat.description && (
-                  <div className="mt-4 border-t border-border pt-4">
-                    <h3 className="mb-2 text-sm font-medium text-text-primary">Description</h3>
-                    <p className="whitespace-pre-wrap text-sm text-text-secondary">{mandat.description}</p>
-                  </div>
-                )}
-              </>
-            )}
-          </Card>
-
-          {/* Brief Client Section */}
-          <BriefClientSection
-            mandatId={mandat.id}
-            transcript={mandat.transcript}
-            ficheDePoste={mandat.ficheDePoste}
-            scorecard={mandat.scorecard}
-            scorecardGeneratedAt={mandat.scorecardGeneratedAt}
-          />
-
-          {/* AI Matching Section */}
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
-                <Zap size={18} className="text-violet-500" /> AI Matching
-              </h2>
-              <button
-                onClick={() => matchingMutation.mutate()}
-                disabled={matchingMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-500 to-indigo-500 px-4 py-2 text-sm font-medium text-white transition-all hover:from-violet-600 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {matchingMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                Lancer le matching IA
-              </button>
-            </div>
-
-            {showMatching && matchResults.length > 0 && (
-              <div className="space-y-2">
-                {matchResults.map((match, idx) => (
-                  <div
-                    key={match.candidatId}
-                    className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-primary-50/30 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/candidats/${match.candidatId}`)}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-text-primary">
-                        {match.prenom} {match.nom}
-                      </p>
-                      <p className="text-xs text-text-secondary">
-                        {[match.posteActuel, match.entrepriseActuelle].filter(Boolean).join(' @ ') || 'Aucun poste renseigné'}
-                      </p>
-                      {match.reasons.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {match.reasons.slice(0, 3).map((r, i) => (
-                            <span key={i} className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] text-violet-600">{r}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="ml-3 flex items-center gap-1.5">
-                      <Star size={14} className="text-amber-400" />
-                      <span className="text-sm font-bold text-text-primary">{match.score}%</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {showMatching && matchResults.length === 0 && !matchingMutation.isPending && (
-              <p className="text-sm text-text-secondary">Aucun candidat correspondant trouvé. Essayez d'enrichir la scorecard.</p>
-            )}
-
-            {!showMatching && !matchingMutation.isPending && (
-              <p className="text-sm text-text-secondary">Lancez le matching IA pour trouver les meilleurs candidats de votre base pour ce mandat.</p>
-            )}
-          </Card>
-
-          <Card>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-text-primary">
-                Candidatures ({mandat.candidatures.length})
-              </h2>
-              <div className="relative" ref={addCandidatDropdownRef}>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => { setShowAddCandidat(!showAddCandidat); setCandidatSearch(''); setCandidatResults([]); }}
-                >
-                  <Plus size={14} /> Ajouter un candidat
-                </Button>
-
-                <AnimatePresence>
-                  {showAddCandidat && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4, scale: 0.97 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -4, scale: 0.97 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-border bg-white shadow-xl"
-                    >
-                      <div className="p-2">
-                        <div className="relative">
-                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-                          <input
-                            autoFocus
-                            type="text"
-                            value={candidatSearch}
-                            onChange={(e) => setCandidatSearch(e.target.value)}
-                            placeholder="Rechercher un candidat..."
-                            className="w-full rounded-lg border border-border bg-neutral-50 py-2 pl-9 pr-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500"
-                          />
-                        </div>
-                      </div>
-                      <div className="max-h-56 overflow-y-auto px-1 pb-1">
-                        {candidatSearchLoading ? (
-                          <div className="flex items-center justify-center py-4">
-                            <Loader2 size={16} className="animate-spin text-neutral-400" />
-                          </div>
-                        ) : candidatSearch.length < 2 ? (
-                          <p className="px-3 py-4 text-center text-xs text-neutral-400">Tapez au moins 2 caractères</p>
-                        ) : candidatResults.length === 0 ? (
-                          <p className="px-3 py-4 text-center text-sm text-neutral-400">Aucun résultat</p>
-                        ) : (
-                          candidatResults.map((c) => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              disabled={addCandidatMutation.isPending}
-                              onClick={() => addCandidatMutation.mutate(c.id)}
-                              className="w-full rounded-lg px-3 py-2.5 text-left hover:bg-primary-50 transition-colors group disabled:opacity-50"
-                            >
-                              <p className="text-sm font-medium text-text-primary group-hover:text-primary-700">
-                                {c.prenom} {c.nom}
-                              </p>
-                              <p className="text-xs text-text-secondary">
-                                {[c.posteActuel, c.entrepriseActuelle].filter(Boolean).join(' @ ') || 'Aucun poste'}
-                              </p>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-            {mandat.candidatures.length === 0 ? (
-              <p className="text-sm text-text-secondary">Aucun candidat associé pour le moment.</p>
-            ) : (
-              <div className="space-y-3">
-                {mandat.candidatures.map((c) => (
-                  <div
-                    key={c.id}
-                    className="flex items-center justify-between rounded-md border border-border p-3 hover:bg-primary-50/30 cursor-pointer"
-                    onClick={() => navigate(`/candidats/${c.candidat.id}`)}
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-text-primary">
-                        {c.candidat.prenom} {c.candidat.nom}
-                      </p>
-                      <p className="text-xs text-text-secondary">
-                        {[c.candidat.posteActuel, c.candidat.entrepriseActuelle]
-                          .filter(Boolean)
-                          .join(' @ ') || 'Aucun poste renseigné'}
-                      </p>
-                    </div>
-                    <Badge variant={stageBadgeVariant[c.stage] || 'default'}>
-                      {stageLabels[c.stage] || c.stage}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </motion.div>
-
-        {/* Sidebar */}
-        <motion.div className="space-y-6" variants={detailItem}>
-          <Card>
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">Détails</h2>
-            <dl className="space-y-3 text-sm">
-              <div>
-                <dt className="text-text-tertiary">Priorité</dt>
-                <dd className="mt-1">
-                  <Badge variant={prioriteVariant[mandat.priorite]}>
-                    {prioriteLabels[mandat.priorite]}
-                  </Badge>
-                </dd>
-              </div>
-              <div>
-                <dt className="text-text-tertiary">Salaire min</dt>
-                <dd className="font-medium text-text-primary">{formatSalary(mandat.salaireMin)}</dd>
-              </div>
-              <div>
-                <dt className="text-text-tertiary">Salaire max</dt>
-                <dd className="font-medium text-text-primary">{formatSalary(mandat.salaireMax)}</dd>
-              </div>
-              {mandat.dateCloture && (
+      {/* ═══════════ MODAL · PUBLIER L'OFFRE ═══════════ */}
+      {pubOpen && jForm && (
+        <div onClick={() => setPubOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(26,21,51,.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 26 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 1080, maxWidth: '100%', maxHeight: '90vh', overflow: 'hidden', display: 'flex', background: '#fff', borderRadius: 20, boxShadow: '0 40px 90px -40px rgba(26,21,51,0.6)' }}>
+            {/* FORM */}
+            <div className="scrollcol" style={{ width: 400, flexShrink: 0, overflowY: 'auto', padding: '24px 26px', borderRight: '1px solid rgba(34,23,122,0.09)', background: '#FCFCF5' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                 <div>
-                  <dt className="text-text-tertiary">Date de clôture</dt>
-                  <dd className="font-medium text-text-primary">{formatDate(mandat.dateCloture)}</dd>
+                  <div style={{ fontFamily: ARCHIVO, fontSize: 19, letterSpacing: '-0.02em', color: INK }}>Publier l'offre</div>
+                  <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 3 }}>Annonce anonyme sur humanup.io</div>
+                </div>
+                <button onClick={() => setPubOpen(false)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer', flexShrink: 0 }}>✕</button>
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 11, marginTop: 18, padding: '12px 14px', borderRadius: 12, background: pubDraft ? '#EAF3EC' : '#FCFCF5', border: `1px solid ${pubDraft ? 'rgba(59,154,84,.28)' : 'rgba(34,23,122,.1)'}`, cursor: 'pointer' }}>
+                <span onClick={() => setPubDraft((v) => !v)} style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: `1.5px solid ${pubDraft ? NAVY : 'rgba(34,23,122,.25)'}`, background: pubDraft ? LIME : '#fff' }}>{pubDraft && <Check size={12} color={NAVY} strokeWidth={3.2} />}</span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ display: 'block', fontSize: 13, fontWeight: 800, color: INK }}>{pubDraft ? 'Offre visible sur le site' : 'Offre hors ligne'}</span>
+                  <span style={{ display: 'block', fontSize: 11.5, color: pubDraft ? '#2C6B3F' : '#8A8699', marginTop: 2 }}>{pubDraft ? 'Publiée sur humanup.io/job-board, candidatures ouvertes.' : "Rien n'est visible publiquement."}</span>
+                </span>
+              </label>
+
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.11em', textTransform: 'uppercase', color: '#8A7F5A', marginTop: 20 }}>L'annonce</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginTop: 11 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10 }}>
+                  <div><label style={pubLabelStyle}>Référence</label><input value={jForm.jRef} onChange={setJField('jRef')} style={pubInputStyle} /></div>
+                  <div><label style={pubLabelStyle}>Secteur</label><input value={jForm.jSector} onChange={setJField('jSector')} style={pubInputStyle} /></div>
+                </div>
+                <div><label style={pubLabelStyle}>Intitulé du poste</label><input value={jForm.jTitle} onChange={setJField('jTitle')} style={pubInputStyle} /></div>
+                <div><label style={pubLabelStyle}>Descriptif anonyme de l'entreprise</label><input value={jForm.jCompany} onChange={setJField('jCompany')} style={pubInputStyle} /></div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10 }}>
+                  <div><label style={pubLabelStyle}>Contrat</label><input value={jForm.jContract} onChange={setJField('jContract')} style={pubInputStyle} /></div>
+                  <div><label style={pubLabelStyle}>Localisation</label><input value={jForm.jLoc} onChange={setJField('jLoc')} style={pubInputStyle} /></div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10 }}>
+                  <div><label style={pubLabelStyle}>Séniorité</label>
+                    <select value={jForm.jSen} onChange={setJField('jSen')} style={{ ...pubInputStyle, cursor: 'pointer' }}>{SEN_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+                  </div>
+                  <div><label style={pubLabelStyle}>Télétravail</label><input value={jForm.jRemote} onChange={setJField('jRemote')} style={pubInputStyle} /></div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10 }}>
+                  <div><label style={pubLabelStyle}>Fixe</label><input value={jForm.jFix} onChange={setJField('jFix')} style={pubInputStyle} /></div>
+                  <div><label style={pubLabelStyle}>Variable / autres</label><input value={jForm.jVar} onChange={setJField('jVar')} style={pubInputStyle} /></div>
+                </div>
+                <div><label style={pubLabelStyle}>Prise de poste</label><input value={jForm.jStart} onChange={setJField('jStart')} style={pubInputStyle} /></div>
+                <div><label style={pubLabelStyle}>Le poste</label><textarea value={jForm.jIntro} onChange={setJField('jIntro')} style={{ ...pubInputStyle, minHeight: 76, resize: 'vertical', lineHeight: 1.55 }} /></div>
+                <div><label style={pubLabelStyle}>Vos missions — une par ligne</label><textarea value={jForm.jMissions} onChange={setJField('jMissions')} style={{ ...pubInputStyle, minHeight: 88, resize: 'vertical', lineHeight: 1.55 }} /></div>
+                <div><label style={pubLabelStyle}>Profil recherché — une par ligne</label><textarea value={jForm.jProfile} onChange={setJField('jProfile')} style={{ ...pubInputStyle, minHeight: 76, resize: 'vertical', lineHeight: 1.55 }} /></div>
+                <div><label style={pubLabelStyle}>Process — « Étape :: détail », une par ligne</label><textarea value={jForm.jProcess} onChange={setJField('jProcess')} style={{ ...pubInputStyle, minHeight: 88, resize: 'vertical', lineHeight: 1.55 }} /></div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginTop: 16, padding: '11px 13px', background: '#F2F3D8', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 11 }}>
+                <Info size={14} color={NAVY} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span style={{ fontSize: 12, lineHeight: 1.5, color: SECONDARY }}>Le nom du client n'apparaît jamais. Les candidatures arrivent dans <strong>Sourcing</strong> du Kanban de ce mandat, marquées « Job board ».</span>
+              </div>
+
+              <button onClick={savePub} style={{ width: '100%', marginTop: 14, fontFamily: MANROPE, fontWeight: 700, fontSize: 15, background: NAVY, color: LIME, border: 'none', borderRadius: 12, padding: 14, cursor: 'pointer' }}>{published ? "Mettre à jour l'annonce" : "Publier l'offre"}</button>
+              {published && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: '10px 13px', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 10 }}>
+                  <Globe size={13} color={NAVY} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>humanup.io/job-board/{jForm.jRef.toLowerCase()}</span>
                 </div>
               )}
-              {bookingSettings?.isActive && bookingSettings?.slug && mandat.slug && (
-                <div>
-                  <dt className="text-text-tertiary">Lien booking</dt>
-                  <dd className="mt-1">
-                    <button
-                      onClick={handleCopyBookingLink}
-                      className="inline-flex items-center gap-1.5 text-[13px] text-violet-600 hover:text-violet-700 font-medium transition-colors"
-                    >
-                      <Link2 size={13} />
-                      ats.propium.co/book/{bookingSettings.slug}/{mandat.slug}
-                    </button>
-                  </dd>
+            </div>
+
+            {/* PREVIEW */}
+            <div className="scrollcol" style={{ flex: 1, minWidth: 0, overflowX: 'auto', overflowY: 'auto', background: '#FBFBF3', padding: '28px 32px 34px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: FAINT }}>HumanUp <span style={{ color: '#C4C1D0' }}>/</span> Job board <span style={{ color: '#C4C1D0' }}>/</span> <span style={{ color: NAVY }}>{jForm.jTitle.toUpperCase()}</span></div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(400px,1.5fr) minmax(280px,1fr)', gap: 26, marginTop: 18, alignItems: 'start', minWidth: 706 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', background: LIME, color: NAVY, borderRadius: 999, padding: '5px 12px' }}>{jForm.jSector}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: NAVY }} />Réf. {jForm.jRef} · publiée aujourd'hui</span>
+                  </div>
+                  <h1 style={{ fontFamily: ARCHIVO, fontSize: 38, lineHeight: 1.04, letterSpacing: '-0.035em', color: INK, marginTop: 14 }}>{jForm.jTitle}</h1>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 18, padding: '14px 16px', border: '1.5px dashed rgba(34,23,122,0.2)', borderRadius: 14, background: '#F7F7EE' }}>
+                    <span style={{ flexShrink: 0, width: 44, height: 44, borderRadius: 12, background: LIME, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg></span>
+                    <div style={{ minWidth: 0 }}><div style={{ fontSize: 15, fontWeight: 800, color: INK }}>Entreprise confidentielle</div><div style={{ fontSize: 12.5, color: TERTIARY, marginTop: 2 }}>{jForm.jCompany} · dévoilée après échange</div></div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9, marginTop: 16 }}>
+                    {jChips.map((ch, i) => <span key={i} style={{ fontSize: 12.5, fontWeight: 700, borderRadius: 999, padding: '8px 15px', background: ch.bg, color: ch.fg, border: `1px solid ${ch.bd}` }}>{ch.v}</span>)}
+                  </div>
+
+                  <div style={{ fontFamily: ARCHIVO, fontSize: 20, letterSpacing: '-0.02em', color: INK, marginTop: 26 }}>Le poste</div>
+                  <span style={{ display: 'block', width: 44, height: 3, borderRadius: 2, background: LIME, marginTop: 7 }} />
+                  <p style={{ fontSize: 14.5, lineHeight: 1.68, color: SECONDARY, marginTop: 13 }}>{jForm.jIntro}</p>
+
+                  <div style={{ fontFamily: ARCHIVO, fontSize: 20, letterSpacing: '-0.02em', color: INK, marginTop: 26 }}>Vos missions</div>
+                  <span style={{ display: 'block', width: 44, height: 3, borderRadius: 2, background: LIME, marginTop: 7 }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', marginTop: 13 }}>
+                    {jMissionList.map((ms, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 13, padding: '12px 0', borderBottom: '1px solid rgba(34,23,122,0.08)' }}>
+                        <span style={{ flexShrink: 0, fontFamily: MANROPE, fontWeight: 800, fontSize: 10.5, color: NAVY, background: '#F0EFC4', borderRadius: 6, padding: '3px 7px' }}>{ms.n}</span>
+                        <span style={{ fontSize: 14, lineHeight: 1.6, color: SECONDARY }}>{ms.t}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ fontFamily: ARCHIVO, fontSize: 20, letterSpacing: '-0.02em', color: INK, marginTop: 26 }}>Profil recherché</div>
+                  <span style={{ display: 'block', width: 44, height: 3, borderRadius: 2, background: LIME, marginTop: 7 }} />
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9, marginTop: 13 }}>
+                    {jProfileList.map((pr, i) => <span key={i} style={{ fontSize: 12.5, fontWeight: 700, borderRadius: 999, padding: '8px 15px', background: '#fff', color: SECONDARY, border: '1px solid rgba(34,23,122,0.16)' }}>{pr}</span>)}
+                  </div>
+
+                  <div style={{ fontFamily: ARCHIVO, fontSize: 20, letterSpacing: '-0.02em', color: INK, marginTop: 26 }}>Le process</div>
+                  <span style={{ display: 'block', width: 44, height: 3, borderRadius: 2, background: LIME, marginTop: 7 }} />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 11, marginTop: 14 }}>
+                    {jProcessList.map((pc, i) => (
+                      <div key={i} style={{ background: '#fff', border: '1px solid rgba(34,23,122,0.1)', borderRadius: 13, padding: 14 }}>
+                        <div style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 11, color: NAVY }}>{pc.n}</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: INK, marginTop: 8 }}>{pc.t}</div>
+                        <div style={{ fontSize: 11.5, lineHeight: 1.5, color: '#8A8699', marginTop: 4 }}>{pc.d}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              )}
-            </dl>
-          </Card>
 
-          <ContractCard mandat={mandat} />
+                {/* SIDE */}
+                <div style={{ minWidth: 0, position: 'relative', background: '#fff', border: '1px solid rgba(34,23,122,0.09)', borderRadius: 18, padding: '22px 24px', boxShadow: '0 24px 56px -40px rgba(34,23,122,0.5)', overflow: 'hidden' }}>
+                  <span aria-hidden style={{ position: 'absolute', top: -50, right: -40, width: 170, height: 170, borderRadius: '50%', background: 'radial-gradient(circle, rgba(230,233,175,0.5), transparent 70%)' }} />
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#8A8699' }}>Rémunération</div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 9 }}><span style={{ fontFamily: ARCHIVO, fontSize: 30, letterSpacing: '-0.03em', color: NAVY, whiteSpace: 'nowrap' }}>{jForm.jFix}</span><span style={{ fontSize: 13, color: '#8A8699' }}>fixe</span></div>
+                    <div style={{ fontSize: 12.5, color: TERTIARY, marginTop: 5 }}>{jForm.jVar}</div>
 
-          <PortalAccessCard mandatId={mandat.id} clientId={mandat.client.id} clientEmail={mandat.client.email} />
+                    <div style={{ height: 1, background: 'rgba(34,23,122,0.1)', margin: '18px 0' }} />
+                    {jFacts.map((ft, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '7px 0' }}><span style={{ fontSize: 13, color: TERTIARY }}>{ft.k}</span><span style={{ fontSize: 13, fontWeight: 800, color: INK, textAlign: 'right' }}>{ft.v}</span></div>
+                    ))}
 
-          <Card>
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">Facturation</h2>
-            <dl className="space-y-3 text-sm">
-              <div>
-                <dt className="text-text-tertiary">Fee %</dt>
-                <dd className="font-medium text-text-primary">{Number(mandat.feePourcentage)}%</dd>
+                    <button style={{ width: '100%', marginTop: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, fontFamily: MANROPE, fontWeight: 700, fontSize: 15, background: NAVY, color: LIME, border: 'none', borderRadius: 12, padding: 15, cursor: 'pointer' }}>Postuler à cette offre <ArrowRight size={16} color={LIME} /></button>
+                  </div>
+                </div>
               </div>
-              <div>
-                <dt className="text-text-tertiary">Fee estimé</dt>
-                <dd className="font-medium text-text-primary">{formatSalary(mandat.feeMontantEstime)}</dd>
-              </div>
-              <div>
-                <dt className="text-text-tertiary">Fee facturé</dt>
-                <dd className="font-medium text-text-primary">{formatSalary(mandat.feeMontantFacture)}</dd>
-              </div>
-              <div>
-                <dt className="text-text-tertiary">Statut facturation</dt>
-                <dd className="mt-1">
-                  <Badge variant={feeStatutVariant[mandat.feeStatut]}>
-                    {feeStatutLabels[mandat.feeStatut]}
-                  </Badge>
-                </dd>
-              </div>
-            </dl>
-          </Card>
+            </div>
+          </div>
+        </div>
+      )}
 
-          <Card>
-            <h2 className="mb-3 text-lg font-semibold text-text-primary">Notes</h2>
-            {isEditing && editForm ? (
-              <Textarea
-                value={editForm.notes}
-                onChange={setField('notes')}
-                placeholder="Notes sur le mandat..."
-              />
-            ) : mandat.notes ? (
-              <p className="whitespace-pre-wrap text-sm text-text-secondary">{mandat.notes}</p>
-            ) : (
-              <p className="text-sm text-text-secondary">Aucune note.</p>
-            )}
-          </Card>
-        </motion.div>
-      </motion.div>
-
-      <div className="mt-8 rounded-lg border border-border bg-white p-6">
-        <MandatTimeline mandatId={mandat.id} />
-      </div>
-
-      <div className="mt-8">
-        <ActivityJournal entiteType="MANDAT" entiteId={mandat.id} />
-      </div>
-
+      {/* Delete */}
       <DeleteConfirmModal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
@@ -1379,1126 +1178,30 @@ export default function MandatDetailPage() {
         entityName={`le mandat ${mandat.titrePoste}`}
         isLoading={deleteMutation.isPending}
       />
+
+      <style>{`
+        @keyframes atsRise{ from{ opacity:0; transform:translateY(18px);} to{ opacity:1; transform:none;} }
+        .fiche-root .rise{ animation:atsRise .66s cubic-bezier(.16,1,.3,1) both; }
+        .fiche-root .kpi{ transition:transform .2s cubic-bezier(.16,1,.3,1), box-shadow .2s ease, border-color .2s ease; }
+        .fiche-root .kpi:hover{ transform:translateY(-3px); box-shadow:0 18px 36px -26px rgba(34,23,122,.5); border-color:rgba(34,23,122,.18); }
+        .fiche-root .kcard{ transition:transform .18s cubic-bezier(.16,1,.3,1), box-shadow .18s ease, border-color .18s ease; }
+        .fiche-root .kcard:hover{ transform:translateY(-2px); box-shadow:0 14px 28px -20px rgba(34,23,122,.5); border-color:rgba(34,23,122,.24); }
+        .fiche-root .row{ transition:background .15s ease; }
+        .fiche-root .row:hover{ background:#FBFBF3; }
+        .fiche-root .btn{ transition:transform .16s cubic-bezier(.16,1,.3,1), background .18s ease, border-color .18s ease, box-shadow .2s ease; }
+        .fiche-root .btn:hover{ transform:translateY(-1px); }
+        .fiche-root .btn:active{ transform:scale(.97); }
+        .fiche-root .scrollcol::-webkit-scrollbar{ width:8px; height:8px; }
+        .fiche-root .scrollcol::-webkit-scrollbar-thumb{ background:rgba(34,23,122,.16); border-radius:999px; }
+        .fiche-root select:focus, .fiche-root input:focus, .fiche-root textarea:focus{ border-color:#22177A !important; box-shadow:0 0 0 3px rgba(34,23,122,.1); }
+        @media (max-width:1320px){ .fiche-root aside[data-rail]{ width:330px !important; } }
+        @media (max-width:1180px){ .fiche-root aside[data-rail]{ width:290px !important; } }
+        @media (max-width:1080px){ .fiche-root aside[data-rail]{ display:none !important; } .fiche-root main{ min-width:0; } }
+        @media (prefers-reduced-motion: reduce){ .fiche-root *{ animation-duration:.001s !important; } }
+      `}</style>
     </div>
   );
 }
 
-// ── Client Activity Card ─────────────────────────────
-//
-// Widget en tete de sidebar sur la fiche mandat : contact client + last
-// 5 activites liees a ce contact (source Activite entiteType=CLIENT).
-// Placeholder pour les evenements portail a venir (chantier 3 :
-// LOGIN | VIEW_PROFILE | MOVE | DECISION | COMMENT).
-
-interface ClientContact {
-  id: string;
-  nom: string;
-  prenom: string | null;
-  email: string | null;
-  telephone: string | null;
-}
-
-interface ClientActivity {
-  id: string;
-  type: string;
-  titre: string | null;
-  contenu: string | null;
-  source: string;
-  createdAt: string;
-}
-
-function ClientActivityCard({
-  client,
-  entrepriseNom,
-  onOpenClient,
-}: {
-  client: ClientContact;
-  entrepriseNom: string;
-  onOpenClient: () => void;
-}) {
-  const { data: activitiesResp } = useQuery({
-    queryKey: ['activites', 'CLIENT', client.id, 5],
-    queryFn: () =>
-      api.get<{ data: ClientActivity[]; meta?: unknown }>(
-        `/activites?entiteType=CLIENT&entiteId=${client.id}&perPage=5`,
-      ),
-  });
-  const activities = activitiesResp?.data;
-
-  const contactLabel =
-    [client.prenom, client.nom].filter(Boolean).join(' ').trim() || 'Contact client';
-  const initials = `${(client.prenom || '')[0] ?? ''}${(client.nom || '')[0] ?? ''}`
-    .toUpperCase() || '?';
-
-  return (
-    <Card>
-      <div className="flex items-start gap-3">
-        <div
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold"
-          style={{ background: '#E6E9AF', color: '#22177A', fontFamily: "'Archivo Black', sans-serif" }}
-        >
-          {initials}
-        </div>
-        <div className="min-w-0 flex-1">
-          <button
-            type="button"
-            onClick={onOpenClient}
-            className="text-left text-[15px] font-semibold text-text-primary hover:text-primary-800 hover:underline"
-          >
-            {contactLabel}
-          </button>
-          <p className="text-xs text-text-secondary">{entrepriseNom}</p>
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-col gap-1.5 text-[13px]">
-        {client.email && (
-          <a
-            href={`mailto:${client.email}`}
-            className="inline-flex items-center gap-1.5 text-text-secondary hover:text-primary-800"
-          >
-            <MailIcon size={13} strokeWidth={2} className="text-text-tertiary" />
-            <span className="truncate">{client.email}</span>
-          </a>
-        )}
-        {client.telephone && (
-          <a
-            href={`tel:${client.telephone}`}
-            className="inline-flex items-center gap-1.5 text-text-secondary hover:text-primary-800"
-          >
-            <Phone size={13} strokeWidth={2} className="text-text-tertiary" />
-            <span>{client.telephone}</span>
-          </a>
-        )}
-      </div>
-
-      <div className="mt-4 border-t border-border pt-3">
-        <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
-          <Clock size={11} strokeWidth={2} /> Activité client
-        </h3>
-        {!activities ? (
-          <Skeleton className="h-12 w-full" />
-        ) : activities.length === 0 ? (
-          <p className="text-[12px] italic text-text-tertiary">
-            Aucune activité sur ce contact. Le portail client (à venir) remontera ici
-            les connexions, déplacements de cartes et commentaires.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {activities.slice(0, 5).map((a) => (
-              <li key={a.id} className="flex items-start gap-2 text-[12px]">
-                <span
-                  className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ background: activityColor(a.type) }}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-text-primary">{a.titre ?? a.type}</p>
-                  <p className="text-[11px] text-text-tertiary">
-                    {new Date(a.createdAt).toLocaleDateString('fr-FR', {
-                      day: '2-digit',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                    {a.source && a.source !== 'MANUEL' && ` · ${a.source.toLowerCase()}`}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </Card>
-  );
-}
-
-function activityColor(type: string): string {
-  switch (type) {
-    case 'APPEL':      return '#2a6bd8';
-    case 'EMAIL':      return '#22177A';
-    case 'MEETING':    return '#3b9a54';
-    case 'NOTE':       return '#6e6a85';
-    case 'TACHE':      return '#b47814';
-    case 'TRANSCRIPT': return '#8e7cc3';
-    default:           return '#c4c1d0';
-  }
-}
-
-// ── Portal Access Card ───────────────────────────────
-// Gère les accès portail client d'un mandat (créer / lister / révoquer)
-// et affiche l'URL à envoyer au client.
-
-interface PortalAccessRow {
-  id: string;
-  email: string;
-  lastLoginAt: string | null;
-  revokedAt: string | null;
-  createdAt: string;
-  client: { id: string; nom: string; prenom: string | null };
-}
-
-function PortalAccessCard({
-  mandatId,
-  clientId,
-  clientEmail,
-}: {
-  mandatId: string;
-  clientId: string;
-  clientEmail: string | null;
-}) {
-  const qc = useQueryClient();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [newEmail, setNewEmail] = useState(clientEmail ?? '');
-  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  const { data: accesses } = useQuery({
-    queryKey: ['portal-accesses', mandatId],
-    queryFn: () => api.get<PortalAccessRow[]>(`/portal/mandat/${mandatId}/accesses`),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      const password = generateRandomPassword();
-      const created = await api.post<PortalAccessRow>('/portal/access', {
-        mandatId,
-        clientId,
-        email: newEmail.trim(),
-        password,
-      });
-      return { created, password };
-    },
-    onSuccess: ({ password }) => {
-      setGeneratedPassword(password);
-      qc.invalidateQueries({ queryKey: ['portal-accesses', mandatId] });
-      toast('success', 'Accès portail créé');
-    },
-    onError: (err: any) => {
-      toast('error', err?.data?.message || "Erreur lors de la création");
-    },
-  });
-
-  const revokeMutation = useMutation({
-    mutationFn: (accessId: string) => api.post(`/portal/access/${accessId}/revoke`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['portal-accesses', mandatId] });
-      toast('success', 'Accès révoqué');
-    },
-  });
-
-  const portalUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/portail/login?m=${mandatId}`;
-
-  const activeAccesses = (accesses ?? []).filter((a) => !a.revokedAt);
-
-  return (
-    <Card>
-      <div className="mb-3 flex items-start justify-between">
-        <h2 className="text-lg font-semibold text-text-primary">Accès portail client</h2>
-        <button
-          onClick={() => { setModalOpen(true); setGeneratedPassword(null); }}
-          className="rounded-md p-1 text-primary-800 hover:bg-primary-50"
-          title="Créer un accès"
-        >
-          <Plus size={16} strokeWidth={2} />
-        </button>
-      </div>
-
-      {activeAccesses.length === 0 ? (
-        <p className="text-[13px] italic text-text-tertiary">
-          Aucun accès actif. Crée un accès pour partager le kanban en lecture avec le client.
-        </p>
-      ) : (
-        <ul className="space-y-2">
-          {activeAccesses.map((a) => (
-            <li key={a.id} className="flex items-start justify-between rounded-lg border border-neutral-100 p-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium text-text-primary">{a.email}</p>
-                <p className="mt-0.5 text-[11px] text-text-tertiary">
-                  {a.lastLoginAt
-                    ? `Dernière connexion : ${new Date(a.lastLoginAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}`
-                    : 'Jamais connecté'}
-                </p>
-              </div>
-              <button
-                onClick={() => revokeMutation.mutate(a.id)}
-                className="ml-2 shrink-0 rounded p-1 text-neutral-300 hover:bg-error-100 hover:text-error"
-                title="Révoquer"
-              >
-                <X size={14} strokeWidth={2} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {activeAccesses.length > 0 && (
-        <div className="mt-3 border-t border-neutral-100 pt-3">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
-            URL portail à envoyer
-          </p>
-          <div className="flex items-center gap-1 rounded-md bg-neutral-50 px-2 py-1.5">
-            <code className="flex-1 truncate text-[11px] text-text-secondary">{portalUrl}</code>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(portalUrl);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-              className="rounded p-1 text-primary-800 hover:bg-white"
-              title="Copier"
-            >
-              {copied ? <Check size={12} strokeWidth={2.5} /> : <Copy size={12} strokeWidth={2} />}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Création */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setModalOpen(false)}>
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
-          >
-            <h3 style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em' }} className="text-xl text-neutral-900">
-              Nouvel accès portail
-            </h3>
-            <p className="mt-1 text-sm text-neutral-500">
-              Un email + mot de passe pour permettre au contact client de voir le kanban en lecture.
-            </p>
-
-            {generatedPassword ? (
-              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4">
-                <p className="text-sm font-semibold text-green-800">Accès créé — copie ces credentials, ils ne seront plus affichés.</p>
-                <dl className="mt-3 space-y-2 text-sm">
-                  <div>
-                    <dt className="text-[11px] uppercase tracking-wider text-green-700">URL</dt>
-                    <dd className="mt-0.5 truncate rounded bg-white px-2 py-1 font-mono text-[12px] text-green-900">{portalUrl}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[11px] uppercase tracking-wider text-green-700">Email</dt>
-                    <dd className="mt-0.5 rounded bg-white px-2 py-1 font-mono text-[12px] text-green-900">{newEmail}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[11px] uppercase tracking-wider text-green-700">Mot de passe (à envoyer manuellement)</dt>
-                    <dd className="mt-0.5 rounded bg-white px-2 py-1 font-mono text-[12px] text-green-900">{generatedPassword}</dd>
-                  </div>
-                </dl>
-                <div className="mt-3 flex justify-end">
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      const text = `Portail HumanUp\n\nURL : ${portalUrl}\nEmail : ${newEmail}\nMot de passe : ${generatedPassword}`;
-                      navigator.clipboard.writeText(text);
-                      toast('success', 'Credentials copiés');
-                    }}
-                  >
-                    <Copy size={13} /> Copier les 3 lignes
-                  </Button>
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <Button variant="ghost" onClick={() => { setModalOpen(false); setGeneratedPassword(null); setNewEmail(clientEmail ?? ''); }}>
-                    Fermer
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-4 space-y-4">
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                    Email du contact
-                  </label>
-                  <input
-                    type="email"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    placeholder="alice@acme.com"
-                    className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-3 py-2 text-sm outline-none focus:border-primary-800"
-                  />
-                  <p className="mt-1 text-[11px] text-neutral-400">
-                    Un mot de passe aléatoire sécurisé sera généré. Tu pourras le copier + envoyer au client manuellement (l'envoi email automatique arrive plus tard).
-                  </p>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="ghost" onClick={() => setModalOpen(false)}>Annuler</Button>
-                  <Button
-                    variant="primary"
-                    onClick={() => createMutation.mutate()}
-                    disabled={!newEmail.trim() || createMutation.isPending}
-                  >
-                    {createMutation.isPending ? 'Création…' : "Créer l'accès"}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function generateRandomPassword(length = 12): string {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789abcdefghjkmnpqrstuvwxyz';
-  let out = '';
-  const arr = new Uint8Array(length);
-  crypto.getRandomValues(arr);
-  for (let i = 0; i < length; i++) out += alphabet[arr[i] % alphabet.length];
-  return out;
-}
-
-// ── Contract Card + Modal ────────────────────────────
-
-const FEE_FLOOR = 18;
-const FEE_OPTIONS = [25, 24, 22, 20, 18] as const;
-const PAYMENT_OPTIONS = [
-  { value: 'reception', label: 'À réception' },
-  { value: 'signature', label: 'À la signature' },
-  { value: '30j',       label: '30 jours' },
-  { value: '45j_fdm',   label: '45 jours FDM' },
-  { value: '60j',       label: '60 jours' },
-] as const;
-const COUNTRY_OPTIONS = [
-  { value: 'FR', label: '🇫🇷 France' },
-  { value: 'GB', label: '🇬🇧 Royaume-Uni' },
-  { value: 'HK', label: '🇭🇰 Hong Kong' },
-  { value: 'US', label: '🇺🇸 États-Unis' },
-  { value: 'BE', label: '🇧🇪 Belgique' },
-  { value: 'CH', label: '🇨🇭 Suisse' },
-] as const;
-
-const CONTRACT_STATUS_LABEL: Record<string, string> = {
-  DRAFT:  'Brouillon',
-  SENT:   'Envoyé pour signature',
-  SIGNED: 'Signé',
-  EXPIRED: 'Expiré',
-};
-const CONTRACT_STATUS_TONE: Record<string, { bg: string; fg: string }> = {
-  DRAFT:   { bg: '#f6f5fa', fg: '#4a4568' },
-  SENT:    { bg: '#eef4fb', fg: '#2a6bd8' },
-  SIGNED:  { bg: '#eaf3ec', fg: '#3b9a54' },
-  EXPIRED: { bg: '#f9ece9', fg: '#b0361f' },
-};
-
-function ContractCard({ mandat }: { mandat: MandatDetail }) {
-  const [modalOpen, setModalOpen] = useState(false);
-  const qc = useQueryClient();
-  const status = mandat.contractStatus ?? 'DRAFT';
-  const tone = CONTRACT_STATUS_TONE[status];
-
-  return (
-    <>
-      <Card>
-        <div className="flex items-start justify-between">
-          <h2 className="text-lg font-semibold text-text-primary">Contrat</h2>
-          <span
-            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
-            style={{ background: tone.bg, color: tone.fg }}
-          >
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone.fg }} />
-            {CONTRACT_STATUS_LABEL[status] || status}
-          </span>
-        </div>
-        <dl className="mt-3 space-y-2.5 text-sm">
-          <div className="flex items-baseline justify-between">
-            <dt className="text-text-tertiary">Fee</dt>
-            <dd className="font-semibold text-text-primary tabular-nums">
-              {Number(mandat.feePourcentage)}%
-              {Number(mandat.feePourcentage) < FEE_FLOOR && (
-                <span
-                  className="ml-1.5 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase"
-                  style={{ background: '#fbf3e7', color: '#b47814' }}
-                >
-                  Sous plancher
-                </span>
-              )}
-            </dd>
-          </div>
-          {mandat.paymentTerms && (
-            <div className="flex items-baseline justify-between">
-              <dt className="text-text-tertiary">Conditions paiement</dt>
-              <dd className="font-medium text-text-primary">
-                {PAYMENT_OPTIONS.find((p) => p.value === mandat.paymentTerms)?.label ?? mandat.paymentTerms}
-              </dd>
-            </div>
-          )}
-          {mandat.applicableCountry && (
-            <div className="flex items-baseline justify-between">
-              <dt className="text-text-tertiary">Droit applicable</dt>
-              <dd className="font-medium text-text-primary">
-                {COUNTRY_OPTIONS.find((c) => c.value === mandat.applicableCountry)?.label ?? mandat.applicableCountry}
-              </dd>
-            </div>
-          )}
-          {mandat.contractSentAt && (
-            <div className="flex items-baseline justify-between">
-              <dt className="text-text-tertiary">Envoyé le</dt>
-              <dd className="font-medium text-text-primary">
-                {new Date(mandat.contractSentAt).toLocaleDateString('fr-FR', {
-                  day: '2-digit', month: 'short', year: 'numeric',
-                })}
-              </dd>
-            </div>
-          )}
-        </dl>
-
-        {status === 'DRAFT' && (
-          <Button variant="primary" onClick={() => setModalOpen(true)} className="mt-4 w-full">
-            <Sparkles size={14} /> Envoyer pour signature
-          </Button>
-        )}
-        {status === 'SENT' && (
-          <p className="mt-4 text-xs text-text-tertiary">
-            En attente de signature du client. Le webhook signature (à brancher) marquera automatiquement en <strong>SIGNED</strong>.
-          </p>
-        )}
-      </Card>
-
-      <ContractSendModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        mandat={mandat}
-        onSuccess={() => {
-          qc.invalidateQueries({ queryKey: ['mandat', mandat.id] });
-          setModalOpen(false);
-        }}
-      />
-    </>
-  );
-}
-
-function ContractSendModal({
-  isOpen,
-  onClose,
-  mandat,
-  onSuccess,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  mandat: MandatDetail;
-  onSuccess: () => void;
-}) {
-  const [fee, setFee] = useState<number>(Number(mandat.feePourcentage) || 20);
-  const [customFee, setCustomFee] = useState('');
-  const [paymentTerms, setPaymentTerms] = useState<string>(mandat.paymentTerms || '30j');
-  const [country, setCountry] = useState<string>(mandat.applicableCountry || 'FR');
-  const [approvalReason, setApprovalReason] = useState('');
-
-  const effectiveFee = customFee.trim() ? Number(customFee) : fee;
-  const needsApproval = effectiveFee > 0 && effectiveFee < FEE_FLOOR;
-
-  // Query : y a-t-il déjà une approval APPROVED pour ce mandat au fee demandé ?
-  const { data: pendingApprovals } = useQuery({
-    queryKey: ['contract-approvals', mandat.id],
-    queryFn: () => api.get<Array<{ id: string; status: string; feeRequested: string }>>('/contracts/pending'),
-    enabled: isOpen && needsApproval,
-  });
-  const approvalMatch = pendingApprovals?.find(
-    (a) => a.status === 'PENDING' && Number(a.feeRequested) === effectiveFee,
-  );
-
-  const requestApprovalMutation = useMutation({
-    mutationFn: () =>
-      api.post('/contracts/request-approval', {
-        mandatId: mandat.id,
-        feeRequested: effectiveFee,
-        reason: approvalReason.trim(),
-      }),
-    onSuccess: () => {
-      toast('success', 'Demande envoyée aux admins via Slack. On te ping dès validation.');
-      onClose();
-    },
-    onError: (err: any) => {
-      toast('error', err?.data?.message || 'Erreur lors de la demande');
-    },
-  });
-
-  const sendMutation = useMutation({
-    mutationFn: () =>
-      api.post(`/contracts/mandat/${mandat.id}/send`, {
-        feePourcentage: effectiveFee,
-        paymentTerms,
-        applicableCountry: country,
-      }),
-    onSuccess: () => {
-      toast('success', 'Contrat envoyé pour signature — trace posée sur la fiche.');
-      onSuccess();
-    },
-    onError: (err: any) => {
-      toast('error', err?.data?.message || "Erreur lors de l'envoi");
-    },
-  });
-
-  return (
-    <div>{isOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
-        >
-          <div className="mb-4 flex items-start justify-between">
-            <div>
-              <h3 style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em' }} className="text-xl text-neutral-900">
-                Envoyer le contrat
-              </h3>
-              <p className="mt-1 text-sm text-neutral-500">
-                {mandat.entreprise.nom} — {mandat.titrePoste}
-              </p>
-            </div>
-            <button onClick={onClose} className="rounded-md p-1 text-neutral-400 hover:bg-neutral-100">
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {/* Fee */}
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                Success fee (%)
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {FEE_OPTIONS.map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => { setFee(f); setCustomFee(''); }}
-                    className={`rounded-lg border px-3 py-1.5 text-sm font-semibold tabular-nums ${
-                      fee === f && !customFee
-                        ? 'border-primary-800 bg-primary-50 text-primary-800'
-                        : 'border-neutral-200 text-neutral-600 hover:border-primary-300'
-                    }`}
-                  >
-                    {f}%
-                  </button>
-                ))}
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.5}
-                    value={customFee}
-                    onChange={(e) => setCustomFee(e.target.value)}
-                    placeholder="Autre"
-                    className="w-20 rounded-lg border border-neutral-200 px-2 py-1.5 text-sm outline-none focus:border-primary-800"
-                  />
-                  <span className="text-sm text-neutral-500">%</span>
-                </div>
-              </div>
-              <p className="mt-1.5 text-[11px] text-neutral-400">
-                Défaut 20% · plancher <strong>{FEE_FLOOR}%</strong> · sous ce plancher : validation admin requise.
-              </p>
-            </div>
-
-            {/* Sous plancher : demande d'approbation */}
-            {needsApproval && !approvalMatch && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-sm font-semibold text-amber-800">
-                  Fee sous le plancher {FEE_FLOOR}% — validation admin requise
-                </p>
-                <p className="mt-1 text-xs text-amber-700">
-                  Explique pourquoi (contexte client, volume mandat, exception…). Les admins reçoivent une notif Slack.
-                </p>
-                <textarea
-                  value={approvalReason}
-                  onChange={(e) => setApprovalReason(e.target.value)}
-                  rows={3}
-                  placeholder="Ex : Client historique, 4 mandats déjà signés sur l'année. Il pousse pour 15%."
-                  className="mt-2 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-amber-400 focus:border-amber-500"
-                />
-                <div className="mt-2 flex justify-end">
-                  <Button
-                    variant="primary"
-                    onClick={() => requestApprovalMutation.mutate()}
-                    disabled={!approvalReason.trim() || requestApprovalMutation.isPending}
-                  >
-                    Demander la validation
-                  </Button>
-                </div>
-              </div>
-            )}
-            {needsApproval && approvalMatch && (
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-                Demande en attente d'approbation admin — envoi bloqué jusqu'à validation.
-              </div>
-            )}
-
-            {/* Conditions de paiement */}
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                Conditions de paiement
-              </label>
-              <select
-                value={paymentTerms}
-                onChange={(e) => setPaymentTerms(e.target.value)}
-                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary-800"
-              >
-                {PAYMENT_OPTIONS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Droit applicable */}
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                Droit applicable
-              </label>
-              <select
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary-800"
-              >
-                {COUNTRY_OPTIONS.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
-              <p className="mt-1 text-[11px] text-neutral-400">
-                La clause « Litiges » du contrat sera adaptée au pays choisi.
-              </p>
-            </div>
-
-            {/* Send */}
-            <div className="flex items-center justify-between border-t border-neutral-100 pt-4">
-              <p className="text-[12px] text-neutral-400">
-                Aucun provider de signature branché — cet envoi trace en base et log une activité sur la fiche.
-              </p>
-              <div className="flex gap-2">
-                <Button variant="ghost" onClick={onClose}>Annuler</Button>
-                <Button
-                  variant="primary"
-                  onClick={() => sendMutation.mutate()}
-                  disabled={
-                    sendMutation.isPending ||
-                    !effectiveFee ||
-                    !paymentTerms ||
-                    !country ||
-                    needsApproval  // sous plancher : bloque
-                  }
-                >
-                  {sendMutation.isPending ? 'Envoi…' : 'Envoyer pour signature'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    )}</div>
-  );
-}
-
-// ─── Stats bar cell (fiche mandat header) ──────────
-
-function StatsCell({
-  label, value, valueColor, foot,
-}: {
-  label: string;
-  value: string;
-  valueColor: string;
-  foot?: string;
-}) {
-  return (
-    <div style={{ flex: 1, padding: '12px 18px' }}>
-      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#8A8699' }}>
-        {label}
-      </div>
-      <div
-        style={{
-          fontFamily: "'Archivo Black', sans-serif",
-          fontSize: 19,
-          color: valueColor,
-          marginTop: 5,
-          lineHeight: 1.1,
-        }}
-      >
-        {value}
-      </div>
-      {foot && <div style={{ fontSize: 11, color: '#9A96AE', marginTop: 1 }}>{foot}</div>}
-    </div>
-  );
-}
-
-function StatsCellDivider() {
-  return <div style={{ width: 1, background: 'rgba(34,23,122,0.08)' }} />;
-}
-
-// ═════════════════════════════════════════════════════════════════
-// MOCK-FIDELITY BODY COMPONENTS (fiche mandat 3-col body)
-// ═════════════════════════════════════════════════════════════════
-
-// ── COL 1 · Le brief ─────────────────────────────────
-
-function LeBriefCard({ mandat, onStartEdit }: { mandat: MandatDetail; onStartEdit: () => void }) {
-  const skills: string[] = mandat.scorecard?.competencesCles?.map((c) => c.nom) ?? [];
-  const localisation = mandat.localisation ?? '—';
-  return (
-    <div
-      className="rise"
-      style={{
-        background: '#fff', border: '1px solid rgba(34,23,122,0.08)',
-        borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 2px rgba(34,23,122,0.04)',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-        <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 16, color: '#1A1533' }}>Le brief</div>
-        <button
-          onClick={onStartEdit}
-          className="chip"
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            fontSize: 11.5, fontWeight: 700, color: '#22177A',
-            background: '#F7F7EF', border: '1px solid rgba(34,23,122,0.12)',
-            borderRadius: 9, padding: '5px 11px', cursor: 'pointer',
-          }}
-        >
-          <Pencil size={12} /> Éditer
-        </button>
-      </div>
-
-      <p style={{ fontSize: 14.5, lineHeight: 1.68, color: '#4A4568', marginTop: 12, whiteSpace: 'pre-wrap' }}>
-        {mandat.description || 'Pas de brief renseigné. Clique sur Éditer pour ajouter la description du poste.'}
-      </p>
-
-      <div
-        style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px',
-          marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(34,23,122,0.07)',
-        }}
-      >
-        <BriefField label="Localisation" value={localisation} />
-        <BriefField label="Contrat" value="CDI · temps plein" />
-        <BriefField label="Expérience" value="—" />
-        <BriefField label="Télétravail" value={mandat.localisation?.toLowerCase().includes('remote') ? 'Oui' : '—'} />
-      </div>
-
-      {skills.length > 0 && (
-        <>
-          <div
-            style={{
-              fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
-              textTransform: 'uppercase', color: '#8A8699', marginTop: 18,
-            }}
-          >
-            Compétences clés
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 11 }}>
-            {skills.map((s, i) => (
-              <span
-                key={i}
-                style={{
-                  fontSize: 12.5, fontWeight: 600, borderRadius: 999,
-                  padding: '6px 12px', background: 'rgba(34,23,122,0.06)', color: '#22177A',
-                }}
-              >
-                {s}
-              </span>
-            ))}
-          </div>
-        </>
-      )}
-
-      {mandat.ficheDePoste && (
-        <div
-          style={{
-            display: 'flex', alignItems: 'center', gap: 12,
-            marginTop: 18, padding: '11px 13px',
-            background: '#FCFCF5', border: '1px solid rgba(34,23,122,0.1)',
-            borderRadius: 12, cursor: 'pointer',
-          }}
-        >
-          <span
-            style={{
-              width: 38, height: 38, borderRadius: 10, background: '#F1EDF9',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}
-          >
-            <ClipboardList size={17} color="#8E7CC3" />
-          </span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#1A1533' }}>Fiche de poste</div>
-            <div style={{ fontSize: 12, color: '#9A96AE' }}>Texte importé · Brief IA</div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BriefField({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#9A96AE' }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 13.5, fontWeight: 600, color: '#1A1533', marginTop: 3 }}>{value}</div>
-    </div>
-  );
-}
-
-// ── COL 1 · Process de recrutement ───────────────────
-
-function ProcessRecrutementCard({ mandat, onOpenKanban }: { mandat: MandatDetail; onOpenKanban: () => void }) {
-  const stageDefs: Array<{ key: string; label: string; color: string }> = [
-    { key: 'SOURCING',         label: 'Sourcing',        color: '#8E7CC3' },
-    { key: 'CONTACTE',         label: 'Contacté',        color: '#3B6FE0' },
-    { key: 'ENTRETIEN_1',      label: 'Entretien 1',     color: '#22177A' },
-    { key: 'ENVOYE_CLIENT',    label: 'Envoyé client',   color: '#E08A2B' },
-    { key: 'ENTRETIEN_CLIENT', label: 'Entretien client', color: '#C9A227' },
-    { key: 'OFFRE',            label: 'Offre',           color: '#3B9A54' },
-    { key: 'PLACE',            label: 'Placé',           color: '#2C9A47' },
-  ];
-  const counts: Record<string, number> = {};
-  for (const c of mandat.candidatures) counts[c.stage] = (counts[c.stage] ?? 0) + 1;
-  const total = mandat.candidatures.length;
-  const max = Math.max(1, ...stageDefs.map((s) => counts[s.key] ?? 0));
-
-  return (
-    <div
-      className="rise"
-      style={{
-        background: '#fff', border: '1px solid rgba(34,23,122,0.08)',
-        borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 2px rgba(34,23,122,0.04)',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-        <a
-          onClick={onOpenKanban}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
-            textDecoration: 'none', fontFamily: "'Archivo Black', sans-serif",
-            fontSize: 15, color: '#1A1533',
-          }}
-        >
-          Process de recrutement
-          <ArrowLeft size={14} strokeWidth={2.4} color="#22177A" style={{ transform: 'rotate(180deg)' }} />
-        </a>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: '#9A96AE' }}>{total} candidat{total > 1 ? 's' : ''}</span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginTop: 15 }}>
-        {stageDefs.map((s) => {
-          const c = counts[s.key] ?? 0;
-          const pct = Math.round((c / max) * 100);
-          return (
-            <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: 13, color: '#4A4568' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color, flexShrink: 0 }} />
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 600 }}>{s.label}</span>
-                  </span>
-                  <strong style={{ color: s.color, flexShrink: 0 }}>{c}</strong>
-                </div>
-                <div style={{ height: 6, borderRadius: 999, background: 'rgba(34,23,122,0.08)', marginTop: 6 }}>
-                  <div style={{ width: `${pct}%`, height: '100%', borderRadius: 999, background: s.color, transition: 'width 0.6s cubic-bezier(.16,1,.3,1)' }} />
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── COL 2 · Notes internes ───────────────────────────
-
-function NotesInternesCard({ mandat, onSave, saving }: { mandat: MandatDetail; onSave: (notes: string) => void; saving: boolean }) {
-  const [draft, setDraft] = useState(mandat.notes ?? '');
-  useEffect(() => {
-    setDraft(mandat.notes ?? '');
-  }, [mandat.notes]);
-  const dirty = draft !== (mandat.notes ?? '');
-  return (
-    <div
-      className="rise"
-      style={{
-        background: '#fff', border: '1px solid rgba(34,23,122,0.08)',
-        borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 2px rgba(34,23,122,0.04)',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Pencil size={15} color="#22177A" strokeWidth={2} />
-        <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 15, color: '#1A1533' }}>Notes internes</span>
-      </div>
-      <textarea
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        placeholder="Ajoutez une note sur ce mandat : contexte, exigences du client, points d'attention…"
-        style={{
-          width: '100%', minHeight: 110, resize: 'vertical',
-          marginTop: 12, fontFamily: "'Manrope', sans-serif",
-          fontSize: 13.5, lineHeight: 1.55, padding: '12px 14px',
-          borderRadius: 12, border: '1.5px solid rgba(34,23,122,0.14)',
-          background: '#FCFCF5', color: '#1A1533', outline: 'none',
-        }}
-      />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10 }}>
-        <span style={{ fontSize: 11.5, color: '#9A96AE' }}>Visible par l'équipe HumanUp uniquement.</span>
-        <button
-          onClick={() => onSave(draft)}
-          disabled={saving || !dirty}
-          style={{
-            fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 13,
-            background: dirty ? '#22177A' : 'rgba(34,23,122,0.35)',
-            color: '#E6E9AF', border: 'none', borderRadius: 10,
-            padding: '9px 18px', cursor: dirty && !saving ? 'pointer' : 'not-allowed',
-          }}
-        >
-          {saving ? 'Enregistrement…' : 'Enregistrer'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── COL 2 · Contact client ───────────────────────────
-
-function ContactClientCardMock({
-  client, entrepriseNom, onOpen,
-}: {
-  client: { id: string; nom: string; prenom: string | null; email: string | null; telephone: string | null };
-  entrepriseNom: string;
-  onOpen: () => void;
-}) {
-  const initials = `${client.prenom?.[0] ?? ''}${client.nom?.[0] ?? ''}`.toUpperCase() || '·';
-  return (
-    <a
-      className="rise clk"
-      onClick={onOpen}
-      style={{
-        background: '#fff', border: '1px solid rgba(34,23,122,0.08)',
-        borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 2px rgba(34,23,122,0.04)',
-        textDecoration: 'none', display: 'block', cursor: 'pointer',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-        <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 15, color: '#1A1533' }}>Contact client</div>
-        <ArrowLeft size={15} strokeWidth={2.4} color="#22177A" style={{ transform: 'rotate(180deg)' }} />
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
-        <span
-          style={{
-            width: 44, height: 44, borderRadius: '50%',
-            background: '#8E7CC3', color: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: "'Archivo Black', sans-serif", fontSize: 14,
-          }}
-        >
-          {initials}
-        </span>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#1A1533' }}>
-            {[client.prenom, client.nom].filter(Boolean).join(' ')}
-          </div>
-          <div style={{ fontSize: 12.5, color: '#8A8699' }}>{entrepriseNom}</div>
-        </div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(34,23,122,0.07)' }}>
-        {client.email && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13, color: '#4A4568' }}>
-            <MailIcon size={14} color="#22177A" strokeWidth={2} />
-            {client.email}
-          </span>
-        )}
-        {client.telephone && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13, color: '#4A4568' }}>
-            <Phone size={14} color="#22177A" strokeWidth={2} />
-            {client.telephone}
-          </span>
-        )}
-        {!client.email && !client.telephone && (
-          <span style={{ fontSize: 12.5, color: '#9A96AE' }}>Aucun contact renseigné</span>
-        )}
-      </div>
-    </a>
-  );
-}
-
-// ── COL 3 · Activité interne (timeline verticale) ────
-
-interface InternalActivity {
-  id: string;
-  type: string;
-  titre: string | null;
-  contenu: string | null;
-  source: string;
-  createdAt: string;
-  auteur?: { prenom: string | null; nom: string } | null;
-}
-
-function ActiviteInterneMockCard({ mandatId }: { mandatId: string }) {
-  const { data } = useQuery({
-    queryKey: ['activites', 'MANDAT', mandatId, 'internal'],
-    queryFn: () => api.get<{ data: InternalActivity[]; meta?: unknown }>(`/activites?entiteType=MANDAT&entiteId=${mandatId}&perPage=8`),
-  });
-  const items = data?.data ?? [];
-
-  const dotColor = (type: string): string => {
-    if (type.startsWith('EMAIL')) return '#3B6FE0';
-    if (type.startsWith('CALL') || type.includes('APPEL')) return '#22177A';
-    if (type.includes('CREATED') || type.includes('CREE')) return '#3B9A54';
-    if (type.includes('DEPLACE') || type.includes('MOVE') || type.includes('STAGE')) return '#E08A2B';
-    return '#8E7CC3';
-  };
-
-  const rel = (t: string): string => {
-    const then = new Date(t).getTime();
-    const now = Date.now();
-    const s = Math.floor((now - then) / 1000);
-    if (s < 60) return 'à l’instant';
-    if (s < 3600) return `il y a ${Math.floor(s / 60)} min`;
-    if (s < 86400) return `il y a ${Math.floor(s / 3600)} h`;
-    const d = new Date(then);
-    return `le ${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
-  };
-
-  return (
-    <div
-      className="rise"
-      style={{
-        background: '#fff', border: '1px solid rgba(34,23,122,0.08)',
-        borderRadius: 16, padding: '18px 20px', boxShadow: '0 1px 2px rgba(34,23,122,0.04)',
-      }}
-    >
-      <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 15, color: '#1A1533' }}>Activité interne</div>
-      <div style={{ marginTop: 15, display: 'flex', flexDirection: 'column' }}>
-        {items.length === 0 ? (
-          <div style={{ fontSize: 12.5, color: '#9A96AE' }}>Aucune activité pour le moment.</div>
-        ) : (
-          items.map((ev, i) => {
-            const isLast = i === items.length - 1;
-            const authorName = ev.auteur ? [ev.auteur.prenom, ev.auteur.nom].filter(Boolean).join(' ') : null;
-            return (
-              <div
-                key={ev.id}
-                style={{
-                  display: 'flex', gap: 14,
-                  paddingBottom: isLast ? 0 : 15,
-                  borderLeft: isLast ? 'none' : '2px solid rgba(34,23,122,0.12)',
-                  marginLeft: 5, paddingLeft: 16, position: 'relative',
-                }}
-              >
-                <span
-                  style={{
-                    position: 'absolute', left: -6, top: 2,
-                    width: 10, height: 10, borderRadius: '50%',
-                    background: dotColor(ev.type),
-                  }}
-                />
-                <div>
-                  <div style={{ fontSize: 12.5, color: '#1A1533' }}>
-                    {ev.titre || ev.type}
-                  </div>
-                  <div style={{ fontSize: 11, color: '#9A96AE', marginTop: 2 }}>
-                    {rel(ev.createdAt)}
-                    {authorName ? ` · ${authorName}` : ''}
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-}
+const fieldLabel: React.CSSProperties = { fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: FAINT };
+const fieldValue: React.CSSProperties = { fontSize: 13.5, fontWeight: 600, color: INK, marginTop: 3 };
