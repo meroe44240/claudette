@@ -1,1822 +1,570 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, Mail, Phone, MapPin, Linkedin, Briefcase, Building2,
-  Calendar, Send, Pencil, Trash2, Save, X, FileText, Loader2,
-  Upload, Copy, Check, Sparkles, ChevronDown, ChevronUp, Bot,
-  Link2, CalendarPlus, Search, Plus, User, Download, Eye, Rocket,
-  Star, Clock, Banknote,
+  ArrowLeft, ArrowRight, ChevronDown, Plus, Star, Mail, Phone, Linkedin, MapPin,
+  Trash2, X, FileText, Upload, Download, Calendar, Send, MessageSquare,
+  CheckSquare, Ban, Clock, Building2,
 } from 'lucide-react';
-import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
-import PageHeader from '../../components/ui/PageHeader';
-import Card from '../../components/ui/Card';
-import Badge from '../../components/ui/Badge';
-import Button from '../../components/ui/Button';
-import Input, { Textarea } from '../../components/ui/Input';
-import Select from '../../components/ui/Select';
-import Skeleton, { SkeletonCard } from '../../components/ui/Skeleton';
-import Modal from '../../components/ui/Modal';
-import EmailComposer from '../../components/email/EmailComposer';
-import ScheduleMeeting from '../../components/calendar/ScheduleMeeting';
-import ActivityJournal from '../../components/activity/ActivityJournal';
-import Avatar from '../../components/ui/Avatar';
-import DeleteConfirmModal from '../../components/ui/DeleteConfirmModal';
-import CallBriefPanel from '../../components/ai/CallBriefPanel';
-import TagPicker from '../../components/ui/TagPicker';
-import InlineEdit from '../../components/ui/InlineEdit';
-import ProfileCompleteness from '../../components/ui/ProfileCompleteness';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
 
+// ─── TYPES ──────────────────────────────────────────
 interface Candidature {
-  id: string;
-  stage: string;
-  mandat: {
-    id: string;
-    titrePoste: string;
-    slug: string | null;
-    entreprise: { id: string; nom: string };
-    statut: string;
-  };
+  id: string; stage: string;
+  mandat: { id: string; titrePoste: string; slug: string | null; entreprise: { id: string; nom: string }; statut: string };
   createdAt: string;
 }
-
+interface Experience { id: string; titre: string; entreprise: string; anneeDebut: number; anneeFin: number | null; highlights: string[]; source: string }
 interface CandidatDetail {
-  id: string;
-  nom: string;
-  prenom: string | null;
-  email: string | null;
-  telephone: string | null;
-  linkedinUrl: string | null;
-  photoUrl: string | null;
-  cvUrl: string | null;
-  posteActuel: string | null;
-  entrepriseActuelle: string | null;
-  localisation: string | null;
-  salaireActuel: number | null;
-  salaireSouhaite: number | null;
-  anneesExperience: number | null;
-  disponibilite: string | null;
-  mobilite: string | null;
-  source: string | null;
-  tags: string[];
-  notes: string | null;
-  consentementRgpd: boolean;
-  candidatures: Candidature[];
-  experiences: {
-    id: string;
-    titre: string;
-    entreprise: string;
-    anneeDebut: number;
-    anneeFin: number | null;
-    highlights: string[];
-    source: string;
-  }[];
-  // AI fields
-  aiPitchShort: string | null;
-  aiPitchLong: string | null;
-  aiSellingPoints: string[] | null;
-  aiIdealFor: string | null;
-  aiAnonymizedProfile: {
-    title: string;
-    summary: string;
-    bullet_points: string[];
-  } | null;
-  aiParsedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
+  id: string; nom: string; prenom: string | null; email: string | null; telephone: string | null;
+  linkedinUrl: string | null; photoUrl: string | null; cvUrl: string | null;
+  posteActuel: string | null; entrepriseActuelle: string | null; localisation: string | null;
+  salaireSouhaite: number | null; disponibilite: string | null; source: string | null;
+  tags: string[]; aiPitchLong: string | null; aiPitchShort: string | null;
+  candidatures: Candidature[]; experiences: Experience[];
+}
+interface Activite {
+  id: string; type: string; titre: string | null; contenu: string | null; createdAt: string;
+  isTache: boolean; tacheCompleted: boolean; tacheDueDate: string | null;
+  user: { nom: string; prenom: string | null } | null;
 }
 
-interface EditForm {
-  nom: string;
-  prenom: string;
-  email: string;
-  telephone: string;
-  posteActuel: string;
-  entrepriseActuelle: string;
-  localisation: string;
-  linkedinUrl: string;
-  salaireActuel: string;
-  salaireSouhaite: string;
-  anneesExperience: string;
-  disponibilite: string;
-  mobilite: string;
-  tags: string[];
-  notes: string;
+// ─── STAGES ─────────────────────────────────────────
+const STAGES = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE'];
+const STAGE_META: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
+  SOURCING: { label: 'Sourcing', bg: 'rgba(34,23,122,.07)', fg: '#22177A', dot: '#8E7CC3' },
+  CONTACTE: { label: 'Contacté', bg: 'rgba(34,23,122,.07)', fg: '#22177A', dot: '#8E7CC3' },
+  ENTRETIEN_1: { label: 'Entretien', bg: 'rgba(34,23,122,.09)', fg: '#22177A', dot: '#22177A' },
+  ENVOYE_CLIENT: { label: 'Envoyé client', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  ENTRETIEN_CLIENT: { label: 'Entr. client', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
+  OFFRE: { label: 'Offre', bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
+  PLACE: { label: 'Placé', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  REFUSE: { label: 'Perdu', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
+};
+const SEG_COLORS = ['#8E7CC3', '#8E7CC3', '#22177A', '#2A6BD8', '#E08A2B', '#C9A227', '#3B9A54'];
+const SOURCE_OPTIONS = ['LinkedIn', 'Kalent', 'List Push', 'Candidature spontanée', 'Cooptation', 'Indeed', 'Jobboard client', 'Réseau', 'Autre'];
+const LOST_REASONS = ['Ne convient pas au poste', 'Prétentions trop élevées', 'Refus du candidat', 'Contre-offre acceptée', 'Process trop long', 'Autre'];
+
+// ─── HELPERS ────────────────────────────────────────
+function initials(prenom: string | null, nom: string) { return `${(prenom?.[0] ?? '')}${nom?.[0] ?? ''}`.toUpperCase() || '?'; }
+function relTime(iso: string) {
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (d <= 0) return "aujourd'hui"; if (d === 1) return 'hier'; if (d < 30) return `il y a ${d} j`;
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 }
+const authHeader = (): Record<string, string> => { const t = localStorage.getItem('accessToken'); return t ? { Authorization: `Bearer ${t}` } : {}; };
 
-const stageBadgeVariant: Record<string, 'sourcing' | 'contacte' | 'entretien1' | 'envoyeClient' | 'entretienClient' | 'offre' | 'place' | 'refuse'> = {
-  SOURCING: 'sourcing',
-  CONTACTE: 'contacte',
-  ENTRETIEN_1: 'entretien1',
-  ENVOYE_CLIENT: 'envoyeClient',
-  ENTRETIEN_CLIENT: 'entretienClient',
-  OFFRE: 'offre',
-  PLACE: 'place',
-  REFUSE: 'refuse',
-};
-
-const stageLabels: Record<string, string> = {
-  SOURCING: 'Sourcing',
-  CONTACTE: 'Contacté',
-  ENTRETIEN_1: 'Entretien 1',
-  ENVOYE_CLIENT: 'Envoyé client',
-  ENTRETIEN_CLIENT: 'Entretien Client',
-  OFFRE: 'Offre',
-  PLACE: 'Placé',
-  REFUSE: 'Refusé',
-};
-
-function formatSalary(value: number | null): string {
-  if (!value) return '\u2014';
-  return `${(value / 1000).toFixed(0)}k\u20ac`;
-}
-
-const detailStagger = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
-};
-const detailItem = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 260, damping: 24 } },
-};
-
-function buildEditForm(candidat: CandidatDetail): EditForm {
-  return {
-    nom: candidat.nom || '',
-    prenom: candidat.prenom || '',
-    email: candidat.email || '',
-    telephone: candidat.telephone || '',
-    posteActuel: candidat.posteActuel || '',
-    entrepriseActuelle: candidat.entrepriseActuelle || '',
-    localisation: candidat.localisation || '',
-    linkedinUrl: candidat.linkedinUrl || '',
-    salaireActuel: candidat.salaireActuel ? String(candidat.salaireActuel) : '',
-    salaireSouhaite: candidat.salaireSouhaite ? String(candidat.salaireSouhaite) : '',
-    anneesExperience: candidat.anneesExperience != null ? String(candidat.anneesExperience) : '',
-    disponibilite: candidat.disponibilite || '',
-    mobilite: candidat.mobilite || '',
-    tags: [...candidat.tags],
-    notes: candidat.notes || '',
-  };
-}
-
+// ═════════════════════════════════════════════════════
 export default function CandidatDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [showEmailComposer, setShowEmailComposer] = useState(false);
-  const [emailDefaults, setEmailDefaults] = useState({ subject: '', body: '' });
-  const [showScheduleMeeting, setShowScheduleMeeting] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState<EditForm | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showCallBrief, setShowCallBrief] = useState(false);
+  const qc = useQueryClient();
+  usePageTitle('Fiche candidat');
 
-  // Add to mandat state
-  const [showAddToMandat, setShowAddToMandat] = useState(false);
-  const [mandatSearch, setMandatSearch] = useState('');
-  const mandatDropdownRef = useRef<HTMLDivElement>(null);
+  const [detOpen, setDetOpen] = useState(true);
+  const [cvOpen, setCvOpen] = useState(true);
+  const [cvTab, setCvTab] = useState<'synth' | 'chrono' | 'full'>('synth');
+  const [railTab, setRailTab] = useState<'act' | 'com' | 'task' | 'eval' | 'msg'>('act');
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [taskText, setTaskText] = useState('');
+  const [linkSel, setLinkSel] = useState('');
+  const [lost, setLost] = useState<{ candId: string; titre: string; company: string } | null>(null);
+  const [lostReason, setLostReason] = useState('');
+  const [lostNote, setLostNote] = useState('');
+  const [lostMail, setLostMail] = useState(true);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const cvInputRef = useRef<HTMLInputElement>(null);
 
-  // CV upload modal state
-  const [showCvUploadModal, setShowCvUploadModal] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const cvFileInputRef = useRef<HTMLInputElement>(null);
+  const { data: c, isLoading } = useQuery({ queryKey: ['candidat', id], queryFn: () => api.get<CandidatDetail>(`/candidats/${id}`), enabled: !!id });
+  const { data: actsRaw } = useQuery({ queryKey: ['activites', 'candidat', id], queryFn: () => api.get<{ data: Activite[] }>(`/activites?entiteType=CANDIDAT&entiteId=${id}&perPage=100`), enabled: !!id });
+  const { data: mandatsData } = useQuery({ queryKey: ['mandats', 'open'], queryFn: () => api.get<{ data: { id: string; titrePoste: string; entreprise: { nom: string } }[] }>('/mandats?statut=OUVERT&perPage=200&scope=all'), staleTime: 5 * 60 * 1000 });
 
-  const cvDirectInputRef = useRef<HTMLInputElement>(null);
+  const acts = actsRaw?.data ?? [];
+  const feed = acts.filter(a => !a.isTache);
+  const comments = acts.filter(a => a.type === 'NOTE' && !a.isTache);
+  const tasks = acts.filter(a => a.isTache);
 
-  // Direct CV upload mutation (just attach file, no AI parsing)
-  const cvDirectUploadMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`/api/v1/candidats/${id}/cv`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      });
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `Erreur ${response.status}`);
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['candidat', id] });
-      toast('success', 'CV attaché avec succès !');
-    },
-    onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de l\'upload du CV');
-    },
-  });
+  const invalidate = () => { qc.invalidateQueries({ queryKey: ['candidat', id] }); qc.invalidateQueries({ queryKey: ['activites', 'candidat', id] }); };
 
-  // Booking link state
-  const [showBookingDropdown, setShowBookingDropdown] = useState(false);
-  const [bookingCopiedField, setBookingCopiedField] = useState<string | null>(null);
+  const advanceMut = useMutation({ mutationFn: ({ candId, stage }: { candId: string; stage: string }) => api.put(`/candidatures/${candId}`, { stage }), onSuccess: () => { invalidate(); toast('success', 'Étape mise à jour'); } });
+  const loseMut = useMutation({ mutationFn: ({ candId, motifRefus, motifRefusDetail }: { candId: string; motifRefus: string; motifRefusDetail?: string }) => api.put(`/candidatures/${candId}`, { stage: 'REFUSE', motifRefus, motifRefusDetail }), onSuccess: () => { invalidate(); setLost(null); setLostReason(''); setLostNote(''); toast('success', 'Marqué perdu'); } });
+  const removeMut = useMutation({ mutationFn: (candId: string) => api.delete(`/candidatures/${candId}`), onSuccess: () => { invalidate(); toast('success', 'Retiré du mandat'); } });
+  const linkMut = useMutation({ mutationFn: (mandatId: string) => api.post('/candidatures', { candidatId: id, mandatId, stage: 'SOURCING' }), onSuccess: () => { invalidate(); setLinkSel(''); toast('success', 'Relié au mandat'); } });
+  const sourceMut = useMutation({ mutationFn: (source: string) => api.put(`/candidats/${id}`, { source }), onSuccess: () => { invalidate(); toast('success', 'Source mise à jour'); } });
+  const actMut = useMutation({ mutationFn: (body: Record<string, unknown>) => api.post('/activites', { entiteType: 'CANDIDAT', entiteId: id, ...body }), onSuccess: () => { invalidate(); } });
+  const toggleTaskMut = useMutation({ mutationFn: ({ actId, done }: { actId: string; done: boolean }) => api.put(`/activites/${actId}`, { tacheCompleted: done }), onSuccess: () => invalidate() });
 
-  // Calendly link state
-  const [calendlyCopied, setCalendlyCopied] = useState(false);
-
-  // Pitch IA section state
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [showAnonymized, setShowAnonymized] = useState(false);
-
-  // Experience section state
-  const [showExpModal, setShowExpModal] = useState(false);
-  const [editingExp, setEditingExp] = useState<CandidatDetail['experiences'][0] | null>(null);
-  const [expForm, setExpForm] = useState({ titre: '', entreprise: '', anneeDebut: '', anneeFin: '', highlights: '' });
-
-  const { data: candidat, isLoading, isError } = useQuery({
-    queryKey: ['candidat', id],
-    queryFn: () => api.get<CandidatDetail>(`/candidats/${id}`),
-    enabled: !!id,
-    retry: (failureCount, error: any) => {
-      if (error?.status === 404) return false;
-      return failureCount < 2;
-    },
-  });
-
-  const { data: bookingSettings } = useQuery({
-    queryKey: ['booking', 'settings'],
-    queryFn: () => api.get<{ slug: string; isActive: boolean }>('/booking/settings'),
-    retry: false,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const bookingSlug = bookingSettings?.isActive ? bookingSettings.slug : null;
-
-  // Fetch current user profile for calendly URL
-  const { data: currentUser } = useQuery({
-    queryKey: ['me'],
-    queryFn: () => api.get<{ id: string; calendlyUrl?: string }>('/auth/me'),
-    staleTime: 10 * 60 * 1000,
-  });
-
-  // Fetch existing tags for autocomplete
-  const { data: tagSuggestions } = useQuery({
-    queryKey: ['candidats', 'tags'],
-    queryFn: () => api.get<string[]>('/candidats/tags'),
-    staleTime: 2 * 60 * 1000,
-  });
-
-  // Fetch open mandats for "Ajouter au mandat" — always loaded
-  const { data: mandatsData } = useQuery({
-    queryKey: ['mandats', 'open-for-add'],
-    queryFn: () => api.get<{ data: { id: string; titrePoste: string; entreprise: { nom: string } }[]; meta: any }>('/mandats?statut=OUVERT&perPage=200&scope=all'),
-    staleTime: 60_000,
-  });
-
-  const { data: pushes, isLoading: pushesLoading } = useQuery({
-    queryKey: ['pushes-candidat', candidat?.id],
-    queryFn: () => api.get<any[]>(`/pushes/by-candidat/${candidat!.id}`),
-    enabled: !!candidat?.id,
-  });
-
-  usePageTitle(candidat ? `${candidat.prenom || ''} ${candidat.nom}`.trim() : 'Candidat');
-
-  const completenessFields = useMemo(() => {
-    if (!candidat) return [];
-    return [
-      { key: 'nom', label: 'Nom', filled: !!candidat.nom },
-      { key: 'email', label: 'Email', filled: !!candidat.email },
-      { key: 'telephone', label: 'Téléphone', filled: !!candidat.telephone },
-      { key: 'posteActuel', label: 'Poste actuel', filled: !!candidat.posteActuel },
-      { key: 'localisation', label: 'Localisation', filled: !!candidat.localisation },
-      { key: 'linkedinUrl', label: 'LinkedIn', filled: !!candidat.linkedinUrl },
-      { key: 'salaireSouhaite', label: 'Salaire souhaité', filled: !!candidat.salaireSouhaite },
-      { key: 'disponibilite', label: 'Disponibilité', filled: !!candidat.disponibilite },
-      { key: 'cvUrl', label: 'CV', filled: !!candidat.cvUrl },
-      { key: 'tags', label: 'Tags', filled: Array.isArray(candidat.tags) && candidat.tags.length > 0 },
-    ];
-  }, [candidat]);
-
-  // Filter out mandats where candidat is already added
-  const existingMandatIds = new Set(candidat?.candidatures.map((c) => c.mandat.id) || []);
-  const availableMandats = (mandatsData?.data || []).filter((m) => !existingMandatIds.has(m.id));
-  const filteredMandats = mandatSearch
-    ? availableMandats.filter((m) =>
-        `${m.titrePoste} ${m.entreprise.nom}`.toLowerCase().includes(mandatSearch.toLowerCase())
-      )
-    : availableMandats;
-
-  const addToMandatMutation = useMutation({
-    mutationFn: (mandatId: string) =>
-      api.post('/candidatures', { candidatId: id, mandatId, stage: 'SOURCING' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['candidat', id] });
-      toast('success', 'Candidat ajouté au mandat !');
-      setShowAddToMandat(false);
-      setMandatSearch('');
-    },
-    onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de l\'ajout');
-    },
-  });
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!showAddToMandat) return;
-    const handler = (e: MouseEvent) => {
-      if (mandatDropdownRef.current && !mandatDropdownRef.current.contains(e.target as Node)) {
-        setShowAddToMandat(false);
-        setMandatSearch('');
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showAddToMandat]);
-
-  const handleCopyBookingLink = useCallback((link: string, fieldId: string) => {
-    navigator.clipboard.writeText(link).then(() => {
-      toast('success', 'Lien booking copié !');
-      setBookingCopiedField(fieldId);
-      setTimeout(() => setBookingCopiedField(null), 2000);
-    });
-  }, []);
-
-  const handleSendBookingEmail = useCallback((link: string, mandatTitle?: string) => {
-    const firstName = candidat?.prenom || candidat?.nom || '';
-    const subject = mandatTitle
-      ? `Réservez un créneau — ${mandatTitle}`
-      : 'Réservez un créneau pour notre échange';
-    const body = `Bonjour ${firstName},\n\nJe vous propose de choisir un créneau qui vous convient pour notre prochain échange :\n\n👉 ${link}\n\nN'hésitez pas à sélectionner le créneau qui vous arrange le mieux.\n\nCordialement`;
-    setEmailDefaults({ subject, body });
-    setShowBookingDropdown(false);
-    setShowEmailComposer(true);
-  }, [candidat?.prenom, candidat?.nom]);
-
-  const updateMutation = useMutation({
-    mutationFn: (payload: Record<string, unknown>) =>
-      api.put<CandidatDetail>(`/candidats/${id}`, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['candidat', id] });
-      toast('success', 'Modifications enregistrées');
-      setIsEditing(false);
-      setEditForm(null);
-    },
-    onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de la mise à jour');
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: () => api.delete(`/candidats/${id}`),
-    onSuccess: () => {
-      toast('success', 'Supprimé avec succès');
-      navigate('/candidats');
-    },
-    onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de la suppression');
-    },
-  });
-
-  // CV upload mutation
-  const cvUploadMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append('candidatId', id!);
-      formData.append('file', file);
-
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch('/api/v1/ai/update-from-cv', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.message || `Erreur ${response.status}`);
-      }
-
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['candidat', id] });
-      toast('success', 'CV analysé et candidat mis à jour !');
-      setShowCvUploadModal(false);
-    },
-    onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de l\'analyse du CV');
-    },
-  });
-
-  // Experience mutations
-  const addExpMutation = useMutation({
-    mutationFn: (data: any) => api.post(`/candidats/${id}/experiences`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['candidat', id] });
-      setShowExpModal(false);
-      setEditingExp(null);
-      setExpForm({ titre: '', entreprise: '', anneeDebut: '', anneeFin: '', highlights: '' });
-      toast('success', 'Experience ajoutee');
-    },
-  });
-
-  const updateExpMutation = useMutation({
-    mutationFn: ({ expId, data }: { expId: string; data: any }) => api.put(`/candidats/experiences/${expId}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['candidat', id] });
-      setShowExpModal(false);
-      setEditingExp(null);
-      setExpForm({ titre: '', entreprise: '', anneeDebut: '', anneeFin: '', highlights: '' });
-      toast('success', 'Experience mise a jour');
-    },
-  });
-
-  const deleteExpMutation = useMutation({
-    mutationFn: (expId: string) => api.delete(`/candidats/experiences/${expId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['candidat', id] });
-      toast('success', 'Experience supprimee');
-    },
-  });
-
-  const openExpModal = (exp?: CandidatDetail['experiences'][0]) => {
-    if (exp) {
-      setEditingExp(exp);
-      setExpForm({
-        titre: exp.titre,
-        entreprise: exp.entreprise,
-        anneeDebut: String(exp.anneeDebut),
-        anneeFin: exp.anneeFin ? String(exp.anneeFin) : '',
-        highlights: exp.highlights.join('\n'),
-      });
-    } else {
-      setEditingExp(null);
-      setExpForm({ titre: '', entreprise: '', anneeDebut: '', anneeFin: '', highlights: '' });
-    }
-    setShowExpModal(true);
-  };
-
-  const handleExpSubmit = () => {
-    const data = {
-      titre: expForm.titre,
-      entreprise: expForm.entreprise,
-      anneeDebut: parseInt(expForm.anneeDebut, 10),
-      anneeFin: expForm.anneeFin ? parseInt(expForm.anneeFin, 10) : null,
-      highlights: expForm.highlights.split('\n').map((h) => h.trim()).filter(Boolean),
-      source: editingExp ? editingExp.source : 'manual',
-    };
-    if (editingExp) {
-      updateExpMutation.mutate({ expId: editingExp.id, data });
-    } else {
-      addExpMutation.mutate(data);
-    }
-  };
-
-  const handleCvFileUpload = useCallback((file: File) => {
-    if (!file) return;
-    if (file.type !== 'application/pdf') {
-      toast('error', 'Seuls les fichiers PDF sont acceptés.');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      toast('error', 'Le fichier est trop volumineux. Taille maximale : 10 Mo.');
-      return;
-    }
-    cvUploadMutation.mutate(file);
-  }, [cvUploadMutation]);
-
-  const handleCvDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleCvDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleCvDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleCvFileUpload(file);
-  }, [handleCvFileUpload]);
-
-  const handleCvFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleCvFileUpload(file);
-    e.target.value = '';
-  }, [handleCvFileUpload]);
-
-  const copyToClipboard = async (text: string, fieldName: string) => {
+  const cvUpload = async (file: File) => {
+    const fd = new FormData(); fd.append('file', file);
     try {
-      await navigator.clipboard.writeText(text);
-      setCopiedField(fieldName);
-      toast('success', 'Copié dans le presse-papiers');
-      setTimeout(() => setCopiedField(null), 2000);
-    } catch {
-      toast('error', 'Erreur lors de la copie');
-    }
+      const res = await fetch(`/api/v1/candidats/${id}/cv`, { method: 'POST', headers: { ...authHeader() }, body: fd });
+      if (!res.ok) throw new Error('upload');
+      invalidate(); toast('success', 'CV importé');
+    } catch { toast('error', "Échec de l'import du CV"); }
   };
 
-  const handleStartEdit = () => {
-    if (candidat) {
-      setEditForm(buildEditForm(candidat));
-      setIsEditing(true);
-    }
-  };
+  const linkedMandatIds = useMemo(() => new Set((c?.candidatures ?? []).map(x => x.mandat.id)), [c]);
+  const mandatOptions = (mandatsData?.data ?? []).filter(m => !linkedMandatIds.has(m.id));
 
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setEditForm(null);
-  };
-
-  const handleSave = () => {
-    if (!editForm) return;
-    const payload: Record<string, unknown> = {};
-    payload.nom = editForm.nom.trim() || undefined;
-    if (editForm.prenom.trim()) payload.prenom = editForm.prenom.trim();
-    else payload.prenom = null;
-    if (editForm.email.trim()) payload.email = editForm.email.trim();
-    else payload.email = null;
-    if (editForm.telephone.trim()) payload.telephone = editForm.telephone.trim();
-    else payload.telephone = null;
-    if (editForm.posteActuel.trim()) payload.posteActuel = editForm.posteActuel.trim();
-    else payload.posteActuel = null;
-    if (editForm.entrepriseActuelle.trim()) payload.entrepriseActuelle = editForm.entrepriseActuelle.trim();
-    else payload.entrepriseActuelle = null;
-    if (editForm.localisation.trim()) payload.localisation = editForm.localisation.trim();
-    else payload.localisation = null;
-    if (editForm.linkedinUrl.trim()) payload.linkedinUrl = editForm.linkedinUrl.trim();
-    else payload.linkedinUrl = null;
-    if (editForm.salaireActuel) payload.salaireActuel = parseInt(editForm.salaireActuel, 10);
-    else payload.salaireActuel = null;
-    if (editForm.salaireSouhaite) payload.salaireSouhaite = parseInt(editForm.salaireSouhaite, 10);
-    else payload.salaireSouhaite = null;
-    if (editForm.anneesExperience) payload.anneesExperience = parseInt(editForm.anneesExperience, 10);
-    else payload.anneesExperience = null;
-    if (editForm.disponibilite.trim()) payload.disponibilite = editForm.disponibilite.trim();
-    else payload.disponibilite = null;
-    if (editForm.mobilite.trim()) payload.mobilite = editForm.mobilite.trim();
-    else payload.mobilite = null;
-    payload.tags = editForm.tags.filter(Boolean);
-    if (editForm.notes.trim()) payload.notes = editForm.notes.trim();
-    else payload.notes = null;
-
-    updateMutation.mutate(payload);
-  };
-
-  const setField = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setEditForm((prev) => prev ? { ...prev, [field]: e.target.value } : prev);
-  };
-
-  // Check if AI pitch data exists
-  const hasAiPitch = candidat && (candidat.aiPitchShort || candidat.aiPitchLong);
-
-  if (isLoading) {
-    return (
-      <div>
-        <Skeleton className="h-8 w-64 mb-6" />
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            <SkeletonCard />
-            <SkeletonCard />
-          </div>
-          <div className="space-y-6">
-            <SkeletonCard />
-          </div>
-        </div>
-      </div>
-    );
+  if (isLoading || !c) {
+    return <div style={{ padding: 40, color: '#8A8699' }}>Chargement…</div>;
   }
 
-  if (!candidat || isError) {
-    return (
-      <div className="text-center py-16">
-        <p className="text-text-secondary">Candidat introuvable.</p>
-        <Button variant="ghost" onClick={() => navigate('/candidats')} className="mt-4">
-          Retour aux candidats
-        </Button>
-      </div>
-    );
-  }
+  const fullName = `${c.prenom ? c.prenom + ' ' : ''}${c.nom}`.trim();
+  const firstCand = c.candidatures.find(x => x.stage !== 'REFUSE') ?? c.candidatures[0];
+  const sourcedFor = firstCand?.mandat.titrePoste;
 
-  const fullName = `${candidat.prenom || ''} ${candidat.nom}`.trim();
-  const currentStage = candidat.candidatures[0]?.stage;
+  const submitComment = () => { const t = comment.trim(); if (!t) return; actMut.mutate({ type: 'NOTE', contenu: t }); setComment(''); };
+  const submitTask = () => { const t = taskText.trim(); if (!t) return; actMut.mutate({ type: 'TACHE', isTache: true, titre: t }); setTaskText(''); };
+  const submitEval = () => { if (!rating) { toast('error', 'Choisissez une note'); return; } actMut.mutate({ type: 'NOTE', titre: `Évaluation ${'★'.repeat(rating)}`, contenu: comment.trim() || `Note ${rating}/5` }); setComment(''); toast('success', 'Évaluation ajoutée'); };
+  const advance = (cand: Candidature) => { const i = STAGES.indexOf(cand.stage); if (i < 0 || i >= STAGES.length - 1) { toast('error', 'Déjà à la dernière étape'); return; } advanceMut.mutate({ candId: cand.id, stage: STAGES[i + 1] }); };
+
+  const railTabs: [typeof railTab, string][] = [['act', 'Activité'], ['com', 'Commentaires'], ['task', 'Tâches'], ['eval', 'Évaluation'], ['msg', 'Messages']];
+  const actions: { label: string; Icon: typeof Ban; color: string; run: () => void }[] = [
+    { label: 'Rejeter', Icon: Ban, color: '#F3A6A0', run: () => { if (firstCand) setLost({ candId: firstCand.id, titre: firstCand.mandat.titrePoste, company: firstCand.mandat.entreprise.nom }); else toast('error', 'Aucun mandat'); } },
+    { label: 'Étape suivante', Icon: ArrowRight, color: '#E6E9AF', run: () => { if (firstCand) advance(firstCand); else toast('error', 'Aucun mandat'); } },
+    { label: 'Planifier', Icon: Calendar, color: '#fff', run: () => setPlanOpen(true) },
+    { label: 'Commentaire', Icon: MessageSquare, color: '#fff', run: () => setRailTab('com') },
+    { label: 'Tâche', Icon: CheckSquare, color: '#fff', run: () => setRailTab('task') },
+    { label: 'Message', Icon: Send, color: '#fff', run: () => { if (c.email) window.location.href = `mailto:${c.email}`; else toast('error', "Pas d'email"); } },
+  ];
+
+  const details: { label: string; Icon: typeof Mail; value: string | null; href?: string; select?: boolean }[] = [
+    { label: 'E-mail', Icon: Mail, value: c.email, href: c.email ? `mailto:${c.email}` : undefined },
+    { label: 'Téléphone', Icon: Phone, value: c.telephone, href: c.telephone ? `tel:${c.telephone}` : undefined },
+    { label: 'LinkedIn', Icon: Linkedin, value: c.linkedinUrl, href: c.linkedinUrl ?? undefined },
+    { label: 'Localisation', Icon: MapPin, value: c.localisation },
+    { label: 'Source du profil', Icon: FileText, value: c.source, select: true },
+  ];
 
   return (
     <div>
-      {/* Breadcrumb mock-fidelity */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5, color: '#9A96AE', fontWeight: 600 }}>
-        <a onClick={() => navigate('/candidats')} style={{ color: '#8A8699', cursor: 'pointer' }}>Candidats</a>
-        <span style={{ color: '#C4C1D0' }}>›</span>
-        <span style={{ color: '#22177A', fontWeight: 700 }}>{fullName}</span>
+      <style>{`
+        @keyframes fmIn{ from{ transform:translateY(14px); opacity:0; } to{ transform:none; opacity:1; } }
+        .fmcard:hover{ box-shadow:0 20px 40px -28px rgba(34,23,122,.4); border-color:rgba(34,23,122,.16) !important; }
+        .fmcard{ transition:box-shadow .22s ease, border-color .22s ease; }
+        .sec-h{ cursor:pointer; }
+        .sec-h:hover .chev{ color:#22177A; }
+        .abtn:hover{ background:rgba(230,233,175,.12) !important; }
+        .drop:hover{ background:#F2F3D8 !important; border-color:rgba(34,23,122,.4) !important; }
+        .fmodal{ animation:fmIn .3s cubic-bezier(.16,1,.3,1) both; }
+        .fiche-grid{ display:grid; grid-template-columns:minmax(0,1fr) 400px; gap:22px; align-items:start; }
+        @media (max-width:1180px){ .fiche-grid{ grid-template-columns:minmax(0,1fr) 340px; } }
+        @media (max-width:1024px){ .fiche-grid{ grid-template-columns:1fr; } .fiche-rail{ position:static !important; max-height:none !important; } }
+      `}</style>
+
+      {/* TOPBAR */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
+        <button onClick={() => navigate('/candidats')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#4A4568', border: '1px solid rgba(34,23,122,.14)', background: '#fff', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}><ArrowLeft size={14} strokeWidth={2.4} />Candidats</button>
+        <button onClick={() => setExportOpen(true)} style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#22177A', border: '1px solid rgba(34,23,122,.16)', background: '#fff', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }}><Download size={14} strokeWidth={2.2} />Exporter</button>
       </div>
 
-      {/* Hero row : avatar 74px + name/role/chips + actions right */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, marginTop: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-          <div style={{ width: 74, height: 74, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
-            <Avatar src={candidat.photoUrl} nom={candidat.nom} prenom={candidat.prenom} size="xl" />
-          </div>
-          <div>
-            <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 30, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1.05 }}>
-              {fullName}
-            </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
-              {candidat.posteActuel && (
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#4A4568' }}>
-                  {candidat.posteActuel}
-                  {candidat.entrepriseActuelle && <span style={{ color: '#8A8699' }}> · {candidat.entrepriseActuelle}</span>}
-                </span>
+      <div className="fiche-grid">
+        {/* ─── MAIN ─── */}
+        <div style={{ position: 'relative' }}>
+          {/* IDENTITY */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 22 }}>
+            <span style={{ flexShrink: 0 }}>
+              {c.photoUrl
+                ? <img src={c.photoUrl} alt="" style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover', background: '#F2F3D8', boxShadow: '0 16px 36px -18px rgba(34,23,122,.6)' }} />
+                : <span style={{ width: 96, height: 96, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 32, boxShadow: '0 16px 36px -18px rgba(34,23,122,.6)' }}>{initials(c.prenom, c.nom)}</span>}
+            </span>
+            <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
+              <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 31, letterSpacing: '-.035em', color: '#1A1533' }}>{fullName}</h1>
+              <div style={{ fontSize: 15, color: '#4A4568', marginTop: 5 }}>
+                {sourcedFor ? <>Sourcé pour <span onClick={() => navigate(`/mandats/${firstCand!.mandat.id}`)} style={{ color: '#22177A', fontWeight: 700, borderBottom: '1.5px solid rgba(34,23,122,.25)', cursor: 'pointer' }}>{sourcedFor}</span>{c.posteActuel ? ` en tant que ${c.posteActuel}` : ''}</> : (c.posteActuel || 'Dans le vivier')}
+              </div>
+              {c.tags.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 11 }}>
+                  {c.tags.slice(0, 6).map((t, i) => <span key={t} style={{ fontSize: 11.5, fontWeight: 700, borderRadius: 6, padding: '4px 10px', background: i % 2 ? '#EDEAF9' : '#F2F3D8', color: i % 2 ? '#5B4B9E' : '#22177A' }}>{t}</span>)}
+                </div>
               )}
-              {candidat.localisation && (
-                <>
-                  <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#C4C1D0' }} />
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: '#6E6A85' }}>
-                    <MapPin size={13} color="#22177A" />
-                    {candidat.localisation}
-                  </span>
-                </>
-              )}
-              {currentStage && (
-                <span
-                  style={{
-                    fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '4px 11px',
-                    background: 'rgba(34,23,122,0.06)', color: '#22177A',
-                  }}
-                >
-                  {stageLabels[currentStage] || currentStage}
-                </span>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 15, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 3 }}>
+                  {[1, 2, 3, 4, 5].map(n => <button key={n} onClick={() => setRating(n)} style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', lineHeight: 1 }}><Star size={21} fill={n <= rating ? '#E6C64A' : 'none'} color={n <= rating ? '#E6C64A' : '#C4C1D0'} /></button>)}
+                </div>
+                <button onClick={() => setRailTab('eval')} style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 14px', cursor: 'pointer' }}>Ajouter une évaluation</button>
+                <button onClick={() => setPlanOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 9, padding: '9px 15px', cursor: 'pointer' }}><Plus size={14} strokeWidth={2.2} />Prévoir une action</button>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>{/* Actions preserved */}</div>
-      </div>
 
-      {/* KPI row 4 cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
-        <div className="kpi">
-          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Star size={12} style={{ color: '#22177A' }} /><span>Candidatures</span>
-          </div>
-          <div className="kpi-value" style={{ marginTop: 12 }}>{candidat.candidatures.length}</div>
-          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>en pipeline</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Briefcase size={12} style={{ color: '#22177A' }} /><span>Étape actuelle</span>
-          </div>
-          <div className="kpi-value" style={{ marginTop: 12, fontSize: 22 }}>
-            {currentStage ? (stageLabels[currentStage] || currentStage) : '—'}
-          </div>
-          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>{candidat.candidatures[0]?.mandat?.titrePoste ?? ''}</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Clock size={12} style={{ color: '#22177A' }} /><span>Disponibilité</span>
-          </div>
-          <div className="kpi-value" style={{ marginTop: 12, fontSize: 22 }}>
-            {candidat.disponibilite || '—'}
-          </div>
-          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>déclarée</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Banknote size={12} style={{ color: '#22177A' }} /><span>Prétentions</span>
-          </div>
-          <div className="kpi-value" style={{ marginTop: 12 }}>
-            {candidat.salaireSouhaite ? `${Math.round(candidat.salaireSouhaite / 1000)}k€` : '—'}
-          </div>
-          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>package annuel</div>
-        </div>
-      </div>
-
-      {/* Actions row + PageHeader préservé — préserve toutes les fonctionnalités */}
-      <PageHeader
-        title=""
-        breadcrumbs={[]}
-        actions={
-          <div className="flex items-center gap-2">
-            {isEditing ? (
-              <>
-                <Button variant="primary" size="sm" onClick={handleSave} loading={updateMutation.isPending}>
-                  <Save size={14} /> Enregistrer
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleCancelEdit} disabled={updateMutation.isPending}>
-                  <X size={14} /> Annuler
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="secondary" size="sm" onClick={() => setShowCvUploadModal(true)}>
-                  <Upload size={14} /> Mettre à jour depuis un CV
-                </Button>
-                <Button variant="secondary" size="sm" onClick={handleStartEdit}>
-                  <Pencil size={14} /> Modifier
-                </Button>
-                <Button variant="danger" size="sm" onClick={() => setShowDeleteModal(true)} disabled={deleteMutation.isPending}>
-                  <Trash2 size={14} /> Supprimer
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => { setEmailDefaults({ subject: '', body: '' }); setShowEmailComposer(true); }}
-                  disabled={!candidat.email}
-                  title={!candidat.email ? 'Aucun email renseigné — modifiez la fiche pour ajouter un email' : undefined}
-                >
-                  <Send size={14} /> Envoyer un email
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => setShowScheduleMeeting(true)}>
-                  <Calendar size={14} /> Planifier un RDV
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => setShowCallBrief(true)}>
-                  <Bot size={14} /> Brief pre-appel
-                </Button>
-                {bookingSlug && (
-                  <div className="relative">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setShowBookingDropdown(!showBookingDropdown)}
-                    >
-                      <CalendarPlus size={14} /> Liens booking
-                      <ChevronDown size={12} />
-                    </Button>
-                    {showBookingDropdown && (
-                      <>
-                        <div className="fixed inset-0 z-10" onClick={() => setShowBookingDropdown(false)} />
-                        <div className="absolute right-0 top-full mt-1 z-20 w-[420px] rounded-xl border border-border bg-white shadow-lg overflow-hidden">
-                          {/* Candidat link */}
-                          <div className="p-3 border-b border-border/50">
-                            <p className="mb-2 text-xs font-semibold text-primary-500 uppercase tracking-wider flex items-center gap-1.5">
-                              <User size={12} /> Lien Candidat
-                              <span className="text-[10px] font-normal text-text-tertiary ml-1">(15 ou 30 min)</span>
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <span className="flex-1 truncate rounded-lg bg-neutral-50 px-3 py-1.5 text-xs text-text-secondary font-mono">
-                                .../book/{bookingSlug}?type=candidat
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}?type=candidat`, 'candidat')}
-                                className="shrink-0 rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
-                                title="Copier"
-                              >
-                                {bookingCopiedField === 'candidat' ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-text-tertiary" />}
-                              </button>
-                              {candidat.email && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleSendBookingEmail(`https://ats.propium.co/book/${bookingSlug}?type=candidat`)}
-                                  className="shrink-0 rounded-lg p-1.5 hover:bg-primary-50 transition-colors"
-                                  title="Envoyer par email"
-                                >
-                                  <Send size={14} className="text-primary-500" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          {/* Client link */}
-                          <div className="p-3 border-b border-border/50">
-                            <p className="mb-2 text-xs font-semibold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
-                              <Building2 size={12} /> Lien Client
-                              <span className="text-[10px] font-normal text-text-tertiary ml-1">(45 min ou 1h)</span>
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <span className="flex-1 truncate rounded-lg bg-neutral-50 px-3 py-1.5 text-xs text-text-secondary font-mono">
-                                .../book/{bookingSlug}?type=client
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}?type=client`, 'client')}
-                                className="shrink-0 rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
-                                title="Copier"
-                              >
-                                {bookingCopiedField === 'client' ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-text-tertiary" />}
-                              </button>
-                              {candidat.email && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleSendBookingEmail(`https://ats.propium.co/book/${bookingSlug}?type=client`)}
-                                  className="shrink-0 rounded-lg p-1.5 hover:bg-primary-50 transition-colors"
-                                  title="Envoyer par email"
-                                >
-                                  <Send size={14} className="text-primary-500" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          {/* Mandate-specific links */}
-                          {candidat.candidatures.filter(c => c.mandat.slug && c.mandat.statut !== 'CLOTURE' && c.mandat.statut !== 'ANNULE').length > 0 && (
-                            <div className="p-3">
-                              <p className="mb-2 text-xs font-semibold text-text-tertiary uppercase tracking-wider">Liens par mandat</p>
-                              <div className="space-y-2">
-                                {candidat.candidatures.filter(c => c.mandat.slug && c.mandat.statut !== 'CLOTURE' && c.mandat.statut !== 'ANNULE').map((c) => (
-                                  <div key={c.id}>
-                                    <p className="mb-1 text-xs font-medium text-text-primary flex items-center gap-1.5">
-                                      <Briefcase size={12} className="text-text-tertiary" />
-                                      {c.mandat.titrePoste}
-                                    </p>
-                                    <div className="flex items-center gap-2">
-                                      <span className="flex-1 truncate rounded-lg bg-neutral-50 px-3 py-1.5 text-xs text-text-secondary font-mono">
-                                        .../book/{bookingSlug}/{c.mandat.slug}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}/${c.mandat.slug}`, c.id)}
-                                        className="shrink-0 rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
-                                        title="Copier"
-                                      >
-                                        {bookingCopiedField === c.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-text-tertiary" />}
-                                      </button>
-                                      {candidat.email && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleSendBookingEmail(`https://ats.propium.co/book/${bookingSlug}/${c.mandat.slug}`, c.mandat.titrePoste)}
-                                          className="shrink-0 rounded-lg p-1.5 hover:bg-primary-50 transition-colors"
-                                          title="Envoyer par email"
-                                        >
-                                          <Send size={14} className="text-primary-500" />
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </>
+          {/* DÉTAILS */}
+          <div style={{ marginTop: 32 }}>
+            <div onClick={() => setDetOpen(o => !o)} className="sec-h" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <ChevronDown className="chev" size={14} color="#8A8699" strokeWidth={2.6} style={{ transform: detOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .3s' }} />
+              <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: '#1A1533' }}>Détails du candidat</span>
+            </div>
+            {detOpen && (
+              <div style={{ marginTop: 14 }}>
+                {details.map(d => (
+                  <div key={d.label} style={{ display: 'grid', gridTemplateColumns: '210px 1fr', gap: 16, alignItems: 'center', padding: '9px 12px', borderRadius: 9 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 11, fontSize: 13.5, color: '#6E6A85' }}><d.Icon size={15} color="#8A8699" />{d.label}</span>
+                    {d.select ? (
+                      <div style={{ position: 'relative', maxWidth: 300 }}>
+                        <select value={c.source ?? ''} onChange={e => sourceMut.mutate(e.target.value)} style={{ appearance: 'none', width: '100%', fontFamily: "'Manrope',sans-serif", fontSize: 13.5, fontWeight: 600, color: '#1A1533', background: '#fff', border: '1px solid rgba(34,23,122,.14)', borderRadius: 9, padding: '9px 32px 9px 12px', cursor: 'pointer', outline: 'none' }}>
+                          <option value="">— Source —</option>
+                          {SOURCE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                        <ChevronDown size={13} color="#8A8699" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                      </div>
+                    ) : d.value ? (
+                      d.href ? <a href={d.href} target={d.label === 'LinkedIn' ? '_blank' : undefined} rel="noreferrer" style={{ fontSize: 13.5, color: '#22177A', fontWeight: 600, wordBreak: 'break-all' }}>{d.value}</a>
+                        : <span style={{ fontSize: 13.5, color: '#1A1533', fontWeight: 600 }}>{d.value}</span>
+                    ) : (
+                      <span style={{ display: 'block', maxWidth: 420, fontSize: 13.5, color: '#B4B0C4', background: '#F7F7F0', border: '1px solid rgba(34,23,122,.09)', borderRadius: 8, padding: '8px 12px' }}>Vide</span>
                     )}
-                  </div>
-                )}
-                <Button variant="ghost" onClick={() => navigate('/candidats')}>
-                  <ArrowLeft size={16} /> Retour
-                </Button>
-              </>
-            )}
-          </div>
-        }
-      />
-
-      <motion.div className="grid grid-cols-1 gap-6 lg:grid-cols-3" variants={detailStagger} initial="hidden" animate="show">
-        {/* Main info */}
-        <motion.div className="lg:col-span-2 space-y-6" variants={detailItem}>
-          <Card>
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">Informations</h2>
-            {isEditing && editForm ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Input label="Nom" value={editForm.nom} onChange={setField('nom')} placeholder="Nom" />
-                <Input label="Prénom" value={editForm.prenom} onChange={setField('prenom')} placeholder="Prénom" />
-                <Input label="Email" type="email" value={editForm.email} onChange={setField('email')} placeholder="email@exemple.com" />
-                <Input label="Téléphone" value={editForm.telephone} onChange={setField('telephone')} placeholder="+33 6 12 34 56 78" />
-                <Input label="Poste actuel" value={editForm.posteActuel} onChange={setField('posteActuel')} placeholder="Poste actuel" />
-                <Input label="Entreprise actuelle" value={editForm.entrepriseActuelle} onChange={setField('entrepriseActuelle')} placeholder="Entreprise" />
-                <Input label="Localisation" value={editForm.localisation} onChange={setField('localisation')} placeholder="Paris, France" />
-                <Input label="LinkedIn" value={editForm.linkedinUrl} onChange={setField('linkedinUrl')} placeholder="https://linkedin.com/in/..." />
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <Mail size={14} className="shrink-0 text-text-tertiary" />
-                  <InlineEdit
-                    value={candidat.email || ''}
-                    onSave={async (v) => { updateMutation.mutateAsync({ email: v || null }); }}
-                    placeholder="email@exemple.com"
-                    type="email"
-                  />
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Phone size={14} className="shrink-0 text-text-tertiary" />
-                  <InlineEdit
-                    value={candidat.telephone || ''}
-                    onSave={async (v) => { updateMutation.mutateAsync({ telephone: v || null }); }}
-                    placeholder="+33 6 12 34 56 78"
-                    type="tel"
-                  />
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Briefcase size={14} className="shrink-0 text-text-tertiary" />
-                  <InlineEdit
-                    value={candidat.posteActuel || ''}
-                    onSave={async (v) => { updateMutation.mutateAsync({ posteActuel: v || null }); }}
-                    placeholder="Poste actuel"
-                  />
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <MapPin size={14} className="shrink-0 text-text-tertiary" />
-                  <InlineEdit
-                    value={candidat.localisation || ''}
-                    onSave={async (v) => { updateMutation.mutateAsync({ localisation: v || null }); }}
-                    placeholder="Localisation"
-                  />
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Linkedin size={14} className="shrink-0 text-text-tertiary" />
-                  <InlineEdit
-                    value={candidat.linkedinUrl || ''}
-                    onSave={async (v) => { updateMutation.mutateAsync({ linkedinUrl: v || null }); }}
-                    placeholder="URL LinkedIn"
-                    type="url"
-                  />
-                </div>
-                {candidat.entrepriseActuelle && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Building2 size={14} className="text-text-tertiary" />
-                    <span className="text-text-primary">{candidat.entrepriseActuelle}</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </Card>
-
-          {/* Pitch IA Section */}
-          <AnimatePresence>
-            {hasAiPitch && (
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 16 }}
-                transition={{ type: 'spring' as const, stiffness: 260, damping: 24 }}
-              >
-                <Card>
-                  <div className="mb-4 flex items-center justify-between">
-                    <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
-                      <Sparkles size={18} className="text-primary-500" />
-                      Pitch IA
-                    </h2>
-                    <div className="flex items-center gap-2">
-                      {candidat.aiParsedAt && (
-                        <span className="text-xs text-text-tertiary">
-                          Analysé le {new Date(candidat.aiParsedAt).toLocaleDateString('fr-FR')}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const fullPitch = [
-                            candidat.aiPitchLong || candidat.aiPitchShort || '',
-                            '',
-                            ...(candidat.aiSellingPoints || []).map((p, i) => `${i + 1}. ${p}`),
-                            '',
-                            candidat.aiIdealFor ? `Idéal pour : ${candidat.aiIdealFor}` : '',
-                          ].filter(Boolean).join('\n');
-                          copyToClipboard(fullPitch, 'fullPitch');
-                        }}
-                        className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-primary-600 bg-primary-50 hover:bg-primary-100 transition-all"
-                      >
-                        {copiedField === 'fullPitch' ? <Check size={12} /> : <Copy size={12} />}
-                        {copiedField === 'fullPitch' ? 'Copié !' : 'Copier le pitch'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Pitch Short */}
-                  {candidat.aiPitchShort && (
-                    <div className="mb-4">
-                      <div className="mb-1 flex items-center justify-between">
-                        <p className="text-xs font-medium text-text-tertiary">Pitch court</p>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(candidat.aiPitchShort!, 'pitchShort')}
-                          className="flex items-center gap-1 text-xs text-text-tertiary hover:text-text-primary transition-all"
-                        >
-                          {copiedField === 'pitchShort' ? <Check size={10} /> : <Copy size={10} />}
-                        </button>
-                      </div>
-                      <p className="whitespace-pre-wrap rounded-lg bg-primary-50/50 px-3 py-2 text-sm text-text-primary">
-                        {candidat.aiPitchShort}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Pitch Long */}
-                  {candidat.aiPitchLong && (
-                    <div className="mb-4">
-                      <div className="mb-1 flex items-center justify-between">
-                        <p className="text-xs font-medium text-text-tertiary">Pitch commercial</p>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(candidat.aiPitchLong!, 'pitchLong')}
-                          className="flex items-center gap-1 text-xs text-text-tertiary hover:text-text-primary transition-all"
-                        >
-                          {copiedField === 'pitchLong' ? <Check size={10} /> : <Copy size={10} />}
-                        </button>
-                      </div>
-                      <p className="whitespace-pre-wrap rounded-lg bg-primary-50/50 px-3 py-2 text-sm text-text-primary">
-                        {candidat.aiPitchLong}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Key Selling Points */}
-                  {candidat.aiSellingPoints && candidat.aiSellingPoints.length > 0 && (
-                    <div className="mb-4">
-                      <p className="mb-2 text-xs font-medium text-text-tertiary">Points forts</p>
-                      <div className="space-y-1.5">
-                        {candidat.aiSellingPoints.map((point, idx) => (
-                          <div key={idx} className="flex items-start gap-2">
-                            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-600">
-                              {idx + 1}
-                            </span>
-                            <span className="text-sm text-text-primary">{point}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Ideal For */}
-                  {candidat.aiIdealFor && (
-                    <div className="mb-4">
-                      <p className="mb-1 text-xs font-medium text-text-tertiary">Idéal pour</p>
-                      <p className="text-sm font-medium text-primary-600">{candidat.aiIdealFor}</p>
-                    </div>
-                  )}
-
-                  {/* Anonymized Profile (collapsible) */}
-                  {candidat.aiAnonymizedProfile && (
-                    <div className="border-t border-neutral-100 pt-3">
-                      <button
-                        type="button"
-                        onClick={() => setShowAnonymized(!showAnonymized)}
-                        className="flex w-full items-center justify-between text-left"
-                      >
-                        <p className="text-xs font-medium text-text-tertiary">Profil anonymisé</p>
-                        {showAnonymized ? (
-                          <ChevronUp size={14} className="text-text-tertiary" />
-                        ) : (
-                          <ChevronDown size={14} className="text-text-tertiary" />
-                        )}
-                      </button>
-
-                      <AnimatePresence>
-                        {showAnonymized && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="mt-3 space-y-2 rounded-lg bg-neutral-50 p-3">
-                              <p className="text-sm font-semibold text-text-primary">
-                                {candidat.aiAnonymizedProfile.title}
-                              </p>
-                              <p className="whitespace-pre-wrap text-sm text-text-secondary">
-                                {candidat.aiAnonymizedProfile.summary}
-                              </p>
-                              {candidat.aiAnonymizedProfile.bullet_points?.length > 0 && (
-                                <ul className="space-y-1">
-                                  {candidat.aiAnonymizedProfile.bullet_points.map((pt, idx) => (
-                                    <li key={idx} className="flex items-start gap-2 text-sm text-text-primary">
-                                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary-400" />
-                                      {pt}
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const text = [
-                                    candidat.aiAnonymizedProfile!.title,
-                                    '',
-                                    candidat.aiAnonymizedProfile!.summary,
-                                    '',
-                                    ...(candidat.aiAnonymizedProfile!.bullet_points || []).map((p) => `- ${p}`),
-                                  ].join('\n');
-                                  copyToClipboard(text, 'anonymized');
-                                }}
-                                className="flex items-center gap-1 rounded px-2 py-1 text-xs text-text-tertiary hover:bg-neutral-100 hover:text-text-primary transition-all"
-                              >
-                                {copiedField === 'anonymized' ? <Check size={10} /> : <Copy size={10} />}
-                                {copiedField === 'anonymized' ? 'Copié !' : 'Copier le profil anonymisé'}
-                              </button>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  )}
-
-                  {/* Utiliser dans Adchase link */}
-                  <div className="mt-4 flex justify-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => navigate(`/adchase?candidatId=${candidat.id}`)}
-                    >
-                      <Send size={14} /> Utiliser dans Adchase
-                    </Button>
-                  </div>
-                </Card>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Parcours professionnel */}
-          <Card>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
-                <Briefcase size={18} className="text-primary-500" />
-                Parcours professionnel
-              </h2>
-              <Button variant="secondary" size="sm" onClick={() => openExpModal()}>
-                <Plus size={14} /> Ajouter
-              </Button>
-            </div>
-            {(!candidat.experiences || candidat.experiences.length === 0) ? (
-              <p className="text-sm text-text-secondary">Aucune experience renseignee.</p>
-            ) : (
-              <div className="space-y-3">
-                {candidat.experiences.map((exp) => (
-                  <div key={exp.id} className="group relative rounded-lg border border-border p-3 hover:bg-primary-50/30 transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-text-primary truncate">{exp.titre}</p>
-                          {exp.source === 'cv' && (
-                            <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">CV</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-text-secondary">{exp.entreprise}</p>
-                        <p className="text-xs text-text-tertiary">
-                          {exp.anneeDebut} — {exp.anneeFin || "Aujourd'hui"}
-                        </p>
-                        {exp.highlights.length > 0 && (
-                          <ul className="mt-1.5 space-y-0.5">
-                            {exp.highlights.map((h, i) => (
-                              <li key={i} className="flex items-start gap-1.5 text-xs text-text-secondary">
-                                <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-primary-300" />
-                                {h}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
-                        <button
-                          type="button"
-                          title="Chercher ce poste"
-                          onClick={() => navigate(`/candidats?search=${encodeURIComponent(exp.titre)}`)}
-                          className="rounded-lg p-1.5 hover:bg-primary-100 transition-colors"
-                        >
-                          <Search size={14} className="text-primary-500" />
-                        </button>
-                        <button
-                          type="button"
-                          title="Modifier"
-                          onClick={() => openExpModal(exp)}
-                          className="rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
-                        >
-                          <Pencil size={14} className="text-text-tertiary" />
-                        </button>
-                        <button
-                          type="button"
-                          title="Supprimer"
-                          onClick={() => deleteExpMutation.mutate(exp.id)}
-                          className="rounded-lg p-1.5 hover:bg-red-50 transition-colors"
-                        >
-                          <Trash2 size={14} className="text-red-400" />
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 ))}
               </div>
             )}
-          </Card>
-
-          <Card>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-text-primary">Candidatures</h2>
-              <div className="relative" ref={mandatDropdownRef}>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => { setShowAddToMandat(!showAddToMandat); setMandatSearch(''); }}
-                >
-                  <Plus size={14} /> Ajouter au mandat
-                </Button>
-
-                {/* Inline dropdown — replaces the old Modal */}
-                <AnimatePresence>
-                  {showAddToMandat && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4, scale: 0.97 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -4, scale: 0.97 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-border bg-white shadow-xl"
-                    >
-                      <div className="p-2">
-                        <div className="relative">
-                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-                          <input
-                            autoFocus
-                            type="text"
-                            value={mandatSearch}
-                            onChange={(e) => setMandatSearch(e.target.value)}
-                            placeholder="Rechercher un mandat..."
-                            className="w-full rounded-lg border border-border bg-neutral-50 py-2 pl-9 pr-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500"
-                          />
-                        </div>
-                      </div>
-                      <div className="max-h-56 overflow-y-auto px-1 pb-1">
-                        {filteredMandats.length === 0 ? (
-                          <p className="px-3 py-4 text-center text-sm text-neutral-400">
-                            {availableMandats.length === 0 ? 'Aucun mandat ouvert disponible' : 'Aucun résultat'}
-                          </p>
-                        ) : (
-                          filteredMandats.map((m) => (
-                            <button
-                              key={m.id}
-                              type="button"
-                              disabled={addToMandatMutation.isPending}
-                              onClick={() => addToMandatMutation.mutate(m.id)}
-                              className="w-full rounded-lg px-3 py-2.5 text-left hover:bg-primary-50 transition-colors group disabled:opacity-50"
-                            >
-                              <p className="text-sm font-medium text-text-primary group-hover:text-primary-700">{m.titrePoste}</p>
-                              <p className="text-xs text-text-secondary">{m.entreprise.nom}</p>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-            {candidat.candidatures.length === 0 ? (
-              <p className="text-sm text-text-secondary">Aucune candidature pour le moment.</p>
-            ) : (
-              <div className="space-y-3">
-                {candidat.candidatures.map((c) => (
-                  <div
-                    key={c.id}
-                    className="flex items-center justify-between rounded-md border border-border p-3 hover:bg-primary-50/30 cursor-pointer"
-                    onClick={() => navigate(`/mandats/${c.mandat.id}`)}
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-text-primary">{c.mandat.titrePoste}</p>
-                      <p className="text-xs text-text-secondary">{c.mandat.entreprise.nom}</p>
-                    </div>
-                    <Badge variant={stageBadgeVariant[c.stage] || 'default'}>
-                      {stageLabels[c.stage] || c.stage}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </motion.div>
-
-        {/* Sidebar */}
-        <motion.div className="space-y-6" variants={detailItem}>
-          {/* CV Section */}
-          <Card>
-            <h2 className="mb-3 text-lg font-semibold text-text-primary">CV</h2>
-            {candidat.cvUrl ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 rounded-lg border border-border bg-neutral-50 p-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50">
-                    <FileText size={20} className="text-red-500" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-text-primary">
-                      {candidat.cvUrl.split('/').pop()?.substring(9) || 'CV.pdf'}
-                    </p>
-                    <p className="text-xs text-text-secondary">PDF</p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <a
-                    href={candidat.cvUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-neutral-50"
-                  >
-                    <Eye size={14} /> Voir
-                  </a>
-                  <a
-                    href={candidat.cvUrl}
-                    download
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-neutral-50"
-                  >
-                    <Download size={14} /> Télécharger
-                  </a>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => cvDirectInputRef.current?.click()}
-                  className="w-full text-center text-xs text-text-secondary hover:text-primary-500 transition-colors"
-                  disabled={cvDirectUploadMutation.isPending}
-                >
-                  {cvDirectUploadMutation.isPending ? 'Upload en cours...' : 'Remplacer le CV'}
-                </button>
-              </div>
-            ) : (
-              <div
-                onClick={() => cvDirectInputRef.current?.click()}
-                className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-neutral-200 bg-neutral-50/50 p-6 text-center transition-colors hover:border-primary-300 hover:bg-primary-50/30"
-              >
-                <Upload size={24} className="text-neutral-400" />
-                <p className="text-sm text-text-secondary">
-                  <span className="font-medium text-primary-500">Cliquez pour ajouter</span> un CV (PDF)
-                </p>
-                {cvDirectUploadMutation.isPending && (
-                  <div className="flex items-center gap-2">
-                    <Loader2 size={14} className="animate-spin text-primary-500" />
-                    <span className="text-xs text-primary-500">Upload en cours...</span>
-                  </div>
-                )}
-              </div>
-            )}
-            <input
-              ref={cvDirectInputRef}
-              type="file"
-              accept=".pdf"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  if (file.type !== 'application/pdf') {
-                    toast('error', 'Seuls les fichiers PDF sont acceptés');
-                    return;
-                  }
-                  if (file.size > 10 * 1024 * 1024) {
-                    toast('error', 'Fichier trop volumineux (max 10 Mo)');
-                    return;
-                  }
-                  cvDirectUploadMutation.mutate(file);
-                }
-                e.target.value = '';
-              }}
-            />
-          </Card>
-
-          <ProfileCompleteness fields={completenessFields} />
-          <Card>
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">Détails</h2>
-            {isEditing && editForm ? (
-              <div className="space-y-4">
-                <Input label="Salaire actuel (EUR)" type="number" value={editForm.salaireActuel} onChange={setField('salaireActuel')} placeholder="55000" />
-                <Input label="Salaire souhaité (EUR)" type="number" value={editForm.salaireSouhaite} onChange={setField('salaireSouhaite')} placeholder="65000" />
-                <Input label="Années d'expérience" type="number" value={editForm.anneesExperience} onChange={setField('anneesExperience')} placeholder="5" />
-                <Select
-                  label="Disponibilité"
-                  options={[
-                    { value: '', label: 'Sélectionner...' },
-                    { value: 'Immédiate', label: 'Immédiate' },
-                    { value: '1 mois', label: '1 mois' },
-                    { value: '3 mois', label: '3 mois' },
-                    { value: 'En poste', label: 'En poste' },
-                  ]}
-                  value={editForm.disponibilite}
-                  onChange={(val) => setEditForm((prev) => prev ? { ...prev, disponibilite: val } : prev)}
-                />
-                <Input label="Mobilité" value={editForm.mobilite} onChange={setField('mobilite')} placeholder="Île-de-France, Remote..." />
-              </div>
-            ) : (
-              <dl className="space-y-3 text-sm">
-                <div>
-                  <dt className="text-text-tertiary">Salaire actuel</dt>
-                  <dd className="font-medium text-text-primary">{formatSalary(candidat.salaireActuel)}</dd>
-                </div>
-                <div>
-                  <dt className="text-text-tertiary">Salaire souhaité</dt>
-                  <dd className="font-medium text-text-primary">{formatSalary(candidat.salaireSouhaite)}</dd>
-                </div>
-                <div>
-                  <dt className="text-text-tertiary">Années d'expérience</dt>
-                  <dd className="font-medium text-text-primary">{candidat.anneesExperience != null ? `${candidat.anneesExperience} an${candidat.anneesExperience > 1 ? 's' : ''}` : '\u2014'}</dd>
-                </div>
-                <div>
-                  <dt className="text-text-tertiary">Disponibilité</dt>
-                  <dd className="font-medium text-text-primary">{candidat.disponibilite || '\u2014'}</dd>
-                </div>
-                <div>
-                  <dt className="text-text-tertiary">Mobilité</dt>
-                  <dd className="font-medium text-text-primary">{candidat.mobilite || '\u2014'}</dd>
-                </div>
-                <div>
-                  <dt className="text-text-tertiary">Source</dt>
-                  <dd>{candidat.source ? <Badge>{candidat.source}</Badge> : '\u2014'}</dd>
-                </div>
-                <div>
-                  <dt className="text-text-tertiary">RGPD</dt>
-                  <dd>
-                    <Badge variant={candidat.consentementRgpd ? 'success' : 'warning'}>
-                      {candidat.consentementRgpd ? 'Consentement donné' : 'Non consenti'}
-                    </Badge>
-                  </dd>
-                </div>
-              </dl>
-            )}
-          </Card>
-
-          <Card>
-            <h2 className="mb-3 text-lg font-semibold text-text-primary">Tags</h2>
-            {isEditing && editForm ? (
-              <TagPicker
-                label="Tags"
-                tags={editForm.tags}
-                onChange={(newTags) => setEditForm((prev) => prev ? { ...prev, tags: newTags } : prev)}
-                suggestions={tagSuggestions || []}
-                placeholder="Ajouter un tag..."
-              />
-            ) : candidat.tags.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {candidat.tags.map((tag) => (
-                  <Badge key={tag}>{tag}</Badge>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-text-secondary">Aucun tag.</p>
-            )}
-          </Card>
-
-          <Card>
-            <h2 className="mb-3 text-lg font-semibold text-text-primary">Notes</h2>
-            {isEditing && editForm ? (
-              <Textarea
-                value={editForm.notes}
-                onChange={setField('notes')}
-                placeholder="Notes sur le candidat..."
-              />
-            ) : candidat.notes ? (
-              <p className="whitespace-pre-wrap text-sm text-text-secondary">{candidat.notes}</p>
-            ) : (
-              <p className="text-sm text-text-secondary">Aucune note.</p>
-            )}
-          </Card>
-
-          {/* Booking Links */}
-          {bookingSlug && (
-            <Card>
-              <h2 className="mb-4 text-lg font-semibold text-text-primary flex items-center gap-2">
-                <CalendarPlus size={18} className="text-primary-500" />
-                Liens Booking
-              </h2>
-              <div className="space-y-4">
-                {/* Candidat link */}
-                <div className="rounded-xl border border-primary-100 bg-primary-50/30 p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center">
-                      <User size={12} className="text-primary-600" />
-                    </div>
-                    <span className="text-[13px] font-semibold text-primary-700">RDV Candidat</span>
-                    <span className="ml-auto text-[10px] text-primary-400 font-medium">15 ou 30 min</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="flex-1 truncate rounded-lg bg-white/80 border border-primary-100 px-2.5 py-1.5 text-[11px] text-text-secondary font-mono">
-                      .../book/{bookingSlug}?type=candidat
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}?type=candidat`, 'sidebar-candidat')}
-                      className="shrink-0 rounded-lg p-1.5 hover:bg-primary-100 transition-colors"
-                      title="Copier le lien"
-                    >
-                      {bookingCopiedField === 'sidebar-candidat' ? <Check size={13} className="text-green-500" /> : <Copy size={13} className="text-text-tertiary" />}
-                    </button>
-                    {candidat.email && (
-                      <button
-                        type="button"
-                        onClick={() => handleSendBookingEmail(`https://ats.propium.co/book/${bookingSlug}?type=candidat`)}
-                        className="shrink-0 rounded-lg p-1.5 hover:bg-primary-100 transition-colors"
-                        title="Envoyer par email"
-                      >
-                        <Send size={13} className="text-primary-500" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Client link */}
-                <div className="rounded-xl border border-amber-100 bg-amber-50/30 p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
-                      <Building2 size={12} className="text-amber-600" />
-                    </div>
-                    <span className="text-[13px] font-semibold text-amber-700">RDV Client</span>
-                    <span className="ml-auto text-[10px] text-amber-400 font-medium">45 min ou 1h</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="flex-1 truncate rounded-lg bg-white/80 border border-amber-100 px-2.5 py-1.5 text-[11px] text-text-secondary font-mono">
-                      .../book/{bookingSlug}?type=client
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}?type=client`, 'sidebar-client')}
-                      className="shrink-0 rounded-lg p-1.5 hover:bg-amber-100 transition-colors"
-                      title="Copier le lien"
-                    >
-                      {bookingCopiedField === 'sidebar-client' ? <Check size={13} className="text-green-500" /> : <Copy size={13} className="text-text-tertiary" />}
-                    </button>
-                    {candidat.email && (
-                      <button
-                        type="button"
-                        onClick={() => handleSendBookingEmail(`https://ats.propium.co/book/${bookingSlug}?type=client`)}
-                        className="shrink-0 rounded-lg p-1.5 hover:bg-amber-100 transition-colors"
-                        title="Envoyer par email"
-                      >
-                        <Send size={13} className="text-amber-500" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Mandate-specific links */}
-                {candidat.candidatures.filter(c => c.mandat.slug && c.mandat.statut !== 'CLOTURE' && c.mandat.statut !== 'ANNULE').length > 0 && (
-                  <div className="pt-2 border-t border-border/50">
-                    <p className="mb-2 text-[11px] font-semibold text-text-tertiary uppercase tracking-wider">Par mandat</p>
-                    <div className="space-y-2">
-                      {candidat.candidatures.filter(c => c.mandat.slug && c.mandat.statut !== 'CLOTURE' && c.mandat.statut !== 'ANNULE').map((c) => (
-                        <div key={`sidebar-${c.id}`} className="rounded-lg bg-neutral-50 p-2">
-                          <p className="mb-1 text-[11px] font-medium text-text-primary flex items-center gap-1">
-                            <Briefcase size={10} className="text-text-tertiary" />
-                            {c.mandat.titrePoste}
-                          </p>
-                          <div className="flex items-center gap-1.5">
-                            <span className="flex-1 truncate text-[10px] text-text-tertiary font-mono">
-                              .../book/{bookingSlug}/{c.mandat.slug}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyBookingLink(`https://ats.propium.co/book/${bookingSlug}/${c.mandat.slug}`, `sidebar-${c.id}`)}
-                              className="shrink-0 rounded p-1 hover:bg-neutral-200 transition-colors"
-                              title="Copier"
-                            >
-                              {bookingCopiedField === `sidebar-${c.id}` ? <Check size={11} className="text-green-500" /> : <Copy size={11} className="text-text-tertiary" />}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Card>
-          )}
-
-          {/* Calendly Link (legacy) */}
-          {currentUser?.calendlyUrl && (
-            <Card>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-text-primary flex items-center gap-2">
-                  <Link2 size={14} className="text-text-tertiary" />
-                  Lien Calendly
-                </h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="flex-1 truncate rounded-lg bg-neutral-50 px-3 py-1.5 text-[11px] text-text-secondary font-mono">
-                  {currentUser.calendlyUrl}
-                </span>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(currentUser.calendlyUrl || '');
-                    setCalendlyCopied(true);
-                    setTimeout(() => setCalendlyCopied(false), 2000);
-                    toast('success', 'Lien copié !');
-                  }}
-                  className="shrink-0 rounded-lg p-1.5 hover:bg-neutral-100 transition-colors"
-                  title="Copier"
-                >
-                  {calendlyCopied ? <Check size={13} className="text-green-500" /> : <Copy size={13} className="text-text-tertiary" />}
-                </button>
-              </div>
-            </Card>
-          )}
-        </motion.div>
-      </motion.div>
-
-      {/* Push CV Section */}
-      <div className="mt-8">
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <Rocket size={18} className="text-indigo-500" />
-            <h3 className="font-semibold text-base">Push CV</h3>
           </div>
-          {pushesLoading ? (
-            <div className="flex items-center justify-center py-6">
-              <Loader2 size={20} className="animate-spin text-text-tertiary" />
+
+          {/* MANDATS */}
+          <div style={{ marginTop: 26 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+              <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: '#1A1533' }}>Mandats</span>
+              <span style={{ fontFamily: "'Manrope'", fontSize: 11, fontWeight: 800, color: '#22177A', background: '#E6E9AF', borderRadius: 999, padding: '3px 10px' }}>{c.candidatures.length}</span>
             </div>
-          ) : !pushes || pushes.length === 0 ? (
-            <p className="text-sm text-text-tertiary py-4 text-center">Aucun push CV envoyé</p>
-          ) : (
-            <div className="divide-y divide-neutral-100">
-              {pushes.map((push: { id: string; prospect: { companyName: string; contactName: string; contactEmail: string }; recruiter: string; canal: string; status: string; sentAt: string; message: string | null }) => {
-                const statusColors: Record<string, string> = {
-                  ENVOYE: 'bg-blue-100 text-blue-700',
-                  OUVERT: 'bg-yellow-100 text-yellow-700',
-                  REPONDU: 'bg-green-100 text-green-700',
-                  RDV_BOOK: 'bg-purple-100 text-purple-700',
-                  CONVERTI_MANDAT: 'bg-emerald-100 text-emerald-700',
-                  SANS_SUITE: 'bg-neutral-100 text-neutral-500',
-                };
-                const canalColors: Record<string, string> = {
-                  EMAIL: 'bg-blue-50 text-blue-600',
-                  LINKEDIN: 'bg-sky-50 text-sky-600',
-                  TELEPHONE: 'bg-green-50 text-green-600',
-                };
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {c.candidatures.length === 0 && <div style={{ border: '1.5px dashed rgba(34,23,122,.2)', borderRadius: 15, padding: 20, textAlign: 'center', color: '#8A8699', fontSize: 13.5 }}>Dans le vivier — aucun process en cours.</div>}
+              {c.candidatures.map(cand => {
+                const st = STAGE_META[cand.stage] ?? STAGE_META.SOURCING;
+                const idx = STAGES.indexOf(cand.stage);
+                const lostState = cand.stage === 'REFUSE';
                 return (
-                  <div key={push.id} className="flex items-center gap-3 py-2.5 text-sm">
-                    <div className="flex-1 min-w-0">
-                      <span className="font-medium text-text-primary">{push.prospect.companyName}</span>
-                      <span className="text-text-tertiary mx-1.5">·</span>
-                      <span className="text-text-secondary">{push.prospect.contactName}</span>
+                  <div key={cand.id} className="fmcard" style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 15, padding: '15px 18px', boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
+                      <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 11, background: '#F2F3D8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Building2 size={17} color="#22177A" /></span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <a onClick={() => navigate(`/mandats/${cand.mandat.id}`)} style={{ fontSize: 14.5, fontWeight: 800, color: '#1A1533', cursor: 'pointer' }}>{cand.mandat.titrePoste}</a>
+                        <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{cand.mandat.entreprise.nom} · relié {relTime(cand.createdAt)}</div>
+                      </div>
+                      <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11.5, fontWeight: 800, color: st.fg, background: st.bg, borderRadius: 999, padding: '5px 12px' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: st.dot }} />{st.label}</span>
                     </div>
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${canalColors[push.canal] || 'bg-neutral-100 text-neutral-600'}`}>
-                      {push.canal}
-                    </span>
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[push.status] || 'bg-neutral-100 text-neutral-500'}`}>
-                      {push.status.replace(/_/g, ' ')}
-                    </span>
-                    <span className="text-xs text-text-tertiary whitespace-nowrap">
-                      {new Date(push.sentAt).toLocaleDateString('fr-FR')}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, paddingTop: 13, borderTop: '1px solid rgba(34,23,122,.07)' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          {STAGES.map((s, i) => <span key={s} style={{ height: 5, flex: 1, borderRadius: 3, background: lostState ? (i === 0 ? '#B3261E' : 'rgba(34,23,122,.1)') : (i <= idx ? SEG_COLORS[i] : 'rgba(34,23,122,.1)') }} />)}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: '#9A96AE', marginTop: 7 }}>{lostState ? 'Process clôturé' : <>Étape <strong style={{ color: '#22177A' }}>{idx + 1}</strong>/7 · relié {relTime(cand.createdAt)}</>}</div>
+                      </div>
+                      {!lostState && (
+                        <>
+                          <button onClick={() => advance(cand)} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: '#22177A', background: '#F0EFC4', border: '1px solid transparent', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}>Faire avancer<ArrowRight size={13} strokeWidth={2.4} /></button>
+                          <button onClick={() => setLost({ candId: cand.id, titre: cand.mandat.titrePoste, company: cand.mandat.entreprise.nom })} style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: '#B3261E', background: '#fff', border: '1px solid rgba(176,54,31,.2)', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}>Perdu</button>
+                        </>
+                      )}
+                      <button onClick={() => { if (confirm('Retirer du mandat ?')) removeMut.mutate(cand.id); }} title="Retirer" style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 10, color: '#B3261E', background: '#fff', border: '1px solid rgba(176,54,31,.18)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} /></button>
+                    </div>
                   </div>
                 );
               })}
             </div>
-          )}
-        </Card>
-      </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 11, padding: '11px 13px', border: '1.5px dashed rgba(34,23,122,.22)', borderRadius: 15, background: '#FCFCF5' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+                <select value={linkSel} onChange={e => setLinkSel(e.target.value)} style={{ appearance: 'none', width: '100%', fontSize: 13.5, fontWeight: 600, color: '#4A4568', background: '#fff', border: '1px solid rgba(34,23,122,.14)', borderRadius: 11, padding: '11px 34px 11px 14px', cursor: 'pointer', outline: 'none' }}>
+                  <option value="">Relier à un autre mandat…</option>
+                  {mandatOptions.map(m => <option key={m.id} value={m.id}>{m.titrePoste} · {m.entreprise.nom}</option>)}
+                </select>
+                <ChevronDown size={14} color="#8A8699" style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+              </div>
+              <button disabled={!linkSel} onClick={() => linkSel && linkMut.mutate(linkSel)} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, background: linkSel ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: '11px 18px', cursor: linkSel ? 'pointer' : 'default' }}><Plus size={14} strokeWidth={2.8} />Relier</button>
+            </div>
+          </div>
 
-      <div className="mt-8">
-        <ActivityJournal entiteType="CANDIDAT" entiteId={candidat.id} />
-      </div>
-
-      <EmailComposer
-        isOpen={showEmailComposer}
-        onClose={() => setShowEmailComposer(false)}
-        defaultTo={candidat.email || ''}
-        defaultSubject={emailDefaults.subject}
-        defaultBody={emailDefaults.body}
-        entiteType="candidat"
-        entiteId={candidat.id}
-        candidatId={candidat.id}
-      />
-
-      <ScheduleMeeting
-        isOpen={showScheduleMeeting}
-        onClose={() => setShowScheduleMeeting(false)}
-        defaultTitle={`Entretien - ${candidat.prenom || ''} ${candidat.nom}`.trim()}
-        defaultParticipants={candidat.email ? [candidat.email] : []}
-        entiteType="candidat"
-        entiteId={candidat.id}
-      />
-
-      <DeleteConfirmModal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        onConfirm={() => deleteMutation.mutate()}
-        entityName={`le candidat ${candidat.prenom || ''} ${candidat.nom}`.trim()}
-        isLoading={deleteMutation.isPending}
-      />
-
-      {/* CV Upload Modal */}
-      <Modal
-        isOpen={showCvUploadModal}
-        onClose={() => !cvUploadMutation.isPending && setShowCvUploadModal(false)}
-        title="Mettre à jour depuis un CV"
-        size="md"
-      >
-        <div
-          onDragOver={handleCvDragOver}
-          onDragLeave={handleCvDragLeave}
-          onDrop={handleCvDrop}
-          onClick={() => !cvUploadMutation.isPending && cvFileInputRef.current?.click()}
-          className={`cursor-pointer rounded-2xl border-2 border-dashed transition-all duration-300 ${
-            isDragging
-              ? 'border-primary-500 bg-primary-50/50 scale-[1.01]'
-              : cvUploadMutation.isPending
-                ? 'border-primary-300 bg-primary-50/30'
-                : 'border-neutral-200 bg-white hover:border-primary-300 hover:bg-primary-50/20'
-          } p-8`}
-        >
-          <input
-            ref={cvFileInputRef}
-            type="file"
-            accept=".pdf"
-            onChange={handleCvFileInputChange}
-            className="hidden"
-          />
-
-          <div className="flex flex-col items-center gap-3 text-center">
-            {cvUploadMutation.isPending ? (
+          {/* CV */}
+          <div style={{ marginTop: 30 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div onClick={() => setCvOpen(o => !o)} className="sec-h" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                <ChevronDown className="chev" size={14} color="#8A8699" strokeWidth={2.6} style={{ transform: cvOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .3s' }} />
+                <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: '#1A1533' }}>CV</span>
+              </div>
+              {c.cvUrl && <a href={c.cvUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.16)', borderRadius: 9, padding: '8px 13px', textDecoration: 'none' }}><FileText size={14} color="#B0361F" />Afficher au format PDF</a>}
+            </div>
+            {cvOpen && (
               <>
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-100">
-                  <Loader2 size={28} className="animate-spin text-primary-500" />
+                <div style={{ display: 'flex', gap: 4, background: '#EFEFE6', borderRadius: 11, padding: 4, marginTop: 14 }}>
+                  {([['synth', 'Synthèse'], ['chrono', 'Chronologie'], ['full', 'CV complet']] as const).map(([k, l]) => (
+                    <button key={k} onClick={() => setCvTab(k)} style={{ flex: 1, fontFamily: "'Manrope'", fontWeight: 700, fontSize: 12.5, padding: 9, borderRadius: 9, border: 'none', cursor: 'pointer', background: cvTab === k ? '#22177A' : 'transparent', color: cvTab === k ? '#E6E9AF' : '#8A8699' }}>{l}</button>
+                  ))}
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-primary-600">Analyse du CV en cours...</p>
-                  <p className="mt-1 text-xs text-text-tertiary">
-                    L'IA extrait les informations et met à jour la fiche candidat
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-50">
-                  <FileText size={28} className="text-primary-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-text-primary">
-                    <span className="text-primary-500">Déposez un CV ici</span> (PDF)
-                  </p>
-                  <p className="mt-1 text-xs text-text-tertiary">
-                    L'IA analysera le CV et mettra à jour les informations du candidat ainsi que le pitch commercial.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="info" size="sm">PDF</Badge>
-                  <span className="text-xs text-text-tertiary">Max 10 Mo</span>
-                </div>
+                {cvTab === 'synth' && (
+                  <div style={{ background: '#fff', border: '1px solid rgba(34,23,122,.09)', borderRadius: 14, padding: '20px 22px', marginTop: 12 }}>
+                    <p style={{ fontSize: 14, lineHeight: 1.65, color: '#4A4568' }}>{c.aiPitchLong || c.aiPitchShort || 'Aucune synthèse générée pour ce candidat.'}</p>
+                    {c.tags.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 15 }}>{c.tags.map(t => <span key={t} style={{ fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '5px 12px', background: '#F2F3D8', color: '#22177A' }}>{t}</span>)}</div>}
+                  </div>
+                )}
+                {cvTab === 'chrono' && (
+                  <div style={{ background: '#fff', border: '1px solid rgba(34,23,122,.09)', borderRadius: 14, padding: '18px 22px', marginTop: 12 }}>
+                    {c.experiences.length === 0 && <div style={{ color: '#8A8699', fontSize: 13.5 }}>Aucune expérience renseignée.</div>}
+                    {c.experiences.map(e => (
+                      <div key={e.id} style={{ display: 'flex', gap: 16, paddingBottom: 20 }}>
+                        <span style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 11, background: '#F2F3D8', border: '2.5px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px -6px rgba(34,23,122,.5)' }}><Building2 size={16} color="#22177A" /></span>
+                        <div style={{ flex: 1, minWidth: 0, paddingTop: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: '#1A1533' }}>{e.titre}</span>
+                            <span style={{ flexShrink: 0, fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11, fontWeight: 600, color: '#8A8699', background: '#F7F7F0', borderRadius: 6, padding: '3px 9px' }}>{e.anneeDebut} → {e.anneeFin ?? 'auj.'}</span>
+                          </div>
+                          <div style={{ fontSize: 12.5, color: '#22177A', fontWeight: 600, marginTop: 3 }}>{e.entreprise}</div>
+                          {e.highlights.length > 0 && <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 5 }}>{e.highlights[0]}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {cvTab === 'full' && (
+                  <div style={{ marginTop: 12 }}>
+                    {c.cvUrl ? (
+                      <div style={{ background: '#fff', border: '1px solid rgba(34,23,122,.09)', borderRadius: 14, padding: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <span style={{ flexShrink: 0, width: 44, height: 54, borderRadius: 8, background: '#F9ECE9', border: '1px solid rgba(176,54,31,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FileText size={19} color="#B0361F" /></span>
+                        <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 800, color: '#1A1533' }}>CV — {fullName}.pdf</div><div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>Document importé</div></div>
+                        <a href={c.cvUrl} target="_blank" rel="noreferrer" style={{ flexShrink: 0, fontSize: 13, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 10, padding: '10px 16px', textDecoration: 'none' }}>Ouvrir</a>
+                      </div>
+                    ) : null}
+                    <input ref={cvInputRef} type="file" accept=".pdf,.docx" hidden onChange={e => { const f = e.target.files?.[0]; if (f) cvUpload(f); }} />
+                    <div onClick={() => cvInputRef.current?.click()} className="drop" style={{ marginTop: 14, border: '1.5px dashed rgba(34,23,122,.26)', borderRadius: 14, background: '#FCFCF5', padding: 22, textAlign: 'center', cursor: 'pointer', transition: 'background .18s, border-color .18s' }}>
+                      <span style={{ display: 'inline-flex', width: 42, height: 42, borderRadius: 12, background: '#F2F3D8', alignItems: 'center', justifyContent: 'center' }}><Upload size={20} color="#22177A" /></span>
+                      <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1A1533', marginTop: 11 }}>Glissez un nouveau CV ici</div>
+                      <div style={{ fontSize: 12, color: '#8A8699', marginTop: 3 }}>ou <span style={{ color: '#22177A', fontWeight: 700, textDecoration: 'underline' }}>parcourir</span> · PDF, DOCX · 10 Mo max</div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
-        </div>
 
-        <div className="mt-4 flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowCvUploadModal(false)}
-            disabled={cvUploadMutation.isPending}
-          >
-            Fermer
-          </Button>
-        </div>
-      </Modal>
-
-      {/* Experience Add/Edit Modal */}
-      <Modal
-        isOpen={showExpModal}
-        onClose={() => { setShowExpModal(false); setEditingExp(null); }}
-        title={editingExp ? 'Modifier une expérience' : 'Ajouter une expérience'}
-        size="md"
-      >
-        <div className="space-y-4">
-          <Input
-            label="Titre du poste *"
-            value={expForm.titre}
-            onChange={(e) => setExpForm((prev) => ({ ...prev, titre: e.target.value }))}
-            placeholder="Ex: Directeur Commercial"
-          />
-          <Input
-            label="Entreprise *"
-            value={expForm.entreprise}
-            onChange={(e) => setExpForm((prev) => ({ ...prev, entreprise: e.target.value }))}
-            placeholder="Ex: Salesforce"
-          />
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Année de début *"
-              type="number"
-              value={expForm.anneeDebut}
-              onChange={(e) => setExpForm((prev) => ({ ...prev, anneeDebut: e.target.value }))}
-              placeholder="2020"
-            />
-            <Input
-              label="Année de fin"
-              type="number"
-              value={expForm.anneeFin}
-              onChange={(e) => setExpForm((prev) => ({ ...prev, anneeFin: e.target.value }))}
-              placeholder="Laisser vide si en poste"
-            />
-          </div>
-          <Textarea
-            label="Réalisations clés (une par ligne)"
-            value={expForm.highlights}
-            onChange={(e) => setExpForm((prev) => ({ ...prev, highlights: e.target.value }))}
-            placeholder="Augmentation du CA de 30%&#10;Management de 5 commerciaux&#10;Ouverture du marché UK"
-          />
-          <div className="flex justify-end gap-3 pt-2">
-            <Button
-              variant="ghost"
-              onClick={() => { setShowExpModal(false); setEditingExp(null); }}
-            >
-              Annuler
-            </Button>
-            <Button
-              onClick={handleExpSubmit}
-              disabled={!expForm.titre || !expForm.entreprise || !expForm.anneeDebut || addExpMutation.isPending || updateExpMutation.isPending}
-              loading={addExpMutation.isPending || updateExpMutation.isPending}
-            >
-              {editingExp ? 'Enregistrer' : 'Ajouter'}
-            </Button>
+          {/* FLOATING ACTION BAR */}
+          <div style={{ position: 'sticky', bottom: 22, margin: '26px auto 0', width: 'max-content', zIndex: 30, display: 'flex', alignItems: 'center', gap: 2, background: '#1A1533', borderRadius: 16, padding: 8, boxShadow: '0 24px 50px -20px rgba(26,21,51,.65)' }}>
+            {actions.map(a => (
+              <button key={a.label} className="abtn" onClick={a.run} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 74, background: 'transparent', border: 'none', borderRadius: 11, padding: '9px 8px', cursor: 'pointer', color: a.color }}>
+                <a.Icon size={18} />
+                <span style={{ fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>{a.label}</span>
+              </button>
+            ))}
           </div>
         </div>
-      </Modal>
 
-      <CallBriefPanel
-        entityType="CANDIDAT"
-        entityId={candidat.id}
-        entityName={`${candidat.prenom || ''} ${candidat.nom}`.trim()}
-        isOpen={showCallBrief}
-        onClose={() => setShowCallBrief(false)}
-      />
+        {/* ─── RAIL ─── */}
+        <aside className="fiche-rail" style={{ position: 'sticky', top: 12, alignSelf: 'start', maxHeight: 'calc(100vh - 90px)', background: '#fff', border: '1px solid rgba(34,23,122,.1)', borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ flexShrink: 0, display: 'flex', gap: 5, padding: '14px 16px 12px', borderBottom: '1px solid rgba(34,23,122,.09)', overflowX: 'auto' }}>
+            {railTabs.map(([k, l]) => (
+              <button key={k} onClick={() => setRailTab(k)} style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 700, padding: '7px 12px', borderRadius: 9, border: 'none', cursor: 'pointer', background: railTab === k ? '#22177A' : 'transparent', color: railTab === k ? '#E6E9AF' : '#8A8699' }}>{l}</button>
+            ))}
+          </div>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 18px 22px' }}>
+            {railTab === 'act' && (
+              feed.length === 0 ? <div style={{ color: '#9A96AE', fontSize: 13, textAlign: 'center', padding: 20 }}>Aucune activité.</div> :
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {feed.map(f => (
+                    <div key={f.id} style={{ display: 'flex', gap: 11, padding: '10px 8px' }}>
+                      <span style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 9, background: '#E6E9AF', color: '#22177A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 10 }}>{initials(f.user?.prenom ?? null, f.user?.nom ?? '?')}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: '#1A1533' }}>{`${f.user?.prenom ?? ''} ${f.user?.nom ?? ''}`.trim() || 'Système'}</span>
+                          <span style={{ fontSize: 12.5, color: '#6E6A85' }}>· {f.type.toLowerCase()}</span>
+                          <span style={{ fontSize: 11.5, color: '#B4B0C4' }}>{relTime(f.createdAt)}</span>
+                        </div>
+                        {(f.titre || f.contenu) && <div style={{ fontSize: 13, lineHeight: 1.5, color: '#4A4568', marginTop: 4 }}>{f.titre ? <strong>{f.titre}</strong> : null}{f.titre && f.contenu ? ' — ' : ''}{f.contenu}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+            )}
+            {railTab === 'com' && (
+              <>
+                {comments.length === 0 && <div style={{ color: '#9A96AE', fontSize: 13, textAlign: 'center', padding: 14 }}>Aucun commentaire.</div>}
+                {comments.map(cm => (
+                  <div key={cm.id} style={{ background: '#FBFBF3', border: '1px solid rgba(34,23,122,.08)', borderRadius: 12, padding: '13px 15px', marginBottom: 9 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 12.5, fontWeight: 800, color: '#1A1533' }}>{`${cm.user?.prenom ?? ''} ${cm.user?.nom ?? ''}`.trim() || 'Vous'}</span><span style={{ fontSize: 11.5, color: '#B4B0C4' }}>{relTime(cm.createdAt)}</span></div>
+                    <div style={{ fontSize: 13, lineHeight: 1.55, color: '#4A4568', marginTop: 6 }}>{cm.contenu}</div>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <input value={comment} onChange={e => setComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitComment()} placeholder="Écrire un commentaire…" style={{ flex: 1, fontSize: 13, padding: '10px 13px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
+                  <button onClick={submitComment} style={{ flexShrink: 0, fontSize: 13, fontWeight: 700, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 10, padding: '10px 15px', cursor: 'pointer' }}>Envoyer</button>
+                </div>
+              </>
+            )}
+            {railTab === 'task' && (
+              <>
+                {tasks.length === 0 && <div style={{ color: '#9A96AE', fontSize: 13, textAlign: 'center', padding: 14 }}>Aucune tâche.</div>}
+                {tasks.map(t => {
+                  const late = t.tacheDueDate && !t.tacheCompleted && new Date(t.tacheDueDate) < new Date();
+                  return (
+                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', border: '1px solid rgba(34,23,122,.1)', borderRadius: 11, marginBottom: 8 }}>
+                      <span onClick={() => toggleTaskMut.mutate({ actId: t.id, done: !t.tacheCompleted })} style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${t.tacheCompleted ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: t.tacheCompleted ? '#E6E9AF' : '#fff' }}>{t.tacheCompleted && <CheckSquare size={12} color="#22177A" />}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 600, color: t.tacheCompleted ? '#B4B0C4' : '#1A1533', textDecoration: t.tacheCompleted ? 'line-through' : 'none' }}>{t.titre || t.contenu}</div>
+                        <div style={{ fontSize: 11.5, color: late ? '#B3261E' : '#9A96AE', marginTop: 2 }}>{t.tacheDueDate ? new Date(t.tacheDueDate).toLocaleDateString('fr-FR') : 'Sans échéance'}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <input value={taskText} onChange={e => setTaskText(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitTask()} placeholder="Nouvelle tâche…" style={{ flex: 1, fontSize: 13, padding: '10px 13px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
+                  <button onClick={submitTask} style={{ flexShrink: 0, fontSize: 15, fontWeight: 700, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 10, padding: '10px 16px', cursor: 'pointer' }}>+</button>
+                </div>
+              </>
+            )}
+            {railTab === 'eval' && (
+              <>
+                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: '#8A8699' }}>Nouvelle évaluation</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 11 }}>
+                  {[1, 2, 3, 4, 5].map(n => <button key={n} onClick={() => setRating(n)} style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', lineHeight: 1 }}><Star size={22} fill={n <= rating ? '#E6C64A' : 'none'} color={n <= rating ? '#E6C64A' : '#C4C1D0'} /></button>)}
+                  <span style={{ fontSize: 12, color: '#8A8699', marginLeft: 8 }}>{rating ? `${rating}/5` : 'Notez'}</span>
+                </div>
+                <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Votre débrief…" style={{ width: '100%', minHeight: 90, resize: 'vertical', marginTop: 12, fontFamily: "'Manrope',sans-serif", fontSize: 13.5, lineHeight: 1.55, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
+                <button onClick={submitEval} style={{ width: '100%', marginTop: 10, fontSize: 13.5, fontWeight: 800, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: 11, cursor: 'pointer' }}>Enregistrer l'évaluation</button>
+              </>
+            )}
+            {railTab === 'msg' && (
+              <div style={{ textAlign: 'center', padding: '24px 10px' }}>
+                <div style={{ fontSize: 13, color: '#6E6A85' }}>Envoyer un message à {c.prenom || c.nom}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+                  <a href={c.email ? `mailto:${c.email}` : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', border: '1px solid rgba(34,23,122,.12)', borderRadius: 12, textDecoration: 'none', opacity: c.email ? 1 : 0.5 }}><Mail size={16} color="#5B4B9E" /><span style={{ fontSize: 13.5, fontWeight: 700, color: '#1A1533' }}>Email · {c.email || '—'}</span></a>
+                  <a href={c.telephone ? `tel:${c.telephone}` : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', border: '1px solid rgba(34,23,122,.12)', borderRadius: 12, textDecoration: 'none', opacity: c.telephone ? 1 : 0.5 }}><Phone size={16} color="#2C6B3F" /><span style={{ fontSize: 13.5, fontWeight: 700, color: '#1A1533' }}>Appel · {c.telephone || '—'}</span></a>
+                </div>
+              </div>
+            )}
+          </div>
+        </aside>
+      </div>
+
+      {/* LOST MODAL */}
+      {lost && (
+        <>
+          <div onClick={() => setLost(null)} style={{ position: 'fixed', inset: 0, zIndex: 92, background: 'rgba(26,21,51,.42)' }} />
+          <div className="fmodal" style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 93, width: 560, maxWidth: '94vw', maxHeight: '92vh', overflowY: 'auto', background: '#fff', borderRadius: 22, boxShadow: '0 44px 96px -40px rgba(0,0,0,.55)', padding: '26px 28px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 12, background: '#F7DEDB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} color="#B3261E" strokeWidth={2.2} /></span>
+              <div><div style={{ fontWeight: 800, fontSize: 17.5, letterSpacing: '-.015em', color: '#1A1533' }}>Mandat perdu</div><div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{lost.titre} · {lost.company}</div></div>
+            </div>
+            <label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: '#8A8699', margin: '22px 0 7px' }}>Pourquoi ?</label>
+            <div style={{ position: 'relative' }}>
+              <select value={lostReason} onChange={e => setLostReason(e.target.value)} style={{ appearance: 'none', width: '100%', fontFamily: "'Manrope'", fontSize: 13.5, padding: '12px 34px 12px 14px', borderRadius: 12, border: '1.5px solid rgba(34,23,122,.16)', background: '#FCFCF5', color: '#1A1533', cursor: 'pointer', outline: 'none' }}>
+                <option value="">Sélectionnez un motif…</option>
+                {LOST_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <ChevronDown size={13} color="#8A8699" style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            </div>
+            <label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: '#8A8699', margin: '16px 0 7px' }}>Détail (optionnel)</label>
+            <textarea value={lostNote} onChange={e => setLostNote(e.target.value)} placeholder="Contexte utile pour la prochaine fois…" style={{ width: '100%', minHeight: 76, resize: 'vertical', fontFamily: "'Manrope',sans-serif", fontSize: 13.5, lineHeight: 1.55, padding: '12px 14px', borderRadius: 12, border: '1.5px solid rgba(34,23,122,.16)', background: '#FCFCF5', outline: 'none' }} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, padding: '12px 14px', background: '#FCFCF5', border: '1px solid rgba(34,23,122,.1)', borderRadius: 12, cursor: 'pointer' }}>
+              <span onClick={() => setLostMail(m => !m)} style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: `1.5px solid ${lostMail ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: lostMail ? '#E6E9AF' : '#fff' }}>{lostMail && <CheckSquare size={12} color="#22177A" />}</span>
+              <Mail size={15} color="#5B4B9E" /><span style={{ fontSize: 13, color: '#4A4568' }}>Envoyer le <strong style={{ color: '#1A1533' }}>feedback no-go</strong> au candidat</span>
+            </label>
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button onClick={() => setLost(null)} style={{ flex: 1, fontSize: 14, fontWeight: 700, background: '#F5F4EA', color: '#4A4568', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Annuler</button>
+              <button onClick={() => { if (!lostReason) { toast('error', 'Sélectionnez un motif'); return; } loseMut.mutate({ candId: lost.candId, motifRefus: lostReason, motifRefusDetail: lostNote || undefined }); }} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: '#B3261E', color: '#fff', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Marquer perdu</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* PLAN MODAL */}
+      {planOpen && <PlanModal candidat={c} mandats={mandatsData?.data ?? []} onClose={() => setPlanOpen(false)} onSaved={(body) => { actMut.mutate(body); setPlanOpen(false); toast('success', 'Action planifiée'); }} />}
+
+      {/* EXPORT MODAL */}
+      {exportOpen && <ExportModal name={fullName} onClose={() => setExportOpen(false)} />}
     </div>
+  );
+}
+
+// ─── PLAN MODAL ─────────────────────────────────────
+function PlanModal({ candidat, mandats, onClose, onSaved }: { candidat: CandidatDetail; mandats: { id: string; titrePoste: string; entreprise: { nom: string } }[]; onClose: () => void; onSaved: (body: Record<string, unknown>) => void }) {
+  const linked = candidat.candidatures.map(c => ({ id: c.mandat.id, titrePoste: c.mandat.titrePoste, entreprise: c.mandat.entreprise }));
+  const opts = linked.length ? linked : mandats;
+  const [type, setType] = useState<'presentation' | 'entretien' | 'email'>('entretien');
+  const [mandatId, setMandatId] = useState(opts[0]?.id ?? '');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [self, setSelf] = useState(false);
+  const m = opts.find(o => o.id === mandatId);
+  const prenom = candidat.prenom || candidat.nom;
+  const typeLabel = { presentation: 'Présentation client', entretien: 'Entretien', email: 'Email' }[type];
+  const preview = self
+    ? `Bonjour ${prenom},\n\nPour aller au plus vite, choisissez directement le créneau qui vous arrange :\nhttps://humanup.io/booking\n\nVous recevrez la confirmation automatiquement.\n\nMeroe — HumanUp`
+    : `Bonjour ${prenom},\n\n${type === 'presentation' ? `${m?.entreprise.nom ?? 'Le client'} souhaite vous rencontrer pour ${m?.titrePoste ?? 'le poste'}.` : type === 'entretien' ? `Je vous propose un entretien pour ${m?.titrePoste ?? 'le poste'}.` : `Je reviens vers vous concernant ${m?.titrePoste ?? 'le poste'}.`}\n\n${date ? `Date : ${date.split('-').reverse().join('/')}${time ? ' à ' + time : ''}\n\n` : ''}À très vite,\nMeroe — HumanUp`;
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(26,21,51,.42)' }} />
+      <div className="fmodal" style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 91, width: 620, maxWidth: '94vw', maxHeight: '92vh', overflowY: 'auto', background: '#fff', borderRadius: 22, boxShadow: '0 44px 96px -40px rgba(0,0,0,.55)', padding: '26px 28px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div><div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-.015em', color: '#1A1533' }}>Prévoir une action</div><div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 3 }}>{`${candidat.prenom ?? ''} ${candidat.nom}`.trim()}</div></div>
+          <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid rgba(34,23,122,.14)', background: '#fff', color: '#22177A', cursor: 'pointer' }}>✕</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 9, marginTop: 20 }}>
+          {([['presentation', 'Présentation client', 'Envoyer le profil au client'], ['entretien', 'Entretien', 'Visio ou téléphone'], ['email', 'Envoyer un email', 'Relance ou documents']] as const).map(([k, l, d]) => (
+            <button key={k} onClick={() => setType(k)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, padding: '13px 14px', borderRadius: 13, cursor: 'pointer', textAlign: 'left', border: `1.5px solid ${type === k ? '#22177A' : 'rgba(34,23,122,.13)'}`, background: type === k ? 'rgba(34,23,122,.05)' : '#FCFCF5', color: type === k ? '#22177A' : '#4A4568' }}>
+              <span style={{ fontSize: 13, fontWeight: 800 }}>{l}</span><span style={{ fontSize: 11, opacity: .75 }}>{d}</span>
+            </button>
+          ))}
+        </div>
+        <label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', margin: '18px 0 6px' }}>Mandat concerné</label>
+        <div style={{ position: 'relative' }}>
+          <select value={mandatId} onChange={e => setMandatId(e.target.value)} style={{ appearance: 'none', width: '100%', fontFamily: "'Manrope'", fontSize: 13.5, fontWeight: 600, padding: '11px 34px 11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.16)', background: '#FCFCF5', color: '#1A1533', cursor: 'pointer', outline: 'none' }}>
+            {opts.length === 0 && <option value="">Aucun mandat</option>}
+            {opts.map(o => <option key={o.id} value={o.id}>{o.titrePoste} · {o.entreprise.nom}</option>)}
+          </select>
+          <ChevronDown size={13} color="#8A8699" style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+        </div>
+        {!self && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 10, marginTop: 14 }}>
+            <div><label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 6 }}>Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: '100%', fontSize: 13.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} /></div>
+            <div><label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 6 }}>Heure</label><input type="time" value={time} onChange={e => setTime(e.target.value)} style={{ width: '100%', fontSize: 13.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} /></div>
+          </div>
+        )}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, padding: '11px 14px', background: '#F2F3D8', border: '1px solid rgba(34,23,122,.14)', borderRadius: 12, cursor: 'pointer' }}>
+          <span onClick={() => setSelf(s => !s)} style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${self ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: self ? '#E6E9AF' : '#fff' }}>{self && <CheckSquare size={12} color="#22177A" />}</span>
+          <Clock size={15} color="#22177A" /><span style={{ fontSize: 12.5, color: '#4A4568' }}>Envoyer mon <strong style={{ color: '#1A1533' }}>lien de réservation</strong> — le candidat choisit son créneau</span>
+        </label>
+        <label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', margin: '16px 0 6px' }}>Aperçu de l'email</label>
+        <pre style={{ maxHeight: 220, overflowY: 'auto', margin: 0, fontFamily: "'Manrope',sans-serif", fontSize: 12.5, lineHeight: 1.6, color: '#4A4568', whiteSpace: 'pre-wrap', background: '#FCFCF5', border: '1px solid rgba(34,23,122,.11)', borderRadius: 12, padding: '13px 15px' }}>{preview}</pre>
+        <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+          <button onClick={onClose} style={{ flex: 1, fontSize: 14, fontWeight: 700, background: '#F5F4EA', color: '#4A4568', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Annuler</button>
+          <button onClick={() => onSaved({ type: type === 'email' ? 'EMAIL' : 'MEETING', titre: typeLabel, contenu: self ? 'Lien de réservation envoyé' : `${typeLabel}${date ? ' le ' + date.split('-').reverse().join('/') : ''}${time ? ' à ' + time : ''}` })} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>{self ? 'Envoyer le lien' : 'Planifier'}</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── EXPORT MODAL ───────────────────────────────────
+function ExportModal({ name, onClose }: { name: string; onClose: () => void }) {
+  const [format, setFormat] = useState<'cv' | 'dossier'>('cv');
+  const [lang, setLang] = useState<'fr' | 'en'>('fr');
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(26,21,51,.42)' }} />
+      <div className="fmodal" style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 91, width: 520, maxWidth: '94vw', background: '#fff', borderRadius: 22, boxShadow: '0 44px 96px -40px rgba(0,0,0,.55)', padding: '26px 28px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div><div style={{ fontWeight: 800, fontSize: 18, color: '#1A1533' }}>Exporter le dossier</div><div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{name}</div></div>
+          <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid rgba(34,23,122,.14)', background: '#fff', color: '#22177A', cursor: 'pointer' }}>✕</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9, marginTop: 20 }}>
+          {([['cv', 'CV HumanUp', 'Feuille unique'], ['dossier', 'Dossier de compétences', '3 pages A4']] as const).map(([k, l, d]) => (
+            <button key={k} onClick={() => setFormat(k)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 5, padding: '14px 15px', borderRadius: 13, cursor: 'pointer', textAlign: 'left', border: `1.5px solid ${format === k ? '#22177A' : 'rgba(34,23,122,.13)'}`, background: format === k ? 'rgba(34,23,122,.05)' : '#FCFCF5' }}>
+              <FileText size={18} color="#22177A" /><span style={{ fontSize: 13.5, fontWeight: 800, color: '#1A1533', marginTop: 4 }}>{l}</span><span style={{ fontSize: 11.5, color: '#8A8699' }}>{d}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16 }}>
+          <span style={{ fontSize: 12.5, color: '#6E6A85', fontWeight: 600 }}>Langue</span>
+          <div style={{ display: 'flex', background: '#EFEFE6', borderRadius: 9, padding: 3 }}>
+            {(['fr', 'en'] as const).map(l => <button key={l} onClick={() => setLang(l)} style={{ fontSize: 12.5, fontWeight: 800, padding: '6px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', background: lang === l ? '#fff' : 'transparent', color: lang === l ? '#22177A' : '#8A7F5A' }}>{l.toUpperCase()}</button>)}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
+          <button onClick={onClose} style={{ flex: 1, fontSize: 14, fontWeight: 700, background: '#F5F4EA', color: '#4A4568', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Annuler</button>
+          <button onClick={() => { toast('info', `Génération ${format === 'cv' ? 'du CV' : 'du dossier'} (${lang.toUpperCase()}) — bientôt disponible`); onClose(); }} style={{ flex: 1.4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 700, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}><Download size={15} />Générer</button>
+        </div>
+      </div>
+    </>
   );
 }
