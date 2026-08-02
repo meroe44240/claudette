@@ -9,7 +9,7 @@
 
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Upload, Target, ArrowRight, Trash2, Users, MapPin } from 'lucide-react';
+import { Plus, Upload, Target, ArrowRight, Trash2, Users, MapPin, Send, X } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import PageHeader from '../../components/ui/PageHeader';
@@ -72,6 +72,8 @@ export default function ListPushPage() {
   const qc = useQueryClient();
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [pushFor, setPushFor] = useState<Establishment | null>(null);
+  const [pushForm, setPushForm] = useState({ decideurName: '', decideurEmail: '', decideurPhone: '', candidatName: '', candidatRole: '' });
   const [form, setForm] = useState({
     name: '',
     sectorTags: '',
@@ -147,6 +149,33 @@ export default function ListPushPage() {
     },
     onError: () => toast('error', 'Erreur lors de la génération des leads'),
   });
+
+  const pushMutation = useMutation({
+    mutationFn: (p: { estId: string; body: Record<string, unknown> }) =>
+      api.post(`/sourcing/market-lists/establishments/${p.estId}/push`, p.body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['market-lists', selectedListId] });
+      toast('success', 'Lead créé — visible dans Leads');
+      setPushFor(null);
+    },
+    onError: () => toast('error', 'Erreur lors du push'),
+  });
+
+  const submitPush = () => {
+    if (!pushFor) return;
+    if (!pushForm.decideurName.trim()) { toast('error', 'Nom du décideur requis'); return; }
+    pushMutation.mutate({
+      estId: pushFor.id,
+      body: {
+        decideurName: pushForm.decideurName.trim(),
+        decideurEmail: pushForm.decideurEmail.trim() || null,
+        decideurPhone: pushForm.decideurPhone.trim() || null,
+        candidat: pushForm.candidatName.trim()
+          ? { name: pushForm.candidatName.trim(), role: pushForm.candidatRole.trim() || null }
+          : null,
+      },
+    });
+  };
 
   return (
     <div>
@@ -373,6 +402,15 @@ export default function ListPushPage() {
                               </span>
                             </td>
                             <td className="py-3">
+                              {(e.status === 'NEW' || e.status === 'PROSPECTION' || e.status === 'CLIENT_EXISTING') && (
+                                <button
+                                  onClick={() => { setPushFor(e); setPushForm({ decideurName: '', decideurEmail: '', decideurPhone: '', candidatName: '', candidatRole: '' }); }}
+                                  className="mr-1 inline-flex items-center gap-1 rounded-md bg-primary-800 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-primary-900"
+                                  title="Pusher un candidat à cet établissement"
+                                >
+                                  <Send size={12} /> Pusher
+                                </button>
+                              )}
                               {e.status === 'NEW' && (
                                 <button
                                   onClick={() =>
@@ -465,6 +503,40 @@ export default function ListPushPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Modale push ciblé → crée un vrai Lead */}
+      {pushFor && (
+        <div onClick={() => setPushFor(null)} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(26,21,51,.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 460, maxWidth: '100%', background: '#fff', borderRadius: 20, boxShadow: '0 40px 90px -40px rgba(26,21,51,0.6)', padding: 24, fontFamily: "'Manrope',sans-serif" }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 19, color: '#1A1533' }}>Pusher un profil</div>
+                <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 3 }}>{pushFor.name}{pushFor.city ? ` · ${pushFor.city}` : ''}</div>
+              </div>
+              <button onClick={() => setPushFor(null)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer' }}><X size={15} /></button>
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.09em', color: '#8A8699', margin: '18px 0 8px' }}>Le candidat poussé</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <input value={pushForm.candidatName} onChange={(e) => setPushForm((f) => ({ ...f, candidatName: e.target.value }))} placeholder="Nom du candidat" style={pushInputStyle} />
+              <input value={pushForm.candidatRole} onChange={(e) => setPushForm((f) => ({ ...f, candidatRole: e.target.value }))} placeholder="Poste / expertise" style={pushInputStyle} />
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.09em', color: '#8A8699', margin: '18px 0 8px' }}>Le décideur</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <input value={pushForm.decideurName} onChange={(e) => setPushForm((f) => ({ ...f, decideurName: e.target.value }))} placeholder="Nom du décideur *" style={pushInputStyle} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <input value={pushForm.decideurEmail} onChange={(e) => setPushForm((f) => ({ ...f, decideurEmail: e.target.value }))} placeholder="Email" style={pushInputStyle} />
+                <input value={pushForm.decideurPhone} onChange={(e) => setPushForm((f) => ({ ...f, decideurPhone: e.target.value }))} placeholder="Téléphone" style={pushInputStyle} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 14, padding: '10px 12px', background: '#F2F3D8', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 11, fontSize: 12, color: '#4A4568' }}>
+              Le dossier est anonymisé. Le push crée un <strong style={{ color: '#22177A' }}>&nbsp;lead&nbsp;</strong> dans le pipeline commercial.
+            </div>
+            <button onClick={submitPush} disabled={pushMutation.isPending} style={{ width: '100%', marginTop: 16, fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 15, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 13, cursor: 'pointer', opacity: pushMutation.isPending ? 0.6 : 1 }}>{pushMutation.isPending ? 'Push…' : 'Envoyer et créer le lead'}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const pushInputStyle: React.CSSProperties = { width: '100%', fontFamily: "'Manrope',sans-serif", fontSize: 14, padding: '10px 12px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,0.14)', background: '#FCFCF5', color: '#1A1533', outline: 'none' };
