@@ -1,641 +1,207 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { LayoutGrid, List, Plus, Search, Building2, Users, Calendar, Columns3, Briefcase, Filter, X, Download, Mail } from 'lucide-react';
+import { Plus, Search, ChevronDown, X, List, Columns3 } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import { useListNavigation } from '../../hooks/useListNavigation';
-import { usePrefetch } from '../../hooks/usePrefetch';
 import { api } from '../../lib/api-client';
-import { useAuthStore } from '../../stores/auth-store';
-import { toast } from '../../components/ui/Toast';
-import { downloadCSV } from '../../lib/export';
-import PageHeader from '../../components/ui/PageHeader';
-import Button from '../../components/ui/Button';
-import Table from '../../components/ui/Table';
-import Badge from '../../components/ui/Badge';
-import Pagination from '../../components/ui/Pagination';
-import EmptyState from '../../components/ui/EmptyState';
-import Skeleton, { SkeletonCard } from '../../components/ui/Skeleton';
-import SelectionBar from '../../components/ui/SelectionBar';
-import type { SelectionAction } from '../../components/ui/SelectionBar';
-import SortableHeader, { toggleSort, applySortToData } from '../../components/ui/SortableHeader';
-import type { SortConfig } from '../../components/ui/SortableHeader';
 
-type StatutMandat = 'OUVERT' | 'EN_COURS' | 'GAGNE' | 'PERDU' | 'ANNULE' | 'CLOTURE';
-type Priorite = 'BASSE' | 'NORMALE' | 'HAUTE' | 'URGENTE';
-
+// ─── TYPES ──────────────────────────────────────────
 interface Mandat {
   id: string;
   titrePoste: string;
-  statut: StatutMandat;
-  priorite: Priorite;
+  statut: string;
+  priorite: string;
   salaireMin: number | null;
   salaireMax: number | null;
   feeMontantEstime: number | null;
   createdAt?: string;
   entreprise: { id: string; nom: string };
-  client: { id: string; nom: string; prenom: string | null };
+  client: { id: string; nom: string; prenom: string | null } | null;
   _count?: { candidatures: number };
 }
+interface PaginatedResponse { data: Mandat[]; meta: { total: number; page: number; perPage: number; totalPages: number } }
 
-interface PaginatedResponse {
-  data: Mandat[];
-  meta: {
-    total: number;
-    page: number;
-    perPage: number;
-    totalPages: number;
-  };
-}
-
-const statutLabels: Record<StatutMandat, string> = {
-  OUVERT: 'Ouvert',
-  EN_COURS: 'En cours',
-  GAGNE: 'Gagné',
-  PERDU: 'Perdu',
-  ANNULE: 'Annulé',
-  CLOTURE: 'Clôturé',
+// ─── META ───────────────────────────────────────────
+const STATUT_META: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
+  OUVERT: { label: 'Ouvert', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  EN_COURS: { label: 'En cours', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
+  GAGNE: { label: 'Gagné', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  PERDU: { label: 'Perdu', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
+  ANNULE: { label: 'Annulé', bg: 'rgba(34,23,122,.06)', fg: '#8A8699', dot: '#C4C1D0' },
+  CLOTURE: { label: 'Clôturé', bg: 'rgba(34,23,122,.06)', fg: '#6E6A85', dot: '#8E7CC3' },
 };
-
-const statutVariant: Record<StatutMandat, 'default' | 'info' | 'warning' | 'success' | 'error'> = {
-  OUVERT: 'info',
-  EN_COURS: 'warning',
-  GAGNE: 'success',
-  PERDU: 'error',
-  ANNULE: 'error',
-  CLOTURE: 'default',
+const PRIO_META: Record<string, { label: string; bg: string; fg: string }> = {
+  BASSE: { label: 'Basse', bg: 'rgba(34,23,122,.06)', fg: '#8A8699' },
+  NORMALE: { label: 'Normale', bg: '#E8EEF9', fg: '#2A4A8A' },
+  HAUTE: { label: 'Haute', bg: '#FBF3E7', fg: '#8A6A2E' },
+  URGENTE: { label: 'Urgente', bg: '#F7DEDB', fg: '#B3261E' },
 };
+const STATUT_OPTIONS = Object.entries(STATUT_META).map(([value, m]) => ({ value, label: m.label }));
+const PRIO_OPTIONS = Object.entries(PRIO_META).map(([value, m]) => ({ value, label: m.label }));
 
-const prioriteLabels: Record<Priorite, string> = {
-  BASSE: 'Basse',
-  NORMALE: 'Normale',
-  HAUTE: 'Haute',
-  URGENTE: 'Urgente',
-};
+const GRID = '1.6fr 1.2fr 1.1fr 0.85fr 0.85fr 0.9fr 0.7fr 0.6fr auto';
 
-const prioriteVariant: Record<Priorite, 'default' | 'info' | 'warning' | 'error'> = {
-  BASSE: 'default',
-  NORMALE: 'info',
-  HAUTE: 'warning',
-  URGENTE: 'error',
-};
-
-function formatSalaireRange(min: number | null, max: number | null): string {
-  if (!min && !max) return '—';
-  if (min && max) return `${(min / 1000).toFixed(0)}k - ${(max / 1000).toFixed(0)}k€`;
+// ─── HELPERS ────────────────────────────────────────
+function salaire(min: number | null, max: number | null): string {
+  if (min && max) return `${(min / 1000).toFixed(0)}–${(max / 1000).toFixed(0)}k€`;
   if (min) return `≥ ${(min / 1000).toFixed(0)}k€`;
   if (max) return `≤ ${(max / 1000).toFixed(0)}k€`;
   return '—';
 }
+function fee(v: number | null): string { return v ? `${(v / 1000).toFixed(0)}k€` : '—'; }
+function clientName(c: Mandat['client']): string { return c ? `${c.prenom ? c.prenom + ' ' : ''}${c.nom}`.trim() : '—'; }
 
-function formatFee(value: number | null): string {
-  if (!value) return '—';
-  return `${(value / 1000).toFixed(0)}k€`;
+// ─── CHIP DROPDOWN ──────────────────────────────────
+function ChipDropdown({ label, options, value, open, onToggle, onChange }: {
+  label: string; options: { value: string; label: string }[]; value: string[] | undefined;
+  open: boolean; onToggle: () => void; onChange: (v: string[]) => void;
+}) {
+  const sel = value ?? [];
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={onToggle} className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: sel.length ? '#22177A' : '#4A4568', background: sel.length ? '#F2F3D8' : '#fff', border: `1px solid ${sel.length ? 'rgba(34,23,122,0.24)' : 'rgba(34,23,122,0.14)'}`, borderRadius: 10, padding: '9px 13px', cursor: 'pointer' }}>
+        {label}{sel.length > 0 && <span style={{ fontWeight: 800, fontSize: 11 }}>{sel.length}</span>}<ChevronDown size={13} color="#8A8699" strokeWidth={2.4} />
+      </button>
+      {open && (
+        <>
+          <div onClick={onToggle} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 41, minWidth: 190, background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 12, boxShadow: '0 20px 44px -20px rgba(34,23,122,0.4)', padding: 6 }}>
+            {options.map(o => {
+              const checked = sel.includes(o.value);
+              return (
+                <button key={o.value} onClick={() => onChange(checked ? sel.filter(x => x !== o.value) : [...sel, o.value])} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 8, border: 'none', background: checked ? '#F2F3D8' : 'transparent', color: '#1A1533', fontSize: 13, fontWeight: checked ? 700 : 500, cursor: 'pointer', textAlign: 'left' }}>
+                  <span style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${checked ? '#22177A' : 'rgba(34,23,122,0.3)'}`, background: checked ? '#22177A' : '#fff', flexShrink: 0 }} />{o.label}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return '';
-  try {
-    return new Date(dateStr).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-  } catch {
-    return '';
-  }
-}
-
-const listStagger = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.04 } },
-};
-const listItem = {
-  hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 300, damping: 24 } },
-};
-
-type ViewMode = 'grid' | 'table';
-
-// ── Selection actions ───────────────────────────────────────────
-const SELECTION_ACTIONS: SelectionAction[] = [
-  { key: 'export', label: 'Exporter CSV', icon: Download, variant: 'primary' },
-  { key: 'email', label: 'Email clients', icon: Mail, variant: 'secondary' },
-];
-
+// ═════════════════════════════════════════════════════
 export default function MandatsPage() {
   usePageTitle('Mandats');
-  const currentUser = useAuthStore((s) => s.user);
-  const isAdmin = currentUser?.role === 'ADMIN';
+  const navigate = useNavigate();
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [view, setView] = useState<ViewMode>('table');
-  const navigate = useNavigate();
-  const { prefetchOnHover, cancelPrefetch } = usePrefetch();
-  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
-  const [filterStatut, setFilterStatut] = useState<string>('');
-  const [filterPriorite, setFilterPriorite] = useState<string>('');
-  const [filterConsultant, setFilterConsultant] = useState<string>('');
-  const [showFilters, setShowFilters] = useState(false);
+  const [debSearch, setDebSearch] = useState('');
+  const [openChip, setOpenChip] = useState<string | null>(null);
+  const [filters, setFilters] = useState<Record<string, string[]>>({});
 
-  // Load users for admin consultant filter
-  const { data: usersData } = useQuery({
-    queryKey: ['users-list'],
-    queryFn: () => api.get<{ id: string; nom: string; prenom: string | null }[]>('/settings/users'),
-    enabled: isAdmin,
-  });
-
-  const activeFilterCount = [filterStatut, filterPriorite, filterConsultant].filter(Boolean).length;
-
-  // ── Selection state ───────────────────────────────────────────
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const handleSort = useCallback((key: string) => {
-    setSortConfig((prev) => toggleSort(prev, key));
-  }, []);
+  useEffect(() => { const t = setTimeout(() => { setDebSearch(search); setPage(1); }, 350); return () => clearTimeout(t); }, [search]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['mandats', page, search, filterStatut, filterPriorite, filterConsultant],
+    queryKey: ['mandats', page, debSearch, filters],
     queryFn: () => {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-      params.set('perPage', '20');
-      if (search) params.set('search', search);
-      if (filterStatut) params.set('statut', filterStatut);
-      if (filterPriorite) params.set('priorite', filterPriorite);
-      if (isAdmin && filterConsultant) params.set('assignedToId', filterConsultant);
-      return api.get<PaginatedResponse>(`/mandats?${params.toString()}`);
+      const p = new URLSearchParams();
+      p.set('page', String(page)); p.set('perPage', '20'); p.set('scope', 'all');
+      if (debSearch) p.set('search', debSearch);
+      if (filters.statut?.length) p.set('statut', filters.statut.join(','));
+      if (filters.priorite?.length) p.set('priorite', filters.priorite.join(','));
+      return api.get<PaginatedResponse>(`/mandats?${p.toString()}`);
     },
   });
 
   const total = data?.meta?.total ?? 0;
+  const totalPages = data?.meta?.totalPages ?? 1;
+  const rows = data?.data ?? [];
 
-  // ── Sort mandats ──────────────────────────────────────────────
-  const sortedMandats = useMemo(
-    () => applySortToData(data?.data ?? [], sortConfig, (row, key) => {
-      switch (key) {
-        case 'titrePoste': return row.titrePoste;
-        case 'entreprise': return row.entreprise.nom;
-        case 'statut': return statutLabels[row.statut];
-        case 'fee': return row.feeMontantEstime;
-        case 'priorite': {
-          const order: Record<string, number> = { BASSE: 0, NORMALE: 1, HAUTE: 2, URGENTE: 3 };
-          return order[row.priorite] ?? 0;
-        }
-        default: return null;
-      }
-    }),
-    [data?.data, sortConfig],
-  );
-
-  const { focusedIndex, setFocusedIndex } = useListNavigation(sortedMandats.length, {
-    onSelect: (index) => navigate(`/mandats/${sortedMandats[index].id}`),
+  const setFilter = (key: string, v: string[]) => { setFilters(prev => { const n = { ...prev }; if (!v.length) delete n[key]; else n[key] = v; return n; }); setPage(1); };
+  const activeChips: { key: string; label: string; onRemove: () => void }[] = [];
+  for (const [k, arr] of Object.entries(filters)) arr.forEach(v => {
+    const opt = (k === 'statut' ? STATUT_OPTIONS : PRIO_OPTIONS).find(o => o.value === v);
+    activeChips.push({ key: k + v, label: opt?.label ?? v, onRemove: () => setFilter(k, (filters[k] ?? []).filter(x => x !== v)) });
   });
-
-  // ── Selection helpers ──────────────────────────────────────────
-  const handleSelectionAction = useCallback((key: string) => {
-    const ids = Array.from(selectedIds);
-
-    switch (key) {
-      case 'export': {
-        downloadCSV('mandats', ids)
-          .then(() => toast('success', `${ids.length} mandat(s) exporté(s)`))
-          .catch(() => toast('error', "Erreur lors de l'export"));
-        break;
-      }
-      case 'email': {
-        const selected = sortedMandats.filter((m) => ids.includes(m.id));
-        // Collect unique client info — in a real app you'd use client emails
-        const clientNames = selected.map((m) => `${m.client.prenom || ''} ${m.client.nom}`.trim());
-        toast('info', `Email groupé pour les clients : ${clientNames.join(', ')}`);
-        break;
-      }
-      default:
-        break;
-    }
-  }, [selectedIds, sortedMandats]);
-
-  const allSelected = sortedMandats.length > 0 && sortedMandats.every((m) => selectedIds.has(m.id));
-
-  const toggleSelectAll = useCallback(() => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(sortedMandats.map((m) => m.id)));
-    }
-  }, [allSelected, sortedMandats]);
-
-  const columns = [
-    {
-      key: 'checkbox',
-      header: (
-        <input
-          type="checkbox"
-          checked={allSelected}
-          onChange={toggleSelectAll}
-          className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer"
-        />
-      ) as unknown as string,
-      render: (r: Mandat) => (
-        <input
-          type="checkbox"
-          checked={selectedIds.has(r.id)}
-          onChange={(e) => { e.stopPropagation(); toggleSelect(r.id); }}
-          onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer"
-        />
-      ),
-      className: 'w-10',
-    },
-    {
-      key: 'titrePoste',
-      header: (<SortableHeader label="Poste" sortKey="titrePoste" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Mandat) => <span className="font-semibold text-text-primary">{r.titrePoste}</span>,
-    },
-    {
-      key: 'entreprise',
-      header: (<SortableHeader label="Entreprise" sortKey="entreprise" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Mandat) => (
-        <span
-          className="text-accent hover:underline cursor-pointer"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/entreprises/${r.entreprise.id}`);
-          }}
-        >
-          {r.entreprise.nom}
-        </span>
-      ),
-    },
-    {
-      key: 'client',
-      header: 'Client',
-      render: (r: Mandat) => (
-        <span
-          className="text-accent hover:underline cursor-pointer"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/clients/${r.client.id}`);
-          }}
-        >
-          {r.client.prenom} {r.client.nom}
-        </span>
-      ),
-    },
-    {
-      key: 'statut',
-      header: (<SortableHeader label="Statut" sortKey="statut" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Mandat) => (
-        <Badge variant={statutVariant[r.statut]}>
-          {statutLabels[r.statut]}
-        </Badge>
-      ),
-    },
-    {
-      key: 'priorite',
-      header: (<SortableHeader label="Priorité" sortKey="priorite" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Mandat) => (
-        <Badge variant={prioriteVariant[r.priorite]}>
-          {prioriteLabels[r.priorite]}
-        </Badge>
-      ),
-    },
-    {
-      key: 'salaire',
-      header: 'Salaire',
-      render: (r: Mandat) => (
-        <span className="text-text-secondary">
-          {formatSalaireRange(r.salaireMin, r.salaireMax)}
-        </span>
-      ),
-    },
-    {
-      key: 'fee',
-      header: (<SortableHeader label="Fee estimé" sortKey="fee" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Mandat) => (
-        <span className="font-semibold text-primary-500">{formatFee(r.feeMontantEstime)}</span>
-      ),
-    },
-    {
-      key: 'candidatures',
-      header: 'Candidats',
-      render: (r: Mandat) => (
-        <Badge variant="info">{r._count?.candidatures || 0}</Badge>
-      ),
-    },
-    {
-      key: 'actions',
-      header: '',
-      render: (r: Mandat) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(e: React.MouseEvent) => { e.stopPropagation(); navigate(`/mandats/${r.id}/kanban`); }}
-        >
-          <Columns3 size={14} /> Kanban
-        </Button>
-      ),
-    },
-  ];
-
-  // ── Grid card ─────────────────────────────────────────────────
-  function MandatCard({ mandat, index }: { mandat: Mandat; index: number }) {
-    const candidatCount = mandat._count?.candidatures ?? 0;
-    return (
-      <div
-        onClick={() => navigate(`/mandats/${mandat.id}`)}
-        onMouseEnter={() => prefetchOnHover(['mandat', mandat.id], `/mandats/${mandat.id}`)}
-        onMouseLeave={cancelPrefetch}
-        className={`cursor-pointer rounded-2xl border border-border/50 bg-white p-5 shadow-card card-hover hover:shadow-card-hover flex flex-col ${focusedIndex === index ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}`}
-      >
-        {/* Header: Title + Status */}
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-[16px] font-semibold leading-tight text-text-primary line-clamp-2">
-            {mandat.titrePoste}
-          </p>
-          <Badge variant={statutVariant[mandat.statut]} size="sm">
-            {statutLabels[mandat.statut]}
-          </Badge>
-        </div>
-
-        {/* Entreprise */}
-        <div className="mt-2 flex items-center gap-1.5 text-[13px] text-neutral-500">
-          <Building2 size={13} className="flex-shrink-0 text-neutral-400" />
-          <span className="truncate">{mandat.entreprise.nom}</span>
-        </div>
-
-        {/* Fee */}
-        {mandat.feeMontantEstime && (
-          <p className="mt-3 text-[20px] font-bold text-primary-500">
-            {formatFee(mandat.feeMontantEstime)}
-          </p>
-        )}
-
-        {/* Badges row */}
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          <Badge variant={prioriteVariant[mandat.priorite]} size="sm">
-            {prioriteLabels[mandat.priorite]}
-          </Badge>
-          <span className="inline-flex items-center gap-1 rounded-full bg-neutral-50 border border-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600">
-            <Users size={10} />
-            {candidatCount} candidat{candidatCount > 1 ? 's' : ''}
-          </span>
-        </div>
-
-        {/* Progress bar placeholder */}
-        {candidatCount > 0 && (
-          <div className="mt-3">
-            <div className="h-1.5 w-full rounded-full bg-neutral-100 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-primary-400 to-primary-600 transition-all"
-                style={{ width: `${Math.min(100, candidatCount * 15)}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="mt-auto pt-3 flex items-center justify-between border-t border-neutral-50">
-          {mandat.createdAt ? (
-            <span className="flex items-center gap-1 text-[11px] text-neutral-300">
-              <Calendar size={10} />
-              {formatDate(mandat.createdAt)}
-            </span>
-          ) : (
-            <span />
-          )}
-          <button
-            onClick={(e) => { e.stopPropagation(); navigate(`/mandats/${mandat.id}/kanban`); }}
-            className="inline-flex items-center gap-1 rounded-md bg-primary-50 px-2 py-1 text-[11px] font-medium text-primary-600 hover:bg-primary-100 transition-colors"
-          >
-            <Columns3 size={11} />
-            Kanban
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div>
-      {/* Header mock-fidelity */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 38, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1 }}>
-            Mandats
-          </h1>
-          {!isLoading && (
-            <span
-              style={{
-                background: '#fff', border: '1px solid rgba(34,23,122,0.12)',
-                borderRadius: 999, padding: '5px 13px', fontSize: 12.5, fontWeight: 700, color: '#22177A',
-              }}
-            >
-              {total} mandat{total > 1 ? 's' : ''}
-            </span>
-          )}
+      <style>{`
+        .crow{ position:relative; transition:background .16s ease, padding-left .2s cubic-bezier(.16,1,.3,1); }
+        .crow::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:#22177A; transform:scaleY(0); transition:transform .22s cubic-bezier(.16,1,.3,1); }
+        .crow:hover{ background:#FBFBF3; padding-left:26px; }
+        .crow:hover::before{ transform:scaleY(1); }
+        .crow:hover .kbl{ color:#22177A !important; }
+        .chip:hover{ border-color:rgba(34,23,122,0.3) !important; transform:translateY(-1px); }
+        .chip{ transition:border-color .16s ease, transform .15s ease; }
+        .kw:hover{ background:#E6E9AF !important; }
+      `}</style>
+
+      {/* HEADER */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>Recrutement</div>
+          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Mandats</h1>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div
-            style={{
-              display: 'flex', alignItems: 'center', borderRadius: 10,
-              border: '1px solid rgba(34,23,122,0.14)', background: '#F7F7EF', padding: 3,
-            }}
-          >
-            <button
-              onClick={() => setView('table')}
-              style={{
-                borderRadius: 7, padding: '6px 8px',
-                background: view === 'table' ? '#fff' : 'transparent',
-                boxShadow: view === 'table' ? '0 1px 2px rgba(34,23,122,0.08)' : 'none',
-                color: view === 'table' ? '#22177A' : '#8A8699', border: 'none', cursor: 'pointer',
-              }}
-              title="Vue tableau"
-            >
-              <List size={16} />
-            </button>
-            <button
-              onClick={() => setView('grid')}
-              style={{
-                borderRadius: 7, padding: '6px 8px',
-                background: view === 'grid' ? '#fff' : 'transparent',
-                boxShadow: view === 'grid' ? '0 1px 2px rgba(34,23,122,0.08)' : 'none',
-                color: view === 'grid' ? '#22177A' : '#8A8699', border: 'none', cursor: 'pointer',
-              }}
-              title="Vue cartes"
-            >
-              <LayoutGrid size={16} />
-            </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{total.toLocaleString('fr-FR')} mandats</span>
+          <div style={{ display: 'flex', background: '#fff', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 11, overflow: 'hidden' }}>
+            <button title="Liste" style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#22177A', border: 'none', cursor: 'pointer' }}><List size={16} color="#E6E9AF" /></button>
+            <button title="Kanban" onClick={() => navigate('/mandats/kanban')} style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: 'none', cursor: 'pointer' }}><Columns3 size={16} color="#8A8699" /></button>
           </div>
-          <button
-            onClick={() => navigate('/mandats/new')}
-            className="btn-primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer', border: 'none' }}
-          >
-            <Plus size={15} /> Ajouter
-          </button>
+          <button onClick={() => navigate('/mandats/new')} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />Nouveau mandat</button>
         </div>
       </div>
 
-      {/* Search + Filters */}
-      <div className="mb-6 space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="relative max-w-[400px] flex-1">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary"
-            />
-            <input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Rechercher un mandat..."
-              className="h-[40px] w-full rounded-lg border-[1.5px] border-neutral-100 bg-white pl-10 pr-4 text-sm shadow-sm outline-none transition-all focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
-            />
-          </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-              activeFilterCount > 0
-                ? 'border-primary-300 bg-primary-50 text-primary-600'
-                : 'border-neutral-200 bg-white text-text-secondary hover:bg-neutral-50'
-            }`}
-          >
-            <Filter size={14} />
-            Filtres
-            {activeFilterCount > 0 && (
-              <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary-500 text-[11px] font-bold text-white">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-          {activeFilterCount > 0 && (
-            <button
-              onClick={() => { setFilterStatut(''); setFilterPriorite(''); setPage(1); }}
-              className="flex items-center gap-1 text-xs text-text-tertiary hover:text-text-primary transition-colors"
-            >
-              <X size={12} /> Réinitialiser
-            </button>
-          )}
+      {/* FILTERS */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', marginTop: 22 }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 220, maxWidth: 360 }}>
+          <Search size={15} color="#9A96AE" strokeWidth={2.2} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)' }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un poste, une entreprise…" style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 36px', borderRadius: 11, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', outline: 'none' }} />
         </div>
-        {showFilters && (
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50/50 p-3">
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Statut</label>
-              <select
-                value={filterStatut}
-                onChange={(e) => { setFilterStatut(e.target.value); setPage(1); }}
-                className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-xs outline-none focus:border-primary-400"
-              >
-                <option value="">Tous</option>
-                <option value="OUVERT">Ouvert</option>
-                <option value="EN_COURS">En cours</option>
-                <option value="GAGNE">Gagné</option>
-                <option value="PERDU">Perdu</option>
-                <option value="ANNULE">Annulé</option>
-                <option value="CLOTURE">Clôturé</option>
-              </select>
+        <ChipDropdown label="Statut" options={STATUT_OPTIONS} value={filters.statut} open={openChip === 'statut'} onToggle={() => setOpenChip(openChip === 'statut' ? null : 'statut')} onChange={v => setFilter('statut', v)} />
+        <ChipDropdown label="Priorité" options={PRIO_OPTIONS} value={filters.priorite} open={openChip === 'prio'} onToggle={() => setOpenChip(openChip === 'prio' ? null : 'prio')} onChange={v => setFilter('priorite', v)} />
+      </div>
+
+      {/* ACTIVE CHIPS */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 11 }}>
+        <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>Filtres</span>
+        {activeChips.length === 0 && <span style={{ fontSize: 12, color: '#C4C1D0' }}>aucun</span>}
+        {activeChips.map(ch => <span key={ch.key} className="kw" onClick={ch.onRemove} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 999, padding: '5px 11px', cursor: 'pointer' }}>{ch.label}<X size={11} strokeWidth={2.8} /></span>)}
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#8A8699' }}>{rows.length} affichés · {total.toLocaleString('fr-FR')} au total</span>
+      </div>
+
+      {/* TABLE */}
+      <div style={{ marginTop: 18, background: '#fff', border: '1px solid rgba(34,23,122,0.08)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 2px rgba(34,23,122,0.04)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 14, padding: '14px 22px', background: '#F7F7EE', borderBottom: '1px solid rgba(34,23,122,0.08)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#8A8699' }}>
+          <span>Poste</span><span>Entreprise</span><span>Client</span><span>Statut</span><span>Priorité</span><span>Salaire</span><span>Fee</span><span style={{ textAlign: 'center' }}>Cand.</span><span />
+        </div>
+        {isLoading ? (
+          Array.from({ length: 8 }).map((_, i) => <div key={i} style={{ height: 62, borderBottom: '1px solid rgba(34,23,122,0.05)', background: i % 2 ? '#fff' : '#FCFCF5' }} />)
+        ) : rows.length === 0 ? (
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: '#8A8699' }}>Aucun mandat ne correspond aux filtres.</div>
+        ) : rows.map(m => {
+          const st = STATUT_META[m.statut] ?? STATUT_META.OUVERT;
+          const pr = PRIO_META[m.priorite] ?? PRIO_META.NORMALE;
+          const cand = m._count?.candidatures ?? 0;
+          return (
+            <div key={m.id} className="crow" onClick={() => navigate(`/mandats/${m.id}`)} style={{ cursor: 'pointer', display: 'grid', gridTemplateColumns: GRID, gap: 14, alignItems: 'center', padding: '15px 22px', borderBottom: '1px solid rgba(34,23,122,0.05)' }}>
+              <div style={{ minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 700, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.titrePoste}</div></div>
+              <span onClick={(e) => { e.stopPropagation(); navigate(`/entreprises/${m.entreprise.id}`); }} style={{ fontSize: 13, color: '#22177A', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.entreprise.nom}</span>
+              <span onClick={(e) => { if (m.client) { e.stopPropagation(); navigate(`/clients/${m.client.id}`); } }} style={{ fontSize: 13, color: '#4A4568', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: m.client ? 'pointer' : 'default' }}>{clientName(m.client)}</span>
+              <span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '4px 11px', background: st.bg, color: st.fg, whiteSpace: 'nowrap' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: st.dot }} />{st.label}</span></span>
+              <span><span style={{ display: 'inline-flex', fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '4px 11px', background: pr.bg, color: pr.fg, whiteSpace: 'nowrap' }}>{pr.label}</span></span>
+              <span style={{ fontSize: 12.5, color: '#4A4568', whiteSpace: 'nowrap' }}>{salaire(m.salaireMin, m.salaireMax)}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#22177A' }}>{fee(m.feeMontantEstime)}</span>
+              <span style={{ textAlign: 'center' }}><span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 26, height: 24, padding: '0 8px', fontSize: 12.5, fontWeight: 800, borderRadius: 999, background: 'rgba(34,23,122,0.08)', color: '#22177A' }}>{cand}</span></span>
+              <span onClick={(e) => { e.stopPropagation(); navigate(`/mandats/${m.id}/kanban`); }} className="kbl" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: '#8A8699', cursor: 'pointer', transition: 'color .16s' }}><Columns3 size={14} />Kanban</span>
             </div>
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Priorité</label>
-              <select
-                value={filterPriorite}
-                onChange={(e) => { setFilterPriorite(e.target.value); setPage(1); }}
-                className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-xs outline-none focus:border-primary-400"
-              >
-                <option value="">Toutes</option>
-                <option value="BASSE">Basse</option>
-                <option value="NORMALE">Normale</option>
-                <option value="HAUTE">Haute</option>
-                <option value="URGENTE">Urgente</option>
-              </select>
+          );
+        })}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 22px', fontSize: 13, color: '#8A8699' }}>
+            <span>Page {page} / {totalPages} · {total.toLocaleString('fr-FR')} mandats</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', color: page <= 1 ? '#C4C1D0' : '#22177A', cursor: page <= 1 ? 'default' : 'pointer' }}>‹</button>
+              <span style={{ minWidth: 32, height: 32, borderRadius: 9, background: '#22177A', color: '#E6E9AF', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{page}</span>
+              <button disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', color: page >= totalPages ? '#C4C1D0' : '#22177A', cursor: page >= totalPages ? 'default' : 'pointer' }}>›</button>
             </div>
-            {isAdmin && (
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-text-tertiary uppercase tracking-wider">Consultant</label>
-                <select
-                  value={filterConsultant}
-                  onChange={(e) => { setFilterConsultant(e.target.value); setPage(1); }}
-                  className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-xs outline-none focus:border-primary-400"
-                >
-                  <option value="">Tous</option>
-                  {usersData?.map((u) => (
-                    <option key={u.id} value={u.id}>{u.prenom} {u.nom}</option>
-                  ))}
-                </select>
-              </div>
-            )}
           </div>
         )}
       </div>
-
-      {/* Content */}
-      {isLoading ? (
-        view === 'grid' ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <SkeletonCard key={i} />
-            ))}
-          </div>
-        ) : (
-          <Skeleton className="h-12 w-full" count={5} />
-        )
-      ) : !sortedMandats.length ? (
-        <EmptyState
-          title="Aucun mandat"
-          description="Suivez vos missions de recrutement de bout en bout en créant votre premier mandat."
-          actionLabel="Ajouter un mandat"
-          onAction={() => navigate('/mandats/new')}
-          icon={<Briefcase size={48} strokeWidth={1} />}
-        />
-      ) : (
-        <>
-          {view === 'grid' ? (
-            <motion.div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3" variants={listStagger} initial="hidden" animate="show">
-              {sortedMandats.map((m, index) => (
-                <motion.div key={m.id} variants={listItem}>
-                  <MandatCard mandat={m} index={index} />
-                </motion.div>
-              ))}
-            </motion.div>
-          ) : (
-            <Table
-              columns={columns}
-              data={sortedMandats}
-              keyExtractor={(r) => r.id}
-              onRowClick={(r) => navigate(`/mandats/${r.id}`)}
-              onRowMouseEnter={(r) => prefetchOnHover(['mandat', r.id], `/mandats/${r.id}`)}
-              onRowMouseLeave={cancelPrefetch}
-              rowClassName={(_r, i) => focusedIndex === i ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}
-            />
-          )}
-          {data?.meta && (
-            <div className="mt-6 flex justify-center">
-              <Pagination
-                page={data.meta.page}
-                totalPages={data.meta.totalPages}
-                onPageChange={setPage}
-              />
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Selection bar */}
-      <SelectionBar
-        count={selectedIds.size}
-        entityLabel="mandats"
-        actions={SELECTION_ACTIONS}
-        onAction={handleSelectionAction}
-        onCancel={() => setSelectedIds(new Set())}
-      />
     </div>
   );
 }
