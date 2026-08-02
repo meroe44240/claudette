@@ -82,6 +82,9 @@ export async function forgotPassword(input: ForgotPasswordInput) {
 
   const resetUrl = `${process.env.APP_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
   const firstName = user.prenom || user.nom;
+  // Fallback (SMTP potentiellement indisponible/bloquant) : on logge le lien de
+  // secours AVANT l'envoi, pour qu'un admin puisse le récupérer même si l'envoi bloque.
+  console.warn(`[password-reset] lien de secours pour ${user.email} — token=${token}`);
   try {
     await sendEmail(
       user.email,
