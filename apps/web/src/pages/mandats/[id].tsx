@@ -121,6 +121,24 @@ interface AccessContact {
   sentAt: number | null;
 }
 
+// Portail client — formes du vrai back-end (/portal)
+interface PortalAccessRow {
+  id: string;
+  email: string;
+  lastLoginAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  client: { id: string; nom: string; prenom: string | null } | null;
+}
+interface PortalEventRow {
+  id: string;
+  type: string;
+  candidatureId: string | null;
+  payload: unknown;
+  createdAt: string;
+  portalAccess: { email: string; client: { nom: string; prenom: string | null } | null } | null;
+}
+
 interface JForm {
   jRef: string;
   jSector: string;
@@ -360,16 +378,22 @@ export default function MandatDetailPage() {
     },
   });
 
-  // Client activity (portail) — recomputed when refreshTick changes
+  // ── Portail client : accès + activité (vrai back-end) ──
+  const portalEventsQuery = useQuery({
+    queryKey: ['portal-events', id],
+    queryFn: () => api.get<PortalEventRow[]>(`/portal/mandat/${id}/events?limit=20`),
+    enabled: !!id,
+  });
+  const portalAccessesQuery = useQuery({
+    queryKey: ['portal-accesses', id],
+    queryFn: () => api.get<PortalAccessRow[]>(`/portal/mandat/${id}/accesses`),
+    enabled: !!id,
+  });
+
+  // Client activity (portail) dérivée des vrais events + accès
   const clientActivity = useMemo(() => {
-    void refreshTick;
-    let evs: { type: string; who?: string; at: number }[] = [];
-    try {
-      const raw = localStorage.getItem('hu_client_events');
-      evs = raw ? JSON.parse(raw) : [];
-    } catch {
-      evs = [];
-    }
+    const evs = portalEventsQuery.data || [];
+    const accesses = portalAccessesQuery.data || [];
     const now = Date.now();
     const rel = (t: number) => {
       const s = Math.floor((now - t) / 1000);
@@ -379,30 +403,61 @@ export default function MandatDetailPage() {
       return `le ${new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
     };
     const hhmm = (t: number) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    const items = evs.slice().reverse().slice(0, 4).map((e) => {
-      let label: string;
-      let dot: string;
-      let detail = e.who || '';
-      if (e.type === 'login') { label = "S'est connecté"; dot = '#2C6B3F'; detail = ''; }
-      else if (e.type === 'view') { label = 'A consulté un profil'; dot = '#22177A'; }
-      else if (e.type === 'comment') { label = 'A laissé un commentaire'; dot = '#8E7CC3'; }
-      else if (e.type && e.type.indexOf('move:') === 0) { label = 'A déplacé un profil'; dot = '#E08A2B'; }
-      else if (e.type === 'decision:meet') { label = 'Souhaite le/la rencontrer'; dot = '#2C6B3F'; }
-      else if (e.type === 'decision:talk') { label = 'À discuter'; dot = '#B4791A'; }
-      else if (e.type === 'decision:pass') { label = 'A écarté un profil'; dot = '#B3261E'; }
-      else if (e.type === 'invite') { label = e.who || 'Action portail'; dot = '#8E7CC3'; detail = ''; }
-      else { label = e.type || 'Action'; dot = '#8A8699'; }
-      return { label, dot, detail, hasDetail: !!detail, time: hhmm(e.at) };
+    const labelFor = (type: string): { label: string; dot: string } => {
+      if (type === 'login') return { label: "S'est connecté", dot: '#2C6B3F' };
+      if (type === 'view') return { label: 'A consulté un profil', dot: '#22177A' };
+      if (type === 'comment') return { label: 'A laissé un commentaire', dot: '#8E7CC3' };
+      if (type.indexOf('move') === 0 || type.indexOf('decision:meet') === 0) return { label: 'A déplacé / décidé', dot: '#E08A2B' };
+      if (type === 'decision:talk') return { label: 'À discuter', dot: '#B4791A' };
+      if (type === 'decision:pass') return { label: 'A écarté un profil', dot: '#B3261E' };
+      return { label: type || 'Action', dot: '#8A8699' };
+    };
+    const items = evs.slice(0, 4).map((e) => {
+      const { label, dot } = labelFor(e.type);
+      const who = e.portalAccess?.client ? `${e.portalAccess.client.prenom || ''} ${e.portalAccess.client.nom || ''}`.trim() : (e.portalAccess?.email || '');
+      return { label, dot, detail: who, hasDetail: !!who && e.type !== 'login', time: hhmm(new Date(e.createdAt).getTime()) };
     });
-    const last = evs.length ? evs[evs.length - 1].at : 0;
-    const online = !!last && (now - last) < 10 * 60 * 1000;
+    const lastLogin = Math.max(0, ...accesses.map((a) => (a.lastLoginAt ? new Date(a.lastLoginAt).getTime() : 0)));
+    const lastEvent = evs.length ? new Date(evs[0].createdAt).getTime() : 0;
+    const last = Math.max(lastLogin, lastEvent);
+    const online = !!last && now - last < 10 * 60 * 1000;
     return {
       items,
       statusLabel: online ? 'En ligne' : 'Hors ligne',
       statusColor: online ? '#2C9A47' : '#B4B0C4',
       lastSeen: last ? `Vu ${rel(last)}` : 'Jamais connecté',
     };
-  }, [refreshTick]);
+  }, [portalEventsQuery.data, portalAccessesQuery.data]);
+
+  // Mot de passe généré au dernier grant (affiché une seule fois, non stocké côté serveur)
+  const [lastGrantedPwd, setLastGrantedPwd] = useState<{ email: string; pwd: string } | null>(null);
+
+  const grantAccessMutation = useMutation({
+    mutationFn: (p: { email: string; password: string }) =>
+      api.post('/portal/access', { mandatId: id, clientId: mandat?.client?.id, email: p.email, password: p.password }),
+    onSuccess: (_res, p) => {
+      queryClient.invalidateQueries({ queryKey: ['portal-accesses', id] });
+      setLastGrantedPwd({ email: p.email, pwd: p.password });
+      setCEmail('');
+      toast('success', `Accès portail créé pour ${p.email}`);
+    },
+    onError: (e: any) => toast('error', e?.message || "Impossible de créer l'accès"),
+  });
+
+  const revokePortalMutation = useMutation({
+    mutationFn: (accessId: string) => api.post(`/portal/access/${accessId}/revoke`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['portal-accesses', id] });
+      toast('info', 'Accès révoqué');
+    },
+    onError: (e: any) => toast('error', e?.message || 'Révocation impossible'),
+  });
+
+  const submitGrant = () => {
+    const email = cEmail.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('error', 'Email invalide'); return; }
+    grantAccessMutation.mutate({ email, password: genPwd() });
+  };
 
   // Init team once mandat is loaded
   useEffect(() => {
@@ -958,7 +1013,7 @@ export default function MandatDetailPage() {
               ) : (
                 <div style={{ marginTop: 13, paddingTop: 13, borderTop: '1px solid rgba(34,23,122,0.07)', fontSize: 12, color: FAINT }}>Le client n'a pas encore ouvert son espace.</div>
               )}
-              <button onClick={() => setRefreshTick((t) => t + 1)} style={{ width: '100%', marginTop: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontFamily: MANROPE, fontWeight: 700, fontSize: 12, color: NAVY, background: 'transparent', border: '1px solid rgba(34,23,122,0.16)', borderRadius: 10, padding: 8, cursor: 'pointer' }}><RefreshCw size={13} /> Rafraîchir</button>
+              <button onClick={() => { queryClient.invalidateQueries({ queryKey: ['portal-events', id] }); queryClient.invalidateQueries({ queryKey: ['portal-accesses', id] }); }} style={{ width: '100%', marginTop: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontFamily: MANROPE, fontWeight: 700, fontSize: 12, color: NAVY, background: 'transparent', border: '1px solid rgba(34,23,122,0.16)', borderRadius: 10, padding: 8, cursor: 'pointer' }}><RefreshCw size={13} /> Rafraîchir</button>
             </div>
           )}
         </div>
@@ -976,23 +1031,26 @@ export default function MandatDetailPage() {
               <button onClick={() => setAccessOpen(false)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer', flexShrink: 0 }}>✕</button>
             </div>
 
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8699', marginTop: 22 }}>Contacts avec accès</div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8699', marginTop: 22 }}>Accès portail · client {`${mandat.client.prenom || ''} ${mandat.client.nom}`.trim()}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 12 }}>
-              {access.length === 0 && <div style={{ fontSize: 13, color: FAINT }}>Aucun contact n'a encore d'accès.</div>}
-              {access.map((c, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', border: '1px solid rgba(34,23,122,0.1)', borderRadius: 13 }}>
-                  <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: '50%', background: '#8E7CC3', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: ARCHIVO, fontSize: 12 }}>{nameInitials(c.name)}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>{c.name} <span style={{ fontSize: 11, fontWeight: 700, color: NAVY, background: '#F2F3D8', borderRadius: 999, padding: '2px 8px', marginLeft: 4 }}>{c.role}</span></div>
-                    <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{c.email} · mdp : <strong style={{ color: NAVY, fontFamily: 'monospace' }}>{c.pwd}</strong></div>
+              {(portalAccessesQuery.data || []).length === 0 && <div style={{ fontSize: 13, color: FAINT }}>Aucun accès portail pour l'instant.</div>}
+              {(portalAccessesQuery.data || []).map((a) => {
+                const nm = a.client ? `${a.client.prenom || ''} ${a.client.nom}`.trim() : a.email;
+                const revoked = !!a.revokedAt;
+                return (
+                  <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', border: '1px solid rgba(34,23,122,0.1)', borderRadius: 13, opacity: revoked ? 0.55 : 1 }}>
+                    <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: '50%', background: '#8E7CC3', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: ARCHIVO, fontSize: 12 }}>{nameInitials(nm)}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>{nm}</div>
+                      <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{a.email}{lastGrantedPwd && lastGrantedPwd.email === a.email ? <> · mdp : <strong style={{ color: NAVY, fontFamily: 'monospace' }}>{lastGrantedPwd.pwd}</strong></> : null}</div>
+                    </div>
+                    <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: '4px 10px', background: revoked ? '#F5DED9' : (a.lastLoginAt ? '#EAF3EC' : '#FBF3E7'), color: revoked ? '#B3261E' : (a.lastLoginAt ? '#2C6B3F' : '#8A6A2E'), whiteSpace: 'nowrap' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: revoked ? '#B3261E' : (a.lastLoginAt ? '#3B9A54' : '#E08A2B') }} />{revoked ? 'révoqué' : (a.lastLoginAt ? `connecté ${new Date(a.lastLoginAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}` : 'jamais connecté')}</span>
+                      {!revoked && <button onClick={() => revokePortalMutation.mutate(a.id)} disabled={revokePortalMutation.isPending} style={{ fontSize: 12.5, fontWeight: 700, color: '#B3261E', background: 'transparent', border: '1px solid rgba(179,38,30,0.25)', borderRadius: 9, padding: '7px 12px', cursor: 'pointer' }}>Révoquer</button>}
+                    </div>
                   </div>
-                  <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: '4px 10px', background: c.sentAt ? '#EAF3EC' : '#FBF3E7', color: c.sentAt ? '#2C6B3F' : '#8A6A2E', whiteSpace: 'nowrap' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: c.sentAt ? '#3B9A54' : '#E08A2B' }} />{c.sentAt ? `invité ${new Date(c.sentAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}` : 'non invité'}</span>
-                    <button onClick={() => resendInvite(i)} title="Renvoyer l'invitation" style={{ width: 30, height: 30, borderRadius: 9, color: NAVY, background: '#fff', border: '1px solid rgba(34,23,122,0.16)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><RefreshCw size={13} /></button>
-                    <button onClick={() => revokeAccess(i)} style={{ fontSize: 12.5, fontWeight: 700, color: '#B3261E', background: 'transparent', border: '1px solid rgba(179,38,30,0.25)', borderRadius: 9, padding: '7px 12px', cursor: 'pointer' }}>Révoquer</button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8699', marginTop: 22 }}>Inviter un contact</div>
@@ -1023,7 +1081,7 @@ export default function MandatDetailPage() {
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 11, fontSize: 12, color: '#8A8699' }}><Info size={14} /> L'accès est créé mais rien n'est envoyé — à vous de transmettre les identifiants.</div>
             )}
-            <button onClick={addContact} style={{ width: '100%', marginTop: 16, fontFamily: MANROPE, fontWeight: 700, fontSize: 15, background: NAVY, color: LIME, border: 'none', borderRadius: 12, padding: 14, cursor: 'pointer' }}>{inviteMail ? "Créer l'accès & envoyer l'invitation" : "Créer l'accès"}</button>
+            <button onClick={submitGrant} disabled={grantAccessMutation.isPending} style={{ width: '100%', marginTop: 16, fontFamily: MANROPE, fontWeight: 700, fontSize: 15, background: NAVY, color: LIME, border: 'none', borderRadius: 12, padding: 14, cursor: 'pointer', opacity: grantAccessMutation.isPending ? 0.6 : 1 }}>{grantAccessMutation.isPending ? 'Création…' : "Créer l'accès"}</button>
           </div>
         </div>
       )}
