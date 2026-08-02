@@ -98,8 +98,11 @@ export async function forgotPassword(input: ForgotPasswordInput) {
       }),
     );
   } catch {
-    // Log but don't fail — we never reveal if the email exists
+    // Log but don't fail — we never reveal if the email exists.
+    // Fallback (SMTP indisponible) : on écrit le lien de secours dans les logs
+    // serveur pour qu'un admin puisse le transmettre manuellement.
     console.error('Failed to send reset email');
+    console.warn(`[password-reset] lien de secours pour ${user.email} — token=${token} url=${resetUrl}`);
   }
 }
 
