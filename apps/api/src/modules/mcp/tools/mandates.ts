@@ -118,17 +118,25 @@ export function registerMandateTools(server: McpServer) {
 
   server.tool(
     'move_candidate_stage',
-    "[CONFIRMATION REQUISE] Deplace un candidat d'une etape a une autre dans le pipeline d'un mandat. ATTENTION : si new_stage='PLACE' (closing won), les 4 champs fee_montant_facture + date_demarrage + source_placement + source_lead sont OBLIGATOIRES — sinon l'outil refuse. Demande-les au recruteur avant d'appeler. Tu DOIS demander confirmation.",
+    "[CONFIRMATION REQUISE] Deplace un candidat d'une etape a une autre dans le pipeline d'un mandat. Certaines etapes ont une SAISIE OBLIGATOIRE (comme les modales de l'interface) — l'outil REFUSE si les champs manquent : " +
+      "• PLACE (closing won) → fee_montant_facture + date_demarrage + source_placement + source_lead. " +
+      "• ENTRETIEN_CLIENT → date_entretien_client (date + heure de l'entretien avec le client). " +
+      "• REFUSE (perdu) → motif_refus (motif de perte, liste fermee). " +
+      "Demande TOUJOURS ces valeurs au recruteur/sales avant d'appeler l'outil, puis rappelle avec tous les params. Tu DOIS demander confirmation.",
     {
       candidature_id: z.string().describe('UUID de la candidature'),
       new_stage: z.string().describe('Nouvelle etape : SOURCING, CONTACTE, ENTRETIEN_1, ENVOYE_CLIENT, ENTRETIEN_CLIENT, OFFRE, PLACE, REFUSE'),
-      motif_refus: z.string().optional().describe('Si REFUSE : SALAIRE, PROFIL_PAS_ALIGNE, CANDIDAT_DECLINE, CLIENT_REFUSE, TIMING, POSTE_POURVU, AUTRE'),
+      motif_refus: z.string().optional().describe('OBLIGATOIRE si REFUSE : SALAIRE, PROFIL_PAS_ALIGNE, CANDIDAT_DECLINE, CLIENT_REFUSE, TIMING, POSTE_POURVU, AUTRE'),
+      motif_refus_detail: z.string().optional().describe('Optionnel si REFUSE : detail libre du motif.'),
+      date_entretien_client: z.string().optional().describe('OBLIGATOIRE si ENTRETIEN_CLIENT : date + heure de l\'entretien avec le client (ISO 8601, ex 2026-08-05T14:30:00). Ecrit dateEntretienClient.'),
+      brief_client: z.string().optional().describe('Recommande si ENVOYE_CLIENT : brief du candidat envoye au client (texte). Enregistre comme note.'),
       fee_montant_facture: z.number().int().nonnegative().optional().describe('OBLIGATOIRE si PLACE : montant de la facture en euros (entier). Ecrit feeMontantFacture + feeStatut=FACTURE sur le mandat.'),
       date_demarrage: z.string().optional().describe('OBLIGATOIRE si PLACE : date de demarrage du candidat (YYYY-MM-DD ou ISO 8601).'),
       source_placement: z.string().optional().describe('OBLIGATOIRE si PLACE : source du profil place (LinkedIn Recruiter, Indeed, Cooptation, Approche directe, Database interne, CVTech, LinkedIn (organique), Autre).'),
       source_lead: z.string().optional().describe('OBLIGATOIRE si PLACE : source du lead/mandat (Cold call, Cooptation, LinkedIn, Inbound, Email outbound, Salon, Partenariat, Autre). Ecrit sourceLead sur le mandat.'),
     },
     wrapTool('move_candidate_stage', async (args, user) => {
+      // ── Gates de saisie obligatoire (equivalent des modales de l'UI) ──
       if (args.new_stage === 'PLACE') {
         const missing: string[] = [];
         if (args.fee_montant_facture === undefined) missing.push('fee_montant_facture');
@@ -143,11 +151,31 @@ export function registerMandateTools(server: McpServer) {
           };
         }
       }
+      if (args.new_stage === 'ENTRETIEN_CLIENT' && !args.date_entretien_client) {
+        return {
+          error: 'entretien_client_date_required',
+          missing_fields: ['date_entretien_client'],
+          message: `Pour passer une candidature en ENTRETIEN_CLIENT, la date + heure de l'entretien est OBLIGATOIRE (comme la modale de l'interface). Demande-la au recruteur (ISO 8601, ex 2026-08-05T14:30:00) puis rappelle l'outil avec date_entretien_client.`,
+        };
+      }
+      if (args.new_stage === 'REFUSE' && !args.motif_refus) {
+        return {
+          error: 'motif_refus_required',
+          missing_fields: ['motif_refus'],
+          message: `Pour passer une candidature en REFUSE (perdu), le motif est OBLIGATOIRE (liste fermee : SALAIRE, PROFIL_PAS_ALIGNE, CANDIDAT_DECLINE, CLIENT_REFUSE, TIMING, POSTE_POURVU, AUTRE). Demande-le au recruteur puis rappelle l'outil avec motif_refus.`,
+        };
+      }
 
       const updates: Record<string, unknown> = {
         stage: args.new_stage,
         motifRefus: args.motif_refus,
+        motifRefusDetail: args.motif_refus_detail,
       };
+
+      if (args.new_stage === 'ENTRETIEN_CLIENT') {
+        const raw = String(args.date_entretien_client);
+        updates.dateEntretienClient = raw.includes('T') ? raw : new Date(`${raw}T09:00:00`).toISOString();
+      }
 
       if (args.new_stage === 'PLACE') {
         updates.feeMontantFacture = args.fee_montant_facture;
