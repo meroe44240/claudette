@@ -135,12 +135,61 @@ export async function list(
       include: {
         _count: { select: { candidatures: true } },
         assignedTo: { select: { id: true, nom: true, prenom: true } },
+        candidatures: {
+          where: { stage: { not: 'REFUSE' } },
+          select: {
+            stage: true,
+            mandat: { select: { id: true, titrePoste: true, entreprise: { select: { nom: true } } } },
+          },
+        },
       },
     }),
     prisma.candidat.count({ where }),
   ]);
 
-  return paginatedResult(data, total, params);
+  // Dernière activité par candidat (pour la colonne "Activité", rouge > 10 j)
+  const ids = data.map((c) => c.id);
+  const lastActivityMap = new Map<string, Date>();
+  if (ids.length > 0) {
+    const acts = await prisma.activite.findMany({
+      where: { entiteType: 'CANDIDAT', entiteId: { in: ids } },
+      orderBy: { createdAt: 'desc' },
+      select: { entiteId: true, createdAt: true },
+    });
+    for (const a of acts) {
+      if (!a.entiteId) continue;
+      if (!lastActivityMap.has(a.entiteId)) lastActivityMap.set(a.entiteId, a.createdAt);
+    }
+  }
+
+  // Position active = candidature la plus avancée (hors REFUSE) ; sinon vivier.
+  const STAGE_RANK: Record<string, number> = {
+    SOURCING: 0, CONTACTE: 1, ENTRETIEN_1: 2, ENVOYE_CLIENT: 3, ENTRETIEN_CLIENT: 4, OFFRE: 5, PLACE: 6,
+  };
+
+  const enriched = data.map((c) => {
+    const { candidatures, ...rest } = c;
+    let position: { stage: string; mandatId: string; mandatTitre: string; entrepriseNom: string | null } | null = null;
+    for (const cand of candidatures) {
+      const rank = STAGE_RANK[cand.stage] ?? -1;
+      if (!position || rank > (STAGE_RANK[position.stage] ?? -1)) {
+        position = {
+          stage: cand.stage,
+          mandatId: cand.mandat?.id ?? '',
+          mandatTitre: cand.mandat?.titrePoste ?? '',
+          entrepriseNom: cand.mandat?.entreprise?.nom ?? null,
+        };
+      }
+    }
+    return {
+      ...rest,
+      position,
+      positionsCount: candidatures.length,
+      lastActivityAt: lastActivityMap.get(c.id)?.toISOString() ?? null,
+    };
+  });
+
+  return paginatedResult(enriched, total, params);
 }
 
 export async function getById(id: string) {
