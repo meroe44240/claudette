@@ -56,6 +56,32 @@ export default async function sourcingRouter(fastify: FastifyInstance) {
     },
   });
 
+  // POST /market-lists/establishments/:id/push — push ciblé → crée un Lead
+  fastify.post('/market-lists/establishments/:id/push', {
+    schema: {
+      description: 'Push ciblé (candidat → décideur) : crée un Lead depuis un établissement',
+      tags: ['Sourcing'],
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const input = z.object({
+        decideurName: z.string().min(1),
+        decideurEmail: z.string().nullable().optional(),
+        decideurPhone: z.string().nullable().optional(),
+        candidat: z.object({
+          name: z.string().min(1),
+          role: z.string().nullable().optional(),
+          score: z.string().nullable().optional(),
+        }).nullable().optional(),
+      }).parse(request.body);
+      const lead = await sourcingService.pushEstablishment(id, input, request.userId);
+      reply.code(201);
+      return lead;
+    },
+  });
+
   // POST /market-lists/:id/ingest-cv — upload un CV, parse, alimente les establishments
   fastify.post('/market-lists/:id/ingest-cv', {
     schema: {

@@ -16,7 +16,54 @@
 import prisma from '../../lib/db.js';
 import { NotFoundError, ValidationError } from '../../lib/errors.js';
 import { parseCv } from '../ai/cv-parsing.service.js';
+import * as leadService from '../leads/lead.service.js';
 import type { MarketEstablishmentStatus } from '@prisma/client';
+
+/**
+ * Push ciblé : depuis un établissement, on pousse un candidat (dossier anonymisé)
+ * à un décideur → crée un vrai Lead (src=push) + marque l'établissement en prospection.
+ */
+export async function pushEstablishment(
+  establishmentId: string,
+  data: {
+    candidat?: { name: string; role?: string | null; score?: string | null } | null;
+    decideurName: string;
+    decideurEmail?: string | null;
+    decideurPhone?: string | null;
+  },
+  userId?: string,
+) {
+  const est = await prisma.marketListEstablishment.findUnique({
+    where: { id: establishmentId },
+    include: { marketList: { select: { name: true } } },
+  });
+  if (!est) throw new NotFoundError('Établissement', establishmentId);
+
+  const lead = await leadService.createLead(
+    {
+      company: est.name,
+      contact: data.decideurName,
+      city: est.city,
+      sector: est.sector,
+      headcount: est.effectif,
+      email: data.decideurEmail ?? null,
+      phone: data.decideurPhone ?? null,
+      source: `List Push · ${est.marketList.name}`,
+      src: 'push',
+      stage: 'nouveau',
+      entrepriseId: est.entrepriseId ?? null,
+      pushedCandidat: data.candidat ?? null,
+    },
+    userId,
+  );
+
+  await prisma.marketListEstablishment.update({
+    where: { id: establishmentId },
+    data: { status: 'PROSPECTION' },
+  });
+
+  return lead;
+}
 
 // ─── Lists CRUD ─────────────────────────────────
 
