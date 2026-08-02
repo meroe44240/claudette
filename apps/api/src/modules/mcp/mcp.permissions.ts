@@ -50,6 +50,9 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   update_company:                { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   remove_candidate_from_mandate: { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   validate_call_analysis:        { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  list_job_offers:               { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  create_job_offer:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  publish_job_offer:             { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
   // ═══ PUSHES ═══
 
