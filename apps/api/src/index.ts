@@ -44,6 +44,7 @@ import recapRouter from './modules/recap/recap.router.js';
 import contractRouter from './modules/contracts/contract.router.js';
 import portalRouter from './modules/portal/portal.router.js';
 import sourcingRouter from './modules/sourcing/sourcing.router.js';
+import leadRouter from './modules/leads/lead.router.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 
@@ -169,6 +170,7 @@ async function buildApp() {
   await app.register(contractRouter, { prefix: '/api/v1/contracts' });
   await app.register(portalRouter, { prefix: '/api/v1/portal' });
   await app.register(sourcingRouter, { prefix: '/api/v1/sourcing' });
+  await app.register(leadRouter, { prefix: '/api/v1/leads' });
 
   return app;
 }

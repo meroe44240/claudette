@@ -32,7 +32,7 @@ const navSections: NavSection[] = [
   {
     label: 'RECRUTEMENT',
     items: [
-      { to: '/clients/pipeline', icon: Activity, label: 'Leads' },
+      { to: '/leads', icon: Activity, label: 'Leads' },
       { to: '/mandats', icon: FileText, label: 'Mandats' },
       { to: '/list-push', icon: Radar, label: 'List Push' },
     ],
