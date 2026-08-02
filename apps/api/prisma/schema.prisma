@@ -191,6 +191,7 @@ model Candidat {
   disponibilite      String?   @db.VarChar(100)
   mobilite           String?   @db.VarChar(255)
   source             String?   @db.VarChar(100)
+  aPlayer            Boolean   @default(false)
   tags               String[]  @default([])
   notes              String?   @db.Text
   consentementRgpd   Boolean   @default(false)
