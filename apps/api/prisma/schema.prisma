@@ -940,3 +940,50 @@ model RecapRun {
   @@index([sentAt])
   @@map("recap_runs")
 }
+
+// ─── LEADS (prospection commerciale à relances) ──────
+//
+// Lead froid (push List Push / cold / call / csv) qui avance de « nouveau »
+// jusqu'à « RDV obtenu », puis peut être converti en Client (funnel /clients/pipeline).
+model Lead {
+  id             String            @id @default(uuid()) @db.Uuid
+  company        String            @db.VarChar(255)
+  contact        String            @db.VarChar(255)
+  role           String?           @db.VarChar(160)
+  city           String?           @db.VarChar(120)
+  sector         String?           @db.VarChar(120)
+  headcount      String?           @db.VarChar(60)
+  phone          String?           @db.VarChar(60)
+  email          String?           @db.VarChar(255)
+  source         String?           @db.VarChar(255) // libellé provenance
+  src            String            @default("cold") @db.VarChar(20) // push|cold|call|csv
+  stage          String            @default("nouveau") @db.VarChar(20) // nouveau|contacte|r1..r7|rdv|gagne|perdu
+  ownerId        String?           @db.Uuid
+  entrepriseId   String?           @db.Uuid
+  clientId       String?           @db.Uuid // Client créé à la conversion
+  pushedCandidat Json? // snapshot du candidat poussé
+  lostReason     String?           @db.VarChar(160)
+  lostNote       String?           @db.Text
+  lastContactAt  DateTime?         @db.Timestamptz()
+  createdAt      DateTime          @default(now()) @db.Timestamptz()
+  updatedAt      DateTime          @updatedAt @db.Timestamptz()
+
+  interactions   LeadInteraction[]
+
+  @@index([ownerId])
+  @@index([stage])
+  @@map("leads")
+}
+
+model LeadInteraction {
+  id          String   @id @default(uuid()) @db.Uuid
+  leadId      String   @db.Uuid
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type        String?  @db.VarChar(20) // appel|sms|email|note
+  text        String   @db.Text
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz()
+
+  @@index([leadId])
+  @@map("lead_interactions")
+}

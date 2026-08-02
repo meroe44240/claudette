@@ -40,6 +40,7 @@ const MandatDetailPage = lazy(() => import('./pages/mandats/[id]'));
 const MandatNewPage = lazy(() => import('./pages/mandats/new'));
 const MandatKanbanPage = lazy(() => import('./pages/mandats/[id]-kanban'));
 const MandatsLifecycleKanbanPage = lazy(() => import('./pages/mandats/kanban'));
+const LeadsPage = lazy(() => import('./pages/leads/index'));
 const FastReviewPage = lazy(() => import('./pages/mandats/[id]-review'));
 const ActivitesPage = lazy(() => import('./pages/activites/index'));
 const TachesPage = lazy(() => import('./pages/taches/index'));
@@ -95,6 +96,7 @@ export default function App() {
           <Route path="clients" element={<ClientsPage />} />
           <Route path="clients/new" element={<ClientNewPage />} />
           <Route path="clients/pipeline" element={<ClientPipelinePage />} />
+          <Route path="leads" element={<LeadsPage />} />
           <Route path="clients/:id" element={<ClientDetailPage />} />
           <Route path="entreprises" element={<EntreprisesPage />} />
           <Route path="entreprises/new" element={<EntrepriseNewPage />} />
