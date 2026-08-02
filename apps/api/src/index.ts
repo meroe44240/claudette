@@ -45,6 +45,7 @@ import contractRouter from './modules/contracts/contract.router.js';
 import portalRouter from './modules/portal/portal.router.js';
 import sourcingRouter from './modules/sourcing/sourcing.router.js';
 import leadRouter from './modules/leads/lead.router.js';
+import jobOfferRouter, { jobOfferPublicRouter } from './modules/job-offers/job-offer.router.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 
@@ -171,6 +172,9 @@ async function buildApp() {
   await app.register(portalRouter, { prefix: '/api/v1/portal' });
   await app.register(sourcingRouter, { prefix: '/api/v1/sourcing' });
   await app.register(leadRouter, { prefix: '/api/v1/leads' });
+  await app.register(jobOfferRouter, { prefix: '/api/v1/job-offers' });
+  // API PUBLIQUE — consommée par la landing / job board (aucune auth requise).
+  await app.register(jobOfferPublicRouter, { prefix: '/api/v1/public/job-offers' });
 
   return app;
 }

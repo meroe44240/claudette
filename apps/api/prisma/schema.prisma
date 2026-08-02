@@ -988,3 +988,26 @@ model LeadInteraction {
   @@index([leadId])
   @@map("lead_interactions")
 }
+
+model JobOffer {
+  id            String   @id @default(uuid()) @db.Uuid
+  slug          String   @unique @db.VarChar(255)
+  titre         String   @db.VarChar(255)
+  description   String   @db.Text
+  localisation  String?  @db.VarChar(255)
+  contractType  String?  @db.VarChar(50)   // CDI, CDD, FREELANCE, STAGE, ALTERNANCE
+  remote        String?  @db.VarChar(50)   // ONSITE, HYBRID, REMOTE
+  salaireMin    Int?
+  salaireMax    Int?
+  secteur       String?  @db.VarChar(100)
+  entrepriseNom String?  @db.VarChar(255)  // affiché publiquement, ou null = confidentiel
+  tags          String[] @default([])
+  published     Boolean  @default(false)
+  mandatId      String?  @db.Uuid
+  createdById   String?  @db.Uuid
+  createdAt     DateTime @default(now()) @db.Timestamptz()
+  updatedAt     DateTime @updatedAt @db.Timestamptz()
+
+  @@index([published])
+  @@map("job_offers")
+}
