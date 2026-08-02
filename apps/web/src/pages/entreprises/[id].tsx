@@ -1,765 +1,227 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Globe, MapPin, Linkedin, Users, FileText, Pencil, Trash2, Save, X, Building, Building2, Phone, Mail, ChevronDown, ChevronUp, Briefcase, ExternalLink, RefreshCw, Plus } from 'lucide-react';
-import { Link } from 'react-router';
+import {
+  ArrowLeft, Plus, Mail, Phone, Globe, Building2, MapPin, Briefcase, Banknote,
+  Users, FileText, ExternalLink, Hash,
+} from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import PageHeader from '../../components/ui/PageHeader';
-import Card from '../../components/ui/Card';
-import Badge from '../../components/ui/Badge';
-import Button from '../../components/ui/Button';
-import Input, { Textarea } from '../../components/ui/Input';
-import Select from '../../components/ui/Select';
-import Skeleton, { SkeletonCard } from '../../components/ui/Skeleton';
-import ActivityJournal from '../../components/activity/ActivityJournal';
-import DeleteConfirmModal from '../../components/ui/DeleteConfirmModal';
-import InlineEdit from '../../components/ui/InlineEdit';
-import ProfileCompleteness from '../../components/ui/ProfileCompleteness';
-import { toast } from '../../components/ui/Toast';
 
-type TailleEntreprise = 'STARTUP' | 'PME' | 'ETI' | 'GRAND_GROUPE';
-
-interface ClientContact {
-  id: string;
-  nom: string;
-  prenom: string | null;
-  email: string | null;
-  telephone: string | null;
-  poste: string | null;
+// ─── TYPES ──────────────────────────────────────────
+interface Contact { id: string; nom: string; prenom: string | null; email: string | null; telephone: string | null; poste: string | null }
+interface Mandat { id: string; titrePoste: string; statut: string; createdAt: string; feeMontantFacture: number | null; feeMontantEstime: number | null; feeStatut: string | null; _count: { candidatures: number } }
+interface Entreprise {
+  id: string; nom: string; secteur: string | null; siteWeb: string | null; taille: string | null;
+  localisation: string | null; logoUrl: string | null; siren: string | null; formeJuridique: string | null;
+  chiffreAffaires: number | null; effectif: string | null; dateCreation: string | null; adresseComplete: string | null; pappersUrl: string | null;
+  _count: { clients: number; mandats: number };
+  clients: Contact[]; mandats: Mandat[];
 }
+interface Activite { id: string; type: string; titre: string | null; contenu: string | null; createdAt: string; isTache: boolean; user: { nom: string; prenom: string | null } | null }
 
-interface MandatInfo {
-  id: string;
-  titrePoste: string;
-  statut: string;
-  createdAt: string;
-  _count?: { candidatures: number };
-}
-
-interface EntrepriseDetail {
-  id: string;
-  nom: string;
-  secteur: string | null;
-  siteWeb: string | null;
-  taille: TailleEntreprise | null;
-  localisation: string | null;
-  linkedinUrl: string | null;
-  logoUrl: string | null;
-  notes: string | null;
-  // Pappers fields
-  siren: string | null;
-  siret: string | null;
-  formeJuridique: string | null;
-  capitalSocial: number | null;
-  chiffreAffaires: number | null;
-  effectif: string | null;
-  dateCreation: string | null;
-  codeNAF: string | null;
-  libelleNAF: string | null;
-  adresseComplete: string | null;
-  pappersUrl: string | null;
-  pappersEnrichedAt: string | null;
-  pappersRawData: unknown | null;
-  _count?: { clients: number; mandats: number };
-  clients?: ClientContact[];
-  mandats?: MandatInfo[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-const STATUT_COLORS: Record<string, string> = {
-  OUVERT: 'bg-blue-50 text-blue-600',
-  EN_COURS: 'bg-violet-50 text-violet-600',
-  GAGNE: 'bg-emerald-50 text-emerald-600',
-  PERDU: 'bg-red-50 text-red-600',
-  ANNULE: 'bg-neutral-100 text-neutral-500',
-  CLOTURE: 'bg-neutral-100 text-neutral-500',
+const MANDAT_STATUT: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
+  OUVERT: { label: 'Ouvert', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  EN_COURS: { label: 'En cours', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
+  GAGNE: { label: 'Gagné', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  PERDU: { label: 'Perdu', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
+  ANNULE: { label: 'Annulé', bg: 'rgba(34,23,122,.06)', fg: '#8A8699', dot: '#C4C1D0' },
+  CLOTURE: { label: 'Clôturé', bg: 'rgba(34,23,122,.06)', fg: '#6E6A85', dot: '#8E7CC3' },
 };
+const TAILLE_LABELS: Record<string, string> = { TPE: 'TPE', PME: 'PME', ETI: 'ETI', GRAND_GROUPE: 'Grand groupe', STARTUP: 'Start-up' };
 
-const STATUT_LABELS: Record<string, string> = {
-  OUVERT: 'Ouvert',
-  EN_COURS: 'En cours',
-  GAGNE: 'Gagné',
-  PERDU: 'Perdu',
-  ANNULE: 'Annulé',
-  CLOTURE: 'Clôturé',
-};
+function mono(name: string) { return name.split(/\s+/).map(w => w[0]).filter(Boolean).join('').slice(0, 2).toUpperCase(); }
+function initials(prenom: string | null, nom: string) { return `${(prenom?.[0] ?? '')}${nom?.[0] ?? ''}`.toUpperCase() || '?'; }
+function relTime(iso: string) { const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000); if (d <= 0) return "aujourd'hui"; if (d === 1) return 'hier'; if (d < 30) return `il y a ${d} j`; return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }); }
+function fmtEur(n: number) { return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k€` : `${n}€`; }
+const AV: Array<[string, string]> = [['#22177A', '#E6E9AF'], ['#3B9A54', '#fff'], ['#8E7CC3', '#fff'], ['#2A6BD8', '#fff']];
 
-interface EntrepriseStats {
-  revenueCumule: number;
-  nombrePlacements: number;
-  feeMoyen: number;
-}
-
-interface EditForm {
-  nom: string;
-  secteur: string;
-  siteWeb: string;
-  taille: string;
-  localisation: string;
-  linkedinUrl: string;
-  notes: string;
-}
-
-const tailleLabels: Record<TailleEntreprise, string> = {
-  STARTUP: 'Startup',
-  PME: 'PME',
-  ETI: 'ETI',
-  GRAND_GROUPE: 'Grand Groupe',
-};
-
-const tailleOptions = [
-  { value: '', label: 'Aucune' },
-  { value: 'STARTUP', label: 'Startup' },
-  { value: 'PME', label: 'PME' },
-  { value: 'ETI', label: 'ETI' },
-  { value: 'GRAND_GROUPE', label: 'Grand Groupe' },
-];
-
-function formatCurrency(value: number): string {
-  if (value === 0) return '0\u20ac';
-  if (value >= 1000) return `${(value / 1000).toFixed(0)}k\u20ac`;
-  return `${value}\u20ac`;
-}
-
-function formatEuro(value: number | null | undefined): string {
-  if (value == null) return '\u2014';
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
-}
-
-function formatDateFR(dateStr: string | null | undefined): string {
-  if (!dateStr) return '\u2014';
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  } catch {
-    return dateStr;
-  }
-}
-
-const detailStagger = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
-};
-const detailItem = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 260, damping: 24 } },
-};
-
-function buildEditForm(entreprise: EntrepriseDetail): EditForm {
-  return {
-    nom: entreprise.nom || '',
-    secteur: entreprise.secteur || '',
-    siteWeb: entreprise.siteWeb || '',
-    taille: entreprise.taille || '',
-    localisation: entreprise.localisation || '',
-    linkedinUrl: entreprise.linkedinUrl || '',
-    notes: entreprise.notes || '',
-  };
-}
-
+// ═════════════════════════════════════════════════════
 export default function EntrepriseDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState<EditForm | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [pappersOpen, setPappersOpen] = useState(true);
+  const qc = useQueryClient();
+  usePageTitle('Fiche société');
+  const [railTab, setRailTab] = useState<'rel' | 'notes'>('rel');
+  const [note, setNote] = useState('');
 
-  const { data: entreprise, isLoading } = useQuery({
-    queryKey: ['entreprise', id],
-    queryFn: () => api.get<EntrepriseDetail>(`/entreprises/${id}`),
-    enabled: !!id,
-  });
+  const { data: e, isLoading } = useQuery({ queryKey: ['entreprise', id], queryFn: () => api.get<Entreprise>(`/entreprises/${id}`), enabled: !!id });
+  const { data: actsRaw } = useQuery({ queryKey: ['activites', 'entreprise', id], queryFn: () => api.get<{ data: Activite[] }>(`/activites?entiteType=ENTREPRISE&entiteId=${id}&perPage=50`), enabled: !!id });
+  const notes = actsRaw?.data ?? [];
+  const noteMut = useMutation({ mutationFn: (contenu: string) => api.post('/activites', { entiteType: 'ENTREPRISE', entiteId: id, type: 'NOTE', contenu }), onSuccess: () => qc.invalidateQueries({ queryKey: ['activites', 'entreprise', id] }) });
 
-  usePageTitle(entreprise ? entreprise.nom : 'Entreprise');
+  const { revenue, actifs } = useMemo(() => {
+    const m = e?.mandats ?? [];
+    return {
+      revenue: m.filter(x => x.feeStatut === 'PAYE').reduce((s, x) => s + (x.feeMontantFacture ?? 0), 0),
+      actifs: m.filter(x => ['OUVERT', 'EN_COURS'].includes(x.statut)).length,
+    };
+  }, [e]);
 
-  const completenessFields = useMemo(() => {
-    if (!entreprise) return [];
-    return [
-      { key: 'nom', label: 'Nom', filled: !!entreprise.nom },
-      { key: 'secteur', label: 'Secteur', filled: !!entreprise.secteur },
-      { key: 'siteWeb', label: 'Site web', filled: !!entreprise.siteWeb },
-      { key: 'taille', label: 'Taille', filled: !!entreprise.taille },
-      { key: 'localisation', label: 'Localisation', filled: !!entreprise.localisation },
-      { key: 'linkedinUrl', label: 'LinkedIn', filled: !!entreprise.linkedinUrl },
-      { key: 'siren', label: 'SIREN', filled: !!entreprise.siren },
-    ];
-  }, [entreprise]);
+  if (isLoading || !e) return <div style={{ padding: 40, color: '#8A8699' }}>Chargement…</div>;
 
-  const { data: stats } = useQuery({
-    queryKey: ['entreprise-stats', id],
-    queryFn: () => api.get<EntrepriseStats>(`/entreprises/${id}/stats`),
-    enabled: !!id,
-  });
+  const siteHost = e.siteWeb ? e.siteWeb.replace(/^https?:\/\//, '').replace(/\/$/, '') : null;
+  const infos = [
+    { label: 'SIREN', value: e.siren, Icon: Hash },
+    { label: 'Forme juridique', value: e.formeJuridique, Icon: Building2 },
+    { label: 'Effectif', value: e.effectif || (e.taille ? TAILLE_LABELS[e.taille] : null), Icon: Users },
+    { label: "Chiffre d'affaires", value: e.chiffreAffaires ? fmtEur(e.chiffreAffaires) : null, Icon: Banknote },
+    { label: 'Création', value: e.dateCreation, Icon: FileText },
+    { label: 'Adresse', value: e.adresseComplete || e.localisation, Icon: MapPin },
+  ].filter(i => i.value);
 
-  const updateMutation = useMutation({
-    mutationFn: (payload: Record<string, unknown>) =>
-      api.put<EntrepriseDetail>(`/entreprises/${id}`, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['entreprise', id] });
-      toast('success', 'Modifications enregistrées');
-      setIsEditing(false);
-      setEditForm(null);
-    },
-    onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de la mise à jour');
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: () => api.delete(`/entreprises/${id}`),
-    onSuccess: () => {
-      toast('success', 'Supprimé avec succès');
-      navigate('/entreprises');
-    },
-    onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de la suppression');
-    },
-  });
-
-  const pappersEnrichMutation = useMutation({
-    mutationFn: () => api.post(`/integrations/pappers/enrich/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['entreprise', id] });
-      toast('success', 'Données Pappers mises à jour');
-    },
-    onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de l\'enrichissement Pappers');
-    },
-  });
-
-  const handleStartEdit = () => {
-    if (entreprise) {
-      setEditForm(buildEditForm(entreprise));
-      setIsEditing(true);
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setEditForm(null);
-  };
-
-  const handleSave = () => {
-    if (!editForm) return;
-    const payload: Record<string, unknown> = {};
-    payload.nom = editForm.nom.trim() || undefined;
-    if (editForm.secteur.trim()) payload.secteur = editForm.secteur.trim();
-    else payload.secteur = null;
-    if (editForm.siteWeb.trim()) payload.siteWeb = editForm.siteWeb.trim();
-    else payload.siteWeb = null;
-    if (editForm.taille) payload.taille = editForm.taille;
-    else payload.taille = null;
-    if (editForm.localisation.trim()) payload.localisation = editForm.localisation.trim();
-    else payload.localisation = null;
-    if (editForm.linkedinUrl.trim()) payload.linkedinUrl = editForm.linkedinUrl.trim();
-    else payload.linkedinUrl = null;
-    if (editForm.notes.trim()) payload.notes = editForm.notes.trim();
-    else payload.notes = null;
-
-    updateMutation.mutate(payload);
-  };
-
-  const setField = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setEditForm((prev) => prev ? { ...prev, [field]: e.target.value } : prev);
-  };
-
-  if (isLoading) {
-    return (
-      <div>
-        <Skeleton className="h-8 w-64 mb-6" />
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            <SkeletonCard />
-            <SkeletonCard />
-          </div>
-          <div className="space-y-6">
-            <SkeletonCard />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!entreprise) {
-    return (
-      <div className="text-center py-16">
-        <p className="text-text-secondary">Entreprise introuvable.</p>
-        <Button variant="ghost" onClick={() => navigate('/entreprises')} className="mt-4">
-          Retour aux entreprises
-        </Button>
-      </div>
-    );
-  }
-
-  const logoSrc = entreprise.logoUrl || (entreprise.siteWeb ? (() => {
-    try {
-      const h = new URL(entreprise.siteWeb.startsWith('http') ? entreprise.siteWeb : `https://${entreprise.siteWeb}`).hostname;
-      return h && h !== 'localhost' ? `https://www.google.com/s2/favicons?domain=${h}&sz=128` : null;
-    } catch { return null; }
-  })() : null);
+  const submitNote = () => { const t = note.trim(); if (!t) return; noteMut.mutate(t); setNote(''); };
 
   return (
     <div>
-      {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5, color: '#9A96AE', fontWeight: 600 }}>
-        <a onClick={() => navigate('/entreprises')} style={{ color: '#8A8699', cursor: 'pointer' }}>Entreprises</a>
-        <span style={{ color: '#C4C1D0' }}>›</span>
-        <span style={{ color: '#22177A', fontWeight: 700 }}>{entreprise.nom}</span>
+      <style>{`
+        .fmcard:hover{ box-shadow:0 20px 40px -28px rgba(34,23,122,.4); border-color:rgba(34,23,122,.16) !important; }
+        .fmcard{ transition:box-shadow .22s ease, border-color .22s ease; }
+        .fs-grid{ display:grid; grid-template-columns:minmax(0,1fr) 400px; gap:22px; align-items:start; }
+        @media (max-width:1180px){ .fs-grid{ grid-template-columns:minmax(0,1fr) 340px; } }
+        @media (max-width:1024px){ .fs-grid{ grid-template-columns:1fr; } .fs-rail{ position:static !important; max-height:none !important; } }
+      `}</style>
+
+      {/* TOPBAR */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
+        <button onClick={() => navigate('/entreprises')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#4A4568', border: '1px solid rgba(34,23,122,.14)', background: '#fff', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}><ArrowLeft size={14} strokeWidth={2.4} />Entreprises</button>
+        {e.pappersUrl && <a href={e.pappersUrl} target="_blank" rel="noreferrer" style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#22177A', border: '1px solid rgba(34,23,122,.16)', background: '#fff', borderRadius: 10, padding: '8px 14px', textDecoration: 'none' }}><ExternalLink size={14} />Fiche Pappers</a>}
       </div>
 
-      {/* Hero mock-fidelity : logo carré arrondi + nom + chips secteur/ville/taille */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 12, marginBottom: 20 }}>
-        {logoSrc ? (
-          <img
-            src={logoSrc}
-            alt={entreprise.nom}
-            style={{ height: 68, width: 68, borderRadius: 14, objectFit: 'contain', border: '1px solid rgba(34,23,122,0.1)', background: '#fff', padding: 4 }}
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-          />
-        ) : (
-          <div
-            style={{
-              height: 68, width: 68, borderRadius: 14,
-              background: '#F0EFC4', border: '1px solid rgba(34,23,122,0.1)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Building size={30} color="#22177A" />
+      <div className="fs-grid">
+        {/* MAIN */}
+        <div>
+          {/* BANDEAU */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20 }}>
+            <span style={{ flexShrink: 0, width: 72, height: 72, borderRadius: 18, background: '#fff', border: '1px solid rgba(34,23,122,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: 8, boxShadow: '0 10px 28px -16px rgba(34,23,122,.5)' }}>
+              {e.logoUrl ? <img src={e.logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} /> : <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, color: '#22177A' }}>{mono(e.nom)}</span>}
+            </span>
+            <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+              <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 29, letterSpacing: '-.035em', color: '#1A1533' }}>{e.nom}</h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap', fontSize: 13.5, color: '#6E6A85' }}>
+                {e.secteur && <span style={{ fontWeight: 700, color: '#4A4568' }}>{e.secteur}</span>}
+                {(e.effectif || e.taille) && <><span style={{ color: '#C4C1D0' }}>·</span><span>{e.effectif || TAILLE_LABELS[e.taille!]}</span></>}
+                {e.localisation && <><span style={{ color: '#C4C1D0' }}>·</span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><MapPin size={13} color="#9A96AE" />{e.localisation}</span></>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 13, flexWrap: 'wrap' }}>
+                {siteHost && <a href={e.siteWeb!.startsWith('http') ? e.siteWeb! : `https://${e.siteWeb}`} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.16)', borderRadius: 9, padding: '7px 13px', textDecoration: 'none' }}><Globe size={13} />{siteHost}</a>}
+                <button onClick={() => navigate(`/clients/new?entrepriseId=${e.id}`)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.16)', borderRadius: 9, padding: '7px 13px', cursor: 'pointer' }}><Plus size={13} />Contact</button>
+                <button onClick={() => navigate(`/mandats/new?entrepriseId=${e.id}`)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 9, padding: '8px 14px', cursor: 'pointer' }}><Plus size={13} strokeWidth={2.4} />Nouveau mandat</button>
+              </div>
+            </div>
           </div>
-        )}
-        <div style={{ flex: 1 }}>
-          <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 30, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1.05 }}>
-            {entreprise.nom}
-          </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
-            {entreprise.secteur && (
-              <span style={{ fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '4px 11px', background: 'rgba(34,23,122,0.06)', color: '#22177A' }}>
-                {entreprise.secteur}
-              </span>
-            )}
-            {entreprise.localisation && (
-              <span style={{ fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '4px 11px', background: 'rgba(34,23,122,0.06)', color: '#22177A' }}>
-                {entreprise.localisation}
-              </span>
-            )}
-            {entreprise.taille && (
-              <span style={{ fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '4px 11px', background: '#F0EFC4', color: '#22177A' }}>
-                {tailleLabels[entreprise.taille as TailleEntreprise] ?? entreprise.taille}
-              </span>
-            )}
+
+          {/* KPIs */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginTop: 22 }}>
+            {[{ label: 'CA généré', value: fmtEur(revenue), Icon: Banknote, color: '#2C6B3F' }, { label: 'Mandats actifs', value: String(actifs), Icon: Briefcase, color: '#22177A' }, { label: 'Total mandats', value: String(e._count.mandats), Icon: FileText, color: '#1A1533' }, { label: 'Contacts', value: String(e._count.clients), Icon: Users, color: '#1A1533' }].map(k => (
+              <div key={k.label} style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 14, padding: '14px 16px', boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9A96AE' }}><k.Icon size={12} color="#22177A" />{k.label}</div>
+                <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, letterSpacing: '-.03em', color: k.color, marginTop: 8 }}>{k.value}</div>
+              </div>
+            ))}
           </div>
+
+          {/* CONTACTS */}
+          <div style={{ marginTop: 26 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+              <span style={{ fontWeight: 800, fontSize: 17, color: '#1A1533' }}>Contacts</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#22177A', background: '#E6E9AF', borderRadius: 999, padding: '3px 10px' }}>{e._count.clients}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 11 }}>
+              {e.clients.length === 0 && <div style={{ border: '1.5px dashed rgba(34,23,122,.2)', borderRadius: 14, padding: 18, textAlign: 'center', color: '#8A8699', fontSize: 13.5 }}>Aucun contact enregistré.</div>}
+              {e.clients.map(ct => {
+                const [bg, fg] = AV[Math.abs([...ct.nom].reduce((h, c) => c.charCodeAt(0) + ((h << 5) - h), 0)) % AV.length];
+                return (
+                  <div key={ct.id} className="fmcard" onClick={() => navigate(`/clients/${ct.id}`)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 11, background: '#fff', border: '1px solid rgba(34,23,122,.09)', borderRadius: 13, padding: '12px 14px' }}>
+                    <span style={{ flexShrink: 0, width: 36, height: 36, borderRadius: '50%', background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 12 }}>{initials(ct.prenom, ct.nom)}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${ct.prenom ? ct.prenom + ' ' : ''}${ct.nom}`.trim()}</div>
+                      <div style={{ fontSize: 12, color: '#8A8699', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ct.poste || '—'}</div>
+                    </div>
+                    {ct.email && <a href={`mailto:${ct.email}`} onClick={ev => ev.stopPropagation()} style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 8, background: 'rgba(34,23,122,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Mail size={13} color="#22177A" /></a>}
+                    {ct.telephone && <a href={`tel:${ct.telephone}`} onClick={ev => ev.stopPropagation()} style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 8, background: 'rgba(34,23,122,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Phone size={13} color="#22177A" /></a>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* MANDATS */}
+          <div style={{ marginTop: 26 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+              <span style={{ fontWeight: 800, fontSize: 17, color: '#1A1533' }}>Mandats de la société</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#22177A', background: '#E6E9AF', borderRadius: 999, padding: '3px 10px' }}>{e._count.mandats}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {e.mandats.length === 0 && <div style={{ border: '1.5px dashed rgba(34,23,122,.2)', borderRadius: 15, padding: 20, textAlign: 'center', color: '#8A8699', fontSize: 13.5 }}>Aucun mandat pour cette société.</div>}
+              {e.mandats.map(m => {
+                const ms = MANDAT_STATUT[m.statut] ?? MANDAT_STATUT.OUVERT;
+                const fee = m.feeMontantFacture ?? m.feeMontantEstime;
+                return (
+                  <div key={m.id} className="fmcard" onClick={() => navigate(`/mandats/${m.id}`)} style={{ cursor: 'pointer', background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 15, padding: '15px 18px', boxShadow: '0 1px 2px rgba(34,23,122,.04)', display: 'flex', alignItems: 'center', gap: 13 }}>
+                    <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 11, background: '#F2F3D8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Briefcase size={17} color="#22177A" /></span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14.5, fontWeight: 800, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.titrePoste}</div>
+                      <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{m._count.candidatures} candidat{m._count.candidatures > 1 ? 's' : ''} · ouvert {relTime(m.createdAt)}{fee ? ` · fee ${fmtEur(fee)}` : ''}</div>
+                    </div>
+                    <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11.5, fontWeight: 800, color: ms.fg, background: ms.bg, borderRadius: 999, padding: '5px 12px' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: ms.dot }} />{ms.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* INFOS */}
+          {infos.length > 0 && (
+            <div style={{ marginTop: 26 }}>
+              <span style={{ fontWeight: 800, fontSize: 17, color: '#1A1533' }}>Informations légales</span>
+              <div style={{ marginTop: 12, background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 15, padding: '6px 4px' }}>
+                {infos.map(i => (
+                  <div key={i.label} style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 16, alignItems: 'center', padding: '11px 16px' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 11, fontSize: 13.5, color: '#6E6A85' }}><i.Icon size={15} color="#8A8699" />{i.label}</span>
+                    <span style={{ fontSize: 13.5, color: '#1A1533', fontWeight: 600 }}>{i.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
 
-      <PageHeader
-        title=""
-        breadcrumbs={[]}
-        actions={
-          <div className="flex items-center gap-2">
-            {isEditing ? (
+        {/* RAIL */}
+        <aside className="fs-rail" style={{ position: 'sticky', top: 12, alignSelf: 'start', maxHeight: 'calc(100vh - 90px)', background: '#fff', border: '1px solid rgba(34,23,122,.1)', borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ flexShrink: 0, display: 'flex', gap: 5, padding: '14px 16px 12px', borderBottom: '1px solid rgba(34,23,122,.09)' }}>
+            {([['rel', 'Relation'], ['notes', 'Notes']] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setRailTab(k)} style={{ fontSize: 12.5, fontWeight: 700, padding: '7px 12px', borderRadius: 9, border: 'none', cursor: 'pointer', background: railTab === k ? '#22177A' : 'transparent', color: railTab === k ? '#E6E9AF' : '#8A8699' }}>{l}</button>
+            ))}
+          </div>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 18px 22px' }}>
+            {railTab === 'rel' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {[['CA généré', fmtEur(revenue)], ['Mandats actifs', String(actifs)], ['Total mandats', String(e._count.mandats)], ['Contacts', String(e._count.clients)], ['Secteur', e.secteur || '—'], ['Effectif', e.effectif || (e.taille ? TAILLE_LABELS[e.taille] : '—')]].map(([k, v]) => (
+                  <div key={k} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 13px', background: '#FBFBF3', border: '1px solid rgba(34,23,122,.08)', borderRadius: 11 }}>
+                    <span style={{ fontSize: 12.5, color: '#6E6A85' }}>{k}</span><span style={{ fontSize: 13.5, fontWeight: 800, color: '#1A1533' }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {railTab === 'notes' && (
               <>
-                <Button variant="primary" size="sm" onClick={handleSave} loading={updateMutation.isPending}>
-                  <Save size={14} /> Enregistrer
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleCancelEdit} disabled={updateMutation.isPending}>
-                  <X size={14} /> Annuler
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="secondary" size="sm" onClick={handleStartEdit}>
-                  <Pencil size={14} /> Modifier
-                </Button>
-                <Button variant="danger" size="sm" onClick={() => setShowDeleteModal(true)}>
-                  <Trash2 size={14} /> Supprimer
-                </Button>
-                <Button variant="ghost" onClick={() => navigate('/entreprises')}>
-                  <ArrowLeft size={16} /> Retour
-                </Button>
+                {notes.length === 0 && <div style={{ color: '#9A96AE', fontSize: 13, textAlign: 'center', padding: 14 }}>Aucune note.</div>}
+                {notes.map(n => (
+                  <div key={n.id} style={{ background: '#FBFBF3', border: '1px solid rgba(34,23,122,.08)', borderRadius: 12, padding: '12px 14px', marginBottom: 9 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 12.5, fontWeight: 800, color: '#1A1533' }}>{`${n.user?.prenom ?? ''} ${n.user?.nom ?? ''}`.trim() || 'Vous'}</span><span style={{ fontSize: 11.5, color: '#B4B0C4' }}>{relTime(n.createdAt)}</span></div>
+                    <div style={{ fontSize: 13, lineHeight: 1.55, color: '#4A4568', marginTop: 6 }}>{n.titre ? <strong>{n.titre} — </strong> : null}{n.contenu}</div>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <input value={note} onChange={ev => setNote(ev.target.value)} onKeyDown={ev => ev.key === 'Enter' && submitNote()} placeholder="Ajouter une note…" style={{ flex: 1, fontSize: 13, padding: '10px 13px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
+                  <button onClick={submitNote} style={{ flexShrink: 0, fontSize: 13, fontWeight: 700, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 10, padding: '10px 15px', cursor: 'pointer' }}>Ajouter</button>
+                </div>
               </>
             )}
           </div>
-        }
-      />
-
-      <motion.div className="grid grid-cols-1 gap-6 lg:grid-cols-3" variants={detailStagger} initial="hidden" animate="show">
-        {/* Main info */}
-        <motion.div className="lg:col-span-2 space-y-6" variants={detailItem}>
-          <Card>
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">Informations</h2>
-            {isEditing && editForm ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Input label="Nom" value={editForm.nom} onChange={setField('nom')} placeholder="Nom de l'entreprise" />
-                <Select
-                  label="Secteur"
-                  options={[
-                    { value: '', label: 'Aucun' },
-                    { value: 'Tech / SaaS', label: 'Tech / SaaS' },
-                    { value: 'Finance / Banque', label: 'Finance / Banque' },
-                    { value: 'Conseil', label: 'Conseil' },
-                    { value: 'Industrie', label: 'Industrie' },
-                    { value: 'Santé / Pharma', label: 'Santé / Pharma' },
-                    { value: 'E-commerce / Retail', label: 'E-commerce / Retail' },
-                    { value: 'Immobilier', label: 'Immobilier' },
-                    { value: 'Énergie', label: 'Énergie' },
-                    { value: 'Média / Communication', label: 'Média / Communication' },
-                    { value: 'Assurance', label: 'Assurance' },
-                    { value: 'Autre', label: 'Autre' },
-                  ]}
-                  value={editForm.secteur}
-                  onChange={(val) => setEditForm((prev) => prev ? { ...prev, secteur: val } : prev)}
-                  searchable
-                />
-                <Input label="Site web" value={editForm.siteWeb} onChange={setField('siteWeb')} placeholder="https://www.exemple.com" />
-                <Select
-                  label="Taille"
-                  options={tailleOptions}
-                  value={editForm.taille}
-                  onChange={(val) => setEditForm((prev) => prev ? { ...prev, taille: val } : prev)}
-                />
-                <Input label="Localisation" value={editForm.localisation} onChange={setField('localisation')} placeholder="Paris, France" />
-                <Input label="LinkedIn" value={editForm.linkedinUrl} onChange={setField('linkedinUrl')} placeholder="https://linkedin.com/company/..." />
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <InlineEdit
-                    value={entreprise.nom || ''}
-                    onSave={async (v) => { if (v) updateMutation.mutateAsync({ nom: v }); }}
-                    placeholder="Nom de l'entreprise"
-                    label="Nom"
-                  />
-                </div>
-                <div className="text-sm">
-                  <InlineEdit
-                    value={entreprise.secteur || ''}
-                    onSave={async (v) => { updateMutation.mutateAsync({ secteur: v || null }); }}
-                    placeholder="Secteur"
-                    label="Secteur"
-                  />
-                </div>
-                {entreprise.taille && (
-                  <div className="text-sm">
-                    <span className="text-text-tertiary">Taille : </span>
-                    <Badge>{tailleLabels[entreprise.taille]}</Badge>
-                  </div>
-                )}
-                {entreprise.localisation && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <MapPin size={14} className="text-text-tertiary" />
-                    <span className="text-text-primary">{entreprise.localisation}</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-2 text-sm">
-                  <Globe size={14} className="shrink-0 text-text-tertiary" />
-                  <InlineEdit
-                    value={entreprise.siteWeb || ''}
-                    onSave={async (v) => { updateMutation.mutateAsync({ siteWeb: v || null }); }}
-                    placeholder="https://www.exemple.com"
-                    type="url"
-                  />
-                </div>
-                {entreprise.linkedinUrl && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Linkedin size={14} className="text-text-tertiary" />
-                    <a href={entreprise.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                      LinkedIn
-                    </a>
-                  </div>
-                )}
-              </div>
-            )}
-          </Card>
-
-          <Card>
-            <h2 className="mb-3 text-lg font-semibold text-text-primary">Notes</h2>
-            {isEditing && editForm ? (
-              <Textarea
-                value={editForm.notes}
-                onChange={setField('notes')}
-                placeholder="Notes sur l'entreprise..."
-              />
-            ) : entreprise.notes ? (
-              <p className="whitespace-pre-wrap text-sm text-text-secondary">{entreprise.notes}</p>
-            ) : (
-              <p className="text-sm text-text-secondary">Aucune note.</p>
-            )}
-          </Card>
-
-          {/* Données Pappers */}
-          <Card>
-            <button
-              type="button"
-              className="flex w-full items-center justify-between"
-              onClick={() => setPappersOpen(!pappersOpen)}
-            >
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
-                <Building2 size={18} className="text-blue-500" />
-                Données Pappers
-              </h2>
-              <div className="flex items-center gap-2">
-                {entreprise.pappersEnrichedAt ? (
-                  <Badge variant="success" size="sm">Enrichi le {formatDateFR(entreprise.pappersEnrichedAt)}</Badge>
-                ) : (
-                  <Badge variant="warning" size="sm">Non enrichi</Badge>
-                )}
-                {pappersOpen ? <ChevronUp size={16} className="text-text-tertiary" /> : <ChevronDown size={16} className="text-text-tertiary" />}
-              </div>
-            </button>
-
-            {pappersOpen && (
-              <div className="mt-4">
-                {entreprise.pappersEnrichedAt ? (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="text-sm">
-                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">SIREN</dt>
-                      <dd className="font-medium text-text-primary">{entreprise.siren || '\u2014'}</dd>
-                    </div>
-                    <div className="text-sm">
-                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">SIRET</dt>
-                      <dd className="font-medium text-text-primary">{entreprise.siret || '\u2014'}</dd>
-                    </div>
-                    <div className="text-sm">
-                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Forme juridique</dt>
-                      <dd className="font-medium text-text-primary">{entreprise.formeJuridique || '\u2014'}</dd>
-                    </div>
-                    <div className="text-sm">
-                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Capital social</dt>
-                      <dd className="font-medium text-text-primary">{entreprise.capitalSocial != null ? formatEuro(entreprise.capitalSocial) : '\u2014'}</dd>
-                    </div>
-                    <div className="text-sm">
-                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Chiffre d'affaires</dt>
-                      <dd className="font-medium text-text-primary">{entreprise.chiffreAffaires != null ? formatEuro(entreprise.chiffreAffaires) : '\u2014'}</dd>
-                    </div>
-                    <div className="text-sm">
-                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Effectif</dt>
-                      <dd className="font-medium text-text-primary">{entreprise.effectif || '\u2014'}</dd>
-                    </div>
-                    <div className="text-sm">
-                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Date de création</dt>
-                      <dd className="font-medium text-text-primary">{formatDateFR(entreprise.dateCreation)}</dd>
-                    </div>
-                    <div className="text-sm">
-                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Code NAF</dt>
-                      <dd className="font-medium text-text-primary">
-                        {entreprise.codeNAF || '\u2014'}
-                        {entreprise.libelleNAF && <span className="text-text-secondary font-normal"> — {entreprise.libelleNAF}</span>}
-                      </dd>
-                    </div>
-                    <div className="text-sm sm:col-span-2">
-                      <dt className="text-text-tertiary text-xs uppercase tracking-wide mb-0.5">Adresse complète</dt>
-                      <dd className="font-medium text-text-primary">{entreprise.adresseComplete || '\u2014'}</dd>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-text-secondary">
-                    Aucune donnée Pappers. Cliquez sur le bouton ci-dessous pour enrichir cette fiche.
-                  </p>
-                )}
-
-                <div className="mt-4 flex items-center gap-3 border-t border-neutral-50 pt-4">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => pappersEnrichMutation.mutate()}
-                    loading={pappersEnrichMutation.isPending}
-                  >
-                    {pappersEnrichMutation.isPending ? (
-                      <>Enrichissement...</>
-                    ) : entreprise.pappersEnrichedAt ? (
-                      <><RefreshCw size={14} /> Rafraîchir via Pappers</>
-                    ) : (
-                      <><Building2 size={14} /> Enrichir via Pappers</>
-                    )}
-                  </Button>
-                  {entreprise.pappersUrl && (
-                    <a
-                      href={entreprise.pappersUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
-                    >
-                      <ExternalLink size={14} />
-                      Voir la fiche Pappers
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
-          </Card>
-        </motion.div>
-
-        {/* Sidebar */}
-        <motion.div className="space-y-6" variants={detailItem}>
-          <ProfileCompleteness fields={completenessFields} />
-          <Card>
-            <h2 className="mb-4 text-lg font-semibold text-text-primary">Statistiques</h2>
-            <dl className="space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <dt className="flex items-center gap-2 text-text-tertiary">
-                  <Users size={14} /> Clients
-                </dt>
-                <dd>
-                  <Badge variant="info">{entreprise._count?.clients || 0}</Badge>
-                </dd>
-              </div>
-              <div className="flex items-center justify-between">
-                <dt className="flex items-center gap-2 text-text-tertiary">
-                  <FileText size={14} /> Mandats
-                </dt>
-                <dd>
-                  <Badge variant="info">{entreprise._count?.mandats || 0}</Badge>
-                </dd>
-              </div>
-              {stats && (
-                <>
-                  <div className="border-t border-border pt-3">
-                    <dt className="text-text-tertiary">Placements</dt>
-                    <dd className="mt-1 text-lg font-semibold text-text-primary">{stats.nombrePlacements}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-text-tertiary">Revenue cumulé</dt>
-                    <dd className="mt-1 text-lg font-semibold text-text-primary">{formatCurrency(stats.revenueCumule)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-text-tertiary">Fee moyen</dt>
-                    <dd className="mt-1 text-lg font-semibold text-text-primary">{formatCurrency(stats.feeMoyen)}</dd>
-                  </div>
-                </>
-              )}
-            </dl>
-          </Card>
-        </motion.div>
-      </motion.div>
-
-      {/* Contacts section */}
-        <motion.div className="mt-6" variants={detailItem}>
-          <Card>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
-                <Users size={18} className="text-violet-500" />
-                Contacts ({entreprise.clients?.length || 0})
-              </h2>
-              <Link to={`/clients/new?entrepriseId=${entreprise.id}`}>
-                <Button variant="secondary" size="sm">
-                  <Plus size={14} className="mr-1" />
-                  Nouveau contact
-                </Button>
-              </Link>
-            </div>
-            {entreprise.clients && entreprise.clients.length > 0 ? (
-              <div className="divide-y divide-neutral-50">
-                {entreprise.clients.map((c) => (
-                  <Link
-                    key={c.id}
-                    to={`/clients/${c.id}`}
-                    className="flex items-center gap-3 py-3 px-1 rounded-lg hover:bg-neutral-50 transition-colors group"
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-600">
-                      {(c.prenom?.[0] || '').toUpperCase()}{(c.nom[0] || '').toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-neutral-900 group-hover:text-violet-600 transition-colors">
-                        {c.prenom} {c.nom}
-                      </p>
-                      {c.poste && <p className="text-xs text-neutral-500">{c.poste}</p>}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {c.telephone && (
-                        <a
-                          href={`tel:${c.telephone}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px] text-emerald-600 hover:bg-emerald-100 transition-colors"
-                        >
-                          <Phone size={11} />
-                          {c.telephone}
-                        </a>
-                      )}
-                      {c.email && (
-                        <a
-                          href={`mailto:${c.email}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-[11px] text-blue-600 hover:bg-blue-100 transition-colors"
-                        >
-                          <Mail size={11} />
-                        </a>
-                      )}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-neutral-400 py-2">Aucun contact pour le moment.</p>
-            )}
-          </Card>
-        </motion.div>
-
-      {/* Mandats section */}
-        <motion.div className="mt-6" variants={detailItem}>
-          <Card>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-text-primary">
-                <Briefcase size={18} className="text-violet-500" />
-                Mandats ({entreprise.mandats?.length || 0})
-              </h2>
-              <Link to={`/mandats/new?entrepriseId=${entreprise.id}`}>
-                <Button variant="secondary" size="sm">
-                  <Plus size={14} className="mr-1" />
-                  Nouveau mandat
-                </Button>
-              </Link>
-            </div>
-            {entreprise.mandats && entreprise.mandats.length > 0 ? (
-              <div className="divide-y divide-neutral-50">
-                {entreprise.mandats.map((m) => (
-                  <Link
-                    key={m.id}
-                    to={`/mandats/${m.id}`}
-                    className="flex items-center gap-3 py-3 px-1 rounded-lg hover:bg-neutral-50 transition-colors group"
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50">
-                      <FileText size={16} className="text-blue-500" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-neutral-900 group-hover:text-violet-600 transition-colors">
-                        {m.titrePoste}
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUT_COLORS[m.statut] || 'bg-neutral-100 text-neutral-500'}`}>
-                          {STATUT_LABELS[m.statut] || m.statut}
-                        </span>
-                        {m._count?.candidatures !== undefined && m._count.candidatures > 0 && (
-                          <span className="text-[11px] text-neutral-400">
-                            {m._count.candidatures} candidat{m._count.candidatures > 1 ? 's' : ''}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-neutral-400 py-2">Aucun mandat pour le moment.</p>
-            )}
-          </Card>
-        </motion.div>
-
-      <div className="mt-8">
-        <ActivityJournal entiteType="ENTREPRISE" entiteId={entreprise.id} />
+        </aside>
       </div>
-
-      <DeleteConfirmModal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        onConfirm={() => deleteMutation.mutate()}
-        entityName={`l'entreprise ${entreprise.nom}`}
-        isLoading={deleteMutation.isPending}
-      />
     </div>
   );
 }
