@@ -370,6 +370,19 @@ async function processEmail(
     return 'activities';
   }
 
+  // ── DURCISSEMENT : ne créer un nouveau profil QUE si l'email porte un vrai
+  //    nom (prénom + nom dans le display name du "From"). Sinon on n'invente
+  //    PAS de profil fantôme à partir du préfixe de l'email (ex. "themix222"),
+  //    qui polluait le vivier avec le bruit de la boîte de réception. ──
+  const displayName = (from.name || '').trim();
+  const nameTokens = displayName
+    .split(/\s+/)
+    .filter((w) => w.replace(/[^\p{L}]/gu, '').length >= 2); // au moins 2 lettres
+  if (nameTokens.length < 2) {
+    console.log(`[EmailAutoCreate] Ignoré (pas de vrai nom): <${senderEmail}> — "${displayName}"`);
+    return 'skipped';
+  }
+
   // ── New contact — extract info ──
   const { firstName, lastName } = extractName(from);
   const signatureInfo = extractSignatureInfo(email.snippet);
