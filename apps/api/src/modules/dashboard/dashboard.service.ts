@@ -890,9 +890,14 @@ export async function getSpaData(
       id: true,
       titrePoste: true,
       feeMontantEstime: true,
-      entreprise: { select: { id: true, nom: true } },
+      createdAt: true,
+      entreprise: { select: { id: true, nom: true, logoUrl: true } },
       candidatures: {
-        select: { id: true, stage: true },
+        select: {
+          id: true,
+          stage: true,
+          candidat: { select: { id: true, nom: true, prenom: true, photoUrl: true } },
+        },
       },
       _count: { select: { candidatures: true } },
     },
@@ -952,15 +957,31 @@ export async function getSpaData(
     const hs = stages.length > 0 ? highestStageAmong(stages) : 'SOURCING';
     const lastAct = lastActivityMap.get(m.id) ?? null;
     const daysSince = lastAct ? Math.floor((nowMs - lastAct.getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+    // Détail candidats par étape (pour le mini-kanban du dashboard)
+    const candidaturesParStage: Record<string, Array<{ id: string; candidatId: string; nom: string; prenom: string | null; photoUrl: string | null }>> = {};
+    for (const c of m.candidatures) {
+      if (!candidaturesParStage[c.stage]) candidaturesParStage[c.stage] = [];
+      candidaturesParStage[c.stage].push({
+        id: c.id,
+        candidatId: c.candidat.id,
+        nom: c.candidat.nom,
+        prenom: c.candidat.prenom,
+        photoUrl: c.candidat.photoUrl,
+      });
+    }
+
     return {
       id: m.id,
       titrePoste: m.titrePoste,
-      entreprise: m.entreprise,
+      entreprise: { id: m.entreprise.id, nom: m.entreprise.nom, logoUrl: m.entreprise.logoUrl },
       feeMontantEstime: m.feeMontantEstime ?? null,
       highestStage: hs,
       totalCandidats: m._count.candidatures,
+      ouvertDepuisJours: Math.floor((nowMs - m.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
       daysSinceActivity: daysSince,
       isDormant: daysSince === null ? false : daysSince > 7,
+      candidaturesParStage,
     };
   });
 
@@ -992,6 +1013,16 @@ export async function getSpaData(
   const caDelta = caPrevVal > 0
     ? Math.round(((caThisVal - caPrevVal) / caPrevVal) * 100)
     : caThisVal > 0 ? 100 : null;
+
+  // ── Nouveaux mandats sur la période sélectionnée ──
+  const periodStart = period === 'today' ? startOfToday : period === 'month' ? startOfMonth : startOfWeek;
+  const periodEnd = period === 'today' ? endOfToday : period === 'month' ? endOfMonth : endOfWeek;
+  const nouveauxMandats = await prisma.mandat.count({
+    where: {
+      createdAt: { gte: periodStart, lte: periodEnd },
+      ...(isTeam ? {} : { OR: [{ createdById: userId }, { assignedToId: userId }] }),
+    },
+  });
 
   // ── Appels average per day (this week, past days only) ──
   const dayOfWeek = nowParis.getDay(); // 0=Sun, 1=Mon...
@@ -1096,6 +1127,7 @@ export async function getSpaData(
       rdv: { today: rdvTodayCount, week: rdvWeekCount, confirmes: rdvConfirmes, enAttente: rdvEnAttente },
       presentationsMois: presentationsMonth,
       placementsMois: placementsMonth,
+      nouveauxMandats,
       candidatsEnProcess: candidatsEnProcessCount,
       pipePondere: { value: Math.round(pipeThisMonth), delta: pipeDelta },
     },
