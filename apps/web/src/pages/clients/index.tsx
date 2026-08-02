@@ -1,30 +1,11 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { Plus, Search, LayoutGrid, List, Mail, Phone, ArrowRightLeft, Download, UserCheck, MoreHorizontal, Building2 } from 'lucide-react';
+import { Plus, Search, ChevronDown, X, Phone, Mail } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import { useListNavigation } from '../../hooks/useListNavigation';
-import { usePrefetch } from '../../hooks/usePrefetch';
-import { toast } from '../../components/ui/Toast';
 import { api } from '../../lib/api-client';
-import { downloadCSV } from '../../lib/export';
-import PageHeader from '../../components/ui/PageHeader';
-import Button from '../../components/ui/Button';
-import Table from '../../components/ui/Table';
-import Badge from '../../components/ui/Badge';
-import Pagination from '../../components/ui/Pagination';
-import EmptyState from '../../components/ui/EmptyState';
-import Skeleton, { SkeletonCard } from '../../components/ui/Skeleton';
-import Avatar from '../../components/ui/Avatar';
-import FilterBar from '../../components/ui/FilterBar';
-import type { FilterConfig } from '../../components/ui/FilterBar';
-import SelectionBar from '../../components/ui/SelectionBar';
-import type { SelectionAction } from '../../components/ui/SelectionBar';
-import SortableHeader, { toggleSort } from '../../components/ui/SortableHeader';
-import type { SortConfig } from '../../components/ui/SortableHeader';
 
-// ── Interfaces ────────────────────────────────────────────────
+// ─── TYPES ──────────────────────────────────────────
 interface Client {
   id: string;
   nom: string;
@@ -36,806 +17,222 @@ interface Client {
   typeClient: string | null;
   computedType: string | null;
   statutClient: string;
-  entreprise: {
-    id: string;
-    nom: string;
-    secteur?: string | null;
-    localisation?: string | null;
-    logoUrl?: string | null;
-    siteWeb?: string | null;
-  } | null;
+  entreprise: { id: string; nom: string; secteur?: string | null; localisation?: string | null; logoUrl?: string | null } | null;
   mandatsActifs: number;
   revenueCumule: number;
   lastActivityAt: string | null;
-  assignedTo?: { id: string; nom: string; prenom: string | null } | null;
+}
+interface PaginatedResponse { data: Client[]; meta: { total: number; page: number; perPage: number; totalPages: number } }
+
+// ─── META ───────────────────────────────────────────
+const STATUT_META: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
+  LEAD: { label: 'Lead', bg: 'rgba(34,23,122,.06)', fg: '#22177A', dot: '#8E7CC3' },
+  PREMIER_CONTACT: { label: 'Premier contact', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  BESOIN_QUALIFIE: { label: 'Besoin qualifié', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
+  PROPOSITION_ENVOYEE: { label: 'Proposition', bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
+  MANDAT_SIGNE: { label: 'Client actif', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  RECURRENT: { label: 'Récurrent', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  INACTIF: { label: 'Inactif', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
+};
+const TYPE_META: Record<string, { label: string; bg: string; fg: string }> = {
+  INBOUND: { label: 'Inbound', bg: '#F2F3D8', fg: '#22177A' },
+  OUTBOUND: { label: 'Outbound', bg: '#EDEAF9', fg: '#5B4B9E' },
+};
+const STATUT_OPTIONS = Object.entries(STATUT_META).map(([value, m]) => ({ value, label: m.label }));
+const TYPE_OPTIONS = [{ value: 'INBOUND', label: 'Inbound' }, { value: 'OUTBOUND', label: 'Outbound' }];
+
+const GRID = 'minmax(200px,1.5fr) minmax(130px,1.1fr) minmax(150px,1.05fr) minmax(74px,.72fr) minmax(84px,.72fr) minmax(110px,.72fr) minmax(104px,.6fr)';
+
+// ─── HELPERS ────────────────────────────────────────
+function fullName(c: Client) { return `${c.prenom ? c.prenom + ' ' : ''}${c.nom}`.trim(); }
+function initials(c: Client) { return `${(c.prenom?.[0] ?? '')}${c.nom?.[0] ?? ''}`.toUpperCase() || '?'; }
+function mono(name: string) { return name.split(/\s+/).map(w => w[0]).filter(Boolean).join('').slice(0, 2).toUpperCase(); }
+const AV: Array<[string, string]> = [['#22177A', '#E6E9AF'], ['#3B9A54', '#fff'], ['#8E7CC3', '#fff'], ['#2A6BD8', '#fff'], ['#E05A9C', '#fff']];
+function avColor(name: string): [string, string] { let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h); return AV[Math.abs(h) % AV.length]; }
+function isStale(c: Client) { return !!c.lastActivityAt && (Date.now() - new Date(c.lastActivityAt).getTime()) > 30 * 86400000; }
+
+// ─── CHIP DROPDOWN ──────────────────────────────────
+function ChipDropdown({ label, options, value, open, onToggle, onChange }: {
+  label: string; options: { value: string; label: string }[]; value: string[] | undefined;
+  open: boolean; onToggle: () => void; onChange: (v: string[]) => void;
+}) {
+  const sel = value ?? [];
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={onToggle} className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: sel.length ? '#22177A' : '#4A4568', background: sel.length ? '#F2F3D8' : '#fff', border: `1px solid ${sel.length ? 'rgba(34,23,122,0.24)' : 'rgba(34,23,122,0.14)'}`, borderRadius: 10, padding: '9px 13px', cursor: 'pointer' }}>
+        {label}{sel.length > 0 && <span style={{ fontWeight: 800, fontSize: 11 }}>{sel.length}</span>}<ChevronDown size={13} color="#8A8699" strokeWidth={2.4} />
+      </button>
+      {open && (
+        <>
+          <div onClick={onToggle} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 41, minWidth: 200, maxHeight: 280, overflowY: 'auto', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 12, boxShadow: '0 20px 44px -20px rgba(34,23,122,0.4)', padding: 6 }}>
+            {options.map(o => {
+              const checked = sel.includes(o.value);
+              return (
+                <button key={o.value} onClick={() => onChange(checked ? sel.filter(x => x !== o.value) : [...sel, o.value])} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 8, border: 'none', background: checked ? '#F2F3D8' : 'transparent', color: '#1A1533', fontSize: 13, fontWeight: checked ? 700 : 500, cursor: 'pointer', textAlign: 'left' }}>
+                  <span style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${checked ? '#22177A' : 'rgba(34,23,122,0.3)'}`, background: checked ? '#22177A' : '#fff', flexShrink: 0 }} />{o.label}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
-interface PaginatedResponse {
-  data: Client[];
-  meta: {
-    total: number;
-    page: number;
-    perPage: number;
-    totalPages: number;
-  };
-}
-
-// ── Helper functions ──────────────────────────────────────────
-function formatRevenue(amount: number): string {
-  if (amount === 0) return '\u2014';
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(amount);
-}
-
-function formatRelativeDate(date: string | null): string {
-  if (!date) return 'Jamais';
-  const diff = Date.now() - new Date(date).getTime();
-  const days = Math.floor(diff / 86400000);
-  if (days === 0) return "Aujourd'hui";
-  if (days === 1) return 'Hier';
-  if (days < 7) return `il y a ${days}j`;
-  if (days < 30) return `il y a ${Math.floor(days / 7)} sem`;
-  if (days < 365) return `il y a ${Math.floor(days / 30)} mois`;
-  return `il y a ${Math.floor(days / 365)} an(s)`;
-}
-
-// ── Label & variant maps ──────────────────────────────────────
-const STATUT_LABELS: Record<string, string> = {
-  LEAD: 'Lead',
-  PREMIER_CONTACT: 'Premier contact',
-  BESOIN_QUALIFIE: 'Besoin qualifi\u00e9',
-  PROPOSITION_ENVOYEE: 'Proposition',
-  MANDAT_SIGNE: 'Mandat sign\u00e9',
-  RECURRENT: 'R\u00e9current',
-  INACTIF: 'Inactif',
-};
-
-const STATUT_BADGE_VARIANT: Record<string, string> = {
-  LEAD: 'default',
-  PREMIER_CONTACT: 'info',
-  BESOIN_QUALIFIE: 'warning',
-  PROPOSITION_ENVOYEE: 'warning',
-  MANDAT_SIGNE: 'success',
-  RECURRENT: 'offre',
-  INACTIF: 'error',
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  HIRING_MANAGER: 'Hiring Manager',
-  DRH: 'DRH',
-  PROCUREMENT: 'Procurement',
-  CEO: 'CEO',
-  AUTRE: 'Autre',
-};
-
-const ROLE_BADGE_VARIANT: Record<string, string> = {
-  HIRING_MANAGER: 'info',
-  DRH: 'primary',
-  PROCUREMENT: 'warning',
-  CEO: 'error',
-  AUTRE: 'default',
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  INBOUND: '\ud83d\udce9 Inbound',
-  OUTBOUND: '\ud83c\udfaf Outbound',
-  RESEAU: '\ud83e\udd1d R\u00e9seau',
-  CLIENT_ACTIF: '\u2705 Client actif',
-  RECURRENT: '\u2b50 R\u00e9current',
-};
-
-const TYPE_BADGE_VARIANT: Record<string, string> = {
-  INBOUND: 'success',
-  OUTBOUND: 'info',
-  RESEAU: 'primary',
-  CLIENT_ACTIF: 'default',
-  RECURRENT: 'warning',
-};
-
-// ── Animation variants ────────────────────────────────────────
-const listStagger = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.04 } },
-};
-const listItem = {
-  hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 300, damping: 24 } },
-};
-
-// ── View type ─────────────────────────────────────────────────
-type ViewMode = 'grid' | 'table';
-
-// ── Filter options ────────────────────────────────────────────
-const TYPE_OPTIONS = [
-  { value: 'INBOUND', label: '\ud83d\udce9 Inbound' },
-  { value: 'OUTBOUND', label: '\ud83c\udfaf Outbound' },
-  { value: 'RESEAU', label: '\ud83e\udd1d R\u00e9seau' },
-  { value: 'CLIENT_ACTIF', label: '\u2705 Client actif' },
-  { value: 'RECURRENT', label: '\u2b50 R\u00e9current' },
-];
-
-const STATUT_OPTIONS = [
-  { value: 'LEAD', label: 'Lead' },
-  { value: 'PREMIER_CONTACT', label: 'Premier contact' },
-  { value: 'BESOIN_QUALIFIE', label: 'Besoin qualifi\u00e9' },
-  { value: 'PROPOSITION_ENVOYEE', label: 'Proposition' },
-  { value: 'MANDAT_SIGNE', label: 'Mandat sign\u00e9' },
-  { value: 'RECURRENT', label: 'R\u00e9current' },
-  { value: 'INACTIF', label: 'Inactif' },
-];
-
-const ROLE_OPTIONS = [
-  { value: 'HIRING_MANAGER', label: 'Hiring Manager' },
-  { value: 'DRH', label: 'DRH' },
-  { value: 'PROCUREMENT', label: 'Procurement' },
-  { value: 'CEO', label: 'CEO' },
-  { value: 'AUTRE', label: 'Autre' },
-];
-
-// ── Selection actions ─────────────────────────────────────────
-const SELECTION_ACTIONS: SelectionAction[] = [
-  { key: 'statut', label: 'Changer statut', icon: ArrowRightLeft, variant: 'secondary' },
-  { key: 'assign', label: 'Assigner \u00e0', icon: UserCheck, variant: 'secondary' },
-  { key: 'email', label: 'Email groupe', icon: Mail, variant: 'primary' },
-  { key: 'export', label: 'Exporter', icon: Download, variant: 'ghost' },
-];
-
-// ── URL helpers ───────────────────────────────────────────────
-function parseFiltersFromURL(params: URLSearchParams): Record<string, any> {
-  const result: Record<string, any> = {};
-  const multiKeys = ['typeClient', 'statutClient', 'role', 'city'];
-  for (const key of multiKeys) {
-    const val = params.get(key);
-    if (val) result[key] = val.split(',');
-  }
-  const singleKeys = ['assigned_to'];
-  for (const key of singleKeys) {
-    const val = params.get(key);
-    if (val) result[key] = val;
-  }
-  return result;
-}
-
-function serializeFiltersToURL(values: Record<string, any>): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const [key, val] of Object.entries(values)) {
-    if (Array.isArray(val) && val.length > 0) result[key] = val.join(',');
-    else if (typeof val === 'string' && val) result[key] = val;
-  }
-  return result;
-}
-
-// ── Main component ────────────────────────────────────────────
+// ═════════════════════════════════════════════════════
 export default function ClientsPage() {
   usePageTitle('Clients');
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const entrepriseId = searchParams.get('entrepriseId') || undefined;
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [view, setView] = useState<ViewMode>('table');
-  const [searchParams, setSearchParams] = useSearchParams();
-  const entrepriseId = searchParams.get('entrepriseId') || undefined;
-  const navigate = useNavigate();
-  const { prefetchOnHover, cancelPrefetch } = usePrefetch();
-  const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'revenueCumule', direction: 'desc' });
+  const [debSearch, setDebSearch] = useState('');
+  const [openChip, setOpenChip] = useState<string | null>(null);
+  const [filters, setFilters] = useState<Record<string, string[]>>({});
+  const [secteurSel, setSecteurSel] = useState<string[]>([]);
 
-  const handleSort = useCallback((key: string) => {
-    setSortConfig((prev) => toggleSort(prev, key));
-  }, []);
+  useEffect(() => { const t = setTimeout(() => { setDebSearch(search); setPage(1); }, 350); return () => clearTimeout(t); }, [search]);
 
-  // ── Filter state from URL ─────────────────────────────────────
-  const [filterValues, setFilterValues] = useState<Record<string, any>>(() =>
-    parseFiltersFromURL(searchParams),
-  );
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Sync filters to URL with debounce
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const serialized = serializeFiltersToURL(filterValues);
-      const newParams = new URLSearchParams();
-      if (entrepriseId) newParams.set('entrepriseId', entrepriseId);
-      for (const [k, v] of Object.entries(serialized)) newParams.set(k, v);
-      setSearchParams(newParams, { replace: true });
-    }, 300);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [filterValues, entrepriseId, setSearchParams]);
-
-  const handleFilterChange = useCallback((key: string, value: any) => {
-    setFilterValues((prev) => ({ ...prev, [key]: value }));
-    setPage(1);
-  }, []);
-
-  const handleFilterReset = useCallback(() => {
-    setFilterValues({});
-    setPage(1);
-  }, []);
-
-  // ── Selection state ─────────────────────────────────────────
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-
-  // ── Data fetching ───────────────────────────────────────────
   const { data, isLoading } = useQuery({
-    queryKey: ['clients', page, search, entrepriseId, filterValues, sortConfig],
+    queryKey: ['clients', page, debSearch, entrepriseId, filters],
     queryFn: () => {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-      params.set('perPage', '20');
-      if (search) params.set('search', search);
-      if (entrepriseId) params.set('entrepriseId', entrepriseId);
-      if (filterValues.typeClient?.length) params.set('typeClient', filterValues.typeClient.join(','));
-      if (filterValues.statutClient?.length) params.set('statutClient', filterValues.statutClient.join(','));
-      if (filterValues.role?.length) params.set('role', filterValues.role.join(','));
-      if (filterValues.city?.length) params.set('city', filterValues.city.join(','));
-      if (filterValues.assigned_to) params.set('assignedToId', filterValues.assigned_to);
-      if (sortConfig) {
-        params.set('sortBy', sortConfig.key);
-        params.set('sortDir', sortConfig.direction);
-      }
-      return api.get<PaginatedResponse>(`/clients?${params.toString()}`);
+      const p = new URLSearchParams();
+      p.set('page', String(page)); p.set('perPage', '20');
+      if (debSearch) p.set('search', debSearch);
+      if (entrepriseId) p.set('entrepriseId', entrepriseId);
+      if (filters.typeClient?.length) p.set('typeClient', filters.typeClient.join(','));
+      if (filters.statutClient?.length) p.set('statutClient', filters.statutClient.join(','));
+      if (filters.city?.length) p.set('city', filters.city.join(','));
+      return api.get<PaginatedResponse>(`/clients?${p.toString()}`);
     },
   });
 
   const total = data?.meta?.total ?? 0;
+  const totalPages = data?.meta?.totalPages ?? 1;
+  let rows = data?.data ?? [];
+  if (secteurSel.length) rows = rows.filter(c => c.entreprise?.secteur && secteurSel.includes(c.entreprise.secteur));
 
-  // ── Fetch team members for "Assigne a" filter ─────────────
-  const { data: teamUsers } = useQuery({
-    queryKey: ['settings', 'team'],
-    queryFn: () => api.get<{ id: string; nom: string; prenom: string | null }[]>('/settings/team'),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const userOptions = useMemo(() =>
-    (teamUsers || []).map((u) => ({
-      value: u.id,
-      label: `${u.prenom || ''} ${u.nom}`.trim(),
-    })),
-  [teamUsers]);
-
-  // ── Dynamic city options from data ──────────────────────────
-  const dynamicCityOptions = useMemo(() => {
-    if (!data?.data) return [];
-    const cities = new Set<string>();
-    data.data.forEach((c) => {
-      if (c.entreprise?.localisation) cities.add(c.entreprise.localisation);
-    });
-    return Array.from(cities).sort().map((city) => ({ value: city, label: city }));
+  const cityOptions = useMemo(() => {
+    const s = new Set<string>(); (data?.data ?? []).forEach(c => { if (c.entreprise?.localisation) s.add(c.entreprise.localisation); });
+    return Array.from(s).sort().map(v => ({ value: v, label: v }));
+  }, [data?.data]);
+  const secteurOptions = useMemo(() => {
+    const s = new Set<string>(); (data?.data ?? []).forEach(c => { if (c.entreprise?.secteur) s.add(c.entreprise.secteur); });
+    return Array.from(s).sort().map(v => ({ value: v, label: v }));
   }, [data?.data]);
 
-  // ── Filter config ───────────────────────────────────────────
-  const filterConfigs: FilterConfig[] = useMemo(() => [
-    { key: 'typeClient', label: 'Type', type: 'multi-select', options: TYPE_OPTIONS },
-    { key: 'statutClient', label: 'Statut', type: 'multi-select', options: STATUT_OPTIONS },
-    { key: 'role', label: 'R\u00f4le', type: 'multi-select', options: ROLE_OPTIONS },
-    { key: 'city', label: 'Ville', type: 'multi-select', options: dynamicCityOptions },
-    { key: 'assigned_to', label: 'Assign\u00e9 \u00e0', type: 'single-select', options: userOptions },
-  ], [dynamicCityOptions, userOptions]);
+  const setFilter = (key: string, v: string[]) => { setFilters(prev => { const n = { ...prev }; if (!v.length) delete n[key]; else n[key] = v; return n; }); setPage(1); };
 
-  // ── Data (server-side sorting) ──────────────────────────────
-  const allClients = data?.data ?? [];
-  const sortedClients = allClients; // sorting is server-side
-
-  const { focusedIndex } = useListNavigation(sortedClients.length, {
-    onSelect: (index) => navigate(`/clients/${sortedClients[index].id}`),
+  const activeChips: { key: string; value: string; label: string; onRemove: () => void }[] = [];
+  for (const [k, arr] of Object.entries(filters)) arr.forEach(v => {
+    const opt = (k === 'typeClient' ? TYPE_OPTIONS : k === 'statutClient' ? STATUT_OPTIONS : cityOptions).find(o => o.value === v);
+    activeChips.push({ key: k, value: v, label: opt?.label ?? v, onRemove: () => setFilter(k, (filters[k] ?? []).filter(x => x !== v)) });
   });
-
-  // ── Selection actions handler ───────────────────────────────
-  const handleSelectionAction = useCallback((key: string) => {
-    const ids = Array.from(selectedIds);
-    const selected = allClients.filter((c) => ids.includes(c.id));
-
-    switch (key) {
-      case 'export': {
-        downloadCSV('clients', ids)
-          .then(() => toast('success', `${ids.length} client(s) export\u00e9(s)`))
-          .catch(() => toast('error', "Erreur lors de l'export"));
-        break;
-      }
-      case 'email': {
-        const emails = selected
-          .map((c) => c.email)
-          .filter((e): e is string => !!e);
-        if (emails.length === 0) {
-          toast('error', "Aucun client s\u00e9lectionn\u00e9 n'a d'email");
-          break;
-        }
-        const mailto = `mailto:?bcc=${emails.join(',')}`;
-        window.open(mailto, '_blank');
-        toast('success', `Email group\u00e9 ouvert pour ${emails.length} client(s)`);
-        break;
-      }
-      case 'statut':
-        toast('info', `Changement de statut group\u00e9 pour ${selected.length} client(s) \u2014 bient\u00f4t disponible`);
-        break;
-      case 'assign':
-        toast('info', `Assignation group\u00e9e pour ${selected.length} client(s) \u2014 bient\u00f4t disponible`);
-        break;
-      default:
-        break;
-    }
-  }, [selectedIds, allClients]);
-
-  const allSelected = sortedClients.length > 0 && sortedClients.every((c) => selectedIds.has(c.id));
-
-  const toggleSelectAll = useCallback(() => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(sortedClients.map((c) => c.id)));
-    }
-  }, [allSelected, sortedClients]);
-
-  // ── Table columns (12 columns) ──────────────────────────────
-  const columns = [
-    // 1. Checkbox
-    {
-      key: 'checkbox',
-      header: (
-        <input
-          type="checkbox"
-          checked={allSelected}
-          onChange={toggleSelectAll}
-          className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer"
-        />
-      ) as unknown as string,
-      render: (r: Client) => (
-        <input
-          type="checkbox"
-          checked={selectedIds.has(r.id)}
-          onChange={(e) => { e.stopPropagation(); toggleSelect(r.id); }}
-          onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer"
-        />
-      ),
-      className: 'w-10',
-    },
-    // 2. Client (Avatar + name)
-    {
-      key: 'nom',
-      header: (<SortableHeader label="Client" sortKey="nom" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Client) => (
-        <div className="flex items-center gap-3">
-          <Avatar nom={r.nom} prenom={r.prenom} size="sm" />
-          <span className="font-medium">
-            {r.prenom} {r.nom}
-          </span>
-        </div>
-      ),
-      className: 'min-w-[180px]',
-    },
-    // 3. Entreprise (logo + name)
-    {
-      key: 'entreprise',
-      header: 'Entreprise',
-      render: (r: Client) => r.entreprise ? (
-        <span
-          className="inline-flex items-center gap-2 text-accent hover:underline cursor-pointer"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/entreprises/${r.entreprise!.id}`);
-          }}
-        >
-          {r.entreprise.logoUrl ? (
-            <img src={r.entreprise.logoUrl} alt="" className="h-4 w-4 rounded object-contain flex-shrink-0" />
-          ) : (
-            <Building2 size={14} className="text-neutral-400 flex-shrink-0" />
-          )}
-          <span className="truncate">{r.entreprise.nom}</span>
-        </span>
-      ) : '\u2014',
-      className: 'min-w-[140px]',
-    },
-    // 4. Role
-    {
-      key: 'role',
-      header: 'R\u00f4le',
-      render: (r: Client) =>
-        r.roleContact ? (
-          <Badge variant={(ROLE_BADGE_VARIANT[r.roleContact] || 'default') as any}>
-            {ROLE_LABELS[r.roleContact] || r.roleContact}
-          </Badge>
-        ) : '\u2014',
-      className: 'w-32',
-    },
-    // 5. Type (computedType)
-    {
-      key: 'type',
-      header: 'Type',
-      render: (r: Client) => {
-        const t = r.computedType || r.typeClient;
-        if (!t) return '\u2014';
-        return (
-          <Badge variant={(TYPE_BADGE_VARIANT[t] || 'default') as any}>
-            {TYPE_LABELS[t] || t}
-          </Badge>
-        );
-      },
-      className: 'w-36',
-    },
-    // 6. Email
-    {
-      key: 'email',
-      header: 'Email',
-      render: (r: Client) => r.email ? (
-        <a
-          href={`mailto:${r.email}`}
-          className="inline-flex items-center gap-1.5 text-neutral-600 hover:text-violet-600 transition-colors truncate max-w-[180px]"
-          onClick={(e) => e.stopPropagation()}
-          title={r.email}
-        >
-          <Mail size={12} className="text-neutral-400 flex-shrink-0" />
-          <span className="truncate">{r.email}</span>
-        </a>
-      ) : '\u2014',
-      className: 'min-w-[180px]',
-    },
-    // 7. Telephone
-    {
-      key: 'telephone',
-      header: 'T\u00e9l\u00e9phone',
-      render: (r: Client) => r.telephone ? (
-        <a
-          href={`tel:${r.telephone}`}
-          className="inline-flex items-center gap-1.5 text-neutral-600 hover:text-violet-600 transition-colors"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Phone size={12} className="text-neutral-400 flex-shrink-0" />
-          {r.telephone}
-        </a>
-      ) : '\u2014',
-      className: 'w-32',
-    },
-    // 8. Statut
-    {
-      key: 'statut',
-      header: (<SortableHeader label="Statut" sortKey="statutClient" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Client) => (
-        <Badge variant={(STATUT_BADGE_VARIANT[r.statutClient] || 'default') as any}>
-          {STATUT_LABELS[r.statutClient] || r.statutClient}
-        </Badge>
-      ),
-      className: 'w-36',
-    },
-    // 9. Mandats actifs
-    {
-      key: 'mandatsActifs',
-      header: (<SortableHeader label="Mandats" sortKey="mandatsActifs" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Client) => r.mandatsActifs > 0 ? (
-        <Badge variant="info">{r.mandatsActifs}</Badge>
-      ) : '\u2014',
-      className: 'w-20',
-    },
-    // 10. Revenue
-    {
-      key: 'revenueCumule',
-      header: (<SortableHeader label="Revenue" sortKey="revenueCumule" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Client) => (
-        <span className={r.revenueCumule > 0 ? 'font-semibold text-emerald-600' : 'text-neutral-400'}>
-          {formatRevenue(r.revenueCumule)}
-        </span>
-      ),
-      className: 'w-28',
-    },
-    // 11. Derniere interaction
-    {
-      key: 'lastActivityAt',
-      header: (<SortableHeader label="Interaction" sortKey="lastActivityAt" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Client) => (
-        <span className="text-neutral-500 text-xs">{formatRelativeDate(r.lastActivityAt)}</span>
-      ),
-      className: 'w-32',
-    },
-    // 12. Actions
-    {
-      key: 'actions',
-      header: '',
-      render: (r: Client) => (
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          {r.telephone && (
-            <a
-              href={`tel:${r.telephone}`}
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
-              title={`Appeler ${r.telephone}`}
-            >
-              <Phone size={13} />
-            </a>
-          )}
-          {r.email && (
-            <a
-              href={`mailto:${r.email}`}
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
-              title={`Email ${r.email}`}
-            >
-              <Mail size={13} />
-            </a>
-          )}
-          {r.entreprise && (
-            <span
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/entreprises/${r.entreprise!.id}`);
-              }}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-violet-50 hover:text-violet-600 transition-colors cursor-pointer"
-              title={`Voir ${r.entreprise.nom}`}
-            >
-              <Building2 size={13} />
-            </span>
-          )}
-        </div>
-      ),
-      className: 'w-10',
-    },
-  ];
-
-  // ── Card component for grid view ────────────────────────────
-  function ClientCard({ client, index }: { client: Client; index: number }) {
-    const fullName = `${client.prenom || ''} ${client.nom}`.trim();
-    const isSelected = selectedIds.has(client.id);
-    const t = client.computedType || client.typeClient;
-
-    return (
-      <div
-        onClick={() => navigate(`/clients/${client.id}`)}
-        onMouseEnter={() => prefetchOnHover(['client', client.id], `/clients/${client.id}`)}
-        onMouseLeave={cancelPrefetch}
-        className={`group relative cursor-pointer rounded-xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:border-[#22177A]/30 ${
-          isSelected ? 'border-[#22177A] ring-2 ring-[#22177A]/20 shadow-md' : 'border-neutral-100 shadow-sm'
-        } ${focusedIndex === index ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}`}
-      >
-        <div className="flex items-center gap-4 px-4 py-3">
-          {/* Checkbox */}
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={(e) => { e.stopPropagation(); toggleSelect(client.id); }}
-            onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer flex-shrink-0"
-          />
-
-          {/* Avatar */}
-          <Avatar nom={client.nom} prenom={client.prenom} size="md" />
-
-          {/* Name + Poste */}
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[14px] font-semibold text-neutral-900">
-              {fullName}
-            </p>
-            {client.poste && (
-              <p className="mt-0.5 truncate text-[12px] font-medium text-[#22177A]">
-                {client.poste}
-              </p>
-            )}
-          </div>
-
-          {/* Info columns */}
-          <div className="hidden lg:flex items-center gap-4 flex-shrink-0">
-            {/* Entreprise */}
-            <div className="w-[130px]">
-              {client.entreprise ? (
-                <div className="flex items-center gap-1.5 text-[12px] text-neutral-600">
-                  {client.entreprise.logoUrl ? (
-                    <img src={client.entreprise.logoUrl} alt="" className="h-3.5 w-3.5 rounded object-contain flex-shrink-0" />
-                  ) : (
-                    <Building2 size={12} className="flex-shrink-0 text-neutral-400" />
-                  )}
-                  <span className="truncate">{client.entreprise.nom}</span>
-                </div>
-              ) : (
-                <span className="text-[12px] text-neutral-300">{'\u2014'}</span>
-              )}
-            </div>
-
-            {/* Type */}
-            <div className="w-[100px]">
-              {t ? (
-                <Badge variant={(TYPE_BADGE_VARIANT[t] || 'default') as any} size="sm">
-                  {TYPE_LABELS[t] || t}
-                </Badge>
-              ) : (
-                <span className="text-[12px] text-neutral-300">{'\u2014'}</span>
-              )}
-            </div>
-
-            {/* Statut */}
-            <div className="w-[100px]">
-              <Badge variant={(STATUT_BADGE_VARIANT[client.statutClient] || 'default') as any} size="sm">
-                {STATUT_LABELS[client.statutClient] || client.statutClient}
-              </Badge>
-            </div>
-          </div>
-
-          {/* Revenue badge */}
-          <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
-            {client.revenueCumule > 0 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 border border-emerald-100">
-                {formatRevenue(client.revenueCumule)}
-              </span>
-            )}
-            {client.mandatsActifs > 0 && (
-              <Badge variant="info" size="sm">{client.mandatsActifs}</Badge>
-            )}
-          </div>
-        </div>
-
-        {/* Mobile info row */}
-        <div className="lg:hidden px-4 pb-3 flex flex-wrap gap-2">
-          {client.entreprise && (
-            <div className="inline-flex items-center gap-1 text-[11px] text-neutral-500">
-              <Building2 size={10} className="text-neutral-400" />
-              {client.entreprise.nom}
-            </div>
-          )}
-          {t && (
-            <Badge variant={(TYPE_BADGE_VARIANT[t] || 'default') as any} size="sm">
-              {TYPE_LABELS[t] || t}
-            </Badge>
-          )}
-          <Badge variant={(STATUT_BADGE_VARIANT[client.statutClient] || 'default') as any} size="sm">
-            {STATUT_LABELS[client.statutClient] || client.statutClient}
-          </Badge>
-        </div>
-      </div>
-    );
-  }
+  secteurSel.forEach(v => activeChips.push({ key: 'secteur', value: v, label: v, onRemove: () => setSecteurSel(s => s.filter(x => x !== v)) }));
 
   return (
     <div>
-      {/* Header mock-fidelity */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 38, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1 }}>
-            Clients
-          </h1>
-          {!isLoading && (
-            <span
-              style={{
-                background: '#fff', border: '1px solid rgba(34,23,122,0.12)',
-                borderRadius: 999, padding: '5px 13px', fontSize: 12.5, fontWeight: 700, color: '#22177A',
-              }}
-            >
-              {total} client{total > 1 ? 's' : ''}
-            </span>
-          )}
+      <style>{`
+        .crow{ position:relative; transition:background .16s ease, padding-left .2s cubic-bezier(.16,1,.3,1); }
+        .crow::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:#22177A; transform:scaleY(0); transition:transform .22s cubic-bezier(.16,1,.3,1); }
+        .crow:hover{ background:#FBFBF3; padding-left:26px; }
+        .crow:hover::before{ transform:scaleY(1); }
+        .chip:hover{ border-color:rgba(34,23,122,0.3) !important; transform:translateY(-1px); }
+        .chip{ transition:border-color .16s ease, transform .15s ease; }
+        .kw:hover{ background:#E6E9AF !important; }
+      `}</style>
+
+      {/* HEADER */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>CRM</div>
+          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Clients</h1>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div
-            style={{
-              display: 'flex', alignItems: 'center', borderRadius: 10,
-              border: '1px solid rgba(34,23,122,0.14)', background: '#F7F7EF', padding: 3,
-            }}
-          >
-            <button
-              onClick={() => setView('grid')}
-              style={{
-                borderRadius: 7, padding: '6px 8px',
-                background: view === 'grid' ? '#fff' : 'transparent',
-                boxShadow: view === 'grid' ? '0 1px 2px rgba(34,23,122,0.08)' : 'none',
-                color: view === 'grid' ? '#22177A' : '#8A8699', border: 'none', cursor: 'pointer',
-              }}
-              title="Vue grille"
-            >
-              <LayoutGrid size={16} />
-            </button>
-            <button
-              onClick={() => setView('table')}
-              style={{
-                borderRadius: 7, padding: '6px 8px',
-                background: view === 'table' ? '#fff' : 'transparent',
-                boxShadow: view === 'table' ? '0 1px 2px rgba(34,23,122,0.08)' : 'none',
-                color: view === 'table' ? '#22177A' : '#8A8699', border: 'none', cursor: 'pointer',
-              }}
-              title="Vue tableau"
-            >
-              <List size={16} />
-            </button>
-          </div>
-          <button
-            onClick={() => navigate('/clients/new')}
-            className="btn-primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer', border: 'none' }}
-          >
-            <Plus size={15} /> Nouveau client
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{total.toLocaleString('fr-FR')} clients</span>
+          <button onClick={() => navigate('/clients/new')} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />Nouveau client</button>
         </div>
       </div>
 
-      {/* Search + Filters (compact row) */}
-      <div className="mb-3 flex items-start gap-3">
-        <div className="relative shrink-0" style={{ width: 240 }}>
-          <Search
-            size={14}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary"
-          />
-          <input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Rechercher un client..."
-            className="h-8 w-full rounded-md border border-neutral-200 bg-white pl-8 pr-3 text-xs outline-none transition-all focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-          />
+      {/* FILTERS */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', marginTop: 22 }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+          <Search size={15} color="#9A96AE" strokeWidth={2.2} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)' }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un client, une société…" style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 36px', borderRadius: 11, border: '1px solid rgba(34,23,122,0.14)', background: '#FCFCF5', outline: 'none' }} />
         </div>
-        <div className="flex-1 min-w-0">
-          <FilterBar
-            filters={filterConfigs}
-            values={filterValues}
-            onChange={handleFilterChange}
-            onReset={handleFilterReset}
-            resultCount={data?.data?.length ?? 0}
-            totalCount={data?.meta?.total ?? 0}
-          />
-        </div>
+        <ChipDropdown label="Type" options={TYPE_OPTIONS} value={filters.typeClient} open={openChip === 'type'} onToggle={() => setOpenChip(openChip === 'type' ? null : 'type')} onChange={v => setFilter('typeClient', v)} />
+        <ChipDropdown label="Statut" options={STATUT_OPTIONS} value={filters.statutClient} open={openChip === 'statut'} onToggle={() => setOpenChip(openChip === 'statut' ? null : 'statut')} onChange={v => setFilter('statutClient', v)} />
+        <ChipDropdown label="Secteur" options={secteurOptions} value={secteurSel} open={openChip === 'secteur'} onToggle={() => setOpenChip(openChip === 'secteur' ? null : 'secteur')} onChange={setSecteurSel} />
+        <ChipDropdown label="Ville" options={cityOptions} value={filters.city} open={openChip === 'city'} onToggle={() => setOpenChip(openChip === 'city' ? null : 'city')} onChange={v => setFilter('city', v)} />
       </div>
 
-      {/* Content */}
-      {isLoading ? (
-        view === 'grid' ? (
-          <div className="grid grid-cols-1 gap-2">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 w-full rounded-xl" />
-            ))}
-          </div>
-        ) : (
-          <Skeleton className="h-12 w-full" count={5} />
-        )
-      ) : !sortedClients.length ? (
-        <EmptyState
-          title="Aucun client"
-          description="G\u00e9rez vos contacts clients et suivez vos relations commerciales en ajoutant votre premier client."
-          actionLabel="Ajouter un client"
-          onAction={() => navigate('/clients/new')}
-          icon={<Building2 size={48} strokeWidth={1} />}
-        />
-      ) : (
-        <>
-          {view === 'grid' ? (
-            <motion.div className="grid grid-cols-1 gap-2" variants={listStagger} initial="hidden" animate="show">
-              {sortedClients.map((c, index) => (
-                <motion.div key={c.id} variants={listItem}>
-                  <ClientCard client={c} index={index} />
-                </motion.div>
-              ))}
-            </motion.div>
-          ) : (
-            <Table
-              columns={columns}
-              data={sortedClients}
-              keyExtractor={(r) => r.id}
-              onRowClick={(r) => navigate(`/clients/${r.id}`)}
-              onRowMouseEnter={(r) => prefetchOnHover(['client', r.id], `/clients/${r.id}`)}
-              onRowMouseLeave={cancelPrefetch}
-              rowClassName={(_r, i) => focusedIndex === i ? 'ring-2 ring-primary-200/50 bg-primary-50/30' : ''}
-            />
-          )}
-          {data?.meta && (
-            <div className="mt-6 flex justify-center">
-              <Pagination
-                page={data.meta.page}
-                totalPages={data.meta.totalPages}
-                onPageChange={setPage}
-              />
+      {/* ACTIVE CHIPS */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 11 }}>
+        <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>Filtres</span>
+        {activeChips.length === 0 && <span style={{ fontSize: 12, color: '#C4C1D0' }}>aucun</span>}
+        {activeChips.map(ch => (
+          <span key={ch.key + ch.value} className="kw" onClick={ch.onRemove} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 999, padding: '5px 11px', cursor: 'pointer' }}>{ch.label}<X size={11} strokeWidth={2.8} /></span>
+        ))}
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#8A8699' }}>{rows.length} affichés · {total.toLocaleString('fr-FR')} au total</span>
+      </div>
+
+      {/* TABLE */}
+      <div style={{ marginTop: 18, background: '#fff', border: '1px solid rgba(34,23,122,0.08)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 2px rgba(34,23,122,0.04)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 14, padding: '14px 22px', background: '#F7F7EE', borderBottom: '1px solid rgba(34,23,122,0.08)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#8A8699' }}>
+          <span>Client</span><span>Société</span><span>Contact</span><span>Mandats</span><span>Secteur</span><span>Statut</span><span style={{ textAlign: 'right' }}>Type</span>
+        </div>
+        {isLoading ? (
+          Array.from({ length: 8 }).map((_, i) => <div key={i} style={{ height: 67, borderBottom: '1px solid rgba(34,23,122,0.05)', background: i % 2 ? '#fff' : '#FCFCF5' }} />)
+        ) : rows.length === 0 ? (
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: '#8A8699' }}>Aucun client ne correspond aux filtres.</div>
+        ) : rows.map(c => {
+          const st = STATUT_META[c.statutClient] ?? STATUT_META.LEAD;
+          const ty = TYPE_META[(c.computedType || c.typeClient || '') as string];
+          const [avBg, avFg] = avColor(fullName(c));
+          return (
+            <div key={c.id} className="crow" onClick={() => navigate(`/clients/${c.id}`)} style={{ cursor: 'pointer', display: 'grid', gridTemplateColumns: GRID, gap: 14, alignItems: 'center', padding: '14px 22px', borderBottom: '1px solid rgba(34,23,122,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: '50%', background: avBg, color: avFg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 12 }}>{initials(c)}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName(c)}</div>
+                  <div style={{ fontSize: 12, color: '#8A8699', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.poste || c.roleContact || '—'}</div>
+                </div>
+              </div>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                {c.entreprise?.logoUrl
+                  ? <span style={{ flexShrink: 0, width: 34, height: 26, borderRadius: 7, background: '#fff', border: '1px solid rgba(34,23,122,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: 3 }}><img src={c.entreprise.logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} /></span>
+                  : <span style={{ flexShrink: 0, width: 34, height: 26, borderRadius: 7, background: '#F2F3D8', border: '1px solid rgba(34,23,122,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 11, color: '#22177A' }}>{c.entreprise ? mono(c.entreprise.nom) : '—'}</span>}
+                <span onClick={(e) => { if (c.entreprise) { e.stopPropagation(); navigate(`/entreprises/${c.entreprise.id}`); } }} style={{ fontSize: 13, color: '#22177A', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.entreprise?.nom || '—'}</span>
+              </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 600, color: '#22177A', whiteSpace: 'nowrap' }}><Phone size={12} color="#9A96AE" style={{ flexShrink: 0 }} />{c.telephone || '—'}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8A8699', minWidth: 0 }}><Mail size={12} color="#9A96AE" style={{ flexShrink: 0 }} /><span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.email || '—'}</span></span>
+              </div>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 15, color: c.mandatsActifs > 0 ? '#1A1533' : '#C4C1D0' }}>{c.mandatsActifs}</span>
+                {isStale(c) && <span title="Client dormant" style={{ width: 7, height: 7, borderRadius: '50%', background: '#B3261E' }} />}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#4A4568', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.entreprise?.secteur || '—'}</span>
+              <span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, borderRadius: 999, padding: '4px 11px', background: st.bg, color: st.fg, whiteSpace: 'nowrap' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: st.dot }} />{st.label}</span></span>
+              <span style={{ textAlign: 'right' }}>{ty ? <span style={{ display: 'inline-flex', fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '4px 11px', background: ty.bg, color: ty.fg, whiteSpace: 'nowrap' }}>{ty.label}</span> : <span style={{ color: '#C4C1D0' }}>—</span>}</span>
             </div>
-          )}
-        </>
-      )}
-
-      {/* Selection bar */}
-      <SelectionBar
-        count={selectedIds.size}
-        entityLabel="clients"
-        actions={SELECTION_ACTIONS}
-        onAction={handleSelectionAction}
-        onCancel={() => setSelectedIds(new Set())}
-      />
+          );
+        })}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 22px', fontSize: 13, color: '#8A8699' }}>
+            <span>Page {page} / {totalPages} · {total.toLocaleString('fr-FR')} clients</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', color: page <= 1 ? '#C4C1D0' : '#22177A', cursor: page <= 1 ? 'default' : 'pointer' }}>‹</button>
+              <span style={{ minWidth: 32, height: 32, borderRadius: 9, background: '#22177A', color: '#E6E9AF', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{page}</span>
+              <button disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', color: page >= totalPages ? '#C4C1D0' : '#22177A', cursor: page >= totalPages ? 'default' : 'pointer' }}>›</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
