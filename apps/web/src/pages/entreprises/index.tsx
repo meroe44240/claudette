@@ -1,27 +1,11 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { Plus, Search, LayoutGrid, List, Download, Building2, MapPin, Users, MoreHorizontal, Sparkles } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
+import { Plus, Search, ChevronDown, X, Users } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import { usePrefetch } from '../../hooks/usePrefetch';
-import { toast } from '../../components/ui/Toast';
 import { api } from '../../lib/api-client';
-import PageHeader from '../../components/ui/PageHeader';
-import Button from '../../components/ui/Button';
-import Table from '../../components/ui/Table';
-import Badge from '../../components/ui/Badge';
-import Pagination from '../../components/ui/Pagination';
-import EmptyState from '../../components/ui/EmptyState';
-import Skeleton from '../../components/ui/Skeleton';
-import FilterBar from '../../components/ui/FilterBar';
-import type { FilterConfig } from '../../components/ui/FilterBar';
-import SelectionBar from '../../components/ui/SelectionBar';
-import type { SelectionAction } from '../../components/ui/SelectionBar';
-import SortableHeader, { toggleSort } from '../../components/ui/SortableHeader';
-import type { SortConfig } from '../../components/ui/SortableHeader';
 
-// ── Interface ────────────────────────────────────────────────────
+// ─── TYPES ──────────────────────────────────────────
 interface Entreprise {
   id: string;
   nom: string;
@@ -32,746 +16,220 @@ interface Entreprise {
   logoUrl: string | null;
   effectif: string | null;
   pappersEnriched: boolean;
-  libelleNAF: string | null;
-  adresseComplete: string | null;
   _count?: { clients: number; mandats: number };
   mandatsActifs: number;
   mandatsHistoriques: number;
-  revenueCumule: number;
-  placements: number;
   dernierMandat: string | null;
 }
+interface PaginatedResponse { data: Entreprise[]; meta: { total: number; page: number; perPage: number; totalPages: number } }
 
-interface PaginatedResponse {
-  data: Entreprise[];
-  meta: {
-    total: number;
-    page: number;
-    perPage: number;
-    totalPages: number;
-  };
-}
-
-// ── Helpers ──────────────────────────────────────────────────────
-const TAILLE_LABELS: Record<string, string> = {
-  STARTUP: 'Startup',
-  PME: 'PME',
-  ETI: 'ETI',
-  GRAND_GROUPE: 'Grand groupe',
+// ─── META ───────────────────────────────────────────
+const REL_META: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
+  client: { label: 'Client', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  prospect: { label: 'Prospect', bg: '#EDEAF9', fg: '#5B4B9E', dot: '#8E7CC3' },
+  cible: { label: 'Cible', bg: '#F2F3D8', fg: '#22177A', dot: '#C9A227' },
+  dormant: { label: 'Dormant', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
 };
+const REL_OPTIONS = Object.entries(REL_META).map(([value, m]) => ({ value, label: m.label }));
 
-function formatRevenue(amount: number): string {
-  if (amount === 0) return '\u2014';
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(amount);
+const GRID = 'minmax(210px,1.7fr) minmax(120px,1fr) minmax(96px,.8fr) minmax(110px,.8fr) minmax(84px,.72fr) minmax(112px,.8fr) minmax(118px,.85fr)';
+
+// ─── HELPERS ────────────────────────────────────────
+function mono(name: string) { return name.split(/\s+/).map(w => w[0]).filter(Boolean).join('').slice(0, 2).toUpperCase(); }
+function relationOf(e: Entreprise): string {
+  if (e.mandatsActifs > 0) return 'client';
+  if (e.mandatsHistoriques > 0) return 'dormant';
+  if ((e._count?.clients ?? 0) > 0) return 'prospect';
+  return 'cible';
+}
+function lastContact(iso: string | null): { txt: string; late: boolean } {
+  if (!iso) return { txt: 'jamais', late: false };
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  const late = d > 30;
+  if (d <= 0) return { txt: "aujourd'hui", late: false };
+  if (d === 1) return { txt: 'hier', late: false };
+  if (d < 30) return { txt: `il y a ${d} j`, late };
+  if (d < 60) return { txt: `il y a ${Math.floor(d / 7)} sem.`, late };
+  return { txt: `il y a ${Math.floor(d / 30)} mois`, late: true };
 }
 
-function formatRelativeDate(date: string | null): string {
-  if (!date) return '\u2014';
-  const diff = Date.now() - new Date(date).getTime();
-  const days = Math.floor(diff / 86400000);
-  if (days === 0) return "Aujourd'hui";
-  if (days === 1) return 'Hier';
-  if (days < 7) return `il y a ${days}j`;
-  if (days < 30) return `il y a ${Math.floor(days / 7)} sem`;
-  if (days < 365) return `il y a ${Math.floor(days / 30)} mois`;
-  return `il y a ${Math.floor(days / 365)} an(s)`;
-}
-
-function extractCity(localisation: string | null, adresseComplete: string | null): string {
-  if (localisation) return localisation;
-  if (!adresseComplete) return '\u2014';
-  // Try to extract city from full address (usually last meaningful part before postal code)
-  const parts = adresseComplete.split(',').map((p) => p.trim());
-  if (parts.length >= 2) return parts[parts.length - 1];
-  return adresseComplete;
-}
-
-function formatTaille(taille: string | null, effectif: string | null): string {
-  if (effectif) return effectif;
-  if (taille && TAILLE_LABELS[taille]) return TAILLE_LABELS[taille];
-  return '\u2014';
-}
-
-// ── Company logo ────────────────────────────────────────────────
-function CompanyLogo({ url, name, size = 32 }: { url?: string | null; name: string; size?: number }) {
-  const [imgError, setImgError] = useState(false);
-  if (url && !imgError) {
-    return (
-      <img
-        src={url}
-        alt={name}
-        className="rounded-md object-contain bg-neutral-50 border border-neutral-100"
-        style={{ width: size, height: size }}
-        onError={() => setImgError(true)}
-      />
-    );
-  }
+// ─── CHIP DROPDOWN ──────────────────────────────────
+function ChipDropdown({ label, options, value, open, onToggle, onChange }: {
+  label: string; options: { value: string; label: string }[]; value: string[] | undefined;
+  open: boolean; onToggle: () => void; onChange: (v: string[]) => void;
+}) {
+  const sel = value ?? [];
   return (
-    <div
-      className="rounded-md bg-neutral-100 flex items-center justify-center text-neutral-500 font-semibold"
-      style={{ width: size, height: size, fontSize: size * 0.4 }}
-    >
-      {name.charAt(0).toUpperCase()}
+    <div style={{ position: 'relative' }}>
+      <button onClick={onToggle} className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: sel.length ? '#22177A' : '#4A4568', background: sel.length ? '#F2F3D8' : '#fff', border: `1px solid ${sel.length ? 'rgba(34,23,122,0.24)' : 'rgba(34,23,122,0.14)'}`, borderRadius: 10, padding: '9px 13px', cursor: 'pointer' }}>
+        {label}{sel.length > 0 && <span style={{ fontWeight: 800, fontSize: 11 }}>{sel.length}</span>}<ChevronDown size={13} color="#8A8699" strokeWidth={2.4} />
+      </button>
+      {open && (
+        <>
+          <div onClick={onToggle} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 41, minWidth: 190, maxHeight: 280, overflowY: 'auto', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 12, boxShadow: '0 20px 44px -20px rgba(34,23,122,0.4)', padding: 6 }}>
+            {options.length === 0 && <div style={{ padding: '8px 10px', fontSize: 12.5, color: '#9A96AE' }}>Aucune option</div>}
+            {options.map(o => {
+              const checked = sel.includes(o.value);
+              return (
+                <button key={o.value} onClick={() => onChange(checked ? sel.filter(x => x !== o.value) : [...sel, o.value])} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 8, border: 'none', background: checked ? '#F2F3D8' : 'transparent', color: '#1A1533', fontSize: 13, fontWeight: checked ? 700 : 500, cursor: 'pointer', textAlign: 'left' }}>
+                  <span style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${checked ? '#22177A' : 'rgba(34,23,122,0.3)'}`, background: checked ? '#22177A' : '#fff', flexShrink: 0 }} />{o.label}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-// ── Animations ──────────────────────────────────────────────────
-const listStagger = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.04 } },
-};
-const listItem = {
-  hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 300, damping: 24 } },
-};
-
-// ── View type ───────────────────────────────────────────────────
-type ViewMode = 'grid' | 'table';
-
-// ── Filter options ──────────────────────────────────────────────
-const PERFORMANCE_OPTIONS = [
-  { value: 'revenue_positive', label: 'Revenue > 0' },
-  { value: 'jamais_travaille', label: 'Jamais travaille' },
-];
-
-const TAILLE_OPTIONS = [
-  { value: 'STARTUP', label: 'Startup' },
-  { value: 'PME', label: 'PME' },
-  { value: 'ETI', label: 'ETI' },
-  { value: 'GRAND_GROUPE', label: 'Grand groupe' },
-];
-
-// ── Selection actions ───────────────────────────────────────────
-const SELECTION_ACTIONS: SelectionAction[] = [
-  { key: 'enrich', label: 'Enrichir Pappers', icon: Sparkles, variant: 'primary' },
-  { key: 'export', label: 'Exporter', icon: Download, variant: 'ghost' },
-];
-
-// ── URL helpers ─────────────────────────────────────────────────
-function parseFiltersFromURL(params: URLSearchParams): Record<string, any> {
-  const result: Record<string, any> = {};
-  const multiKeys = ['performance', 'secteur', 'city'];
-  for (const key of multiKeys) {
-    const val = params.get(key);
-    if (val) result[key] = val.split(',');
-  }
-  const singleKeys = ['taille'];
-  for (const key of singleKeys) {
-    const val = params.get(key);
-    if (val) result[key] = val;
-  }
-  const toggleKeys = ['enriched'];
-  for (const key of toggleKeys) {
-    const val = params.get(key);
-    if (val === 'true') result[key] = true;
-  }
-  return result;
-}
-
-function serializeFiltersToURL(values: Record<string, any>): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const [key, val] of Object.entries(values)) {
-    if (Array.isArray(val) && val.length > 0) result[key] = val.join(',');
-    else if (typeof val === 'boolean' && val) result[key] = 'true';
-    else if (typeof val === 'string' && val) result[key] = val;
-  }
-  return result;
-}
-
-// ── Main page ───────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════
 export default function EntreprisesPage() {
   usePageTitle('Entreprises');
+  const navigate = useNavigate();
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [view, setView] = useState<ViewMode>('table');
-  const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const { prefetchOnHover, cancelPrefetch } = usePrefetch();
-  const queryClient = useQueryClient();
-  const [sortConfig, setSortConfig] = useState<SortConfig | null>({ key: 'revenueCumule', direction: 'desc' });
+  const [debSearch, setDebSearch] = useState('');
+  const [openChip, setOpenChip] = useState<string | null>(null);
+  const [filters, setFilters] = useState<Record<string, string[]>>({});
+  const [relSel, setRelSel] = useState<string[]>([]);
+  const [pappersOnly, setPappersOnly] = useState(false);
 
-  const handleSort = useCallback((key: string) => {
-    setSortConfig((prev) => toggleSort(prev, key));
-  }, []);
+  useEffect(() => { const t = setTimeout(() => { setDebSearch(search); setPage(1); }, 350); return () => clearTimeout(t); }, [search]);
 
-  // ── Filter state ──────────────────────────────────────────────
-  const [filterValues, setFilterValues] = useState<Record<string, any>>(() =>
-    parseFiltersFromURL(searchParams),
-  );
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const serialized = serializeFiltersToURL(filterValues);
-      const newParams = new URLSearchParams();
-      for (const [k, v] of Object.entries(serialized)) newParams.set(k, v);
-      setSearchParams(newParams, { replace: true });
-    }, 300);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [filterValues, setSearchParams]);
-
-  const handleFilterChange = useCallback((key: string, value: any) => {
-    setFilterValues((prev) => ({ ...prev, [key]: value }));
-    setPage(1);
-  }, []);
-
-  const handleFilterReset = useCallback(() => {
-    setFilterValues({});
-    setPage(1);
-  }, []);
-
-  // ── Selection state ───────────────────────────────────────────
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-
-  // ── Data fetching ─────────────────────────────────────────────
   const { data, isLoading } = useQuery({
-    queryKey: ['entreprises', page, search, filterValues, sortConfig],
+    queryKey: ['entreprises', page, debSearch, filters, pappersOnly],
     queryFn: () => {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-      params.set('perPage', '20');
-      if (search) params.set('search', search);
-      if (filterValues.performance?.length) params.set('performance', filterValues.performance.join(','));
-      if (filterValues.secteur?.length) params.set('secteur', filterValues.secteur.join(','));
-      if (filterValues.city?.length) params.set('localisation', filterValues.city.join(','));
-      if (filterValues.taille) params.set('taille', filterValues.taille);
-      if (filterValues.enriched) params.set('enriched', 'true');
-      if (sortConfig) {
-        params.set('sortBy', sortConfig.key);
-        params.set('sortDir', sortConfig.direction);
-      }
-      return api.get<PaginatedResponse>(`/entreprises?${params.toString()}`);
+      const p = new URLSearchParams();
+      p.set('page', String(page)); p.set('perPage', '20');
+      if (debSearch) p.set('search', debSearch);
+      if (filters.secteur?.length) p.set('secteur', filters.secteur.join(','));
+      if (filters.city?.length) p.set('localisation', filters.city.join(','));
+      if (pappersOnly) p.set('enriched', 'true');
+      return api.get<PaginatedResponse>(`/entreprises?${p.toString()}`);
     },
   });
 
   const total = data?.meta?.total ?? 0;
+  const totalPages = data?.meta?.totalPages ?? 1;
+  let rows = data?.data ?? [];
+  if (relSel.length) rows = rows.filter(e => relSel.includes(relationOf(e)));
 
-  // ── Dynamic filter options ────────────────────────────────────
-  const dynamicSecteurOptions = useMemo(() => {
-    if (!data?.data) return [];
-    const sectors = new Set<string>();
-    data.data.forEach((e) => {
-      if (e.secteur) sectors.add(e.secteur);
-      if (e.libelleNAF) sectors.add(e.libelleNAF);
-    });
-    return Array.from(sectors).sort().map((s) => ({ value: s, label: s }));
+  const secteurOptions = useMemo(() => {
+    const s = new Set<string>(); (data?.data ?? []).forEach(e => { if (e.secteur) s.add(e.secteur); });
+    return Array.from(s).sort().map(v => ({ value: v, label: v }));
+  }, [data?.data]);
+  const cityOptions = useMemo(() => {
+    const s = new Set<string>(); (data?.data ?? []).forEach(e => { if (e.localisation) s.add(e.localisation); });
+    return Array.from(s).sort().map(v => ({ value: v, label: v }));
   }, [data?.data]);
 
-  const dynamicCityOptions = useMemo(() => {
-    if (!data?.data) return [];
-    const cities = new Set<string>();
-    data.data.forEach((e) => {
-      const city = extractCity(e.localisation, e.adresseComplete);
-      if (city && city !== '\u2014') cities.add(city);
-    });
-    return Array.from(cities).sort().map((city) => ({ value: city, label: city }));
-  }, [data?.data]);
+  const setFilter = (key: string, v: string[]) => { setFilters(prev => { const n = { ...prev }; if (!v.length) delete n[key]; else n[key] = v; return n; }); setPage(1); };
 
-  const filterConfigs: FilterConfig[] = useMemo(() => [
-    { key: 'performance', label: 'Performance', type: 'multi-select', options: PERFORMANCE_OPTIONS },
-    { key: 'secteur', label: 'Secteur', type: 'multi-select', options: dynamicSecteurOptions },
-    { key: 'city', label: 'Ville', type: 'multi-select', options: dynamicCityOptions },
-    { key: 'taille', label: 'Taille', type: 'single-select', options: TAILLE_OPTIONS },
-    { key: 'enriched', label: 'Pappers', type: 'toggle' },
-  ], [dynamicSecteurOptions, dynamicCityOptions]);
-
-  // ── Data (server-side sorting) ──
-  const allEntreprises = data?.data ?? [];
-  const sortedEntreprises = allEntreprises; // sorting is server-side
-
-  const allSelected = sortedEntreprises.length > 0 && sortedEntreprises.every((e) => selectedIds.has(e.id));
-
-  const toggleSelectAll = useCallback(() => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(sortedEntreprises.map((e) => e.id)));
-    }
-  }, [allSelected, sortedEntreprises]);
-
-  const [enriching, setEnriching] = useState(false);
-
-  const handleSelectionAction = useCallback(async (key: string) => {
-    const ids = Array.from(selectedIds);
-    const selected = allEntreprises.filter((e) => ids.includes(e.id));
-
-    switch (key) {
-      case 'enrich': {
-        if (enriching) return;
-        setEnriching(true);
-        toast('success', `Enrichissement de ${ids.length} entreprise(s) en cours...`);
-        try {
-          const result = await api.post<{ enriched: number; failed: number }>('/entreprises/bulk-enrich', { ids });
-          toast('success', `${result.enriched} entreprise(s) enrichie(s) via Pappers`);
-          if (result.failed > 0) {
-            toast('error', `${result.failed} échec(s) d'enrichissement`);
-          }
-          queryClient.invalidateQueries({ queryKey: ['entreprises'] });
-          setSelectedIds(new Set());
-        } catch (err: any) {
-          toast('error', err.message || 'Erreur lors de l\'enrichissement');
-        } finally {
-          setEnriching(false);
-        }
-        break;
-      }
-      case 'export': {
-        const headers = ['Nom', 'Secteur', 'Localisation', 'Taille', 'Contacts', 'Mandats actifs', 'Mandats historiques', 'Revenue', 'Placements', 'Dernier mandat'];
-        const rows = selected.map((e) => [
-          e.nom,
-          e.secteur || e.libelleNAF || '',
-          extractCity(e.localisation, e.adresseComplete),
-          formatTaille(e.taille, e.effectif),
-          String(e._count?.clients || 0),
-          String(e.mandatsActifs),
-          String(e.mandatsHistoriques),
-          e.revenueCumule ? String(e.revenueCumule) : '0',
-          String(e.placements),
-          e.dernierMandat ? new Date(e.dernierMandat).toLocaleDateString('fr-FR') : '',
-        ]);
-        const csvContent = [headers, ...rows].map((r) => r.map((v) => `"${v.replace(/"/g, '""')}"`).join(',')).join('\n');
-        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `entreprises-export-${new Date().toISOString().slice(0, 10)}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast('success', `${selected.length} entreprise(s) exportee(s)`);
-        break;
-      }
-      default:
-        break;
-    }
-  }, [selectedIds, allEntreprises]);
-
-  // ── Table columns (12 columns) ────────────────────────────────
-  const columns = [
-    // 1. Checkbox
-    {
-      key: 'checkbox',
-      header: (
-        <input
-          type="checkbox"
-          checked={allSelected}
-          onChange={toggleSelectAll}
-          className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer"
-        />
-      ) as unknown as string,
-      render: (r: Entreprise) => (
-        <input
-          type="checkbox"
-          checked={selectedIds.has(r.id)}
-          onChange={(e) => { e.stopPropagation(); toggleSelect(r.id); }}
-          onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer"
-        />
-      ),
-      className: 'w-10',
-    },
-    // 2. Entreprise (logo + nom + pappers badge)
-    {
-      key: 'nom',
-      header: (<SortableHeader label="Entreprise" sortKey="nom" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Entreprise) => (
-        <div className="flex items-center gap-3 min-w-[200px]">
-          <CompanyLogo url={r.logoUrl} name={r.nom} size={32} />
-          <div className="min-w-0">
-            <div className="flex items-center gap-1">
-              <span className="font-medium truncate">{r.nom}</span>
-              {r.pappersEnriched && (
-                <span className="ml-1.5 inline-flex items-center gap-0.5 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 border border-emerald-100 flex-shrink-0">
-                  &#10003; Pappers
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      ),
-      className: 'min-w-[200px]',
-    },
-    // 3. Secteur
-    {
-      key: 'secteur',
-      header: 'Secteur',
-      render: (r: Entreprise) => {
-        const label = r.secteur || r.libelleNAF;
-        return label ? <Badge>{label}</Badge> : <span className="text-neutral-300">{'\u2014'}</span>;
-      },
-      className: 'w-32',
-    },
-    // 4. Ville
-    {
-      key: 'ville',
-      header: 'Ville',
-      render: (r: Entreprise) => {
-        const city = extractCity(r.localisation, r.adresseComplete);
-        return <span className="text-text-secondary text-sm">{city}</span>;
-      },
-      className: 'w-28',
-    },
-    // 5. Taille
-    {
-      key: 'taille',
-      header: 'Taille',
-      render: (r: Entreprise) => {
-        const label = formatTaille(r.taille, r.effectif);
-        return <span className="text-text-secondary text-sm">{label}</span>;
-      },
-      className: 'w-24',
-    },
-    // 6. Contacts
-    {
-      key: 'contacts',
-      header: 'Contacts',
-      render: (r: Entreprise) => (
-        <span className="text-sm tabular-nums">{r._count?.clients || 0}</span>
-      ),
-      className: 'w-20',
-    },
-    // 7. Mandats actifs
-    {
-      key: 'mandatsActifs',
-      header: (<SortableHeader label="Actifs" sortKey="mandatsActifs" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Entreprise) => (
-        <span className={`text-sm tabular-nums ${r.mandatsActifs > 0 ? 'font-semibold text-violet-600' : ''}`}>
-          {r.mandatsActifs}
-        </span>
-      ),
-      className: 'w-20',
-    },
-    // 8. Mandats historiques
-    {
-      key: 'mandatsHistoriques',
-      header: (<SortableHeader label="Historique" sortKey="mandatsHistoriques" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Entreprise) => (
-        <span className="text-sm tabular-nums">{r.mandatsHistoriques}</span>
-      ),
-      className: 'w-20',
-    },
-    // 9. Revenue
-    {
-      key: 'revenueCumule',
-      header: (<SortableHeader label="Revenue" sortKey="revenueCumule" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Entreprise) => (
-        <span className={`text-sm tabular-nums ${r.revenueCumule > 0 ? 'font-semibold text-emerald-600' : 'text-neutral-400'}`}>
-          {formatRevenue(r.revenueCumule)}
-        </span>
-      ),
-      className: 'w-28',
-    },
-    // 10. Placements
-    {
-      key: 'placements',
-      header: (<SortableHeader label="Placements" sortKey="placements" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Entreprise) => (
-        <span className={`text-sm tabular-nums ${r.placements > 0 ? 'font-semibold' : ''}`}>
-          {r.placements}
-        </span>
-      ),
-      className: 'w-20',
-    },
-    // 11. Dernier mandat
-    {
-      key: 'dernierMandat',
-      header: (<SortableHeader label="Dernier" sortKey="dernierMandat" sortConfig={sortConfig} onSort={handleSort} />) as unknown as string,
-      render: (r: Entreprise) => (
-        <span className="text-sm text-neutral-500">{formatRelativeDate(r.dernierMandat)}</span>
-      ),
-      className: 'w-28',
-    },
-    // 12. Actions
-    {
-      key: 'actions',
-      header: '',
-      render: (r: Entreprise) => (
-        <div className="flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={(e) => { e.stopPropagation(); navigate(`/entreprises/${r.id}`); }}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
-            title="Plus d'options"
-          >
-            <MoreHorizontal size={14} />
-          </button>
-        </div>
-      ),
-      className: 'w-10',
-    },
-  ];
-
-  // ── Grid card (secondary view) ────────────────────────────────
-  function EntrepriseCard({ entreprise }: { entreprise: Entreprise }) {
-    const isSelected = selectedIds.has(entreprise.id);
-    return (
-      <div
-        onClick={() => navigate(`/entreprises/${entreprise.id}`)}
-        onMouseEnter={() => prefetchOnHover(['entreprise', entreprise.id], `/entreprises/${entreprise.id}`)}
-        onMouseLeave={cancelPrefetch}
-        className={`group relative cursor-pointer rounded-xl border bg-white overflow-hidden transition-all duration-200 hover:shadow-md hover:border-[#22177A]/30 ${
-          isSelected ? 'border-[#22177A] ring-2 ring-[#22177A]/20 shadow-md' : 'border-neutral-100 shadow-sm'
-        }`}
-      >
-        <div className="flex items-center gap-4 px-4 py-3">
-          {/* Checkbox */}
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={(e) => { e.stopPropagation(); toggleSelect(entreprise.id); }}
-            onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded border-neutral-300 text-[#22177A] focus:ring-[#22177A]/30 cursor-pointer flex-shrink-0"
-          />
-
-          {/* Logo */}
-          <CompanyLogo url={entreprise.logoUrl} name={entreprise.nom} size={36} />
-
-          {/* Name + Secteur */}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <p className="truncate text-[14px] font-semibold text-neutral-900">{entreprise.nom}</p>
-              {entreprise.pappersEnriched && (
-                <span className="inline-flex items-center gap-0.5 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 border border-emerald-100 flex-shrink-0">
-                  &#10003; Pappers
-                </span>
-              )}
-            </div>
-            {(entreprise.secteur || entreprise.libelleNAF) && (
-              <p className="mt-0.5 truncate text-[12px] text-neutral-500">{entreprise.secteur || entreprise.libelleNAF}</p>
-            )}
-          </div>
-
-          {/* Stats columns (desktop) */}
-          <div className="hidden lg:flex items-center gap-5 flex-shrink-0">
-            {/* Ville */}
-            <div className="w-[100px]">
-              {(entreprise.localisation || entreprise.adresseComplete) ? (
-                <div className="flex items-center gap-1.5 text-[12px] text-neutral-600">
-                  <MapPin size={12} className="flex-shrink-0 text-neutral-400" />
-                  <span className="truncate">{extractCity(entreprise.localisation, entreprise.adresseComplete)}</span>
-                </div>
-              ) : (
-                <span className="text-[12px] text-neutral-300">{'\u2014'}</span>
-              )}
-            </div>
-
-            {/* Contacts */}
-            <div className="w-[60px] text-center">
-              <div className="flex items-center gap-1 text-[12px] text-neutral-600">
-                <Users size={12} className="text-neutral-400" />
-                <span>{entreprise._count?.clients || 0}</span>
-              </div>
-            </div>
-
-            {/* Mandats actifs */}
-            <div className="w-[50px] text-center">
-              {entreprise.mandatsActifs > 0 ? (
-                <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-600 border border-violet-100">
-                  {entreprise.mandatsActifs}
-                </span>
-              ) : (
-                <span className="text-[12px] text-neutral-300">0</span>
-              )}
-            </div>
-
-            {/* Revenue */}
-            <div className="w-[90px] text-right">
-              <span className={`text-[12px] tabular-nums ${entreprise.revenueCumule > 0 ? 'font-semibold text-emerald-600' : 'text-neutral-300'}`}>
-                {formatRevenue(entreprise.revenueCumule)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile info row */}
-        <div className="lg:hidden px-4 pb-3 flex flex-wrap gap-2">
-          {(entreprise.localisation || entreprise.adresseComplete) && (
-            <div className="inline-flex items-center gap-1 text-[11px] text-neutral-500">
-              <MapPin size={10} className="text-neutral-400" />
-              {extractCity(entreprise.localisation, entreprise.adresseComplete)}
-            </div>
-          )}
-          <div className="inline-flex items-center gap-1 text-[11px] text-neutral-500">
-            <Users size={10} className="text-neutral-400" />
-            {entreprise._count?.clients || 0} contact(s)
-          </div>
-          {entreprise.mandatsActifs > 0 && (
-            <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-600">
-              {entreprise.mandatsActifs} actif(s)
-            </span>
-          )}
-          {entreprise.revenueCumule > 0 && (
-            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600">
-              {formatRevenue(entreprise.revenueCumule)}
-            </span>
-          )}
-        </div>
-      </div>
-    );
-  }
+  const activeChips: { label: string; onRemove: () => void; key: string }[] = [];
+  for (const [k, arr] of Object.entries(filters)) arr.forEach(v => {
+    const opt = (k === 'secteur' ? secteurOptions : cityOptions).find(o => o.value === v);
+    activeChips.push({ key: k + v, label: opt?.label ?? v, onRemove: () => setFilter(k, (filters[k] ?? []).filter(x => x !== v)) });
+  });
+  relSel.forEach(v => activeChips.push({ key: 'rel' + v, label: REL_META[v]?.label ?? v, onRemove: () => setRelSel(s => s.filter(x => x !== v)) }));
+  if (pappersOnly) activeChips.push({ key: 'pappers', label: 'Pappers', onRemove: () => setPappersOnly(false) });
 
   return (
     <div>
-      {/* Header mock-fidelity */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 38, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1 }}>
-            Entreprises
-          </h1>
-          {!isLoading && (
-            <span
-              style={{
-                background: '#fff', border: '1px solid rgba(34,23,122,0.12)',
-                borderRadius: 999, padding: '5px 13px', fontSize: 12.5, fontWeight: 700, color: '#22177A',
-              }}
-            >
-              {total} entreprise{total > 1 ? 's' : ''}
-            </span>
-          )}
+      <style>{`
+        .crow{ position:relative; transition:background .16s ease, padding-left .2s cubic-bezier(.16,1,.3,1); }
+        .crow::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:#22177A; transform:scaleY(0); transition:transform .22s cubic-bezier(.16,1,.3,1); }
+        .crow:hover{ background:#FBFBF3; padding-left:26px; }
+        .crow:hover::before{ transform:scaleY(1); }
+        .chip:hover{ border-color:rgba(34,23,122,0.3) !important; transform:translateY(-1px); }
+        .chip{ transition:border-color .16s ease, transform .15s ease; }
+        .kw:hover{ background:#E6E9AF !important; }
+      `}</style>
+
+      {/* HEADER */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>CRM</div>
+          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Entreprises</h1>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div
-            style={{
-              display: 'flex', alignItems: 'center', borderRadius: 10,
-              border: '1px solid rgba(34,23,122,0.14)', background: '#F7F7EF', padding: 3,
-            }}
-          >
-            <button
-              onClick={() => setView('grid')}
-              style={{
-                borderRadius: 7, padding: '6px 8px',
-                background: view === 'grid' ? '#fff' : 'transparent',
-                boxShadow: view === 'grid' ? '0 1px 2px rgba(34,23,122,0.08)' : 'none',
-                color: view === 'grid' ? '#22177A' : '#8A8699', border: 'none', cursor: 'pointer',
-              }}
-              title="Vue grille"
-            >
-              <LayoutGrid size={16} />
-            </button>
-            <button
-              onClick={() => setView('table')}
-              style={{
-                borderRadius: 7, padding: '6px 8px',
-                background: view === 'table' ? '#fff' : 'transparent',
-                boxShadow: view === 'table' ? '0 1px 2px rgba(34,23,122,0.08)' : 'none',
-                color: view === 'table' ? '#22177A' : '#8A8699', border: 'none', cursor: 'pointer',
-              }}
-              title="Vue tableau"
-            >
-              <List size={16} />
-            </button>
-          </div>
-          <button
-            onClick={() => navigate('/entreprises/new')}
-            className="btn-primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer', border: 'none' }}
-          >
-            <Plus size={15} /> Ajouter
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{total.toLocaleString('fr-FR')} entreprises</span>
+          <button onClick={() => navigate('/entreprises/new')} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />Ajouter</button>
         </div>
       </div>
 
-      {/* Search + Filters (compact row) */}
-      <div className="mb-3 flex items-start gap-3">
-        <div className="relative shrink-0" style={{ width: 240 }}>
-          <Search
-            size={14}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary"
-          />
-          <input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Rechercher une entreprise..."
-            className="h-8 w-full rounded-md border border-neutral-200 bg-white pl-8 pr-3 text-xs outline-none transition-all focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-          />
+      {/* FILTERS */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', marginTop: 22 }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 220, maxWidth: 340 }}>
+          <Search size={15} color="#9A96AE" strokeWidth={2.2} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)' }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une entreprise…" style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 36px', borderRadius: 11, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', outline: 'none' }} />
         </div>
-        <div className="flex-1 min-w-0">
-          <FilterBar
-            filters={filterConfigs}
-            values={filterValues}
-            onChange={handleFilterChange}
-            onReset={handleFilterReset}
-            resultCount={data?.data?.length ?? 0}
-            totalCount={data?.meta?.total ?? 0}
-          />
-        </div>
+        <ChipDropdown label="Relation" options={REL_OPTIONS} value={relSel} open={openChip === 'rel'} onToggle={() => setOpenChip(openChip === 'rel' ? null : 'rel')} onChange={setRelSel} />
+        <ChipDropdown label="Secteur" options={secteurOptions} value={filters.secteur} open={openChip === 'secteur'} onToggle={() => setOpenChip(openChip === 'secteur' ? null : 'secteur')} onChange={v => setFilter('secteur', v)} />
+        <ChipDropdown label="Ville" options={cityOptions} value={filters.city} open={openChip === 'city'} onToggle={() => setOpenChip(openChip === 'city' ? null : 'city')} onChange={v => setFilter('city', v)} />
+        <button onClick={() => { setPappersOnly(p => !p); setPage(1); }} className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: '#22177A', background: pappersOnly ? '#F0EFC4' : '#fff', border: `1px solid ${pappersOnly ? 'transparent' : 'rgba(34,23,122,0.14)'}`, borderRadius: 10, padding: '9px 13px', cursor: 'pointer' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22177A' }} />Pappers</button>
       </div>
 
-      {/* Content */}
-      {isLoading ? (
-        view === 'grid' ? (
-          <div className="grid grid-cols-1 gap-2">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 w-full rounded-xl" />
-            ))}
-          </div>
-        ) : (
-          <Skeleton className="h-12 w-full" count={5} />
-        )
-      ) : !sortedEntreprises.length ? (
-        <EmptyState
-          title="Aucune entreprise"
-          description="Centralisez les informations de vos entreprises clientes et prospects en ajoutant votre premiere entreprise."
-          actionLabel="Ajouter une entreprise"
-          onAction={() => navigate('/entreprises/new')}
-          icon={<Building2 size={48} strokeWidth={1} />}
-        />
-      ) : (
-        <>
-          {view === 'grid' ? (
-            <motion.div className="grid grid-cols-1 gap-2" variants={listStagger} initial="hidden" animate="show">
-              {sortedEntreprises.map((e) => (
-                <motion.div key={e.id} variants={listItem}>
-                  <EntrepriseCard entreprise={e} />
-                </motion.div>
-              ))}
-            </motion.div>
-          ) : (
-            <Table
-              columns={columns}
-              data={sortedEntreprises}
-              keyExtractor={(r) => r.id}
-              onRowClick={(r) => navigate(`/entreprises/${r.id}`)}
-              onRowMouseEnter={(r) => prefetchOnHover(['entreprise', r.id], `/entreprises/${r.id}`)}
-              onRowMouseLeave={cancelPrefetch}
-              rowClassName={(r: Entreprise) => {
-                if (r.revenueCumule > 20000) return 'bg-emerald-50/40';
-                if (r.revenueCumule === 0 && r.mandatsHistoriques === 0) return 'text-neutral-400';
-                return '';
-              }}
-            />
-          )}
-          {data?.meta && (
-            <div className="mt-6 flex justify-center">
-              <Pagination
-                page={data.meta.page}
-                totalPages={data.meta.totalPages}
-                onPageChange={setPage}
-              />
+      {/* ACTIVE CHIPS */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 11 }}>
+        <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>Filtres</span>
+        {activeChips.length === 0 && <span style={{ fontSize: 12, color: '#C4C1D0' }}>aucun</span>}
+        {activeChips.map(ch => <span key={ch.key} className="kw" onClick={ch.onRemove} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 999, padding: '5px 11px', cursor: 'pointer' }}>{ch.label}<X size={11} strokeWidth={2.8} /></span>)}
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#8A8699' }}>{rows.length} affichés · {total.toLocaleString('fr-FR')} au total</span>
+      </div>
+
+      {/* TABLE */}
+      <div style={{ marginTop: 18, background: '#fff', border: '1px solid rgba(34,23,122,0.08)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 2px rgba(34,23,122,0.04)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 14, padding: '14px 22px', background: '#F7F7EE', borderBottom: '1px solid rgba(34,23,122,0.08)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#8A8699' }}>
+          <span>Entreprise</span><span>Secteur</span><span>Ville</span><span>Contacts</span><span style={{ textAlign: 'center' }}>Mandats</span><span>Relation</span><span style={{ textAlign: 'right' }}>Dernier contact</span>
+        </div>
+        {isLoading ? (
+          Array.from({ length: 8 }).map((_, i) => <div key={i} style={{ height: 65, borderBottom: '1px solid rgba(34,23,122,0.05)', background: i % 2 ? '#fff' : '#FCFCF5' }} />)
+        ) : rows.length === 0 ? (
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: '#8A8699' }}>Aucune entreprise ne correspond aux filtres.</div>
+        ) : rows.map(e => {
+          const rel = REL_META[relationOf(e)];
+          const contacts = e._count?.clients ?? 0;
+          const mandats = e._count?.mandats ?? 0;
+          const stale = e.mandatsActifs === 0 && e.mandatsHistoriques > 0;
+          const last = lastContact(e.dernierMandat);
+          return (
+            <div key={e.id} className="crow" onClick={() => navigate(`/entreprises/${e.id}`)} style={{ cursor: 'pointer', display: 'grid', gridTemplateColumns: GRID, gap: 14, alignItems: 'center', padding: '14px 22px', borderBottom: '1px solid rgba(34,23,122,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+                {e.logoUrl
+                  ? <span style={{ flexShrink: 0, width: 36, height: 28, borderRadius: 8, background: '#fff', border: '1px solid rgba(34,23,122,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: 3 }}><img src={e.logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} /></span>
+                  : <span style={{ flexShrink: 0, width: 36, height: 28, borderRadius: 8, background: '#F2F3D8', border: '1px solid rgba(34,23,122,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 11, color: '#22177A' }}>{mono(e.nom)}</span>}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.nom}</div>
+                  <div style={{ fontSize: 11.5, color: '#8A8699', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.effectif || e.taille || '—'}</div>
+                </div>
+              </div>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#4A4568', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.secteur || '—'}</span>
+              <span style={{ fontSize: 13, color: '#8A8699', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.localisation || '—'}</span>
+              <span>
+                {contacts > 0
+                  ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#22177A', background: 'rgba(34,23,122,.06)', borderRadius: 999, padding: '4px 11px' }}><Users size={12} />{contacts}</span>
+                  : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: '#8A8699', border: '1px dashed rgba(34,23,122,.22)', borderRadius: 999, padding: '4px 10px' }}><Plus size={11} strokeWidth={2.6} />Ajouter</span>}
+              </span>
+              <span style={{ textAlign: 'center' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}><span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 14, color: mandats > 0 ? '#1A1533' : '#C4C1D0' }}>{mandats}</span>{stale && <span title="Mandat dormant" style={{ width: 7, height: 7, borderRadius: '50%', background: '#B3261E' }} />}</span></span>
+              <span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, borderRadius: 999, padding: '4px 11px', background: rel.bg, color: rel.fg, whiteSpace: 'nowrap' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: rel.dot }} />{rel.label}</span></span>
+              <span style={{ textAlign: 'right', fontSize: 12.5, color: last.late ? '#B3261E' : '#8A8699', whiteSpace: 'nowrap' }}>{last.txt}</span>
             </div>
-          )}
-        </>
-      )}
-
-      {/* Selection bar */}
-      <SelectionBar
-        count={selectedIds.size}
-        entityLabel="entreprises"
-        actions={SELECTION_ACTIONS}
-        onAction={handleSelectionAction}
-        onCancel={() => setSelectedIds(new Set())}
-      />
+          );
+        })}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 22px', fontSize: 13, color: '#8A8699' }}>
+            <span>Page {page} / {totalPages} · {total.toLocaleString('fr-FR')} entreprises</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', color: page <= 1 ? '#C4C1D0' : '#22177A', cursor: page <= 1 ? 'default' : 'pointer' }}>‹</button>
+              <span style={{ minWidth: 32, height: 32, borderRadius: 9, background: '#22177A', color: '#E6E9AF', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{page}</span>
+              <button disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', color: page >= totalPages ? '#C4C1D0' : '#22177A', cursor: page >= totalPages ? 'default' : 'pointer' }}>›</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
