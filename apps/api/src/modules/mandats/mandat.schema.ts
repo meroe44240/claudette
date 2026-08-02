@@ -43,6 +43,7 @@ export const updateMandatSchema = z.object({
   salaryRange: z.string().nullable().optional(),
   pitchPoints: z.any().optional(),
   typeContrat: z.string().nullable().optional(),
+  etapeCycle: z.string().max(60).nullable().optional(),
 });
 
 export const updateFeeSchema = z.object({

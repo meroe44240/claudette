@@ -255,6 +255,8 @@ model Mandat {
   feeStatut        FeeStatut    @default(NON_FACTURE)
   statut           StatutMandat @default(OUVERT)
   priorite         Priorite     @default(NORMALE)
+  // Étape du board cycle-de-vie (Prospection, 1er rendez-vous, Signature du mandat, Sourcing, Placé, Perdu)
+  etapeCycle       String?      @db.VarChar(60)
   dateOuverture    DateTime     @default(now()) @db.Date
   dateCloture      DateTime?    @db.Date
   notes            String?      @db.Text
