@@ -1,105 +1,49 @@
 /**
- * Portail client — kanban en lecture d'un mandat.
- *
- * URL : /portail/mandat/:mandatId
- * Session portail dans sessionStorage (token expire 4h).
- * Drawer profil au click sur une carte. Actions : rencontrer / à discuter
- * / écarter (avec raison). Commentaire textuel.
+ * Portail client — vue « Suivi Client » d'un mandat (design pack).
+ * URL : /portail/mandat/:mandatId — session portail (sessionStorage, 4h).
  */
 
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { AnimatePresence, motion } from 'framer-motion';
-import { LogOut, MessageSquare, X, CheckCircle2, HelpCircle, XCircle } from 'lucide-react';
+import { LogOut, X, Check, MessageSquare, Users } from 'lucide-react';
 
-// ── Types ────────────────────────────────────────────
-
-type Stage =
-  | 'SOURCING'
-  | 'CONTACTE'
-  | 'ENTRETIEN_1'
-  | 'ENVOYE_CLIENT'
-  | 'ENTRETIEN_CLIENT'
-  | 'OFFRE'
-  | 'PLACE'
-  | 'REFUSE';
-
+type Stage = 'SOURCING' | 'CONTACTE' | 'ENTRETIEN_1' | 'ENVOYE_CLIENT' | 'ENTRETIEN_CLIENT' | 'OFFRE' | 'PLACE' | 'REFUSE';
 type Decision = 'RENCONTRER' | 'A_DISCUTER' | 'ECARTER';
 
 interface Candidature {
-  id: string;
-  stage: Stage;
-  dateEntretienClient: string | null;
-  candidat: {
-    id: string;
-    nom: string;
-    prenom: string | null;
-    posteActuel: string | null;
-    entrepriseActuelle: string | null;
-    aiPitchShort: string | null;
-    aiAnonymizedProfile: any;
-  };
+  id: string; stage: Stage; dateEntretienClient: string | null;
+  candidat: { id: string; nom: string; prenom: string | null; posteActuel: string | null; entrepriseActuelle: string | null; aiPitchShort: string | null; aiAnonymizedProfile: any };
   portalDecisions: Array<{ decision: Decision; createdAt: string }>;
 }
-
 interface KanbanResponse {
-  mandat: {
-    id: string;
-    titrePoste: string;
-    visibleStages: Stage[];
-    entreprise: { nom: string };
-    client: { nom: string; prenom: string | null };
-  };
+  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string }; client: { nom: string; prenom: string | null } };
   stages: Stage[];
   byStage: Record<Stage, Candidature[]>;
 }
 
 const STAGE_LABELS: Record<Stage, string> = {
-  SOURCING: 'Sourcing',
-  CONTACTE: 'Contactés',
-  ENTRETIEN_1: 'Entretien recruteur',
-  ENVOYE_CLIENT: 'Nouveaux profils',
-  ENTRETIEN_CLIENT: 'Entretien avec vous',
-  OFFRE: 'Offre',
-  PLACE: 'Placé',
-  REFUSE: 'Refusé',
+  SOURCING: 'Sourcing', CONTACTE: 'Contactés', ENTRETIEN_1: 'Entretien recruteur', ENVOYE_CLIENT: 'Nouveaux profils',
+  ENTRETIEN_CLIENT: 'Entretien avec vous', OFFRE: 'Offre', PLACE: 'Placé', REFUSE: 'Écartés',
 };
-const STAGE_COLORS: Record<Stage, string> = {
-  SOURCING: '#8e7cc3',
-  CONTACTE: '#4b3fb0',
-  ENTRETIEN_1: '#22177A',
-  ENVOYE_CLIENT: '#E6E9AF',
-  ENTRETIEN_CLIENT: '#22177A',
-  OFFRE: '#2a6bd8',
-  PLACE: '#3b9a54',
-  REFUSE: '#b0361f',
+const STAGE_ACCENT: Record<Stage, string> = {
+  SOURCING: '#8E7CC3', CONTACTE: '#8E7CC3', ENTRETIEN_1: '#22177A', ENVOYE_CLIENT: '#2A6BD8',
+  ENTRETIEN_CLIENT: '#E08A2B', OFFRE: '#C9A227', PLACE: '#3B9A54', REFUSE: '#B3261E',
 };
-const DECISION_LABEL: Record<Decision, string> = {
-  RENCONTRER: 'À rencontrer',
-  A_DISCUTER: 'À discuter',
-  ECARTER: 'Écarté',
+const STAGE_BG: Record<Stage, string> = {
+  SOURCING: '#F6F4FB', CONTACTE: '#F6F4FB', ENTRETIEN_1: 'rgba(34,23,122,.05)', ENVOYE_CLIENT: '#F2F3D8',
+  ENTRETIEN_CLIENT: '#FBF7F0', OFFRE: '#FBFAEC', PLACE: '#EFF6F0', REFUSE: '#FBF1EF',
 };
+const DECISION_LABEL: Record<Decision, string> = { RENCONTRER: 'À rencontrer', A_DISCUTER: 'À discuter', ECARTER: 'Écarté' };
 const DECISION_TONE: Record<Decision, { bg: string; fg: string }> = {
-  RENCONTRER: { bg: '#eaf3ec', fg: '#3b9a54' },
-  A_DISCUTER: { bg: '#fbf3e7', fg: '#b47814' },
-  ECARTER: { bg: '#f9ece9', fg: '#b0361f' },
+  RENCONTRER: { bg: '#EAF3EC', fg: '#2C6B3F' }, A_DISCUTER: { bg: '#FBF3E7', fg: '#8A6A2E' }, ECARTER: { bg: '#F9ECE9', fg: '#B0361F' },
 };
-
-// ── API helpers ──────────────────────────────────────
 
 function portalFetch(path: string, init?: RequestInit) {
   const token = sessionStorage.getItem('portal_token');
-  return fetch(`/api/v1/portal${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init?.headers as Record<string, string> | undefined),
-    },
-  });
+  return fetch(`/api/v1/portal${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers as Record<string, string> | undefined) } });
 }
-
-// ── Page ─────────────────────────────────────────────
+function fullName(c: Candidature) { return `${c.candidat.prenom || ''} ${c.candidat.nom}`.trim() || '(profil)'; }
+function initials(c: Candidature) { return `${(c.candidat.prenom?.[0] ?? '')}${c.candidat.nom?.[0] ?? ''}`.toUpperCase() || '?'; }
 
 export default function PortalMandatPage() {
   const { mandatId } = useParams<{ mandatId: string }>();
@@ -110,10 +54,7 @@ export default function PortalMandatPage() {
 
   useEffect(() => {
     const token = sessionStorage.getItem('portal_token');
-    if (!token) {
-      navigate(`/portail/login?m=${mandatId ?? ''}`);
-      return;
-    }
+    if (!token) { navigate(`/portail/login?m=${mandatId ?? ''}`); return; }
     document.title = 'Portail client — HumanUp';
     void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -123,108 +64,72 @@ export default function PortalMandatPage() {
     setLoading(true);
     try {
       const res = await portalFetch('/kanban');
-      if (res.status === 401) {
-        sessionStorage.clear();
-        navigate(`/portail/login?m=${mandatId ?? ''}`);
-        return;
-      }
-      const body = (await res.json()) as KanbanResponse;
-      setData(body);
-    } finally {
-      setLoading(false);
-    }
+      if (res.status === 401) { sessionStorage.clear(); navigate(`/portail/login?m=${mandatId ?? ''}`); return; }
+      setData((await res.json()) as KanbanResponse);
+    } finally { setLoading(false); }
   }
+  function handleLogout() { sessionStorage.clear(); navigate(`/portail/login?m=${mandatId ?? ''}`); }
 
-  function handleLogout() {
-    sessionStorage.clear();
-    navigate(`/portail/login?m=${mandatId ?? ''}`);
-  }
+  if (loading || !data) return <div style={{ background: '#F4F4EA', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9A96AE', fontFamily: "'Manrope',sans-serif" }}>Chargement…</div>;
 
-  if (loading || !data) {
-    return (
-      <div style={{ background: '#FCFCF5', minHeight: '100vh' }} className="flex items-center justify-center">
-        <p className="text-neutral-400">Chargement…</p>
-      </div>
-    );
-  }
+  const rep = `${data.mandat.client.prenom ? data.mandat.client.prenom + ' ' : ''}${data.mandat.client.nom}`.trim();
 
   return (
-    <div style={{ background: '#FCFCF5', minHeight: '100vh' }} className="flex flex-col">
-      {/* Top bar */}
-      <header
-        className="flex items-center justify-between border-b border-neutral-100 px-6 py-3"
-        style={{ background: 'white' }}
-      >
-        <div className="flex items-center gap-3">
-          <img src="/brand/logo-mark-navy.png" alt="HumanUp" className="h-8 w-auto" />
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-500">Portail client</p>
-            <p style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em', color: '#1A1533' }} className="text-lg leading-tight">
-              {data.mandat.entreprise.nom} · {data.mandat.titrePoste}
-            </p>
-          </div>
+    <div style={{ background: '#F4F4EA', minHeight: '100vh', fontFamily: "'Manrope',sans-serif", display: 'flex', flexDirection: 'column' }}>
+      <style>{`
+        .pm-card{ transition:transform .18s cubic-bezier(.16,1,.3,1), box-shadow .2s ease, border-color .18s ease; }
+        .pm-card:hover{ transform:translateY(-2px); box-shadow:0 16px 30px -20px rgba(34,23,122,.4); border-color:rgba(34,23,122,.2) !important; }
+        .pm-dec:hover{ transform:translateY(-1px); }
+        .pm-dec{ transition:transform .15s ease; }
+      `}</style>
+
+      {/* TOP BAR */}
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 28px', background: '#22177A' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+          <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 18, letterSpacing: '.01em', color: '#E6E9AF' }}>HUMANUP</span>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: 'rgba(230,233,175,.55)' }}>Portail client</span>
         </div>
-        <button
-          onClick={handleLogout}
-          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-neutral-500 hover:bg-neutral-100"
-        >
-          <LogOut size={14} /> Déconnexion
-        </button>
+        <button onClick={handleLogout} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600, color: 'rgba(230,233,175,.85)', background: 'rgba(230,233,175,.12)', border: '1px solid rgba(230,233,175,.2)', borderRadius: 9, padding: '7px 13px', cursor: 'pointer' }}><LogOut size={14} />Déconnexion</button>
       </header>
 
-      {/* Body */}
-      <main className="flex-1 overflow-x-auto p-6">
-        <div className="flex gap-4">
-          {data.stages.map((stage) => {
+      {/* HERO */}
+      <div style={{ padding: '26px 34px 6px' }}>
+        <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>Suivi de recrutement · {data.mandat.entreprise.nom}</div>
+        <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 30, letterSpacing: '-.03em', color: '#1A1533', marginTop: 5 }}>{data.mandat.titrePoste}</h1>
+        <p style={{ fontSize: 14.5, lineHeight: 1.55, color: '#6E6A85', marginTop: 8, maxWidth: 660 }}>Cliquez un profil pour voir le dossier complet et donner votre avis — votre consultant HumanUp est notifié immédiatement.</p>
+      </div>
+
+      {/* BOARD */}
+      <main style={{ flex: 1, overflowX: 'auto', padding: '20px 34px 40px' }}>
+        <div style={{ display: 'flex', gap: 16, minHeight: 0 }}>
+          {data.stages.map(stage => {
             const items = data.byStage[stage] ?? [];
-            const color = STAGE_COLORS[stage];
             return (
-              <div key={stage} className="flex w-[300px] shrink-0 flex-col rounded-2xl bg-white p-4 shadow-sm">
-                <div className="mb-3 h-[3px] rounded-full" style={{ background: color }} />
-                <div className="mb-3 flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-neutral-800">{STAGE_LABELS[stage]}</h3>
-                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-bold text-neutral-600">
-                    {items.length}
-                  </span>
+              <div key={stage} style={{ flex: '0 0 300px', background: STAGE_BG[stage], border: '1px solid rgba(34,23,122,.07)', borderRadius: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div style={{ height: 4, background: STAGE_ACCENT[stage] }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '14px 15px 10px' }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 3, background: STAGE_ACCENT[stage] }} />
+                  <span style={{ fontWeight: 800, fontSize: 13.5, color: '#1A1533' }}>{STAGE_LABELS[stage]}</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: STAGE_ACCENT[stage], background: 'rgba(255,255,255,.7)', borderRadius: 999, padding: '2px 9px' }}>{items.length}</span>
                 </div>
-                <div className="space-y-2">
-                  {items.map((c) => {
-                    const lastDecision = c.portalDecisions[0]?.decision;
-                    const fullName = `${c.candidat.prenom || ''} ${c.candidat.nom}`.trim();
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 12px 14px' }}>
+                  {items.length === 0 && <div style={{ padding: '24px 10px', textAlign: 'center', fontSize: 12, color: '#B4B0C4' }}>Aucun profil pour l'instant</div>}
+                  {items.map(c => {
+                    const last = c.portalDecisions[0]?.decision;
                     return (
-                      <button
-                        key={c.id}
-                        onClick={() => {
-                          setSelected(c);
-                          void portalFetch(`/candidatures/${c.id}/view`, { method: 'POST' });
-                        }}
-                        className="w-full rounded-xl border border-neutral-100 bg-white p-3 text-left transition-all hover:-translate-y-[1px] hover:shadow-md"
-                      >
-                        <p className="text-sm font-semibold text-neutral-900">{fullName || '(sans nom)'}</p>
-                        {(c.candidat.posteActuel || c.candidat.entrepriseActuelle) && (
-                          <p className="mt-0.5 line-clamp-1 text-[12px] text-neutral-500">
-                            {[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(' · ')}
-                          </p>
-                        )}
-                        {c.candidat.aiPitchShort && (
-                          <p className="mt-1.5 line-clamp-2 text-[12px] text-neutral-500">
-                            {c.candidat.aiPitchShort}
-                          </p>
-                        )}
-                        {lastDecision && (
-                          <span
-                            className="mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                            style={{ background: DECISION_TONE[lastDecision].bg, color: DECISION_TONE[lastDecision].fg }}
-                          >
-                            {DECISION_LABEL[lastDecision]}
-                          </span>
-                        )}
-                      </button>
+                      <div key={c.id} className="pm-card" onClick={() => { setSelected(c); void portalFetch(`/candidatures/${c.id}/view`, { method: 'POST' }); }} style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 13, padding: 14, boxShadow: '0 1px 2px rgba(34,23,122,.05)', cursor: 'pointer' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ flexShrink: 0, width: 36, height: 36, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 12 }}>{initials(c)}</span>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName(c)}</div>
+                            {(c.candidat.posteActuel || c.candidat.entrepriseActuelle) && <div style={{ fontSize: 12, color: '#8A8699', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(' · ')}</div>}
+                          </div>
+                        </div>
+                        {c.candidat.aiPitchShort && <p style={{ fontSize: 12, lineHeight: 1.5, color: '#6E6A85', marginTop: 10, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>{c.candidat.aiPitchShort}</p>}
+                        {last && <span style={{ display: 'inline-flex', marginTop: 10, fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: '3px 10px', background: DECISION_TONE[last].bg, color: DECISION_TONE[last].fg }}>{DECISION_LABEL[last]}</span>}
+                      </div>
                     );
                   })}
-                  {items.length === 0 && (
-                    <p className="py-4 text-center text-[12px] text-neutral-300">Aucun profil pour l'instant</p>
-                  )}
                 </div>
               </div>
             );
@@ -232,249 +137,107 @@ export default function PortalMandatPage() {
         </div>
       </main>
 
-      {/* Drawer profil */}
-      <AnimatePresence>
-        {selected && (
-          <ProfileDrawer
-            candidature={selected}
-            onClose={() => setSelected(null)}
-            onDecision={async (decision, reason) => {
-              const res = await portalFetch(`/candidatures/${selected.id}/decision`, {
-                method: 'POST',
-                body: JSON.stringify({ decision, reason }),
-              });
-              if (res.ok) {
-                setSelected(null);
-                void reload();
-              }
-            }}
-            onComment={async (content) => {
-              const res = await portalFetch(`/candidatures/${selected.id}/comment`, {
-                method: 'POST',
-                body: JSON.stringify({ content }),
-              });
-              if (res.ok) return true;
-              return false;
-            }}
-          />
-        )}
-      </AnimatePresence>
+      {selected && (
+        <ProfileDrawer
+          candidature={selected}
+          repName={rep}
+          onClose={() => setSelected(null)}
+          onDecision={async (decision, reason) => {
+            const res = await portalFetch(`/candidatures/${selected.id}/decision`, { method: 'POST', body: JSON.stringify({ decision, reason }) });
+            if (res.ok) { setSelected(null); void reload(); }
+          }}
+          onComment={async (content) => {
+            const res = await portalFetch(`/candidatures/${selected.id}/comment`, { method: 'POST', body: JSON.stringify({ content }) });
+            return res.ok;
+          }}
+        />
+      )}
     </div>
   );
 }
 
-// ── Drawer profil ────────────────────────────────────
-
-function ProfileDrawer({
-  candidature: c,
-  onClose,
-  onDecision,
-  onComment,
-}: {
-  candidature: Candidature;
+// ─── DRAWER ─────────────────────────────────────────
+function ProfileDrawer({ candidature: c, repName, onClose, onDecision, onComment }: {
+  candidature: Candidature; repName: string;
   onClose: () => void;
   onDecision: (d: Decision, reason?: string) => Promise<void>;
   onComment: (content: string) => Promise<boolean>;
 }) {
   const [reason, setReason] = useState('');
   const [comment, setComment] = useState('');
-  const [pendingDecision, setPendingDecision] = useState<Decision | null>(null);
-  const [commentSent, setCommentSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const last = c.portalDecisions[0]?.decision;
+  const profile = c.candidat.aiAnonymizedProfile;
+  const bullets: string[] = Array.isArray(profile?.bulletPoints) ? profile.bulletPoints : Array.isArray(profile?.highlights) ? profile.highlights : [];
 
-  const fullName = `${c.candidat.prenom || ''} ${c.candidat.nom}`.trim() || '(sans nom)';
-  const lastDecision = c.portalDecisions[0]?.decision;
+  const decide = async (d: Decision) => {
+    if (d === 'ECARTER' && !reason.trim()) { return; }
+    setBusy(true);
+    try { await onDecision(d, d === 'ECARTER' ? reason.trim() : undefined); } finally { setBusy(false); }
+  };
+  const submitComment = async () => {
+    const t = comment.trim(); if (!t) return;
+    setBusy(true);
+    const ok = await onComment(t);
+    setBusy(false);
+    if (ok) { setComment(''); setSent(true); setTimeout(() => setSent(false), 2200); }
+  };
 
   return (
     <>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-40 bg-black/30"
-        onClick={onClose}
-      />
-      <motion.aside
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-[440px] flex-col overflow-y-auto bg-white shadow-2xl"
-      >
-        <header className="sticky top-0 flex items-start justify-between border-b border-neutral-100 bg-white px-6 py-4">
-          <div>
-            <h2 style={{ fontFamily: "'Archivo Black', sans-serif", letterSpacing: '-0.01em' }} className="text-xl text-neutral-900">
-              {fullName}
-            </h2>
-            {(c.candidat.posteActuel || c.candidat.entrepriseActuelle) && (
-              <p className="text-sm text-neutral-500">
-                {[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(' · ')}
-              </p>
-            )}
-            {lastDecision && (
-              <span
-                className="mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                style={{ background: DECISION_TONE[lastDecision].bg, color: DECISION_TONE[lastDecision].fg }}
-              >
-                {DECISION_LABEL[lastDecision]}
-              </span>
-            )}
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(26,21,51,.42)' }} />
+      <aside style={{ position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 61, width: 460, maxWidth: '94vw', background: '#FCFCF5', boxShadow: '-26px 0 70px -30px rgba(26,21,51,.55)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flexShrink: 0, background: '#22177A', padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
+          <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(230,233,175,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(230,233,175,.05) 1px,transparent 1px)', backgroundSize: '36px 36px' }} />
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color: 'rgba(230,233,175,.7)' }}>Dossier candidat</span>
+            <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(230,233,175,.25)', background: 'transparent', color: '#E6E9AF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} strokeWidth={2.4} /></button>
           </div>
-          <button onClick={onClose} className="rounded-md p-1 text-neutral-400 hover:bg-neutral-100">
-            <X size={18} />
-          </button>
-        </header>
-
-        <div className="flex-1 space-y-6 px-6 py-6">
-          {/* Pitch */}
-          {c.candidat.aiPitchShort && (
-            <section>
-              <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Pitch</h3>
-              <p className="text-sm text-neutral-700">{c.candidat.aiPitchShort}</p>
-            </section>
-          )}
-
-          {/* Profil anonymisé */}
-          {c.candidat.aiAnonymizedProfile && (
-            <section>
-              <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Profil</h3>
-              <pre className="whitespace-pre-wrap rounded-lg bg-neutral-50 p-3 text-[12px] text-neutral-700">
-                {typeof c.candidat.aiAnonymizedProfile === 'string'
-                  ? c.candidat.aiAnonymizedProfile
-                  : JSON.stringify(c.candidat.aiAnonymizedProfile, null, 2)}
-              </pre>
-            </section>
-          )}
-
-          {/* Décision */}
-          <section>
-            <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-neutral-500">Votre décision</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <DecisionButton
-                icon={<CheckCircle2 size={16} />}
-                label="Rencontrer"
-                active={pendingDecision === 'RENCONTRER'}
-                tone={DECISION_TONE.RENCONTRER}
-                onClick={() => setPendingDecision('RENCONTRER')}
-              />
-              <DecisionButton
-                icon={<HelpCircle size={16} />}
-                label="À discuter"
-                active={pendingDecision === 'A_DISCUTER'}
-                tone={DECISION_TONE.A_DISCUTER}
-                onClick={() => setPendingDecision('A_DISCUTER')}
-              />
-              <DecisionButton
-                icon={<XCircle size={16} />}
-                label="Écarter"
-                active={pendingDecision === 'ECARTER'}
-                tone={DECISION_TONE.ECARTER}
-                onClick={() => setPendingDecision('ECARTER')}
-              />
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 13, marginTop: 16 }}>
+            <span style={{ flexShrink: 0, width: 54, height: 54, borderRadius: 16, background: '#E6E9AF', color: '#22177A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 18 }}>{initials(c)}</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: 18, color: '#fff' }}>{fullName(c)}</div>
+              {(c.candidat.posteActuel || c.candidat.entrepriseActuelle) && <div style={{ fontSize: 12.5, color: '#E6E9AF', fontWeight: 600, marginTop: 3 }}>{[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(' · ')}</div>}
+              {last && <span style={{ display: 'inline-flex', marginTop: 7, fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: '3px 10px', background: DECISION_TONE[last].bg, color: DECISION_TONE[last].fg }}>{DECISION_LABEL[last]}</span>}
             </div>
-            {pendingDecision && (
-              <div className="mt-3">
-                <textarea
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  rows={3}
-                  placeholder={
-                    pendingDecision === 'RENCONTRER'
-                      ? 'Contexte ou dispo (optionnel)'
-                      : pendingDecision === 'ECARTER'
-                        ? 'Raison (optionnel — nous aide à mieux cibler la suite)'
-                        : 'Vos questions (optionnel)'
-                  }
-                  className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-3 py-2 text-sm outline-none focus:border-[#22177A]"
-                />
-                <div className="mt-2 flex justify-end gap-2">
-                  <button
-                    onClick={() => { setPendingDecision(null); setReason(''); }}
-                    className="rounded-lg px-3 py-1.5 text-sm text-neutral-500 hover:bg-neutral-100"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    onClick={() => onDecision(pendingDecision, reason.trim() || undefined)}
-                    className="rounded-lg px-3 py-1.5 text-sm font-semibold text-white"
-                    style={{ background: '#22177A' }}
-                  >
-                    Confirmer
-                  </button>
-                </div>
-              </div>
-            )}
-          </section>
-
-          {/* Commentaire libre */}
-          <section>
-            <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-neutral-500">
-              <MessageSquare size={11} /> Commentaire au recruteur
-            </h3>
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              rows={3}
-              placeholder="Ex : Peut-on avoir plus d'infos sur son expérience en X ?"
-              className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-3 py-2 text-sm outline-none focus:border-[#22177A]"
-            />
-            <div className="mt-2 flex items-center justify-between gap-2">
-              {commentSent ? (
-                <span className="inline-flex items-center gap-1 text-[12px] text-green-700">
-                  <CheckCircle2 size={13} /> Envoyé
-                </span>
-              ) : (
-                <span />
-              )}
-              <button
-                onClick={async () => {
-                  if (!comment.trim()) return;
-                  const ok = await onComment(comment.trim());
-                  if (ok) {
-                    setCommentSent(true);
-                    setComment('');
-                    setTimeout(() => setCommentSent(false), 3000);
-                  }
-                }}
-                disabled={!comment.trim()}
-                className="rounded-lg px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
-                style={{ background: '#22177A' }}
-              >
-                Envoyer
-              </button>
-            </div>
-          </section>
+          </div>
         </div>
-      </motion.aside>
-    </>
-  );
-}
 
-function DecisionButton({
-  icon,
-  label,
-  active,
-  tone,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active: boolean;
-  tone: { bg: string; fg: string };
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex flex-col items-center gap-1 rounded-xl border p-3 text-[11px] font-semibold transition-all"
-      style={{
-        background: active ? tone.bg : 'white',
-        borderColor: active ? tone.fg : '#eceaf2',
-        color: active ? tone.fg : '#6e6a85',
-      }}
-    >
-      {icon}
-      {label}
-    </button>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 22px 24px' }}>
+          {c.candidat.aiPitchShort && (
+            <>
+              <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>Synthèse</div>
+              <p style={{ fontSize: 13.5, lineHeight: 1.6, color: '#4A4568', marginTop: 9 }}>{c.candidat.aiPitchShort}</p>
+            </>
+          )}
+          {bullets.length > 0 && (
+            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {bullets.slice(0, 6).map((b, i) => (
+                <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                  <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: 6, background: '#F2F3D8', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}><Check size={11} color="#22177A" strokeWidth={2.6} /></span>
+                  <span style={{ fontSize: 13, lineHeight: 1.5, color: '#4A4568' }}>{b}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {!c.candidat.aiPitchShort && bullets.length === 0 && <p style={{ fontSize: 13.5, color: '#8A8699' }}>Le dossier détaillé sera disponible sous peu.</p>}
+
+          {/* DECISION */}
+          <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE', marginTop: 24 }}>Votre avis</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginTop: 10 }}>
+            <button className="pm-dec" disabled={busy} onClick={() => decide('RENCONTRER')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', borderRadius: 12, border: '1.5px solid rgba(59,154,84,.28)', background: '#EAF3EC', color: '#2C6B3F', cursor: 'pointer', fontWeight: 800, fontSize: 12 }}><Check size={17} />Rencontrer</button>
+            <button className="pm-dec" disabled={busy} onClick={() => decide('A_DISCUTER')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', borderRadius: 12, border: '1.5px solid rgba(201,162,39,.3)', background: '#FBF3E7', color: '#8A6A2E', cursor: 'pointer', fontWeight: 800, fontSize: 12 }}><MessageSquare size={17} />À discuter</button>
+            <button className="pm-dec" disabled={busy || !reason.trim()} onClick={() => decide('ECARTER')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', borderRadius: 12, border: '1.5px solid rgba(176,54,31,.28)', background: '#F9ECE9', color: '#B0361F', cursor: reason.trim() ? 'pointer' : 'default', fontWeight: 800, fontSize: 12, opacity: reason.trim() ? 1 : 0.55 }}><X size={17} />Écarter</button>
+          </div>
+          <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Motif (obligatoire pour écarter)…" style={{ width: '100%', marginTop: 10, fontSize: 13, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#fff', outline: 'none' }} />
+
+          {/* COMMENT */}
+          <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE', marginTop: 24 }}>Un message pour {repName || 'votre consultant'} ?</div>
+          <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Une question, une remarque…" style={{ width: '100%', minHeight: 80, resize: 'vertical', marginTop: 10, fontFamily: "'Manrope',sans-serif", fontSize: 13.5, lineHeight: 1.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#fff', outline: 'none' }} />
+          <button disabled={busy || !comment.trim()} onClick={submitComment} style={{ width: '100%', marginTop: 10, fontSize: 13.5, fontWeight: 800, background: comment.trim() ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: 12, cursor: comment.trim() ? 'pointer' : 'default' }}>{sent ? 'Envoyé ✓' : 'Envoyer'}</button>
+        </div>
+      </aside>
+    </>
   );
 }
