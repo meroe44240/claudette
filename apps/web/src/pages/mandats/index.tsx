@@ -1,11 +1,13 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, ChevronDown, X, List, Columns3 } from 'lucide-react';
+import { Plus, Search, ChevronDown, X, List, Columns3, Users } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
+import { useAuthStore } from '../../stores/auth-store';
 
 // ─── TYPES ──────────────────────────────────────────
+interface UserRef { id: string; nom: string | null; prenom: string | null }
 interface Mandat {
   id: string;
   titrePoste: string;
@@ -17,6 +19,8 @@ interface Mandat {
   createdAt?: string;
   entreprise: { id: string; nom: string };
   client: { id: string; nom: string; prenom: string | null } | null;
+  sales?: UserRef | null;
+  recruteur?: UserRef | null;
   _count?: { candidatures: number };
 }
 interface PaginatedResponse { data: Mandat[]; meta: { total: number; page: number; perPage: number; totalPages: number } }
@@ -39,7 +43,7 @@ const PRIO_META: Record<string, { label: string; bg: string; fg: string }> = {
 const STATUT_OPTIONS = Object.entries(STATUT_META).map(([value, m]) => ({ value, label: m.label }));
 const PRIO_OPTIONS = Object.entries(PRIO_META).map(([value, m]) => ({ value, label: m.label }));
 
-const GRID = '1.6fr 1.2fr 1.1fr 0.85fr 0.85fr 0.9fr 0.7fr 0.6fr auto';
+const GRID = '1.5fr 1.1fr 1fr 0.8fr 0.8fr 0.82fr 0.62fr 0.5fr 0.8fr auto';
 
 // ─── HELPERS ────────────────────────────────────────
 function salaire(min: number | null, max: number | null): string {
@@ -50,6 +54,15 @@ function salaire(min: number | null, max: number | null): string {
 }
 function fee(v: number | null): string { return v ? `${(v / 1000).toFixed(0)}k€` : '—'; }
 function clientName(c: Mandat['client']): string { return c ? `${c.prenom ? c.prenom + ' ' : ''}${c.nom}`.trim() : '—'; }
+function fullName(u: UserRef | null | undefined): string { return u ? `${u.prenom || ''} ${u.nom || ''}`.trim() : ''; }
+function initials(u: UserRef | null | undefined): string { return u ? `${(u.prenom || '')[0] || ''}${(u.nom || '')[0] || ''}`.toUpperCase() : ''; }
+
+// Avatar binome (S = sales/commercial navy, R = recruteur lavande)
+function TeamAvatar({ u, kind }: { u: UserRef | null | undefined; kind: 'S' | 'R' }) {
+  const bg = kind === 'S' ? '#22177A' : '#8E7CC3';
+  if (!u) return <span title={kind === 'S' ? 'Commercial non assigné' : 'Recruteur non assigné'} style={{ width: 26, height: 26, borderRadius: '50%', border: '1.5px dashed rgba(34,23,122,0.25)', color: '#C4C1D0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800 }}>{kind}</span>;
+  return <span title={`${kind === 'S' ? 'Commercial' : 'Recruteur'} · ${fullName(u)}`} style={{ width: 26, height: 26, borderRadius: '50%', background: bg, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, fontWeight: 800, border: '1.5px solid #fff', boxShadow: '0 0 0 1px rgba(34,23,122,0.08)' }}>{initials(u)}</span>;
+}
 
 // ─── CHIP DROPDOWN ──────────────────────────────────
 function ChipDropdown({ label, options, value, open, onToggle, onChange }: {
@@ -86,19 +99,32 @@ export default function MandatsPage() {
   usePageTitle('Mandats');
   const navigate = useNavigate();
 
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'ADMIN';
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debSearch, setDebSearch] = useState('');
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [filters, setFilters] = useState<Record<string, string[]>>({});
+  const [who, setWho] = useState<string>('all'); // filtre personne (admin) : 'all' ou userId
 
   useEffect(() => { const t = setTimeout(() => { setDebSearch(search); setPage(1); }, 350); return () => clearTimeout(t); }, [search]);
 
+  // Equipe pour le selecteur admin
+  const { data: team } = useQuery({
+    queryKey: ['team'],
+    queryFn: () => api.get<UserRef[]>('/settings/team'),
+    enabled: isAdmin,
+  });
+
   const { data, isLoading } = useQuery({
-    queryKey: ['mandats', page, debSearch, filters],
+    queryKey: ['mandats', page, debSearch, filters, who],
     queryFn: () => {
       const p = new URLSearchParams();
-      p.set('page', String(page)); p.set('perPage', '20'); p.set('scope', 'all');
+      // PAS de scope=all : on laisse l'API appliquer le perimetre par role.
+      p.set('page', String(page)); p.set('perPage', '20');
+      if (isAdmin && who !== 'all') p.set('userId', who);
       if (debSearch) p.set('search', debSearch);
       if (filters.statut?.length) p.set('statut', filters.statut.join(','));
       if (filters.priorite?.length) p.set('priorite', filters.priorite.join(','));
@@ -136,8 +162,18 @@ export default function MandatsPage() {
           <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>Recrutement</div>
           <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Mandats</h1>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{total.toLocaleString('fr-FR')} mandats</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {isAdmin && (
+            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+              <Users size={14} color="#8A8699" style={{ position: 'absolute', left: 11, pointerEvents: 'none' }} />
+              <select value={who} onChange={e => { setWho(e.target.value); setPage(1); }} style={{ appearance: 'none', fontSize: 13, fontWeight: 700, color: who === 'all' ? '#4A4568' : '#22177A', background: who === 'all' ? '#fff' : '#F2F3D8', border: `1px solid ${who === 'all' ? 'rgba(34,23,122,0.14)' : 'rgba(34,23,122,0.24)'}`, borderRadius: 11, padding: '9px 30px 9px 32px', cursor: 'pointer', outline: 'none' }}>
+                <option value="all">Toute l'équipe</option>
+                {(team ?? []).map(u => <option key={u.id} value={u.id}>{fullName(u)}</option>)}
+              </select>
+              <ChevronDown size={13} color="#8A8699" strokeWidth={2.4} style={{ position: 'absolute', right: 11, pointerEvents: 'none' }} />
+            </div>
+          )}
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{total.toLocaleString('fr-FR')} mandat{total > 1 ? 's' : ''}</span>
           <div style={{ display: 'flex', background: '#fff', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 11, overflow: 'hidden' }}>
             <button title="Liste" style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#22177A', border: 'none', cursor: 'pointer' }}><List size={16} color="#E6E9AF" /></button>
             <button title="Kanban" onClick={() => navigate('/mandats/kanban')} style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: 'none', cursor: 'pointer' }}><Columns3 size={16} color="#8A8699" /></button>
@@ -167,12 +203,21 @@ export default function MandatsPage() {
       {/* TABLE */}
       <div style={{ marginTop: 18, background: '#fff', border: '1px solid rgba(34,23,122,0.08)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 2px rgba(34,23,122,0.04)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 14, padding: '14px 22px', background: '#F7F7EE', borderBottom: '1px solid rgba(34,23,122,0.08)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#8A8699' }}>
-          <span>Poste</span><span>Entreprise</span><span>Client</span><span>Statut</span><span>Priorité</span><span>Salaire</span><span>Fee</span><span style={{ textAlign: 'center' }}>Cand.</span><span />
+          <span>Poste</span><span>Entreprise</span><span>Client</span><span>Statut</span><span>Priorité</span><span>Salaire</span><span>Fee</span><span style={{ textAlign: 'center' }}>Cand.</span><span>Équipe</span><span />
         </div>
         {isLoading ? (
           Array.from({ length: 8 }).map((_, i) => <div key={i} style={{ height: 62, borderBottom: '1px solid rgba(34,23,122,0.05)', background: i % 2 ? '#fff' : '#FCFCF5' }} />)
         ) : rows.length === 0 ? (
-          <div style={{ padding: '48px 20px', textAlign: 'center', color: '#8A8699' }}>Aucun mandat ne correspond aux filtres.</div>
+          <div style={{ padding: '52px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+            <div style={{ width: 56, height: 56, borderRadius: 16, border: '1.5px dashed rgba(34,23,122,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}><List size={22} color="#8E7CC3" /></div>
+            <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 17, color: '#1A1533' }}>Aucun mandat à afficher</div>
+            <div style={{ fontSize: 13, color: '#8A8699', marginTop: 6, maxWidth: 380 }}>{
+              (debSearch || activeChips.length) ? 'Aucun mandat ne correspond à votre recherche ou vos filtres.'
+              : isAdmin ? (who !== 'all' ? "Cette personne n'a aucun mandat (ni commercial, ni recruteur)." : "Aucun mandat pour l'instant.")
+              : "Aucun mandat où vous êtes le commercial ou le recruteur."
+            }</div>
+            <button onClick={() => navigate('/mandats/new')} style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 13.5, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: '10px 18px', cursor: 'pointer' }}><Plus size={15} strokeWidth={2.4} />Créer un mandat</button>
+          </div>
         ) : rows.map(m => {
           const st = STATUT_META[m.statut] ?? STATUT_META.OUVERT;
           const pr = PRIO_META[m.priorite] ?? PRIO_META.NORMALE;
@@ -187,6 +232,7 @@ export default function MandatsPage() {
               <span style={{ fontSize: 12.5, color: '#4A4568', whiteSpace: 'nowrap' }}>{salaire(m.salaireMin, m.salaireMax)}</span>
               <span style={{ fontSize: 12.5, fontWeight: 700, color: '#22177A' }}>{fee(m.feeMontantEstime)}</span>
               <span style={{ textAlign: 'center' }}><span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 26, height: 24, padding: '0 8px', fontSize: 12.5, fontWeight: 800, borderRadius: 999, background: 'rgba(34,23,122,0.08)', color: '#22177A' }}>{cand}</span></span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: -4 }}><span style={{ display: 'inline-flex' }}><TeamAvatar u={m.sales} kind="S" /></span><span style={{ display: 'inline-flex', marginLeft: -6 }}><TeamAvatar u={m.recruteur} kind="R" /></span></span>
               <span onClick={(e) => { e.stopPropagation(); navigate(`/mandats/${m.id}/kanban`); }} className="kbl" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: '#8A8699', cursor: 'pointer', transition: 'color .16s' }}><Columns3 size={14} />Kanban</span>
             </div>
           );

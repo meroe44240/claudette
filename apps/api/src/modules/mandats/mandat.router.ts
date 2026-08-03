@@ -19,6 +19,7 @@ export default async function mandatRouter(fastify: FastifyInstance) {
           statut: { type: 'string' },
           priorite: { type: 'string' },
           entrepriseId: { type: 'string' },
+          userId: { type: 'string' },
           assignedToId: { type: 'string' },
         },
       },
@@ -28,17 +29,27 @@ export default async function mandatRouter(fastify: FastifyInstance) {
       const query = request.query as any;
       const params = parsePagination(query);
 
-      // Non-admin users see mandats where they are EITHER assignedTo or sourceur.
-      // Admins see all unless they explicitly filter by consultant.
-      // scope=all bypasses isolation (for cross-recruiter actions like adding candidatures)
-      let assignedToId: string | undefined;
+      // ── Perimetre par role (impose cote API, pas seulement en UI) ──
+      // Un mandat a deux proprietaires : le SALES (commercial) et le RECRUTEUR.
+      //  • Non-admin : voit UNIQUEMENT ses mandats (salesId=moi OU recruteurId=moi).
+      //    Demander les mandats d'un autre => 403 (le masquage visuel ne suffit pas).
+      //  • Admin : voit tout, ou filtre par personne (userId) => OU sur les 2 colonnes.
+      //  • scope=all : bypass d'isolation pour les usages transverses (dropdown "ajouter au mandat").
+      const isAdmin = request.userRole === 'ADMIN';
+      const wanted = query.userId ?? query.assignedToId; // 'userId' (pack) ou legacy 'assignedToId'
       let userInvolvedId: string | undefined;
       if (query.scope === 'all') {
-        // No isolation — allow seeing all mandats (e.g. for "ajouter au mandat" dropdown)
-      } else if (request.userRole !== 'ADMIN') {
+        // No isolation
+      } else if (!isAdmin) {
+        if (wanted && wanted !== 'all' && wanted !== request.userId) {
+          return reply.code(403).send({
+            error: 'FORBIDDEN',
+            message: 'Vous ne pouvez consulter que vos propres mandats.',
+          });
+        }
         userInvolvedId = request.userId;
-      } else if (query.assignedToId && query.assignedToId !== 'all') {
-        assignedToId = query.assignedToId;
+      } else if (wanted && wanted !== 'all') {
+        userInvolvedId = wanted;
       }
 
       return mandatService.list(
@@ -47,7 +58,7 @@ export default async function mandatRouter(fastify: FastifyInstance) {
         query.statut,
         query.priorite,
         query.entrepriseId,
-        assignedToId,
+        undefined,
         userInvolvedId,
       );
     },

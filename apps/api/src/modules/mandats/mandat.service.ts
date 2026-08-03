@@ -120,13 +120,14 @@ export async function list(
     where.assignedToId = assignedToId;
   }
 
-  // "Mes mandats" for a non-admin user: include mandates where the user is
-  // either primary (assignedTo) or sourceur (co-recruiter).
+  // Perimetre par role : un mandat a deux proprietaires (binome). On voit un
+  // mandat si on en est le SALES (commercial) OU le RECRUTEUR. Sert pour le
+  // scope non-admin (userInvolvedId = soi) et le filtre admin par personne.
   if (userInvolvedId) {
     andClauses.push({
       OR: [
-        { assignedToId: userInvolvedId },
-        { sourceurId: userInvolvedId },
+        { salesId: userInvolvedId },
+        { recruteurId: userInvolvedId },
       ],
     });
   }
@@ -147,6 +148,8 @@ export async function list(
         entreprise: { select: { id: true, nom: true } },
         client: { select: { id: true, nom: true, prenom: true } },
         assignedTo: { select: { id: true, nom: true, prenom: true } },
+        sales: { select: { id: true, nom: true, prenom: true } },
+        recruteur: { select: { id: true, nom: true, prenom: true } },
         _count: { select: { candidatures: true } },
       },
     }),
