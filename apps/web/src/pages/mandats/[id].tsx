@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Globe, Users, Trash2, ArrowRight, Pencil, Check, X, FileText, RefreshCw, ChevronDown, Loader2, Info, Mail } from 'lucide-react';
+import { Globe, Users, Trash2, ArrowRight, Pencil, Check, X, FileText, RefreshCw, ChevronDown, Loader2, Info, Mail, UserPlus, Search } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import Input, { Textarea } from '../../components/ui/Input';
@@ -333,6 +333,11 @@ export default function MandatDetailPage() {
   // Team (local demo state)
   const [team, setTeam] = useState<{ commercial: string; recruteur: string; signed: boolean } | null>(null);
   const [editTeam, setEditTeam] = useState(false);
+  // Ajout de candidats au pipeline
+  const [addOpen, setAddOpen] = useState(false);
+  const [addSearch, setAddSearch] = useState('');
+  const [addDeb, setAddDeb] = useState('');
+  useEffect(() => { const t = setTimeout(() => setAddDeb(addSearch), 300); return () => clearTimeout(t); }, [addSearch]);
   // Access modal
   const [accessOpen, setAccessOpen] = useState(false);
   const [access, setAccess] = useState<AccessContact[]>([]);
@@ -383,6 +388,18 @@ export default function MandatDetailPage() {
       toast('success', 'Binôme mis à jour');
     },
     onError: (error: any) => toast('error', error.message || 'Erreur lors de l\'assignation'),
+  });
+
+  // Recherche de candidats à ajouter au pipeline
+  const addSearchQuery = useQuery({
+    queryKey: ['candidats-search-mandat', addDeb],
+    queryFn: () => api.get<{ data: { id: string; prenom: string | null; nom: string; posteActuel: string | null; entrepriseActuelle: string | null }[] }>(`/candidats?perPage=8${addDeb ? `&search=${encodeURIComponent(addDeb)}` : ''}`),
+    enabled: addOpen,
+  });
+  const addCandMut = useMutation({
+    mutationFn: (candidatId: string) => api.post('/candidatures', { candidatId, mandatId: id, stage: 'SOURCING' }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['mandat', id] }); toast('success', 'Candidat ajouté au pipeline'); },
+    onError: (e: any) => toast('error', e.message || 'Erreur lors de l\'ajout'),
   });
 
   const deleteMutation = useMutation({
@@ -856,7 +873,10 @@ export default function MandatDetailPage() {
             <a onClick={() => navigate(`/mandats/${id}/kanban`)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: MANROPE, fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: INK }}>
               Pipeline candidats <ArrowRight size={14} color={NAVY} />
             </a>
-            <button onClick={() => navigate(`/mandats/${id}/kanban`)} style={{ fontFamily: MANROPE, fontWeight: 700, fontSize: 11.5, borderRadius: 999, padding: '6px 13px', cursor: 'pointer', border: 'none', background: '#F0EFC4', color: NAVY }}>Voir le Kanban</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button onClick={() => { setAddOpen(true); setAddSearch(''); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: MANROPE, fontWeight: 700, fontSize: 11.5, borderRadius: 999, padding: '6px 13px', cursor: 'pointer', border: 'none', background: NAVY, color: LIME }}><UserPlus size={14} />Ajouter des candidats</button>
+              <button onClick={() => navigate(`/mandats/${id}/kanban`)} style={{ fontFamily: MANROPE, fontWeight: 700, fontSize: 11.5, borderRadius: 999, padding: '6px 13px', cursor: 'pointer', border: 'none', background: '#F0EFC4', color: NAVY }}>Voir le Kanban</button>
+            </div>
           </div>
 
           <div className="scrollcol" style={{ overflowX: 'auto', marginTop: 14, paddingBottom: 4 }}>
@@ -1041,6 +1061,46 @@ export default function MandatDetailPage() {
           )}
         </div>
       </aside>
+
+      {/* ═══════════ MODAL · AJOUTER DES CANDIDATS ═══════════ */}
+      {addOpen && (
+        <div onClick={() => setAddOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(26,21,51,.42)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '60px 20px' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 540, maxWidth: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: 20, boxShadow: '0 40px 90px -40px rgba(26,21,51,0.6)', padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ fontFamily: ARCHIVO, fontSize: 19, letterSpacing: '-0.02em', color: INK }}>Ajouter des candidats</div>
+                <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 3 }}>Ils entrent en colonne <strong>Sourcing</strong> du pipeline.</div>
+              </div>
+              <button onClick={() => setAddOpen(false)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer', flexShrink: 0 }}>✕</button>
+            </div>
+            <div style={{ position: 'relative', marginTop: 16 }}>
+              <Search size={15} color="#9A96AE" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)' }} />
+              <input autoFocus value={addSearch} onChange={(e) => setAddSearch(e.target.value)} placeholder="Rechercher un candidat (nom, poste…)" style={{ width: '100%', fontFamily: MANROPE, fontSize: 14, padding: '11px 14px 11px 38px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,0.14)', background: '#FCFCF5', color: INK, outline: 'none' }} />
+            </div>
+            <div style={{ marginTop: 14, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {addSearchQuery.isLoading && <div style={{ fontSize: 13, color: FAINT, padding: '10px 4px' }}>Recherche…</div>}
+              {!addSearchQuery.isLoading && (addSearchQuery.data?.data ?? []).length === 0 && <div style={{ fontSize: 13, color: FAINT, padding: '10px 4px' }}>Aucun candidat trouvé.</div>}
+              {(addSearchQuery.data?.data ?? []).map((c) => {
+                const already = mandat.candidatures.some((x) => x.candidat.id === c.id);
+                return (
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 12px', border: '1px solid rgba(34,23,122,.1)', borderRadius: 12, background: already ? '#FAFAF2' : '#fff' }}>
+                    <span style={{ flexShrink: 0, width: 34, height: 34, borderRadius: '50%', background: '#8E7CC3', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MANROPE, fontWeight: 800, fontSize: 11 }}>{getInitials(c.prenom, c.nom)}</span>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${c.prenom || ''} ${c.nom}`.trim()}</div>
+                      <div style={{ fontSize: 11.5, color: '#8A8699', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[c.posteActuel, c.entrepriseActuelle].filter(Boolean).join(' · ') || '—'}</div>
+                    </div>
+                    {already ? (
+                      <span style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, color: '#2C6B3F', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={13} />Dans le pipe</span>
+                    ) : (
+                      <button disabled={addCandMut.isPending} onClick={() => addCandMut.mutate(c.id)} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: MANROPE, fontWeight: 700, fontSize: 12, background: NAVY, color: LIME, border: 'none', borderRadius: 9, padding: '7px 12px', cursor: 'pointer' }}><UserPlus size={13} />Ajouter</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══════════ MODAL · GÉRER L'ACCÈS ═══════════ */}
       {accessOpen && (
