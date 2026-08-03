@@ -24,6 +24,8 @@ const MonEspacePage = lazy(() => import('./pages/mon-espace/index'));
 const MesMandatsPage = lazy(() => import('./pages/mes-mandats/index'));
 const OutilsPage = lazy(() => import('./pages/outils/index'));
 const OffresPage = lazy(() => import('./pages/offres/index'));
+const BookingSettingsPage = lazy(() => import('./pages/booking/index'));
+const BookPage = lazy(() => import('./pages/book/index'));
 const ListPushPage = lazy(() => import('./pages/list-push/index'));
 const SettingsPage = lazy(() => import('./pages/settings/index'));
 const CandidatsPage = lazy(() => import('./pages/candidats/index'));
@@ -76,6 +78,7 @@ export default function App() {
         <Route path="/change-password" element={<ChangePasswordPage />} />
         <Route path="/docs/mcp" element={<DocsMcpPage />} />
         {/* Portail client — public, hors MainLayout */}
+        <Route path="/book/:slug" element={<BookPage />} />
         <Route path="/portail/login" element={<PortalLoginPage />} />
         <Route path="/portail/mandat/:mandatId" element={<PortalMandatPage />} />
         <Route
@@ -92,6 +95,7 @@ export default function App() {
           <Route path="mes-mandats" element={<MesMandatsPage />} />
           <Route path="outils" element={<OutilsPage />} />
           <Route path="offres" element={<OffresPage />} />
+          <Route path="booking" element={<BookingSettingsPage />} />
           <Route path="list-push" element={<ListPushPage />} />
           <Route path="candidats" element={<CandidatsPage />} />
           <Route path="candidats/new" element={<CandidatNewPage />} />

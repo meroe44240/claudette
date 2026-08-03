@@ -46,6 +46,7 @@ import portalRouter from './modules/portal/portal.router.js';
 import sourcingRouter from './modules/sourcing/sourcing.router.js';
 import leadRouter from './modules/leads/lead.router.js';
 import jobOfferRouter, { jobOfferPublicRouter } from './modules/job-offers/job-offer.router.js';
+import bookingRouter, { bookingPublicRouter } from './modules/booking/booking.router.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 
@@ -175,6 +176,9 @@ async function buildApp() {
   await app.register(jobOfferRouter, { prefix: '/api/v1/job-offers' });
   // API PUBLIQUE — consommée par la landing / job board (aucune auth requise).
   await app.register(jobOfferPublicRouter, { prefix: '/api/v1/public/job-offers' });
+  await app.register(bookingRouter, { prefix: '/api/v1/booking' });
+  // Pages de réservation publiques (remplace Calendly) — aucune auth.
+  await app.register(bookingPublicRouter, { prefix: '/api/v1/public/booking' });
 
   return app;
 }
