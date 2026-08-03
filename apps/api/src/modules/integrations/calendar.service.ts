@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import prisma from '../../lib/db.js';
 import { AppError } from '../../lib/errors.js';
 import * as notificationService from '../notifications/notification.service.js';
@@ -25,6 +26,7 @@ interface CalendarEventData {
   attendees?: string[];              // email addresses
   entiteType?: 'CANDIDAT' | 'CLIENT' | 'ENTREPRISE' | 'MANDAT';
   entiteId?: string;
+  withMeet?: boolean;                // génère un lien Google Meet (visioconférence)
 }
 
 interface CalendlyParsedData {
@@ -541,7 +543,7 @@ export async function createEvent(userId: string, data: CalendarEventData, sendN
   const entiteId = data.entiteId ?? matchedEntity?.id ?? '00000000-0000-0000-0000-000000000000';
 
   // Create event via Google Calendar API
-  const event = {
+  const event: Record<string, unknown> = {
     summary: data.summary,
     description: data.description,
     location: data.location,
@@ -552,10 +554,20 @@ export async function createEvent(userId: string, data: CalendarEventData, sendN
     reminders: { useDefault: true },
   };
 
+  // Génère un lien Google Meet (visioconférence) si demandé.
+  if (data.withMeet) {
+    event.conferenceData = {
+      createRequest: {
+        requestId: randomUUID(),
+        conferenceSolutionKey: { type: 'hangoutsMeet' },
+      },
+    };
+  }
+
   // sendNotifications=all tells Google to send email invitations to all attendees
   const sendUpdates = sendNotifications ? 'all' : 'none';
   const calResponse = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=${sendUpdates}`,
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=${sendUpdates}${data.withMeet ? '&conferenceDataVersion=1' : ''}`,
     {
       method: 'POST',
       headers: {
@@ -643,12 +655,42 @@ export async function createEvent(userId: string, data: CalendarEventData, sendN
     };
   }
 
+  const meetLink: string | null =
+    calResult.hangoutLink ||
+    calResult.conferenceData?.entryPoints?.find((e: any) => e.entryPointType === 'video')?.uri ||
+    null;
+
   return {
     success: true,
     activiteId: activite.id,
     googleEventId: calResult.id,
+    meetLink,
     message: `Événement "${data.summary}" créé dans Google Calendar`,
   };
+}
+
+/**
+ * Free/busy : renvoie les intervalles occupés du calendrier principal entre deux dates.
+ * Best-effort — renvoie [] si le calendrier n'est pas connecté ou en cas d'erreur.
+ */
+export async function getBusyTimes(
+  userId: string,
+  timeMin: string,
+  timeMax: string,
+): Promise<Array<{ start: string; end: string }>> {
+  try {
+    const accessToken = await getValidAccessToken(userId);
+    const res = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timeMin, timeMax, items: [{ id: 'primary' }] }),
+    });
+    if (!res.ok) return [];
+    const json = (await res.json()) as any;
+    return json.calendars?.primary?.busy ?? [];
+  } catch {
+    return [];
+  }
 }
 
 // ─── GET UPCOMING EVENTS ────────────────────────────

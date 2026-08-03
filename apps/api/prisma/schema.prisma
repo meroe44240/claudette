@@ -1011,3 +1011,38 @@ model JobOffer {
   @@index([published])
   @@map("job_offers")
 }
+
+model BookingSettings {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @db.Uuid
+  slug         String   @unique @db.VarChar(120)
+  title        String   @db.VarChar(200)
+  durationMin  Int      @default(30)
+  timezone     String   @default("Europe/Paris") @db.VarChar(64)
+  availability Json     @default("[]") // [{ day:1, start:"09:00", end:"18:00" }] day 0=dim..6=sam
+  bufferMin    Int      @default(0)
+  advanceDays  Int      @default(14)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz()
+  updatedAt    DateTime @updatedAt @db.Timestamptz()
+
+  @@map("booking_settings")
+}
+
+model Booking {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid      // le recruteur (proprietaire du creneau)
+  slotStart    DateTime @db.Timestamptz()
+  slotEnd      DateTime @db.Timestamptz()
+  inviteeName  String   @db.VarChar(200)
+  inviteeEmail String   @db.VarChar(255)
+  inviteeNote  String?  @db.Text
+  meetLink     String?  @db.VarChar(500)
+  googleEventId String? @db.VarChar(255)
+  status       String   @default("CONFIRMED") @db.VarChar(20) // CONFIRMED | CANCELLED
+  candidatId   String?  @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz()
+
+  @@index([userId, slotStart])
+  @@map("bookings")
+}
