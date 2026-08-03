@@ -93,7 +93,7 @@ interface MandatDetail {
     email: string | null;
     telephone: string | null;
   };
-  am?: UserRef | null;
+  sales?: UserRef | null;
   recruteur?: UserRef | null;
   candidatures: Candidature[];
   ficheDePoste: string | null;
@@ -223,8 +223,6 @@ const pipelineOrder = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENTRETIEN_CLIENT'
 
 const PIPE_AV: [string, string][] = [['#22177A', '#E6E9AF'], ['#E6E9AF', '#22177A'], ['#8E7CC3', '#fff']];
 
-const COM_OPTIONS = ['Thomas Bernard', 'Sofia Marchetti', 'Léa Martin'];
-const REC_OPTIONS = ['Meroe Nguimbi', 'Sofia Marchetti', 'Hugo Blanchard'];
 const ROLE_OPTIONS = ['Hiring manager', 'Talent Acquisition', 'DRH', 'Autre'];
 const SEN_OPTIONS = ['Confirmé', 'Senior', 'Manager', 'Direction'];
 
@@ -367,6 +365,24 @@ export default function MandatDetailPage() {
     },
   });
 
+  // Vraie equipe (source du binome commercial/recruteur)
+  const teamQuery = useQuery({
+    queryKey: ['team'],
+    queryFn: () => api.get<{ id: string; nom: string; prenom: string | null }[]>('/settings/team'),
+  });
+  const teamMembers = (teamQuery.data ?? []).map((u) => ({ id: u.id, name: `${u.prenom || ''} ${u.nom || ''}`.trim() }));
+  const teamOptions = teamMembers.map((m) => m.name);
+
+  // Persiste le binome en base (salesId / recruteurId) — plus de localStorage
+  const assignMutation = useMutation({
+    mutationFn: (payload: Record<string, unknown>) => api.put<MandatDetail>(`/mandats/${id}`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mandat', id] });
+      toast('success', 'Binôme mis à jour');
+    },
+    onError: (error: any) => toast('error', error.message || 'Erreur lors de l\'assignation'),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`/mandats/${id}`),
     onSuccess: () => {
@@ -462,13 +478,14 @@ export default function MandatDetailPage() {
   // Init team once mandat is loaded
   useEffect(() => {
     if (!id || !mandat || team) return;
+    let signed = false;
     try {
       const raw = localStorage.getItem(`hu_mandat_team_${id}`);
-      if (raw) { setTeam(JSON.parse(raw)); return; }
+      if (raw) signed = !!JSON.parse(raw).signed;
     } catch { /* noop */ }
-    const com = mandat.am ? `${mandat.am.prenom || ''} ${mandat.am.nom}`.trim() : '';
+    const com = mandat.sales ? `${mandat.sales.prenom || ''} ${mandat.sales.nom}`.trim() : '';
     const rec = mandat.recruteur ? `${mandat.recruteur.prenom || ''} ${mandat.recruteur.nom}`.trim() : '';
-    setTeam({ commercial: com || 'Thomas Bernard', recruteur: rec, signed: false });
+    setTeam({ commercial: com, recruteur: rec, signed });
   }, [id, mandat, team]);
 
   // Init access list + published + jForm
@@ -524,6 +541,8 @@ export default function MandatDetailPage() {
       persistTeam(next);
       return next;
     });
+    const m = teamMembers.find((t) => t.name === v);
+    assignMutation.mutate({ salesId: m ? m.id : null });
   };
   const setRecruteur = (v: string) => {
     setTeam((prev) => {
@@ -531,6 +550,8 @@ export default function MandatDetailPage() {
       persistTeam(next);
       return next;
     });
+    const m = teamMembers.find((t) => t.name === v);
+    assignMutation.mutate({ recruteurId: m ? m.id : null });
   };
   const toggleSigned = () => {
     if (!team) return;
@@ -810,11 +831,11 @@ export default function MandatDetailPage() {
             <div style={{ flex: '1 1 420px', display: 'flex', alignItems: 'center', gap: 9, padding: '8px 13px', flexWrap: 'wrap' }}>
               <div style={{ minWidth: 170 }}>
                 <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: FAINT, marginBottom: 4 }}>Commercial</div>
-                <PlainSelect value={teamView.commercial} onChange={setCommercial} options={withCurrent(COM_OPTIONS, teamView.commercial)} />
+                <PlainSelect value={teamView.commercial} onChange={setCommercial} options={withCurrent(teamOptions, teamView.commercial)} />
               </div>
               <div style={{ minWidth: 170 }}>
                 <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: needsRecruteur ? '#B47814' : FAINT, marginBottom: 4 }}>Recruteur{needsRecruteur ? ' · à assigner' : ''}</div>
-                <PlainSelect value={teamView.recruteur} onChange={setRecruteur} options={withCurrent(REC_OPTIONS, teamView.recruteur || '')} />
+                <PlainSelect value={teamView.recruteur} onChange={setRecruteur} options={withCurrent(teamOptions, teamView.recruteur || '')} />
               </div>
             </div>
           )}
