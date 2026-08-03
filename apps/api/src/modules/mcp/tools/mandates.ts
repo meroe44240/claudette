@@ -3,8 +3,118 @@ import { z } from 'zod';
 import { wrapTool } from '../mcp.tools.js';
 import * as mandatService from '../../mandats/mandat.service.js';
 import * as candidatureService from '../../candidatures/candidature.service.js';
+import * as settingsService from '../../settings/settings.service.js';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resout une reference de personne (UUID ou nom libre) vers un userId.
+ * - UUID : verifie l'existence dans l'equipe.
+ * - Nom : match insensible a la casse sur "prenom nom" / nom / prenom.
+ * Retourne { userId, label } si 1 seul match, sinon { error, candidates }.
+ */
+async function resolvePerson(
+  ref: string,
+): Promise<{ userId: string; label: string } | { error: string; message: string; candidates: { id: string; name: string }[] }> {
+  const team = (await settingsService.listTeamMembers()) as { id: string; nom: string | null; prenom: string | null }[];
+  const roster = team.map((u) => ({ id: u.id, name: `${u.prenom || ''} ${u.nom || ''}`.trim() }));
+
+  if (UUID_RE.test(ref)) {
+    const hit = roster.find((u) => u.id === ref.toLowerCase());
+    if (hit) return { userId: hit.id, label: hit.name };
+    return { error: 'user_not_found', message: `Aucun membre d'equipe avec l'UUID ${ref}.`, candidates: roster };
+  }
+
+  const needle = ref.trim().toLowerCase();
+  const matches = roster.filter((u) => u.name.toLowerCase().includes(needle));
+  if (matches.length === 1) return { userId: matches[0].id, label: matches[0].name };
+  if (matches.length === 0) {
+    return { error: 'user_not_found', message: `Aucun membre d'equipe ne correspond a "${ref}". Utilise list_team pour voir les noms exacts.`, candidates: roster };
+  }
+  return {
+    error: 'user_ambiguous',
+    message: `Plusieurs membres correspondent a "${ref}". Demande a l'utilisateur lequel, puis rappelle avec l'UUID ou le nom complet.`,
+    candidates: matches,
+  };
+}
 
 export function registerMandateTools(server: McpServer) {
+  server.tool(
+    'list_team',
+    "Liste les membres de l'equipe assignables a un mandat (sales ou recruteur), avec leur UUID. Utiliser avant assign_mandate pour resoudre un nom, ou quand on demande 'qui est dans l'equipe'.",
+    {},
+    wrapTool('list_team', async () => {
+      const team = (await settingsService.listTeamMembers()) as { id: string; nom: string | null; prenom: string | null }[];
+      return {
+        total: team.length,
+        members: team.map((u) => ({ id: u.id, name: `${u.prenom || ''} ${u.nom || ''}`.trim() })),
+      };
+    }),
+  );
+
+  server.tool(
+    'assign_mandate',
+    "[CONFIRMATION REQUISE] Assigne le binome d'un mandat : le SALES (chasse le mandat cote client) et/ou le RECRUTEUR (source les candidats). " +
+      "Accepte un nom OU un UUID pour chaque role. Fournir au moins un des deux. Pour retirer une assignation, passer clear_sales=true ou clear_recruteur=true. " +
+      "Si un nom est ambigu ou introuvable, l'outil renvoie la liste des membres — demande alors a l'utilisateur de preciser. Tu DOIS demander confirmation.",
+    {
+      mandate_id: z.string().optional().describe('UUID du mandat'),
+      mandate_name: z.string().optional().describe('Nom/titre du mandat si pas d\'UUID'),
+      sales: z.string().optional().describe('Personne a assigner comme SALES (nom ou UUID)'),
+      recruteur: z.string().optional().describe('Personne a assigner comme RECRUTEUR (nom ou UUID)'),
+      clear_sales: z.boolean().optional().describe('true pour retirer le sales du mandat'),
+      clear_recruteur: z.boolean().optional().describe('true pour retirer le recruteur du mandat'),
+    },
+    wrapTool('assign_mandate', async (args) => {
+      // ── Resolution du mandat ──
+      let mandate: any;
+      if (args.mandate_id) {
+        mandate = await mandatService.getById(args.mandate_id as string);
+      } else if (args.mandate_name) {
+        const results = await mandatService.list({ page: 1, perPage: 1 }, args.mandate_name as string);
+        mandate = results.data[0];
+      }
+      if (!mandate) return { error: 'mandate_not_found', message: 'Mandat introuvable. Precise le mandate_id ou un mandate_name plus exact.' };
+
+      const hasSales = typeof args.sales === 'string' && (args.sales as string).trim() !== '';
+      const hasRecruteur = typeof args.recruteur === 'string' && (args.recruteur as string).trim() !== '';
+      if (!hasSales && !hasRecruteur && !args.clear_sales && !args.clear_recruteur) {
+        return { error: 'no_assignment', message: 'Fournis au moins un role : sales, recruteur, clear_sales ou clear_recruteur.' };
+      }
+
+      const updates: Record<string, unknown> = {};
+      const applied: string[] = [];
+
+      if (hasSales) {
+        const r = await resolvePerson(args.sales as string);
+        if ('error' in r) return r;
+        updates.salesId = r.userId;
+        applied.push(`Sales → ${r.label}`);
+      } else if (args.clear_sales) {
+        updates.salesId = null;
+        applied.push('Sales retire');
+      }
+
+      if (hasRecruteur) {
+        const r = await resolvePerson(args.recruteur as string);
+        if ('error' in r) return r;
+        updates.recruteurId = r.userId;
+        applied.push(`Recruteur → ${r.label}`);
+      } else if (args.clear_recruteur) {
+        updates.recruteurId = null;
+        applied.push('Recruteur retire');
+      }
+
+      await mandatService.update(mandate.id, updates as any);
+      return {
+        success: true,
+        mandate_id: mandate.id,
+        mandate: mandate.titrePoste,
+        message: `Mandat "${mandate.titrePoste}" — ${applied.join(', ')}.`,
+      };
+    }),
+  );
+
   server.tool(
     'search_mandates',
     "Recherche des mandats par titre, entreprise, client, ou statut. Utiliser quand le recruteur demande 'ou en est le mandat X' ou 'combien de mandats actifs'.",
