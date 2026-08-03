@@ -109,6 +109,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       // Active mandats assigned to user
       prisma.mandat.count({
         where: {
+          type: 'CLIENT',
           assignedToId: user.id,
           statut: { in: ['OUVERT', 'EN_COURS'] },
         },
@@ -194,10 +195,10 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     placementsAll,
   ] = await Promise.all([
     prisma.mandat.count({
-      where: { statut: { in: ['OUVERT', 'EN_COURS'] } },
+      where: { type: 'CLIENT', statut: { in: ['OUVERT', 'EN_COURS'] } },
     }),
     prisma.mandat.count({
-      where: { statut: { in: ['GAGNE', 'CLOTURE'] } },
+      where: { type: 'CLIENT', statut: { in: ['GAGNE', 'CLOTURE'] } },
     }),
     prisma.mandat.aggregate({
       where: { feeStatut: { in: ['FACTURE', 'PAYE'] } },

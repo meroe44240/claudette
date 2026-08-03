@@ -11,6 +11,7 @@ interface UserRef { id: string; nom: string | null; prenom: string | null }
 interface Mandat {
   id: string;
   titrePoste: string;
+  type?: 'CLIENT' | 'VIVIER';
   statut: string;
   priorite: string;
   salaireMin: number | null;
@@ -224,9 +225,12 @@ export default function MandatsPage() {
           const cand = m._count?.candidatures ?? 0;
           return (
             <div key={m.id} className="crow" onClick={() => navigate(`/mandats/${m.id}`)} style={{ cursor: 'pointer', display: 'grid', gridTemplateColumns: GRID, gap: 14, alignItems: 'center', padding: '15px 22px', borderBottom: '1px solid rgba(34,23,122,0.05)' }}>
-              <div style={{ minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 700, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.titrePoste}</div></div>
+              <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.titrePoste}</div>
+                {m.type === 'VIVIER' && <span title="Mandat vivier (sourcing sans client, hors stats)" style={{ flexShrink: 0, fontSize: 10, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#5B4B9E', background: '#EDEAF9', borderRadius: 999, padding: '2px 8px' }}>Vivier</span>}
+              </div>
               <span onClick={(e) => { e.stopPropagation(); navigate(`/entreprises/${m.entreprise.id}`); }} style={{ fontSize: 13, color: '#22177A', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.entreprise.nom}</span>
-              <span onClick={(e) => { if (m.client) { e.stopPropagation(); navigate(`/clients/${m.client.id}`); } }} style={{ fontSize: 13, color: '#4A4568', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: m.client ? 'pointer' : 'default' }}>{clientName(m.client)}</span>
+              <span onClick={(e) => { if (m.client) { e.stopPropagation(); navigate(`/clients/${m.client.id}`); } }} style={{ fontSize: 13, color: m.client ? '#4A4568' : '#C4C1D0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: m.client ? 'pointer' : 'default' }}>{m.type === 'VIVIER' && !m.client ? 'Vivier interne' : clientName(m.client)}</span>
               <span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '4px 11px', background: st.bg, color: st.fg, whiteSpace: 'nowrap' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: st.dot }} />{st.label}</span></span>
               <span><span style={{ display: 'inline-flex', fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '4px 11px', background: pr.bg, color: pr.fg, whiteSpace: 'nowrap' }}>{pr.label}</span></span>
               <span style={{ fontSize: 12.5, color: '#4A4568', whiteSpace: 'nowrap' }}>{salaire(m.salaireMin, m.salaireMax)}</span>

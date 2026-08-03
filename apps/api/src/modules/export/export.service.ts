@@ -186,7 +186,7 @@ export async function exportMandatsCSV(ids?: string[]): Promise<string> {
   const rows = mandats.map((m) => [
     m.titrePoste,
     m.entreprise.nom,
-    [m.client.prenom, m.client.nom].filter(Boolean).join(' '),
+    m.client ? [m.client.prenom, m.client.nom].filter(Boolean).join(' ') : '',
     m.statut,
     m.priorite,
     formatMoney(m.salaireMin),

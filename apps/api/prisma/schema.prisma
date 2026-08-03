@@ -239,13 +239,21 @@ model CandidatExperience {
 
 // ─── MANDATS ─────────────────────────────────────────
 
+enum MandatType {
+  CLIENT
+  VIVIER
+}
+
 model Mandat {
   id               String       @id @default(uuid()) @db.Uuid
   titrePoste       String       @db.VarChar(255)
+  // CLIENT = mandat classique (contrat, fee, portail, compte dans les stats).
+  // VIVIER = annonce de sourcing sans client : ni contrat, ni fee, ni portail, exclu des stats.
+  type             MandatType   @default(CLIENT)
   entrepriseId     String       @db.Uuid
   entreprise       Entreprise   @relation(fields: [entrepriseId], references: [id])
-  clientId         String       @db.Uuid
-  client           Client       @relation(fields: [clientId], references: [id])
+  clientId         String?      @db.Uuid
+  client           Client?      @relation(fields: [clientId], references: [id])
   description      String?      @db.Text
   localisation     String?      @db.VarChar(255)
   salaireMin       Int?

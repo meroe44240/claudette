@@ -47,7 +47,7 @@ export async function getActiviteStats(dateFrom?: Date, dateTo?: Date, userId?: 
 }
 
 export async function getPipelineStats(userId?: string) {
-  const mandatWhere: any = {};
+  const mandatWhere: any = { type: 'CLIENT' }; // exclut les VIVIER des stats
   if (userId) {
     mandatWhere.candidatures = { some: { createdById: userId } };
   }
@@ -1019,6 +1019,7 @@ export async function getSpaData(
   const periodEnd = period === 'today' ? endOfToday : period === 'month' ? endOfMonth : endOfWeek;
   const nouveauxMandats = await prisma.mandat.count({
     where: {
+      type: 'CLIENT',
       createdAt: { gte: periodStart, lte: periodEnd },
       ...(isTeam ? {} : { OR: [{ createdById: userId }, { assignedToId: userId }] }),
     },

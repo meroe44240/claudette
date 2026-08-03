@@ -227,6 +227,7 @@ export async function getStatsData(
     // ── Current period mandats won ──
     prisma.mandat.count({
       where: {
+        type: 'CLIENT',
         statut: 'GAGNE',
         updatedAt: { gte: start, lte: end },
         OR: [{ createdById: effectiveUserId }, { assignedToId: effectiveUserId }],
@@ -247,6 +248,7 @@ export async function getStatsData(
     // ── Previous period mandats won ──
     prisma.mandat.count({
       where: {
+        type: 'CLIENT',
         statut: 'GAGNE',
         updatedAt: { gte: prevStart, lte: prevEnd },
         OR: [{ createdById: effectiveUserId }, { assignedToId: effectiveUserId }],
@@ -807,7 +809,7 @@ export async function getStatsData(
       where: { createdAt: { gte: start, lte: end } },
     }),
     prisma.mandat.count({
-      where: { statut: { in: ['OUVERT', 'EN_COURS'] } },
+      where: { type: 'CLIENT', statut: { in: ['OUVERT', 'EN_COURS'] } },
     }),
     prisma.mandat.aggregate({
       where: {

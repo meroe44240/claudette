@@ -198,9 +198,11 @@ export async function create(data: CreateMandatInput, createdById: string) {
   const entreprise = await prisma.entreprise.findUnique({ where: { id: data.entrepriseId } });
   if (!entreprise) throw new NotFoundError('Entreprise', data.entrepriseId);
 
-  // Verify client exists
-  const client = await prisma.client.findUnique({ where: { id: data.clientId } });
-  if (!client) throw new NotFoundError('Client', data.clientId);
+  // Verify client exists (un mandat VIVIER peut ne pas avoir de client)
+  if (data.clientId) {
+    const client = await prisma.client.findUnique({ where: { id: data.clientId } });
+    if (!client) throw new NotFoundError('Client', data.clientId);
+  }
 
   const feeMontantEstime = calculateFeeMontantEstime(data.salaireMin, data.salaireMax, data.feePourcentage);
 
@@ -213,8 +215,8 @@ export async function create(data: CreateMandatInput, createdById: string) {
     },
   });
 
-  // Recalculate client typeClient after mandat creation
-  await recalculateTypeClient(data.clientId);
+  // Recalculate client typeClient after mandat creation (si client)
+  if (data.clientId) await recalculateTypeClient(data.clientId);
 
   // Fire-and-forget Slack notification for new opportunity
   (async () => {
@@ -262,8 +264,8 @@ export async function update(id: string, data: UpdateMandatInput) {
     data: updateData,
   });
 
-  // Recalculate client typeClient if mandat statut changed
-  if (data.statut !== undefined) {
+  // Recalculate client typeClient if mandat statut changed (si client)
+  if (data.statut !== undefined && existing.clientId) {
     await recalculateTypeClient(existing.clientId);
   }
 
