@@ -401,6 +401,18 @@ export default function MandatDetailPage() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['mandat', id] }); toast('success', 'Candidat ajouté au pipeline'); },
     onError: (e: any) => toast('error', e.message || 'Erreur lors de l\'ajout'),
   });
+  // Créer un nouveau candidat depuis la recherche puis l'ajouter au pipeline
+  const createCandMut = useMutation({
+    mutationFn: async () => {
+      const parts = addSearch.trim().split(/\s+/);
+      const prenom = parts.length > 1 ? parts[0] : undefined;
+      const nom = parts.length > 1 ? parts.slice(1).join(' ') : parts[0];
+      const created = await api.post<{ id: string }>('/candidats', { nom, prenom });
+      await api.post('/candidatures', { candidatId: created.id, mandatId: id, stage: 'SOURCING' });
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['mandat', id] }); queryClient.invalidateQueries({ queryKey: ['candidats-search-mandat'] }); toast('success', 'Candidat créé et ajouté'); setAddSearch(''); },
+    onError: (e: any) => toast('error', e.message || 'Erreur lors de la création'),
+  });
 
   const deleteMutation = useMutation({
     mutationFn: () => api.delete(`/mandats/${id}`),
@@ -1098,6 +1110,13 @@ export default function MandatDetailPage() {
                 );
               })}
             </div>
+            {addSearch.trim().length >= 2 && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(34,23,122,0.08)' }}>
+                <button disabled={createCandMut.isPending} onClick={() => createCandMut.mutate()} style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: MANROPE, fontWeight: 700, fontSize: 13, background: '#F0EFC4', color: NAVY, border: '1px dashed rgba(34,23,122,0.3)', borderRadius: 11, padding: '11px', cursor: 'pointer' }}>
+                  <UserPlus size={15} />{createCandMut.isPending ? 'Création…' : <>Créer « <strong>{addSearch.trim()}</strong> » et l'ajouter</>}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
