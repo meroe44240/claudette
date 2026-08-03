@@ -50,6 +50,7 @@ interface PaginatedResponse<T> {
 
 interface FormData {
   titrePoste: string;
+  type: string;
   entrepriseId: string;
   clientId: string;
   description: string;
@@ -64,6 +65,7 @@ interface FormData {
 
 const initialForm: FormData = {
   titrePoste: '',
+  type: 'CLIENT',
   entrepriseId: '',
   clientId: '',
   description: '',
@@ -194,7 +196,8 @@ export default function MandatNewPage() {
     const newErrors: Partial<Record<keyof FormData, string>> = {};
     if (!form.titrePoste.trim()) newErrors.titrePoste = 'Le titre du poste est requis';
     if (!form.entrepriseId) newErrors.entrepriseId = "L'entreprise est requise";
-    if (!form.clientId) newErrors.clientId = 'Le client est requis';
+    // Un mandat VIVIER (sourcing sans client) n'exige pas de client.
+    if (form.type === 'CLIENT' && !form.clientId) newErrors.clientId = 'Le client est requis';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -203,9 +206,10 @@ export default function MandatNewPage() {
 
     const payload: Record<string, unknown> = {
       titrePoste: form.titrePoste.trim(),
+      type: form.type,
       entrepriseId: form.entrepriseId,
-      clientId: form.clientId,
     };
+    if (form.type === 'CLIENT' && form.clientId) payload.clientId = form.clientId;
     if (form.description.trim()) payload.description = form.description.trim();
     if (form.localisation.trim()) payload.localisation = form.localisation.trim();
     if (form.salaireMin) payload.salaireMin = parseInt(form.salaireMin, 10);
@@ -232,6 +236,18 @@ export default function MandatNewPage() {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring' as const, stiffness: 260, damping: 25 }}>
         <Card>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-text-secondary">Type de mandat</label>
+              <div className="inline-flex rounded-xl border border-border bg-[#EFEFE6] p-1">
+                {[{ v: 'CLIENT', l: 'Client' }, { v: 'VIVIER', l: 'Vivier' }].map((o) => (
+                  <button key={o.v} type="button" onClick={() => setForm((prev) => ({ ...prev, type: o.v, ...(o.v === 'VIVIER' ? { clientId: '' } : {}) }))}
+                    className={`rounded-lg px-4 py-2 text-sm font-bold transition-all ${form.type === o.v ? 'bg-white text-[#22177A] shadow-sm' : 'text-text-secondary'}`}>
+                    {o.l}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-text-secondary">{form.type === 'VIVIER' ? 'Sourcing sans client : ni contrat, ni fee, ni portail — exclu des statistiques.' : 'Mandat client classique : contrat, fee, portail, compté dans les stats.'}</p>
+            </div>
             <Input
               label="Titre du poste *"
               value={form.titrePoste}
@@ -267,6 +283,7 @@ export default function MandatNewPage() {
               </div>
             </div>
 
+            {form.type === 'CLIENT' && (
             <div>
               <div className="flex items-end gap-2">
                 <div className="flex-1">
@@ -299,6 +316,7 @@ export default function MandatNewPage() {
                 </button>
               </div>
             </div>
+            )}
             <Input
               label="Localisation"
               value={form.localisation}

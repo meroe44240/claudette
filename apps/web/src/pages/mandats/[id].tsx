@@ -86,13 +86,14 @@ interface MandatDetail {
     secteur: string | null;
     localisation: string | null;
   };
+  type?: 'CLIENT' | 'VIVIER';
   client: {
     id: string;
     nom: string;
     prenom: string | null;
     email: string | null;
     telephone: string | null;
-  };
+  } | null;
   sales?: UserRef | null;
   recruteur?: UserRef | null;
   candidatures: Candidature[];
@@ -796,14 +797,14 @@ export default function MandatDetailPage() {
 
         {/* Segmented people bar */}
         <div className="rise" style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap', background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 14, boxShadow: CARD_SHADOW, marginTop: 11, padding: 4, animationDelay: '.14s' }}>
-          {/* Contact client */}
-          <div className="row" onClick={() => navigate(`/clients/${mandat.client.id}`)} style={{ flex: '1 1 220px', minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 13px', borderRadius: 11, cursor: 'pointer' }}>
-            <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: '50%', background: '#8E7CC3', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MANROPE, fontWeight: 800, fontSize: 10.5 }}>{getInitials(mandat.client.prenom, mandat.client.nom)}</span>
+          {/* Contact client (absent pour un mandat VIVIER) */}
+          <div className="row" onClick={() => mandat.client && navigate(`/clients/${mandat.client.id}`)} style={{ flex: '1 1 220px', minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 13px', borderRadius: 11, cursor: mandat.client ? 'pointer' : 'default' }}>
+            <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: '50%', background: mandat.client ? '#8E7CC3' : 'rgba(142,124,195,.25)', color: mandat.client ? '#fff' : '#8E7CC3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MANROPE, fontWeight: 800, fontSize: 10.5 }}>{mandat.client ? getInitials(mandat.client.prenom, mandat.client.nom) : 'V'}</span>
             <span style={{ minWidth: 0 }}>
               <span style={{ display: 'block', fontSize: 9.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: FAINT }}>Contact client</span>
-              <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: INK, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${mandat.client.prenom || ''} ${mandat.client.nom}`.trim()}</span>
+              <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: mandat.client ? INK : FAINT, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{mandat.client ? `${mandat.client.prenom || ''} ${mandat.client.nom}`.trim() : 'Vivier · sans client'}</span>
             </span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C4C1D0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginLeft: 'auto' }}><path d="m9 6 6 6-6 6" /></svg>
+            {mandat.client && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C4C1D0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginLeft: 'auto' }}><path d="m9 6 6 6-6 6" /></svg>}
           </div>
           <span style={{ width: 1, height: 28, background: 'rgba(34,23,122,.09)' }} />
 
@@ -1010,9 +1011,9 @@ export default function MandatDetailPage() {
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, color: clientActivity.statusColor }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: clientActivity.statusColor }} />{clientActivity.statusLabel}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginTop: 13 }}>
-                <span style={{ width: 36, height: 36, borderRadius: '50%', background: '#8E7CC3', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: ARCHIVO, fontSize: 12 }}>{getInitials(mandat.client.prenom, mandat.client.nom)}</span>
+                <span style={{ width: 36, height: 36, borderRadius: '50%', background: '#8E7CC3', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: ARCHIVO, fontSize: 12 }}>{mandat.client ? getInitials(mandat.client.prenom, mandat.client.nom) : 'V'}</span>
                 <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 800, color: INK }}>{`${mandat.client.prenom || ''} ${mandat.client.nom}`.trim()}</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 800, color: INK }}>{mandat.client ? `${mandat.client.prenom || ''} ${mandat.client.nom}`.trim() : 'Vivier · sans client'}</div>
                   <div style={{ fontSize: 11.5, color: '#8A8699' }}>{clientActivity.lastSeen}</div>
                 </div>
               </div>
@@ -1052,7 +1053,7 @@ export default function MandatDetailPage() {
               <button onClick={() => setAccessOpen(false)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer', flexShrink: 0 }}>✕</button>
             </div>
 
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8699', marginTop: 22 }}>Accès portail · client {`${mandat.client.prenom || ''} ${mandat.client.nom}`.trim()}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8699', marginTop: 22 }}>Accès portail{mandat.client ? ` · client ${`${mandat.client.prenom || ''} ${mandat.client.nom}`.trim()}` : ''}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 12 }}>
               {(portalAccessesQuery.data || []).length === 0 && <div style={{ fontSize: 13, color: FAINT }}>Aucun accès portail pour l'instant.</div>}
               {(portalAccessesQuery.data || []).map((a) => {

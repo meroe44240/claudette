@@ -57,7 +57,7 @@ interface MandatReportData {
     dateOuverture: string;
     dateCloture: string | null;
     entreprise: { nom: string };
-    client: { nom: string; prenom: string | null; email: string | null };
+    client: { nom: string; prenom: string | null; email: string | null } | null;
   };
   pipelineSummary: Record<string, number>;
   candidats: Array<{
@@ -289,7 +289,7 @@ export async function getMandatReport(mandatId: string): Promise<MandatReportDat
       dateOuverture: mandat.dateOuverture.toISOString(),
       dateCloture: mandat.dateCloture ? mandat.dateCloture.toISOString() : null,
       entreprise: mandat.entreprise,
-      client: mandat.client,
+      client: mandat.client ?? null,
     },
     pipelineSummary,
     candidats,
@@ -660,7 +660,7 @@ export function generateMandatReportHtml(data: MandatReportData): string {
         <div><span class="info-label">Entreprise</span></div>
         <div><span class="info-value">${escapeHtml(mandat.entreprise.nom)}</span></div>
         <div><span class="info-label">Client</span></div>
-        <div><span class="info-value">${escapeHtml(mandat.client.prenom)} ${escapeHtml(mandat.client.nom)}</span></div>
+        <div><span class="info-value">${mandat.client ? `${escapeHtml(mandat.client.prenom)} ${escapeHtml(mandat.client.nom)}` : '—'}</span></div>
         <div><span class="info-label">Statut</span></div>
         <div><span class="badge ${mandat.statut === 'OUVERT' || mandat.statut === 'EN_COURS' ? 'badge-green' : 'badge-gray'}">${STATUT_LABELS[mandat.statut] ?? mandat.statut}</span></div>
         <div><span class="info-label">Priorite</span></div>
