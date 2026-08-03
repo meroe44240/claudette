@@ -303,6 +303,7 @@ function PlainSelect({ value, onChange, options }: { value: string; onChange: (v
         onChange={(e) => onChange(e.target.value)}
         style={{ appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', width: '100%', fontFamily: MANROPE, fontSize: 13, fontWeight: 700, padding: '8px 30px 8px 12px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,0.14)', background: '#FCFCF5', color: INK, outline: 'none', cursor: 'pointer' }}
       >
+        {!options.includes(value) && <option value="">— Non assigné —</option>}
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
       <ChevronDown size={13} color="#8A8699" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
