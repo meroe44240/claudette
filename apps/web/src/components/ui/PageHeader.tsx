@@ -27,7 +27,7 @@ export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Pa
             <span key={i} className="flex items-center gap-1">
               {i > 0 && <ChevronRight size={14} className="text-neutral-300" />}
               {crumb.href ? (
-                <a href={crumb.href} className="text-neutral-500 hover:text-primary-500 transition-colors">{crumb.label}</a>
+                <a href={crumb.href} className="text-neutral-500 hover:text-[#22177A] transition-colors">{crumb.label}</a>
               ) : (
                 <span className="text-neutral-700">{crumb.label}</span>
               )}

@@ -312,7 +312,7 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
         <div className="flex flex-col items-center gap-2">
           <div
             className={`flex h-12 w-12 items-center justify-center rounded-xl transition-colors duration-200 ${
-              isDragOver ? 'bg-primary-100 text-primary-500' : 'bg-neutral-100 text-neutral-400'
+              isDragOver ? 'bg-primary-100 text-[#22177A]' : 'bg-neutral-100 text-neutral-400'
             }`}
           >
             <Upload size={22} />
@@ -322,7 +322,7 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
               {isDragOver ? 'Déposez vos fichiers ici' : 'Glissez-déposez vos fichiers ici'}
             </p>
             <p className="mt-1 text-xs text-neutral-400">
-              ou <span className="text-primary-500 underline">parcourir</span> {'\u2022'} PDF, DOC, DOCX, PNG, JPG {'\u2022'} Max 10 Mo
+              ou <span className="text-[#22177A] underline">parcourir</span> {'\u2022'} PDF, DOC, DOCX, PNG, JPG {'\u2022'} Max 10 Mo
             </p>
           </div>
         </div>
@@ -346,7 +346,7 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
                 className="flex items-center gap-3 rounded-xl border border-neutral-100 bg-white p-3"
               >
                 {upload.status === 'uploading' && (
-                  <Loader2 size={16} className="shrink-0 animate-spin text-primary-500" />
+                  <Loader2 size={16} className="shrink-0 animate-spin text-[#22177A]" />
                 )}
                 {upload.status === 'success' && (
                   <CheckCircle size={16} className="shrink-0 text-green-500" />
@@ -360,7 +360,7 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
                   {upload.status === 'uploading' && (
                     <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
                       <motion.div
-                        className="h-full rounded-full bg-primary-500"
+                        className="h-full rounded-full bg-[#22177A]"
                         initial={{ width: 0 }}
                         animate={{ width: `${upload.progress}%` }}
                         transition={{ duration: 0.3 }}

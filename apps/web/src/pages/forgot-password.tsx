@@ -21,7 +21,7 @@ export default function ForgotPasswordPage() {
     <div className="flex min-h-screen items-center justify-center bg-neutral-50">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-card">
         <div className="mb-8 text-center">
-          <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-500 text-white font-bold text-lg">
+          <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#22177A] text-[#E6E9AF] font-bold text-lg">
             H
           </div>
           <h1 className="text-[22px] font-bold text-neutral-900">Réinitialisation</h1>

@@ -476,7 +476,7 @@ export default function CandidatNewPage() {
           onClick={() => !cvUploadMutation.isPending && fileInputRef.current?.click()}
           className={`relative cursor-pointer rounded-2xl border-2 border-dashed transition-all duration-300 ${
             isDragging
-              ? 'border-primary-500 bg-primary-50/50 scale-[1.01]'
+              ? 'border-[#22177A] bg-[#F2F3D8]/50 scale-[1.01]'
               : cvUploadMutation.isPending
                 ? 'border-primary-300 bg-primary-50/30'
                 : uploadedFileName && cvParsed
@@ -496,7 +496,7 @@ export default function CandidatNewPage() {
             {cvUploadMutation.isPending ? (
               <>
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-100">
-                  <Loader2 size={28} className="animate-spin text-primary-500" />
+                  <Loader2 size={28} className="animate-spin text-[#22177A]" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-primary-600">Analyse du CV en cours...</p>
@@ -526,7 +526,7 @@ export default function CandidatNewPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-text-primary">
-                    <span className="text-primary-500">Déposez un CV ici</span> (PDF)
+                    <span className="text-[#22177A]">Déposez un CV ici</span> (PDF)
                   </p>
                   <p className="mt-1 text-xs text-text-tertiary">
                     L'IA extraira les informations automatiquement et générera un pitch commercial
@@ -608,7 +608,7 @@ export default function CandidatNewPage() {
                     value={form.entrepriseActuelle}
                     onChange={(e) => set('entrepriseActuelle')(e as React.ChangeEvent<HTMLInputElement>)}
                     placeholder="Nom de l'entreprise"
-                    className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-colors"
+                    className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-[#22177A] focus:outline-none focus:ring-2 focus:ring-[#22177A]/20 transition-colors"
                   />
                   <datalist id="entreprise-suggestions">
                     {(entrepriseSuggestions || []).map((nom: string) => (
@@ -743,7 +743,7 @@ export default function CandidatNewPage() {
               <Card>
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-text-primary">
-                    <Sparkles size={16} className="text-primary-500" />
+                    <Sparkles size={16} className="text-[#22177A]" />
                     Pitch court
                   </h3>
                   <button
@@ -767,7 +767,7 @@ export default function CandidatNewPage() {
               <Card>
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-text-primary">
-                    <Sparkles size={16} className="text-primary-500" />
+                    <Sparkles size={16} className="text-[#22177A]" />
                     Pitch commercial
                   </h3>
                   <button
@@ -790,7 +790,7 @@ export default function CandidatNewPage() {
               {/* Key Selling Points */}
               <Card>
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                  <Sparkles size={16} className="text-primary-500" />
+                  <Sparkles size={16} className="text-[#22177A]" />
                   Points forts
                 </h3>
                 <div className="space-y-2">
@@ -813,7 +813,7 @@ export default function CandidatNewPage() {
               {/* Ideal For */}
               <Card>
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-primary">
-                  <Sparkles size={16} className="text-primary-500" />
+                  <Sparkles size={16} className="text-[#22177A]" />
                   Idéal pour
                 </h3>
                 <input
@@ -832,7 +832,7 @@ export default function CandidatNewPage() {
                   className="flex w-full items-center justify-between text-left"
                 >
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-text-primary">
-                    <Sparkles size={16} className="text-primary-500" />
+                    <Sparkles size={16} className="text-[#22177A]" />
                     Profil anonymisé
                   </h3>
                   {showAnonymized ? <ChevronUp size={16} className="text-text-tertiary" /> : <ChevronDown size={16} className="text-text-tertiary" />}
