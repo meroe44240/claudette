@@ -18,13 +18,31 @@ export async function sendEmail(
   text?: string,
 ): Promise<void> {
   if (process.env.NODE_ENV === 'test') return;
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM || 'noreply@humanup.io',
-    to,
-    subject,
-    html,
-    text,
-  });
+
+  const from = process.env.SMTP_FROM || 'noreply@humanup.io';
+  const apiKey = process.env.SMTP_PASSWORD || '';
+
+  // Resend : privilegier l'API HTTP (port 443, non filtre par l'hebergeur —
+  // les ports SMTP 25/465/587 sont souvent bloques). La cle re_... sert
+  // a la fois pour SMTP et pour l'API HTTP.
+  if (apiKey.startsWith('re_')) {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ from, to, subject, html, text }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Resend API ${res.status}: ${body}`);
+    }
+    return;
+  }
+
+  // Fallback SMTP (nodemailer) pour tout autre fournisseur.
+  await transporter.sendMail({ from, to, subject, html, text });
 }
 
 // ─── HumanUp branded email wrapper ────────────────────
