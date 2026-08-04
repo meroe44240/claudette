@@ -910,6 +910,49 @@ export async function notifyNouvelleOpportunite(data: {
 }
 
 /**
+ * Notify Slack (#general) quand le binome d'un mandat est assigne
+ * (commercial et/ou recruteur).
+ */
+export async function notifyAssignation(data: {
+  mandatTitre: string;
+  entrepriseNom: string | null;
+  changes: { role: 'Commercial' | 'Recruteur'; personne: string }[];
+}): Promise<void> {
+  const config = await getSlackConfig();
+  if (!config || !config.enabled || !data.changes.length) return;
+
+  const lignes = data.changes.map((c) =>
+    `${c.role === 'Recruteur' ? '👔' : '🧭'} ${c.role} → *${c.personne}*`,
+  );
+
+  const payload = {
+    channel: '#general', // pris en compte par les webhooks legacy ; ignore sinon (poste sur le canal du webhook)
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: [
+            `🤝 *Mandat assigné*`,
+            ``,
+            `📋 ${data.mandatTitre}`,
+            ...(data.entrepriseNom ? [`🏢 ${data.entrepriseNom}`] : []),
+            ...lignes,
+          ].join('\n'),
+        },
+      },
+    ],
+  };
+
+  try {
+    await sendToWebhook(config.webhookUrl, payload);
+    console.log(`[Slack] Assignation notification sent: ${data.mandatTitre}`);
+  } catch (err) {
+    console.error('[Slack] Failed to send assignation notification:', err);
+  }
+}
+
+/**
  * Notify Slack when a candidature reaches PLACE or mandat reaches GAGNE (close won).
  */
 export async function notifyCloseWon(data: {

@@ -4,7 +4,7 @@ import { paginatedResult, paginationToSkipTake } from '../../lib/pagination.js';
 import type { PaginationParams } from '../../lib/pagination.js';
 import type { CreateMandatInput, UpdateMandatInput, UpdateFeeInput } from './mandat.schema.js';
 import { scoreCandidature } from '../candidatures/scoring.service.js';
-import { notifyNouvelleOpportunite, notifyCloseWon } from '../slack/slack.service.js';
+import { notifyNouvelleOpportunite, notifyCloseWon, notifyAssignation } from '../slack/slack.service.js';
 
 function calculateFeeMontantEstime(salaireMin?: number | null, salaireMax?: number | null, feePourcentage?: number | null): number | undefined {
   if (salaireMin != null && salaireMax != null && feePourcentage != null) {
@@ -267,6 +267,31 @@ export async function update(id: string, data: UpdateMandatInput) {
   // Recalculate client typeClient if mandat statut changed (si client)
   if (data.statut !== undefined && existing.clientId) {
     await recalculateTypeClient(existing.clientId);
+  }
+
+  // Fire-and-forget Slack notification quand le binome est assigne
+  const salesAssigned = data.salesId !== undefined && data.salesId !== null && data.salesId !== existing.salesId;
+  const recruteurAssigned = data.recruteurId !== undefined && data.recruteurId !== null && data.recruteurId !== existing.recruteurId;
+  if (salesAssigned || recruteurAssigned) {
+    (async () => {
+      try {
+        const changes: { role: 'Commercial' | 'Recruteur'; personne: string }[] = [];
+        if (salesAssigned) {
+          const u = await prisma.user.findUnique({ where: { id: data.salesId as string }, select: { nom: true, prenom: true } });
+          if (u) changes.push({ role: 'Commercial', personne: `${u.prenom || ''} ${u.nom}`.trim() });
+        }
+        if (recruteurAssigned) {
+          const u = await prisma.user.findUnique({ where: { id: data.recruteurId as string }, select: { nom: true, prenom: true } });
+          if (u) changes.push({ role: 'Recruteur', personne: `${u.prenom || ''} ${u.nom}`.trim() });
+        }
+        if (changes.length) {
+          const full = await prisma.mandat.findUnique({ where: { id }, include: { entreprise: { select: { nom: true } } } });
+          if (full) await notifyAssignation({ mandatTitre: full.titrePoste, entrepriseNom: full.entreprise?.nom ?? null, changes });
+        }
+      } catch (err) {
+        console.error('[Slack] assignation notif failed:', err);
+      }
+    })();
   }
 
   // Fire-and-forget Slack notification when mandat is won
