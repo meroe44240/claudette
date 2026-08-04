@@ -122,3 +122,61 @@ export async function getPublicBySlug(slug: string) {
   if (!offer || !offer.published) throw new NotFoundError('Offre', slug);
   return offer;
 }
+
+// ── Candidature publique (job board du site) ─────────────────────
+// Crée un Candidat (source « Job board »). Si l'offre est rattachée à un
+// mandat, crée aussi la Candidature dans le pipeline de ce mandat.
+export interface PublicApplicationInput {
+  nom: string;
+  email: string;
+  telephone?: string | null;
+  linkedinUrl?: string | null;
+  cvUrl?: string | null;
+  disponibilite?: string | null;
+  message?: string | null;
+}
+
+export async function applyToOffer(slug: string, data: PublicApplicationInput) {
+  const offer = await prisma.jobOffer.findUnique({ where: { slug } });
+  if (!offer || !offer.published) throw new NotFoundError('Offre', slug);
+
+  // « Prénom Nom » → on isole le prénom du reste.
+  const parts = data.nom.trim().split(/\s+/);
+  const prenom = parts.length > 1 ? parts.shift()! : null;
+  const nom = parts.join(' ') || data.nom.trim();
+
+  const candidat = await prisma.candidat.create({
+    data: {
+      nom,
+      prenom,
+      email: data.email,
+      telephone: data.telephone ?? null,
+      linkedinUrl: data.linkedinUrl ?? null,
+      cvUrl: data.cvUrl ?? null,
+      disponibilite: data.disponibilite ?? null,
+      source: 'Job board',
+      tags: offer.secteur ? [offer.secteur] : [],
+      notes: `Candidature via le job board pour « ${offer.titre} ».${data.message ? `\n\n${data.message}` : ''}`,
+      consentementRgpd: true,
+      consentementDate: new Date(),
+    },
+  });
+
+  let candidatureId: string | null = null;
+  if (offer.mandatId) {
+    const candidature = await prisma.candidature
+      .create({
+        data: {
+          mandatId: offer.mandatId,
+          candidatId: candidat.id,
+          stage: 'SOURCING',
+          sourcePlacement: 'Job board',
+          notes: `Candidature via le job board (offre : ${offer.titre}).`,
+        },
+      })
+      .catch(() => null);
+    candidatureId = candidature?.id ?? null;
+  }
+
+  return { ok: true, candidatId: candidat.id, candidatureId };
+}
