@@ -37,8 +37,8 @@ export default function PageHeader({ title, subtitle, breadcrumbs, actions }: Pa
       )}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[28px] font-bold text-neutral-900 -tracking-[0.01em]">{title}</h1>
-          {subtitle && <p className="mt-0.5 text-[15px] text-neutral-500">{subtitle}</p>}
+          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 32, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1.05 }}>{title}</h1>
+          {subtitle && <p className="mt-1" style={{ fontSize: 14, color: '#6E6A85' }}>{subtitle}</p>}
         </div>
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>

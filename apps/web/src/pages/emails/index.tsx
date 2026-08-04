@@ -183,8 +183,8 @@ export default function EmailsPage() {
       <div>
         <ToastContainer />
         <div className="mb-6">
-          <h1 className="text-[22px] font-bold text-neutral-900">Emails</h1>
-          <p className="text-[14px] text-neutral-500 mt-1">Vos emails Gmail synchronisés</p>
+          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 32, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1.05 }}>Emails</h1>
+          <p className="mt-1" style={{ fontSize: 14, color: '#6E6A85' }}>Vos emails Gmail synchronisés</p>
         </div>
         <div className="bg-white rounded-xl border border-neutral-100 p-12 text-center">
           <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
