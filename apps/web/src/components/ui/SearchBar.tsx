@@ -184,7 +184,7 @@ export default function SearchBar({ onSearch, onSelect, onCreate, placeholder = 
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="h-10 w-full rounded-lg border-[1.5px] border-transparent bg-neutral-50 py-2 pl-10 pr-10 text-[13px] outline-none transition-all placeholder:text-neutral-300 focus:border-primary-500 focus:bg-white focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
+          className="h-10 w-full rounded-lg border-[1.5px] border-transparent bg-neutral-50 py-2 pl-10 pr-10 text-[13px] outline-none transition-all placeholder:text-neutral-300 focus:border-[#22177A] focus:bg-white focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
         />
         {query && (
           <button onClick={() => { setQuery(''); setResults([]); setIsOpen(false); }} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-neutral-300 hover:text-neutral-700">
@@ -245,10 +245,10 @@ export default function SearchBar({ onSearch, onSelect, onCreate, placeholder = 
                           key={opt.type}
                           onClick={() => { onCreate(opt.type, query); setIsOpen(false); setQuery(''); }}
                           className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm rounded-lg transition-colors ${
-                            activeIndex === navIdx ? 'bg-violet-50 text-violet-700' : 'text-neutral-600 hover:bg-neutral-50'
+                            activeIndex === navIdx ? 'bg-[#F2F3D8] text-[#22177A]' : 'text-neutral-600 hover:bg-neutral-50'
                           }`}
                         >
-                          <Plus size={14} className="text-violet-500" />
+                          <Plus size={14} className="text-[#22177A]" />
                           {opt.label}
                         </button>
                       );
@@ -267,7 +267,7 @@ export default function SearchBar({ onSearch, onSelect, onCreate, placeholder = 
                       key={item.id}
                       onClick={() => { addRecentSearch(query); onSelect(item); setIsOpen(false); setQuery(''); }}
                       className={`flex w-full items-center gap-3 px-3.5 py-2.5 text-sm rounded-lg transition-colors ${
-                        activeIndex === currentIdx ? 'bg-violet-50 text-violet-700' : 'text-neutral-900 hover:bg-neutral-50'
+                        activeIndex === currentIdx ? 'bg-[#F2F3D8] text-[#22177A]' : 'text-neutral-900 hover:bg-neutral-50'
                       }`}
                     >
                       <div className="min-w-0 flex-1">

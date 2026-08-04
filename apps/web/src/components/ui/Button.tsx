@@ -10,11 +10,12 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
 }
 
+// DA HumanUp : navy #22177A + chartreuse #E6E9AF. Boutons cohérents partout.
 const variantStyles: Record<ButtonVariant, string> = {
-  primary: 'gradient-btn text-white shadow-md shadow-primary-500/20 hover:shadow-lg hover:scale-[1.02] active:scale-[0.97]',
-  secondary: 'bg-white border-[1.5px] border-neutral-100 text-neutral-700 hover:bg-neutral-50 hover:border-neutral-300 active:scale-[0.97]',
-  ghost: 'text-primary-500 hover:bg-primary-50 active:scale-[0.97]',
-  danger: 'bg-error-100 text-error hover:bg-[#FEE2E2] active:scale-[0.97]',
+  primary: 'bg-[#22177A] text-[#E6E9AF] shadow-[0_10px_22px_-14px_rgba(34,23,122,0.7)] hover:-translate-y-0.5 hover:shadow-[0_14px_26px_-14px_rgba(34,23,122,0.6)] active:scale-[0.97]',
+  secondary: 'bg-white border-[1.5px] border-[rgba(34,23,122,0.2)] text-[#22177A] hover:bg-[#FCFCF5] hover:border-[#22177A] active:scale-[0.97]',
+  ghost: 'text-[#22177A] hover:bg-[#F2F3D8] active:scale-[0.97]',
+  danger: 'bg-[#F7DEDB] text-[#B3261E] hover:bg-[#F3CFC9] active:scale-[0.97]',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {

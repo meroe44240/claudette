@@ -39,8 +39,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           <input
             ref={ref}
             id={inputId}
-            className={`w-full rounded-lg border-[1.5px] bg-white px-3 py-2.5 text-sm outline-none transition-all placeholder:text-text-tertiary focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)] ${
-              error ? 'border-error' : 'border-neutral-100'
+            className={`w-full rounded-lg border-[1.5px] bg-white px-3 py-2.5 text-sm outline-none transition-all placeholder:text-text-tertiary focus:border-[#22177A] focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)] ${
+              error ? 'border-error' : 'border-[rgba(34,23,122,0.14)]'
             } ${className}`}
             {...props}
           />
@@ -82,8 +82,8 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           <textarea
             ref={ref}
             id={inputId}
-            className={`w-full rounded-lg border-[1.5px] bg-white px-3 py-2.5 text-sm outline-none transition-all placeholder:text-text-tertiary focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)] ${
-              error ? 'border-error' : 'border-neutral-100'
+            className={`w-full rounded-lg border-[1.5px] bg-white px-3 py-2.5 text-sm outline-none transition-all placeholder:text-text-tertiary focus:border-[#22177A] focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)] ${
+              error ? 'border-error' : 'border-[rgba(34,23,122,0.14)]'
             } ${className}`}
             rows={4}
             {...props}
