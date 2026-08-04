@@ -49,7 +49,7 @@ export default function Pagination({ page, totalPages, total, onPageChange }: Pa
               {p === page && (
                 <motion.div
                   layoutId="active-page"
-                  className="absolute inset-0 rounded-lg bg-primary-500"
+                  className="absolute inset-0 rounded-lg bg-[#22177A]"
                   transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                 />
               )}

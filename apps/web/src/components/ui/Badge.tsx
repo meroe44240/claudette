@@ -32,7 +32,7 @@ const variantStyles: Record<BadgeVariant, string> = {
   warning: 'bg-[#FFF7ED] text-[#D97706] border border-[#FDE68A]',
   error: 'bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA]',
   info: 'bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]',
-  primary: 'bg-[#f6f5fa] text-[#7C3AED] border border-[#DDD6FE]',
+  primary: 'bg-[#F2F3D8] text-[#22177A] border border-[rgba(34,23,122,0.16)]',
   teal: 'bg-[#F0FDFA] text-[#0D9488] border border-[#99F6E4]',
   indigo: 'bg-[#EEF2FF] text-[#4338CA] border border-[#C7D2FE]',
   neutral: 'bg-[#f6f5fa] text-[#6e6a85] border border-[#eceaf2]',

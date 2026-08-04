@@ -98,7 +98,7 @@ export default function Select({ options, value, onChange, placeholder = 'Sélec
               key={option.value}
               type="button"
               onClick={() => { onChange(option.value); setOpen(false); setSearch(''); }}
-              className={`flex w-full items-center px-3.5 py-2.5 text-sm rounded-lg transition-colors ${option.value === value ? 'bg-primary-50 font-medium text-primary-500' : 'text-neutral-900 hover:bg-neutral-50'}`}
+              className={`flex w-full items-center px-3.5 py-2.5 text-sm rounded-lg transition-colors ${option.value === value ? 'bg-[#F2F3D8] font-semibold text-[#22177A]' : 'text-neutral-900 hover:bg-[#FCFCF5]'}`}
             >
               {option.label}
             </button>
@@ -117,7 +117,7 @@ export default function Select({ options, value, onChange, placeholder = 'Sélec
         ref={buttonRef}
         type="button"
         onClick={() => setOpen(!open)}
-        className={`flex h-10 w-full items-center justify-between rounded-lg border-[1.5px] bg-white px-3 py-2.5 text-sm outline-none transition-all ${error ? 'border-error' : 'border-neutral-100'} ${open ? 'border-primary-500 shadow-[0_0_0_3px_rgba(34,23,122,0.1)]' : ''}`}
+        className={`flex h-10 w-full items-center justify-between rounded-lg border-[1.5px] bg-white px-3 py-2.5 text-sm outline-none transition-all ${error ? 'border-error' : 'border-[rgba(34,23,122,0.14)]'} ${open ? 'border-[#22177A] shadow-[0_0_0_3px_rgba(34,23,122,0.1)]' : ''}`}
       >
         <span className={selected ? 'text-neutral-900' : 'text-neutral-300'}>{selected?.label || placeholder}</span>
         <ChevronDown size={16} className="text-neutral-300" />
