@@ -49,6 +49,58 @@ const LOST_REASONS = ['Ne convient pas au poste', 'Prétentions trop élevées',
 
 // ─── HELPERS ────────────────────────────────────────
 function initials(prenom: string | null, nom: string) { return `${(prenom?.[0] ?? '')}${nom?.[0] ?? ''}`.toUpperCase() || '?'; }
+
+// ─── Note lisible : structure les CV/notes denses (sections + gras + voir plus) ───
+const NOTE_SECTIONS = [
+  'PROFIL PROFESSIONNEL', 'PROFIL', 'RÉSUMÉ', 'RESUME',
+  'EXPÉRIENCE PROFESSIONNELLE', 'EXPÉRIENCES PROFESSIONNELLES', 'EXPÉRIENCE', 'EXPÉRIENCES', 'EXPERIENCE', 'EXPERIENCES',
+  'FORMATION', 'FORMATIONS', 'DIPLÔMES', 'DIPLOMES',
+  'COMPÉTENCES CLÉS', 'COMPÉTENCES', 'COMPETENCES', 'SKILLS',
+  'LANGUES', 'CERTIFICATIONS', 'CENTRES D\'INTÉRÊT', 'CENTRES D\'INTERET', 'INTÉRÊTS',
+  'INFORMATIONS COMPLÉMENTAIRES', 'CONTACT', 'COORDONNÉES',
+];
+// Normalise pour comparaison : sans accents, en majuscules.
+const noteNorm = (s: string) => s.trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const NOTE_SECTIONS_NORM = new Set(NOTE_SECTIONS.map(noteNorm));
+// Pattern d'une section : MAJUSCULES uniquement (convention CV → evite de
+// matcher le mot en minuscule dans une phrase), insensible aux accents.
+function noteSectionPattern(section: string): string {
+  let s = section.toUpperCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  s = s.replace(/[EÉÈÊË]/g, '[EÉÈÊË]').replace(/[AÀÂÄ]/g, '[AÀÂÄ]').replace(/[IÏÎ]/g, '[IÏÎ]').replace(/[OÔÖ]/g, '[OÔÖ]').replace(/[UÙÛÜ]/g, '[UÙÛÜ]').replace(/[CÇ]/g, '[CÇ]');
+  return s;
+}
+function structureNoteText(raw: string): string {
+  const t0 = raw.replace(/\s+/g, ' ').trim();
+  // Une seule regex, sections triees du plus LONG au plus court (l'alternance
+  // matche "PROFIL PROFESSIONNEL" avant "PROFIL"). Case-SENSITIVE (majuscules).
+  const sorted = [...NOTE_SECTIONS].sort((a, b) => b.length - a.length).map(noteSectionPattern);
+  const re = new RegExp(`\\s*\\b(${sorted.join('|')})\\b\\s*`, 'g');
+  const t = t0.replace(re, '\n\n$1\n');
+  return t.replace(/\n{3,}/g, '\n\n').trim();
+}
+function StructuredNote({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const structured = structureNoteText(text);
+  const long = structured.length > 340;
+  const shown = open || !long ? structured : structured.slice(0, 340).replace(/\s+\S*$/, '') + '…';
+  const lines = shown.split('\n');
+  return (
+    <div style={{ fontSize: 13, lineHeight: 1.55, color: '#4A4568', marginTop: 4 }}>
+      {lines.map((ln, i) => {
+        if (ln.trim() === '') return <div key={i} style={{ height: 5 }} />;
+        const isHeader = NOTE_SECTIONS_NORM.has(noteNorm(ln));
+        return isHeader
+          ? <div key={i} style={{ fontWeight: 800, fontSize: 10.5, letterSpacing: '.06em', color: '#22177A', marginTop: 7, marginBottom: 1 }}>{ln.trim()}</div>
+          : <div key={i}>{ln}</div>;
+      })}
+      {long && (
+        <button onClick={() => setOpen(o => !o)} style={{ marginTop: 5, background: 'none', border: 'none', color: '#22177A', fontWeight: 700, fontSize: 12, cursor: 'pointer', padding: 0 }}>
+          {open ? 'Voir moins' : 'Voir plus'}
+        </button>
+      )}
+    </div>
+  );
+}
 function relTime(iso: string) {
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   if (d <= 0) return "aujourd'hui"; if (d === 1) return 'hier'; if (d < 30) return `il y a ${d} j`;
@@ -369,7 +421,12 @@ export default function CandidatDetailPage() {
                           <span style={{ fontSize: 12.5, color: '#6E6A85' }}>· {f.type.toLowerCase()}</span>
                           <span style={{ fontSize: 11.5, color: '#B4B0C4' }}>{relTime(f.createdAt)}</span>
                         </div>
-                        {(f.titre || f.contenu) && <div style={{ fontSize: 13, lineHeight: 1.5, color: '#4A4568', marginTop: 4 }}>{f.titre ? <strong>{f.titre}</strong> : null}{f.titre && f.contenu ? ' — ' : ''}{f.contenu}</div>}
+                        {(f.titre || f.contenu) && (
+                          <div style={{ marginTop: 4 }}>
+                            {f.titre && <div style={{ fontSize: 13, fontWeight: 700, color: '#1A1533' }}>{f.titre}</div>}
+                            {f.contenu && <StructuredNote text={f.contenu} />}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
