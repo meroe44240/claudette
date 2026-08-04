@@ -29,28 +29,15 @@ export default async function mandatRouter(fastify: FastifyInstance) {
       const query = request.query as any;
       const params = parsePagination(query);
 
-      // ── Perimetre par role (impose cote API, pas seulement en UI) ──
-      // Un mandat a deux proprietaires : le SALES (commercial) et le RECRUTEUR.
-      //  • Non-admin : voit UNIQUEMENT ses mandats (salesId=moi OU recruteurId=moi).
-      //    Demander les mandats d'un autre => 403 (le masquage visuel ne suffit pas).
-      //  • Admin : voit tout, ou filtre par personne (userId) => OU sur les 2 colonnes.
-      //  • scope=all : bypass d'isolation pour les usages transverses (dropdown "ajouter au mandat").
-      const isAdmin = request.userRole === 'ADMIN';
-      const wanted = query.userId ?? query.assignedToId; // 'userId' (pack) ou legacy 'assignedToId'
-      let userInvolvedId: string | undefined;
-      if (query.scope === 'all') {
-        // No isolation
-      } else if (!isAdmin) {
-        if (wanted && wanted !== 'all' && wanted !== request.userId) {
-          return reply.code(403).send({
-            error: 'FORBIDDEN',
-            message: 'Vous ne pouvez consulter que vos propres mandats.',
-          });
-        }
-        userInvolvedId = request.userId;
-      } else if (wanted && wanted !== 'all') {
-        userInvolvedId = wanted;
-      }
+      // ── Visibilite OUVERTE ──
+      // Decision produit (2026-08-04) : tous les utilisateurs voient TOUS les
+      // mandats (comme les candidats). Le binome salesId/recruteurId sert a
+      // l'ATTRIBUTION (equipe, "mes mandats", stats), pas a filtrer la visibilite.
+      // Filtre optionnel par personne (userId) disponible pour tout le monde
+      // (OU sur salesId/recruteurId dans le service).
+      const wanted = query.userId ?? query.assignedToId; // 'userId' ou legacy 'assignedToId'
+      const userInvolvedId: string | undefined =
+        wanted && wanted !== 'all' ? (wanted as string) : undefined;
 
       return mandatService.list(
         params,
