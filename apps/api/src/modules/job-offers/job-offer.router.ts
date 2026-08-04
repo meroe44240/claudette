@@ -46,6 +46,17 @@ export default async function jobOfferRouter(fastify: FastifyInstance) {
   });
 }
 
+// Candidature publique reçue depuis le job board du site.
+const applySchema = z.object({
+  nom: z.string().min(1).max(200),
+  email: z.string().email().max(200),
+  telephone: z.string().max(50).nullable().optional(),
+  linkedinUrl: z.string().max(500).nullable().optional(),
+  cvUrl: z.string().max(1000).nullable().optional(),
+  disponibilite: z.string().max(100).nullable().optional(),
+  message: z.string().max(4000).nullable().optional(),
+});
+
 // ── Routeur PUBLIC (aucune auth) : /api/v1/public/job-offers ──
 // C'est ce que la landing / job board vient consommer.
 export async function jobOfferPublicRouter(fastify: FastifyInstance) {
@@ -53,5 +64,16 @@ export async function jobOfferPublicRouter(fastify: FastifyInstance) {
   fastify.get('/:slug', {
     schema: { tags: ['Public'], params: { type: 'object', required: ['slug'], properties: { slug: { type: 'string' } } } },
     handler: async (request) => { const { slug } = request.params as { slug: string }; return service.getPublicBySlug(slug); },
+  });
+  // Candidature à une offre : crée un candidat (+ candidature si l'offre a un mandat).
+  fastify.post('/:slug/apply', {
+    schema: { tags: ['Public'], params: { type: 'object', required: ['slug'], properties: { slug: { type: 'string' } } } },
+    handler: async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+      const input = applySchema.parse(request.body);
+      const result = await service.applyToOffer(slug, input);
+      reply.code(201);
+      return result;
+    },
   });
 }
