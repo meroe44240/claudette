@@ -910,6 +910,41 @@ export async function notifyNouvelleOpportunite(data: {
 }
 
 /**
+ * Notifie Slack quand une candidature arrive depuis le job board du site.
+ */
+export async function notifyJobBoardApplication(data: {
+  candidatNom: string;
+  offreTitre: string | null;
+  email: string;
+  telephone?: string | null;
+  cvUrl?: string | null;
+}): Promise<void> {
+  const config = await getSlackConfig();
+  if (!config || !config.enabled) return;
+
+  const lines = [
+    `📥 *Nouvelle candidature — job board*`,
+    ``,
+    `👤 ${data.candidatNom}`,
+    data.offreTitre ? `📋 Offre : ${data.offreTitre}` : `📋 Candidature spontanée`,
+    `✉️ ${data.email}`,
+    data.telephone ? `📞 ${data.telephone}` : null,
+    data.cvUrl ? `📎 <${data.cvUrl}|Télécharger le CV>` : null,
+  ].filter(Boolean) as string[];
+
+  const payload = {
+    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: lines.join('\n') } }],
+  };
+
+  try {
+    await sendToWebhook(config.webhookUrl, payload);
+    console.log(`[Slack] Candidature job board notifiée: ${data.candidatNom}`);
+  } catch (err) {
+    console.error('[Slack] Failed to send job board application notification:', err);
+  }
+}
+
+/**
  * Notify Slack (#general) quand le binome d'un mandat est assigne
  * (commercial et/ou recruteur).
  */

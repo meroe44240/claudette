@@ -76,4 +76,14 @@ export async function jobOfferPublicRouter(fastify: FastifyInstance) {
       return result;
     },
   });
+  // Candidature spontanée (aucune offre) : crée un candidat.
+  fastify.post('/apply', {
+    schema: { tags: ['Public'] },
+    handler: async (request, reply) => {
+      const input = applySchema.parse(request.body);
+      const result = await service.applySpontaneous(input);
+      reply.code(201);
+      return result;
+    },
+  });
 }
