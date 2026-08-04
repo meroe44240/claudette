@@ -49,6 +49,7 @@ const FastReviewPage = lazy(() => import('./pages/mandats/[id]-review'));
 const ActivitesPage = lazy(() => import('./pages/activites/index'));
 const TachesPage = lazy(() => import('./pages/taches/index'));
 const IntegrationsSettingsPage = lazy(() => import('./pages/settings/integrations'));
+const IntegrationsGuidePage = lazy(() => import('./pages/settings/integrations-guide'));
 const ImportPage = lazy(() => import('./pages/import/index'));
 const ReportsPage = lazy(() => import('./pages/reports/index'));
 const StatsPage = lazy(() => import('./pages/stats/index'));
@@ -120,6 +121,7 @@ export default function App() {
           <Route path="import" element={<ImportPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/integrations" element={<IntegrationsSettingsPage />} />
+          <Route path="settings/integrations/guide" element={<IntegrationsGuidePage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route path="stats" element={<StatsPage />} />
           <Route path="leaderboard" element={<LeaderboardPage />} />

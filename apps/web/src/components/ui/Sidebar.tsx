@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar, Wrench, Megaphone, CalendarClock } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar, Wrench, Megaphone, CalendarClock, Plug } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 
 interface NavItem {
@@ -48,7 +48,8 @@ const navSections: NavSection[] = [
   },
 ];
 
-// Paramètres — utilitaire posé en bas du bandeau
+// Bas du bandeau : "Mes intégrations" (tous) + Paramètres (admin only)
+const integrationsItem: NavItem = { to: '/settings/integrations', icon: Plug, label: 'Mes intégrations' };
 const paramItem: NavItem = { to: '/settings', icon: Settings, label: 'Paramètres' };
 
 const SHORTCUT_HINTS: Record<string, string> = {
@@ -236,9 +237,12 @@ export default function Sidebar({ collapsed = false, onToggleCollapse, isOpen = 
 
       </nav>
 
-      {/* Paramètres — en bas, séparé */}
+      {/* Bas — Mes intégrations (tous) + Paramètres (admin) */}
       <div style={{ borderTop: '1px solid rgba(230,233,175,0.12)', paddingTop: 4 }}>
-        <NavItemLink item={paramItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
+        <NavItemLink item={integrationsItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
+        {user?.role === 'ADMIN' && (
+          <NavItemLink item={paramItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
+        )}
       </div>
 
       {!mobile && (

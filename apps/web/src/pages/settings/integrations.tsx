@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Phone, Mail, Calendar, Link, Unlink, ExternalLink, Shield, RefreshCw, X, Check, MessageSquare, Send, Save, Building2, HardDrive, Folder } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { useAuthStore } from '../../stores/auth-store';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -42,6 +44,9 @@ interface SlackConfig {
 
 export default function IntegrationsSettingsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'ADMIN';
   const [alloModalOpen, setAlloModalOpen] = useState(false);
   const [alloApiKey, setAlloApiKey] = useState('');
   const [driveFolderId, setDriveFolderId] = useState('');
@@ -258,12 +263,14 @@ export default function IntegrationsSettingsPage() {
   return (
     <div>
       <PageHeader
-        title="Intégrations"
+        title="Mes intégrations"
         subtitle="Connectez vos outils pour une expérience unifiée"
-        breadcrumbs={[
-          { label: 'Paramètres', href: '/settings' },
-          { label: 'Intégrations' },
-        ]}
+        breadcrumbs={[{ label: 'Mes intégrations' }]}
+        actions={
+          <Button variant="secondary" onClick={() => navigate('/settings/integrations/guide')}>
+            📖 Guide de connexion
+          </Button>
+        }
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -603,7 +610,8 @@ export default function IntegrationsSettingsPage() {
           )}
         </Card>
 
-        {/* Slack Card */}
+        {/* Slack Card — config globale, admin uniquement */}
+        {isAdmin && (
         <Card>
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
@@ -679,6 +687,7 @@ export default function IntegrationsSettingsPage() {
             </Button>
           </div>
         </Card>
+        )}
 
         {/* Pappers Card */}
         <Card>
