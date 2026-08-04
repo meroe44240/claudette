@@ -287,7 +287,7 @@ function Scorecard({
         <span className="text-base">{config.emoji}</span>
       </div>
       <div className="flex items-end gap-3">
-        <span className="text-2xl font-bold text-neutral-900">{config.format(item.value)}</span>
+        <span className="text-[26px]" style={{ fontFamily: "'Archivo Black',sans-serif", color: '#1A1533', letterSpacing: '-0.02em' }}>{config.format(item.value)}</span>
         <span
           className={`flex items-center gap-0.5 text-[12px] font-semibold ${
             isPositive ? 'text-emerald-600' : 'text-red-500'
@@ -312,7 +312,7 @@ function Scorecard({
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-[18px] font-bold text-neutral-900 mb-4 -tracking-[0.01em]">
+    <h2 className="mb-4" style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 18, color: '#1A1533', letterSpacing: '-0.02em' }}>
       {children}
     </h2>
   );
@@ -1122,7 +1122,7 @@ export default function StatsPage() {
               onClick={() => setPeriod(opt.key)}
               className={`px-4 py-2 rounded-lg text-[13px] font-medium transition-all ${
                 period === opt.key
-                  ? 'bg-blue-500 text-white shadow-sm'
+                  ? 'bg-[#22177A] text-[#E6E9AF] shadow-sm'
                   : 'bg-transparent text-neutral-600 hover:bg-neutral-50'
               }`}
             >
