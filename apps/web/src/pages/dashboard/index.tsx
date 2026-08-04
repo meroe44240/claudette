@@ -141,6 +141,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [rangeIdx, setRangeIdx] = useState(0);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [toolsBannerHidden, setToolsBannerHidden] = useState(false);
 
   const apiPeriod = RANGES[rangeIdx].period;
 
@@ -153,6 +154,22 @@ export default function DashboardPage() {
     queryKey: ['calendar', 'events'],
     queryFn: () => api.get<{ data: CalendarEvent[] }>('/integrations/calendar/events'),
   });
+
+  // Bandeau "connecte tes outils" : Gmail / Agenda / Allo non connectes
+  const { data: integrations } = useQuery({
+    queryKey: ['integrations', 'status'],
+    queryFn: () =>
+      api.get<{ gmail?: { connected: boolean }; calendar?: { connected: boolean }; allo?: { connected: boolean } }>(
+        '/integrations/status',
+      ),
+  });
+  const missingTools = integrations
+    ? ([
+        !integrations.gmail?.connected && 'Gmail',
+        !integrations.calendar?.connected && 'Google Agenda',
+        !integrations.allo?.connected && 'Allo',
+      ].filter(Boolean) as string[])
+    : [];
 
   const bandeau = spaData?.bandeau;
   const kpis = spaData?.kpis;
@@ -210,6 +227,20 @@ export default function DashboardPage() {
 
   return (
     <div className="rise-stagger" style={{ position: 'relative' }}>
+      {/* Bandeau "connecte tes outils" */}
+      {integrations && missingTools.length > 0 && !toolsBannerHidden && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '12px 16px', background: '#F2F3D8', border: '1px solid rgba(34,23,122,0.18)', borderRadius: 14, marginBottom: 14 }}>
+          <span style={{ fontSize: 19, flexShrink: 0 }}>🔌</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: '#22177A' }}>Connecte tes outils pour tout synchroniser</div>
+            <div style={{ fontSize: 12.5, color: '#4A4568', marginTop: 1 }}>
+              Non connecté : <strong>{missingTools.join(' · ')}</strong>. Mails, RDV (+ lien Meet auto) et appels seront synchronisés dans l'ATS.
+            </div>
+          </div>
+          <button onClick={() => navigate('/settings/integrations/guide')} style={{ flexShrink: 0, fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 12.5, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }}>Connecter</button>
+          <button onClick={() => setToolsBannerHidden(true)} title="Masquer" style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', color: '#8A8699', cursor: 'pointer', fontSize: 14 }}>✕</button>
+        </div>
+      )}
       {/* Styles locaux (classes non présentes globalement) */}
       <style>{`
         @keyframes atsPulse { 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.9); opacity:.3; } }
