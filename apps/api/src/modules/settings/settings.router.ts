@@ -22,6 +22,8 @@ const updateUserSchema = z.object({
   role: z.enum(['ADMIN', 'RECRUTEUR']).optional(),
   fonction: fonctionEnum.optional(),
   excludeFromTeamStats: z.boolean().optional(),
+  // Reinitialisation du mot de passe par un admin (optionnel).
+  password: z.string().min(8, 'Minimum 8 caractères').optional(),
 });
 
 export default async function settingsRouter(fastify: FastifyInstance) {

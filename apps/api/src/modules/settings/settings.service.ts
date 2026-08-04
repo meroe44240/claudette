@@ -68,6 +68,7 @@ export async function updateUser(
     role?: Role;
     fonction?: Fonction;
     excludeFromTeamStats?: boolean;
+    password?: string;
   },
 ) {
   const existing = await prisma.user.findUnique({ where: { id } });
@@ -80,6 +81,11 @@ export async function updateUser(
   if (data.fonction !== undefined) updateData.fonction = data.fonction;
   if (data.excludeFromTeamStats !== undefined)
     updateData.excludeFromTeamStats = data.excludeFromTeamStats;
+  // Reset du mot de passe par un admin : hash + ne force pas le changement.
+  if (data.password) {
+    updateData.passwordHash = await hashPassword(data.password);
+    updateData.mustChangePassword = false;
+  }
 
   return prisma.user.update({
     where: { id },

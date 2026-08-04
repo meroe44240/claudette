@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Trash2, Plug, Settings, Users, Puzzle, GitBranch, Bell, Sparkles, Eye, EyeOff, CheckCircle2, Loader2, CalendarCheck, Copy } from 'lucide-react';
+import { Plus, Trash2, Plug, Settings, Users, Puzzle, GitBranch, Bell, Sparkles, Eye, EyeOff, CheckCircle2, Loader2, CalendarCheck, Copy, KeyRound } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
 import PageHeader from '../../components/ui/PageHeader';
@@ -44,6 +44,7 @@ interface UpdateUserPayload {
   role?: string;
   fonction?: Fonction;
   excludeFromTeamStats?: boolean;
+  password?: string;
 }
 
 const roleOptions = [
@@ -86,6 +87,8 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [resetPwdUser, setResetPwdUser] = useState<User | null>(null);
+  const [newPwd, setNewPwd] = useState('');
 
   // Form state
   const [formEmail, setFormEmail] = useState('');
@@ -462,15 +465,29 @@ export default function SettingsPage() {
       className: 'w-12',
       render: (u: User) =>
         u.id !== currentUser?.id ? (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setDeleteConfirm(u.id);
-            }}
-            className="rounded-lg p-1.5 text-neutral-300 transition-colors hover:bg-error-100 hover:text-error"
-          >
-            <Trash2 size={16} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              title="Réinitialiser le mot de passe"
+              onClick={(e) => {
+                e.stopPropagation();
+                setNewPwd('');
+                setResetPwdUser(u);
+              }}
+              className="rounded-lg p-1.5 text-neutral-300 transition-colors hover:bg-[#F2F3D8] hover:text-[#22177A]"
+            >
+              <KeyRound size={16} />
+            </button>
+            <button
+              title="Supprimer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteConfirm(u.id);
+              }}
+              className="rounded-lg p-1.5 text-neutral-300 transition-colors hover:bg-error-100 hover:text-error"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
         ) : null,
     },
   ];
@@ -1108,6 +1125,46 @@ export default function SettingsPage() {
             disabled={deleteMutation.isPending}
           >
             {deleteMutation.isPending ? 'Suppression...' : 'Supprimer'}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Reset Password Modal */}
+      <Modal
+        isOpen={!!resetPwdUser}
+        onClose={() => setResetPwdUser(null)}
+        title="Réinitialiser le mot de passe"
+        size="sm"
+      >
+        <p className="text-sm text-neutral-500">
+          Définir un nouveau mot de passe pour <strong>{resetPwdUser?.prenom} {resetPwdUser?.nom}</strong> ({resetPwdUser?.email}). Communique-le lui : il pourra se connecter avec directement.
+        </p>
+        <div className="mt-4">
+          <Input
+            type="text"
+            label="Nouveau mot de passe"
+            placeholder="Min. 8 caractères"
+            value={newPwd}
+            onChange={(e) => setNewPwd(e.target.value)}
+            autoFocus
+          />
+        </div>
+        <div className="mt-6 flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => setResetPwdUser(null)}>
+            Annuler
+          </Button>
+          <Button
+            onClick={() => {
+              if (newPwd.trim().length < 8) { toast('error', 'Minimum 8 caractères'); return; }
+              if (!resetPwdUser) return;
+              updateUserMutation.mutate(
+                { id: resetPwdUser.id, patch: { password: newPwd } },
+                { onSuccess: () => { toast('success', 'Mot de passe réinitialisé'); setResetPwdUser(null); setNewPwd(''); } },
+              );
+            }}
+            disabled={updateUserMutation.isPending}
+          >
+            {updateUserMutation.isPending ? 'Enregistrement…' : 'Réinitialiser'}
           </Button>
         </div>
       </Modal>
