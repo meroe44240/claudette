@@ -19,6 +19,7 @@ import { registerBlockedTools } from './tools/blocked.js';
 import { registerEnrichTools } from './tools/enrich.js';
 import { registerKalentTools } from './tools/kalent.js';
 import { registerJobOfferTools } from './tools/job-offers.js';
+import { registerLeadTools } from './tools/leads.js';
 
 export type ToolHandler = (args: Record<string, unknown>) => Promise<{ content: Array<{ type: 'text'; text: string }> }>;
 
@@ -68,5 +69,6 @@ export function registerAllTools(server: McpServer) {
   registerEnrichTools(server);
   registerKalentTools(server);
   registerJobOfferTools(server);
+  registerLeadTools(server);
   registerBlockedTools(server);
 }

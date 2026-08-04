@@ -55,6 +55,13 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   list_job_offers:               { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   create_job_offer:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   publish_job_offer:             { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  // ═══ LEADS (prospection / relances — sales) ═══
+  list_leads:                    { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  create_lead:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  move_lead_stage:               { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  add_lead_interaction:          { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  lose_lead:                     { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  convert_lead:                  { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
   // ═══ PUSHES ═══
 
