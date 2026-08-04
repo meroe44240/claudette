@@ -95,7 +95,7 @@ export default function InlineEdit({
             className="w-full rounded-lg border border-primary-200 bg-white px-2.5 py-1 text-sm text-neutral-900 outline-none ring-2 ring-primary-100 transition-all"
             disabled={saving}
           />
-          {saving && <Loader2 size={14} className="animate-spin text-primary-500" />}
+          {saving && <Loader2 size={14} className="animate-spin text-[#22177A]" />}
         </div>
       </div>
     );

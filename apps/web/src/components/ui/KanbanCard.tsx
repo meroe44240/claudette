@@ -18,7 +18,7 @@ export default function KanbanCard({ title, subtitle, meta, extraLine, time, onC
       className="cursor-pointer rounded-xl border-l-[3px] border-l-primary-300 bg-white p-4 shadow-[0_1px_2px_rgba(26,26,46,0.04)] transition-all duration-200 hover:shadow-[0_4px_16px_rgba(34,23,122,0.08)] hover:-translate-y-[1px]"
     >
       <div className="flex items-start gap-2.5">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold text-primary-500">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F2F3D8] text-xs font-bold text-[#22177A]">
           {title.charAt(0).toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">

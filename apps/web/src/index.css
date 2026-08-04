@@ -11,11 +11,15 @@
  * ═══════════════════════════════════════════════════════════════════════ */
 
 @theme {
-  /* ── Primary — Deep navy/violet ─────────────────────────── */
+  /* ── Primary — Deep navy (DA de marque) ─────────────────────
+   * primary-500 = navy de marque : les composants keyés dessus (Button,
+   * focus des inputs/selects, anneaux…) rendent en navy, pas en lavande.
+   */
   --color-primary-900: #1A1533;
   --color-primary-800: #22177A;   /* brand */
-  --color-primary-700: #4b3fb0;   /* hover */
-  --color-primary-500: #8e7cc3;
+  --color-primary-700: #2e2091;   /* hover (navy foncé) */
+  --color-primary-600: #22177A;   /* alias marque (référencé par endroits) */
+  --color-primary-500: #22177A;   /* = marque (anciennement lavande #8e7cc3) */
   --color-primary-300: #c4c1d0;
   --color-primary-100: #eceaf2;
   --color-primary-50:  #f6f5fa;
@@ -265,11 +269,11 @@ h1, h2, h3, .heading {
 }
 
 .gradient-btn {
-  background: linear-gradient(135deg, #22177A 0%, #4b3fb0 100%);
-  color: white;
+  background: #22177A;
+  color: #E6E9AF;
 }
 .gradient-btn:hover {
-  background: linear-gradient(135deg, #4b3fb0 0%, #22177A 100%);
+  background: #2e2091;
 }
 
 /* ── Shadows ── */
