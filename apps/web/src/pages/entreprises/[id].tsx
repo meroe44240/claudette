@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import NoteContent from '../../components/activity/NoteContent';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Contact { id: string; nom: string; prenom: string | null; email: string | null; telephone: string | null; poste: string | null }
@@ -210,7 +211,10 @@ export default function EntrepriseDetailPage() {
                 {notes.map(n => (
                   <div key={n.id} style={{ background: '#FBFBF3', border: '1px solid rgba(34,23,122,.08)', borderRadius: 12, padding: '12px 14px', marginBottom: 9 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 12.5, fontWeight: 800, color: '#1A1533' }}>{`${n.user?.prenom ?? ''} ${n.user?.nom ?? ''}`.trim() || 'Vous'}</span><span style={{ fontSize: 11.5, color: '#B4B0C4' }}>{relTime(n.createdAt)}</span></div>
-                    <div style={{ fontSize: 13, lineHeight: 1.55, color: '#4A4568', marginTop: 6 }}>{n.titre ? <strong>{n.titre} — </strong> : null}{n.contenu}</div>
+                    <div style={{ marginTop: 6 }}>
+                      {n.titre && <div style={{ fontSize: 13, fontWeight: 700, color: '#1A1533' }}>{n.titre}</div>}
+                      {n.contenu && <NoteContent text={n.contenu} />}
+                    </div>
                   </div>
                 ))}
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
