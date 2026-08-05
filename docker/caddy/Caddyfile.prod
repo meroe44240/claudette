@@ -23,6 +23,11 @@ ats.propium.co {
     reverse_proxy api:3001
   }
 
+  # Fichiers uploades (CV, documents) servis par l'API (fastify-static)
+  handle /uploads/* {
+    reverse_proxy api:3001
+  }
+
   handle {
     reverse_proxy web:80
   }
