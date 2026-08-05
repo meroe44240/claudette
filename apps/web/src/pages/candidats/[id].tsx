@@ -4,11 +4,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ArrowRight, ChevronDown, Plus, Star, Mail, Phone, Linkedin, MapPin,
   Trash2, X, FileText, Upload, Download, Calendar, Send, MessageSquare,
-  CheckSquare, Ban, Clock, Building2,
+  CheckSquare, Ban, Clock, Building2, Euro, Briefcase,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
+import NoteContent from '../../components/activity/NoteContent';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Candidature {
@@ -50,57 +51,6 @@ const LOST_REASONS = ['Ne convient pas au poste', 'Prétentions trop élevées',
 // ─── HELPERS ────────────────────────────────────────
 function initials(prenom: string | null, nom: string) { return `${(prenom?.[0] ?? '')}${nom?.[0] ?? ''}`.toUpperCase() || '?'; }
 
-// ─── Note lisible : structure les CV/notes denses (sections + gras + voir plus) ───
-const NOTE_SECTIONS = [
-  'PROFIL PROFESSIONNEL', 'PROFIL', 'RÉSUMÉ', 'RESUME',
-  'EXPÉRIENCE PROFESSIONNELLE', 'EXPÉRIENCES PROFESSIONNELLES', 'EXPÉRIENCE', 'EXPÉRIENCES', 'EXPERIENCE', 'EXPERIENCES',
-  'FORMATION', 'FORMATIONS', 'DIPLÔMES', 'DIPLOMES',
-  'COMPÉTENCES CLÉS', 'COMPÉTENCES', 'COMPETENCES', 'SKILLS',
-  'LANGUES', 'CERTIFICATIONS', 'CENTRES D\'INTÉRÊT', 'CENTRES D\'INTERET', 'INTÉRÊTS',
-  'INFORMATIONS COMPLÉMENTAIRES', 'CONTACT', 'COORDONNÉES',
-];
-// Normalise pour comparaison : sans accents, en majuscules.
-const noteNorm = (s: string) => s.trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-const NOTE_SECTIONS_NORM = new Set(NOTE_SECTIONS.map(noteNorm));
-// Pattern d'une section : MAJUSCULES uniquement (convention CV → evite de
-// matcher le mot en minuscule dans une phrase), insensible aux accents.
-function noteSectionPattern(section: string): string {
-  let s = section.toUpperCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  s = s.replace(/[EÉÈÊË]/g, '[EÉÈÊË]').replace(/[AÀÂÄ]/g, '[AÀÂÄ]').replace(/[IÏÎ]/g, '[IÏÎ]').replace(/[OÔÖ]/g, '[OÔÖ]').replace(/[UÙÛÜ]/g, '[UÙÛÜ]').replace(/[CÇ]/g, '[CÇ]');
-  return s;
-}
-function structureNoteText(raw: string): string {
-  const t0 = raw.replace(/\s+/g, ' ').trim();
-  // Une seule regex, sections triees du plus LONG au plus court (l'alternance
-  // matche "PROFIL PROFESSIONNEL" avant "PROFIL"). Case-SENSITIVE (majuscules).
-  const sorted = [...NOTE_SECTIONS].sort((a, b) => b.length - a.length).map(noteSectionPattern);
-  const re = new RegExp(`\\s*\\b(${sorted.join('|')})\\b\\s*`, 'g');
-  const t = t0.replace(re, '\n\n$1\n');
-  return t.replace(/\n{3,}/g, '\n\n').trim();
-}
-function StructuredNote({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
-  const structured = structureNoteText(text);
-  const long = structured.length > 340;
-  const shown = open || !long ? structured : structured.slice(0, 340).replace(/\s+\S*$/, '') + '…';
-  const lines = shown.split('\n');
-  return (
-    <div style={{ fontSize: 13, lineHeight: 1.55, color: '#4A4568', marginTop: 4 }}>
-      {lines.map((ln, i) => {
-        if (ln.trim() === '') return <div key={i} style={{ height: 5 }} />;
-        const isHeader = NOTE_SECTIONS_NORM.has(noteNorm(ln));
-        return isHeader
-          ? <div key={i} style={{ fontWeight: 800, fontSize: 10.5, letterSpacing: '.06em', color: '#22177A', marginTop: 7, marginBottom: 1 }}>{ln.trim()}</div>
-          : <div key={i}>{ln}</div>;
-      })}
-      {long && (
-        <button onClick={() => setOpen(o => !o)} style={{ marginTop: 5, background: 'none', border: 'none', color: '#22177A', fontWeight: 700, fontSize: 12, cursor: 'pointer', padding: 0 }}>
-          {open ? 'Voir moins' : 'Voir plus'}
-        </button>
-      )}
-    </div>
-  );
-}
 function relTime(iso: string) {
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   if (d <= 0) return "aujourd'hui"; if (d === 1) return 'hier'; if (d < 30) return `il y a ${d} j`;
@@ -185,7 +135,12 @@ export default function CandidatDetailPage() {
     { label: 'Message', Icon: Send, color: '#fff', run: () => { if (c.email) window.location.href = `mailto:${c.email}`; else toast('error', "Pas d'email"); } },
   ];
 
+  const pretentions = c.salaireSouhaite ? `${c.salaireSouhaite.toLocaleString('fr-FR')} €` : null;
+  const posteActuelLabel = c.posteActuel ? `${c.posteActuel}${c.entrepriseActuelle ? ` · ${c.entrepriseActuelle}` : ''}` : (c.entrepriseActuelle || null);
   const details: { label: string; Icon: typeof Mail; value: string | null; href?: string; select?: boolean }[] = [
+    { label: 'Prétentions', Icon: Euro, value: pretentions },
+    { label: 'Disponibilité', Icon: Clock, value: c.disponibilite },
+    { label: 'Poste actuel', Icon: Briefcase, value: posteActuelLabel },
     { label: 'E-mail', Icon: Mail, value: c.email, href: c.email ? `mailto:${c.email}` : undefined },
     { label: 'Téléphone', Icon: Phone, value: c.telephone, href: c.telephone ? `tel:${c.telephone}` : undefined },
     { label: 'LinkedIn', Icon: Linkedin, value: c.linkedinUrl, href: c.linkedinUrl ?? undefined },
@@ -244,6 +199,23 @@ export default function CandidatDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* FACTS — infos clés en un coup d'œil */}
+          {(pretentions || c.disponibilite || posteActuelLabel || c.localisation) && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 22 }}>
+              {[
+                { label: 'Prétentions', value: pretentions, hi: true },
+                { label: 'Disponibilité', value: c.disponibilite, hi: false },
+                { label: 'Poste actuel', value: posteActuelLabel, hi: false },
+                { label: 'Localisation', value: c.localisation, hi: false },
+              ].filter(f => f.value).map(f => (
+                <div key={f.label} style={{ flex: '1 1 150px', minWidth: 140, background: f.hi ? '#22177A' : '#fff', border: `1px solid ${f.hi ? '#22177A' : 'rgba(34,23,122,.1)'}`, borderRadius: 13, padding: '11px 14px', boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
+                  <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.09em', textTransform: 'uppercase', color: f.hi ? 'rgba(230,233,175,.75)' : '#9A96AE' }}>{f.label}</div>
+                  <div style={{ fontSize: f.hi ? 19 : 14, fontWeight: 800, color: f.hi ? '#E6E9AF' : '#1A1533', marginTop: 3, fontFamily: f.hi ? "'Archivo Black',sans-serif" : undefined, letterSpacing: f.hi ? '-.01em' : undefined, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* DÉTAILS */}
           <div style={{ marginTop: 32 }}>
@@ -424,7 +396,7 @@ export default function CandidatDetailPage() {
                         {(f.titre || f.contenu) && (
                           <div style={{ marginTop: 4 }}>
                             {f.titre && <div style={{ fontSize: 13, fontWeight: 700, color: '#1A1533' }}>{f.titre}</div>}
-                            {f.contenu && <StructuredNote text={f.contenu} />}
+                            {f.contenu && <NoteContent text={f.contenu} />}
                           </div>
                         )}
                       </div>

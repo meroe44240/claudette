@@ -8,6 +8,7 @@ import {
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
+import NoteContent from '../../components/activity/NoteContent';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Mandat {
@@ -242,7 +243,12 @@ export default function ClientDetailPage() {
                     <span style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 9, background: '#E6E9AF', color: '#22177A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 10 }}>{initials(f.user?.prenom ?? null, f.user?.nom ?? '?')}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap' }}><span style={{ fontSize: 13, fontWeight: 800, color: '#1A1533' }}>{`${f.user?.prenom ?? ''} ${f.user?.nom ?? ''}`.trim() || 'Système'}</span><span style={{ fontSize: 12.5, color: '#6E6A85' }}>· {f.type.toLowerCase()}</span><span style={{ fontSize: 11.5, color: '#B4B0C4' }}>{relTime(f.createdAt)}</span></div>
-                      {(f.titre || f.contenu) && <div style={{ fontSize: 13, lineHeight: 1.5, color: '#4A4568', marginTop: 4 }}>{f.titre ? <strong>{f.titre}</strong> : null}{f.titre && f.contenu ? ' — ' : ''}{f.contenu}</div>}
+                      {(f.titre || f.contenu) && (
+                        <div style={{ marginTop: 4 }}>
+                          {f.titre && <div style={{ fontSize: 13, fontWeight: 700, color: '#1A1533' }}>{f.titre}</div>}
+                          {f.contenu && <NoteContent text={f.contenu} />}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
