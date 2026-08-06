@@ -6,6 +6,7 @@ import {
   notifyPresentation,
   notifyRdvClient,
   notifyCloseWon,
+  notifyNewCandidate,
 } from '../slack/slack.service.js';
 import { logActivity } from '../../lib/activity-logger.js';
 import { sendEmail, renderBrandedEmail } from '../../lib/mailer.js';
@@ -256,6 +257,29 @@ export async function create(data: CreateCandidatureInput, createdById: string) 
       });
     })
     .catch(() => {});
+
+  // Fire-and-forget: notif Slack "nouveau candidat au pipeline" (informe le sales du mandat)
+  (async () => {
+    try {
+      const [mandat, candidat, addedBy] = await Promise.all([
+        prisma.mandat.findUnique({ where: { id: data.mandatId }, select: { titrePoste: true, entreprise: { select: { nom: true } }, sales: { select: { prenom: true } } } }),
+        prisma.candidat.findUnique({ where: { id: data.candidatId }, select: { prenom: true, nom: true } }),
+        prisma.user.findUnique({ where: { id: createdById }, select: { prenom: true } }),
+      ]);
+      if (mandat && candidat) {
+        await notifyNewCandidate({
+          candidatNom: `${candidat.prenom || ''} ${candidat.nom}`.trim(),
+          mandatTitre: mandat.titrePoste,
+          entrepriseNom: mandat.entreprise?.nom ?? null,
+          salesPrenom: mandat.sales?.prenom ?? null,
+          byPrenom: addedBy?.prenom ?? null,
+          stageLabel: data.stage,
+        });
+      }
+    } catch (err) {
+      console.error('[Slack] new candidate notif failed:', err);
+    }
+  })();
 
   // If the candidature is created DIRECTLY at an advanced stage
   // (ENTRETIEN_1 / ENTRETIEN_CLIENT / PLACE), fire the matching Slack notif —

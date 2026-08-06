@@ -335,6 +335,7 @@ export default function MandatDetailPage() {
   const [editTeam, setEditTeam] = useState(false);
   // Ajout de candidats au pipeline
   const [addOpen, setAddOpen] = useState(false);
+  const [draggedCandId, setDraggedCandId] = useState<string | null>(null);
   const [addSearch, setAddSearch] = useState('');
   const [addDeb, setAddDeb] = useState('');
   useEffect(() => { const t = setTimeout(() => setAddDeb(addSearch), 300); return () => clearTimeout(t); }, [addSearch]);
@@ -401,6 +402,28 @@ export default function MandatDetailPage() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['mandat', id] }); toast('success', 'Candidat ajouté au pipeline'); },
     onError: (e: any) => toast('error', e.message || 'Erreur lors de l\'ajout'),
   });
+  // Déplacer un candidat entre les colonnes du pipeline (drag & drop)
+  const moveStageMut = useMutation({
+    mutationFn: ({ candId, stage }: { candId: string; stage: string }) => api.put(`/candidatures/${candId}`, { stage }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['mandat', id] }); toast('success', 'Candidat déplacé'); },
+    onError: (e: any) => toast('error', e.message || 'Erreur lors du déplacement'),
+  });
+  // Étapes qui exigent une saisie obligatoire (comme les modales du Kanban) →
+  // on renvoie vers le Kanban complet pour les renseigner.
+  const GATED_STAGES = ['ENTRETIEN_CLIENT', 'PLACE', 'REFUSE'];
+  const handlePipelineDrop = (targetStage: string) => {
+    const candId = draggedCandId;
+    setDraggedCandId(null);
+    if (!candId) return;
+    const cand = mandat?.candidatures.find((c) => c.id === candId);
+    if (!cand || cand.stage === targetStage) return;
+    if (GATED_STAGES.includes(targetStage)) {
+      toast('info', 'Cette étape demande des infos — complète sur le Kanban');
+      navigate(`/mandats/${id}/kanban`);
+      return;
+    }
+    moveStageMut.mutate({ candId, stage: targetStage });
+  };
   // Créer un nouveau candidat depuis la recherche puis l'ajouter au pipeline
   const createCandMut = useMutation({
     mutationFn: async () => {
@@ -899,7 +922,10 @@ export default function MandatDetailPage() {
                 const shown = cands.slice(0, 6);
                 const more = Math.max(0, cands.length - shown.length);
                 return (
-                  <div key={stage} style={{ background: active ? '#FCFCF5' : 'rgba(252,252,245,.5)', border: `1px solid ${active ? 'rgba(34,23,122,.11)' : 'rgba(34,23,122,.06)'}`, borderRadius: 14, padding: '14px 13px 16px', minHeight: 520 }}>
+                  <div key={stage}
+                    onDragOver={(e) => { if (draggedCandId) e.preventDefault(); }}
+                    onDrop={() => handlePipelineDrop(stage)}
+                    style={{ background: draggedCandId ? '#F7F7EA' : (active ? '#FCFCF5' : 'rgba(252,252,245,.5)'), border: `1px ${draggedCandId ? 'dashed' : 'solid'} ${draggedCandId ? 'rgba(34,23,122,.3)' : (active ? 'rgba(34,23,122,.11)' : 'rgba(34,23,122,.06)')}`, borderRadius: 14, padding: '14px 13px 16px', minHeight: 520, transition: 'background .15s, border-color .15s' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 5 }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
                         <span style={{ width: 7, height: 7, borderRadius: '50%', background: stageColors[stage], flexShrink: 0 }} />
@@ -911,7 +937,12 @@ export default function MandatDetailPage() {
                       {shown.map((c, j) => {
                         const [avBg, avFg] = PIPE_AV[j % 3];
                         return (
-                          <div key={c.id} className="kcard" onClick={() => navigate(`/candidats/${c.candidat.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 9, background: '#fff', border: '1px solid rgba(34,23,122,.1)', borderRadius: 11, padding: '11px 12px', boxShadow: '0 1px 2px rgba(34,23,122,.05)', cursor: 'grab' }}>
+                          <div key={c.id} className="kcard"
+                            draggable
+                            onDragStart={(e) => { setDraggedCandId(c.id); e.dataTransfer.effectAllowed = 'move'; }}
+                            onDragEnd={() => setDraggedCandId(null)}
+                            onClick={() => { if (!draggedCandId) navigate(`/candidats/${c.candidat.id}`); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 9, background: '#fff', border: '1px solid rgba(34,23,122,.1)', borderRadius: 11, padding: '11px 12px', boxShadow: '0 1px 2px rgba(34,23,122,.05)', cursor: 'grab', opacity: draggedCandId === c.id ? 0.4 : 1 }}>
                             <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: '50%', background: avBg, color: avFg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MANROPE, fontWeight: 800, fontSize: 11 }}>{getInitials(c.candidat.prenom, c.candidat.nom)}</span>
                             <span style={{ minWidth: 0, flex: 1 }}>
                               <span style={{ display: 'block', fontSize: 13, fontWeight: 800, color: INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${c.candidat.prenom || ''} ${c.candidat.nom}`.trim()}</span>
