@@ -988,6 +988,48 @@ export async function notifyAssignation(data: {
 }
 
 /**
+ * Notify Slack (#general) quand un candidat est ajoute au pipeline d'un mandat.
+ * Informe notamment le SALES (commercial) du mandat qu'un nouveau profil est arrive.
+ */
+export async function notifyNewCandidate(data: {
+  candidatNom: string;
+  mandatTitre: string;
+  entrepriseNom: string | null;
+  salesPrenom: string | null;
+  byPrenom: string | null;
+  stageLabel: string;
+}): Promise<void> {
+  const config = await getSlackConfig();
+  if (!config || !config.enabled) return;
+
+  const payload = {
+    channel: '#general',
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: [
+            `🆕 *Nouveau candidat au pipeline*`,
+            ``,
+            `👤 *${data.candidatNom}*  ·  étape ${data.stageLabel}`,
+            `📋 ${data.mandatTitre}${data.entrepriseNom ? ` — ${data.entrepriseNom}` : ''}`,
+            `➕ Ajouté par ${data.byPrenom || 'un recruteur'}${data.salesPrenom ? `  ·  Sales : *${data.salesPrenom}*` : ''}`,
+          ].join('\n'),
+        },
+      },
+    ],
+  };
+
+  try {
+    await sendToWebhook(config.webhookUrl, payload);
+    console.log(`[Slack] Nouveau candidat notification sent: ${data.candidatNom} -> ${data.mandatTitre}`);
+  } catch (err) {
+    console.error('[Slack] Failed to send nouveau candidat notification:', err);
+  }
+}
+
+/**
  * Notify Slack when a candidature reaches PLACE or mandat reaches GAGNE (close won).
  */
 export async function notifyCloseWon(data: {
