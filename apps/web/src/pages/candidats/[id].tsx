@@ -10,6 +10,7 @@ import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
 import NoteContent from '../../components/activity/NoteContent';
+import MentionTextarea from '../../components/activity/MentionTextarea';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Candidature {
@@ -71,6 +72,7 @@ export default function CandidatDetailPage() {
   const [railTab, setRailTab] = useState<'act' | 'com' | 'task' | 'eval' | 'msg'>('act');
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
+  const [mentionIds, setMentionIds] = useState<string[]>([]);
   const [taskText, setTaskText] = useState('');
   const [linkSel, setLinkSel] = useState('');
   const [lost, setLost] = useState<{ candId: string; titre: string; company: string } | null>(null);
@@ -120,7 +122,7 @@ export default function CandidatDetailPage() {
   const firstCand = c.candidatures.find(x => x.stage !== 'REFUSE') ?? c.candidatures[0];
   const sourcedFor = firstCand?.mandat.titrePoste;
 
-  const submitComment = () => { const t = comment.trim(); if (!t) return; actMut.mutate({ type: 'NOTE', contenu: t }); setComment(''); };
+  const submitComment = () => { const t = comment.trim(); if (!t) return; actMut.mutate({ type: 'NOTE', contenu: t, mentionedUserIds: mentionIds }); setComment(''); setMentionIds([]); };
   const submitTask = () => { const t = taskText.trim(); if (!t) return; actMut.mutate({ type: 'TACHE', isTache: true, titre: t }); setTaskText(''); };
   const submitEval = () => { if (!rating) { toast('error', 'Choisissez une note'); return; } actMut.mutate({ type: 'NOTE', titre: `Évaluation ${'★'.repeat(rating)}`, contenu: comment.trim() || `Note ${rating}/5` }); setComment(''); toast('success', 'Évaluation ajoutée'); };
   const advance = (cand: Candidature) => { const i = STAGES.indexOf(cand.stage); if (i < 0 || i >= STAGES.length - 1) { toast('error', 'Déjà à la dernière étape'); return; } advanceMut.mutate({ candId: cand.id, stage: STAGES[i + 1] }); };
@@ -447,7 +449,7 @@ export default function CandidatDetailPage() {
                   {[1, 2, 3, 4, 5].map(n => <button key={n} onClick={() => setRating(n)} style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', lineHeight: 1 }}><Star size={22} fill={n <= rating ? '#E6C64A' : 'none'} color={n <= rating ? '#E6C64A' : '#C4C1D0'} /></button>)}
                   <span style={{ fontSize: 12, color: '#8A8699', marginLeft: 8 }}>{rating ? `${rating}/5` : 'Notez'}</span>
                 </div>
-                <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Votre débrief…" style={{ width: '100%', minHeight: 90, resize: 'vertical', marginTop: 12, fontFamily: "'Manrope',sans-serif", fontSize: 13.5, lineHeight: 1.55, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
+                <div style={{ marginTop: 12 }}><MentionTextarea value={comment} onChange={(v, ids) => { setComment(v); setMentionIds(ids); }} placeholder="Votre débrief… (tapez @ pour mentionner un collègue)" /></div>
                 <button onClick={submitEval} style={{ width: '100%', marginTop: 10, fontSize: 13.5, fontWeight: 800, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: 11, cursor: 'pointer' }}>Enregistrer l'évaluation</button>
               </>
             )}

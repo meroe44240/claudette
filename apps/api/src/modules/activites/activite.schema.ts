@@ -14,6 +14,7 @@ export const createActiviteSchema = z.object({
   bookmarked: z.boolean().optional(),
   isTache: z.boolean().optional(),
   tacheDueDate: z.string().datetime().optional(),
+  mentionedUserIds: z.array(z.string().uuid()).optional(),
 });
 
 export const updateActiviteSchema = z.object({
