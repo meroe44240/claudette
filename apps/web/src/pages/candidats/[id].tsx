@@ -496,75 +496,113 @@ export default function CandidatDetailPage() {
   );
 }
 
-// ─── MESSAGES (fil des échanges email avec le candidat) ──────────
+// ─── MESSAGES (fil unifié email + SMS avec le candidat) ──────────
 interface GmailMsg { id: string; threadId: string; from: { name: string; email: string }; to?: string; subject: string; snippet: string; date: string; isRead: boolean; isSent?: boolean }
+interface ActiviteRaw { id: string; type: string; contenu: string | null; direction: string | null; createdAt: string; metadata?: Record<string, any> }
+type FilItem = { id: string; kind: 'email' | 'sms'; out: boolean; author: string; subject?: string; text: string; date: string };
 
 function MessagesTab({ candidat }: { candidat: CandidatDetail }) {
   const qc = useQueryClient();
   const email = candidat.email;
+  const phone = candidat.telephone;
   const prenom = candidat.prenom || candidat.nom;
+  const [channel, setChannel] = useState<'email' | 'sms'>(email ? 'email' : 'sms');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
 
-  const { data, isLoading, isError } = useQuery<{ messages: GmailMsg[] }>({
+  const { data: mailData, isLoading: mailLoading, isError: mailError } = useQuery<{ messages: GmailMsg[] }>({
     queryKey: ['candidat-messages', email],
     queryFn: () => api.get(`/integrations/gmail/messages?q=${encodeURIComponent(email ?? '')}&maxResults=40&filter=all`),
     enabled: !!email,
     retry: false,
   });
+  const { data: actData } = useQuery<{ data: ActiviteRaw[] }>({
+    queryKey: ['candidat-sms', candidat.id],
+    queryFn: () => api.get(`/activites?entiteType=CANDIDAT&entiteId=${candidat.id}&perPage=100`),
+    retry: false,
+  });
 
-  const messages = useMemo(
-    () => [...(data?.messages ?? [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
-    [data],
-  );
+  const fil = useMemo<FilItem[]>(() => {
+    const emails: FilItem[] = (mailData?.messages ?? []).map((m) => ({
+      id: 'e_' + m.id, kind: 'email', out: !!m.isSent,
+      author: m.isSent ? 'Vous' : (m.from?.name || m.from?.email || 'Candidat'),
+      subject: m.subject && m.subject !== '(Sans objet)' ? m.subject : undefined,
+      text: m.snippet, date: m.date,
+    }));
+    const sms: FilItem[] = (actData?.data ?? [])
+      .filter((a) => (a.metadata as any)?.channel === 'SMS')
+      .map((a) => ({
+        id: 's_' + a.id, kind: 'sms' as const, out: a.direction === 'SORTANT',
+        author: a.direction === 'SORTANT' ? 'Vous' : prenom, text: a.contenu || '', date: a.createdAt,
+      }));
+    return [...emails, ...sms].sort((x, y) => new Date(x.date).getTime() - new Date(y.date).getTime());
+  }, [mailData, actData, prenom]);
 
   const sendMut = useMutation({
-    mutationFn: () => api.post('/integrations/gmail/send', {
-      to: email,
-      subject: subject.trim() || `Message pour ${prenom}`,
-      body: body.trim(),
-      entiteType: 'CANDIDAT',
-      entiteId: candidat.id,
-    }),
-    onSuccess: () => { setBody(''); toast('success', 'Email envoyé'); qc.invalidateQueries({ queryKey: ['candidat-messages', email] }); },
+    mutationFn: () => channel === 'email'
+      ? api.post('/integrations/gmail/send', { to: email, subject: subject.trim() || `Message pour ${prenom}`, body: body.trim(), entiteType: 'CANDIDAT', entiteId: candidat.id })
+      : api.post('/integrations/allo/sms', { to: phone, message: body.trim(), entiteType: 'CANDIDAT', entiteId: candidat.id }),
+    onSuccess: () => {
+      setBody('');
+      toast('success', channel === 'email' ? 'Email envoyé' : 'SMS envoyé');
+      qc.invalidateQueries({ queryKey: channel === 'email' ? ['candidat-messages', email] : ['candidat-sms', candidat.id] });
+    },
     onError: (e: any) => toast('error', e?.message || "Échec de l'envoi"),
   });
 
-  if (!email) {
-    return <div style={{ textAlign: 'center', padding: '30px 12px', color: '#8A8699', fontSize: 13 }}>Aucun email renseigné pour {prenom}. Ajoute une adresse pour échanger ici.</div>;
+  const canSend = !!body.trim() && !sendMut.isPending && (channel === 'email' ? !!email : !!phone);
+
+  if (!email && !phone) {
+    return <div style={{ textAlign: 'center', padding: '30px 12px', color: '#8A8699', fontSize: 13 }}>Aucun email ni téléphone renseigné pour {prenom}. Ajoute un contact pour échanger ici.</div>;
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {isLoading && <div style={{ textAlign: 'center', color: '#8A8699', fontSize: 12.5, padding: 20 }}>Chargement des échanges…</div>}
-      {isError && (
+      {mailLoading && <div style={{ textAlign: 'center', color: '#8A8699', fontSize: 12.5, padding: 20 }}>Chargement des échanges…</div>}
+      {mailError && email && (
         <div style={{ background: '#FBF3E7', border: '1px solid #F0D9B5', borderRadius: 12, padding: '12px 14px', fontSize: 12.5, lineHeight: 1.5, color: '#8A6A2E' }}>
           Connecte ta boîte <strong>Gmail</strong> dans <strong>Réglages → Intégrations</strong> pour voir et envoyer les emails ici.
         </div>
       )}
-      {!isLoading && !isError && messages.length === 0 && (
-        <div style={{ textAlign: 'center', color: '#8A8699', fontSize: 12.5, padding: '18px 10px' }}>Aucun échange avec {email} pour l'instant. Écris le premier message ci-dessous.</div>
+      {!mailLoading && fil.length === 0 && (
+        <div style={{ textAlign: 'center', color: '#8A8699', fontSize: 12.5, padding: '18px 10px' }}>Aucun échange pour l'instant. Écris le premier message ci-dessous.</div>
       )}
 
-      {messages.map((m) => {
-        const out = !!m.isSent;
+      {fil.map((m) => {
+        const out = m.out;
+        const isSms = m.kind === 'sms';
         return (
-          <div key={m.id} style={{ alignSelf: out ? 'flex-end' : 'flex-start', maxWidth: '90%', background: out ? '#ECE7FA' : '#F5F4EA', border: `1px solid ${out ? 'rgba(34,23,122,.16)' : 'rgba(34,23,122,.08)'}`, borderRadius: 14, borderBottomRightRadius: out ? 4 : 14, borderBottomLeftRadius: out ? 14 : 4, padding: '10px 13px' }}>
-            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.02em', marginBottom: 4, display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-              <span style={{ color: out ? '#22177A' : '#4A4568', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{out ? 'Vous' : (m.from?.name || m.from?.email || 'Candidat')}</span>
+          <div key={m.id} style={{ alignSelf: out ? 'flex-end' : 'flex-start', maxWidth: '90%', background: isSms ? (out ? '#E4F1E8' : '#EEF6F0') : (out ? '#ECE7FA' : '#F5F4EA'), border: `1px solid ${isSms ? 'rgba(43,107,63,.22)' : (out ? 'rgba(34,23,122,.16)' : 'rgba(34,23,122,.08)')}`, borderRadius: 14, borderBottomRightRadius: out ? 4 : 14, borderBottomLeftRadius: out ? 14 : 4, padding: '10px 13px' }}>
+            <div style={{ fontSize: 10, fontWeight: 800, marginBottom: 4, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0, color: isSms ? '#2C6B3F' : (out ? '#22177A' : '#4A4568') }}>
+                {isSms ? <Phone size={10} /> : <Mail size={10} />}
+                <span style={{ textTransform: 'uppercase', letterSpacing: '.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{isSms ? 'SMS' : 'Email'} · {m.author}</span>
+              </span>
               <span style={{ flexShrink: 0, color: '#9A96AE' }}>{new Date(m.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
             </div>
-            {m.subject && m.subject !== '(Sans objet)' && <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1A1533', marginBottom: 3, lineHeight: 1.35 }}>{m.subject}</div>}
-            <div style={{ fontSize: 13, lineHeight: 1.5, color: '#3A3550', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.snippet}</div>
+            {m.subject && <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1A1533', marginBottom: 3, lineHeight: 1.35 }}>{m.subject}</div>}
+            <div style={{ fontSize: 13, lineHeight: 1.5, color: '#3A3550', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.text}</div>
           </div>
         );
       })}
 
-      {/* COMPOSE / RÉPONDRE */}
+      {/* COMPOSE — Email ou SMS */}
       <div style={{ borderTop: '1px solid rgba(34,23,122,.1)', paddingTop: 12, marginTop: 2 }}>
-        <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Objet (optionnel)" style={{ width: '100%', fontFamily: "'Manrope'", fontSize: 12.5, padding: '9px 11px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none', marginBottom: 7, boxSizing: 'border-box' }} />
-        <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder={`Écrire à ${prenom}…`} style={{ width: '100%', minHeight: 84, resize: 'vertical', fontFamily: "'Manrope',sans-serif", fontSize: 13, lineHeight: 1.5, padding: '10px 12px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none', boxSizing: 'border-box' }} />
-        <button disabled={!body.trim() || sendMut.isPending} onClick={() => sendMut.mutate()} style={{ width: '100%', marginTop: 8, fontSize: 13.5, fontWeight: 800, background: body.trim() && !sendMut.isPending ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: 11, cursor: body.trim() && !sendMut.isPending ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Send size={14} />{sendMut.isPending ? 'Envoi…' : "Envoyer l'email"}</button>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 9 }}>
+          {(['email', 'sms'] as const).map((ch) => {
+            const on = channel === ch;
+            const disabled = ch === 'email' ? !email : !phone;
+            return (
+              <button key={ch} disabled={disabled} onClick={() => setChannel(ch)} style={{ flex: 1, fontSize: 12, fontWeight: 800, padding: '8px 0', borderRadius: 9, border: `1.5px solid ${on ? '#22177A' : 'rgba(34,23,122,.14)'}`, background: on ? '#22177A' : '#fff', color: on ? '#E6E9AF' : (disabled ? '#C4C1D0' : '#4A4568'), cursor: disabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: disabled ? 0.5 : 1 }}>
+                {ch === 'email' ? <Mail size={12} /> : <Phone size={12} />}{ch === 'email' ? 'Email' : 'SMS'}
+              </button>
+            );
+          })}
+        </div>
+        {channel === 'email' && <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Objet (optionnel)" style={{ width: '100%', fontFamily: "'Manrope'", fontSize: 12.5, padding: '9px 11px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none', marginBottom: 7, boxSizing: 'border-box' }} />}
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={channel === 'sms' ? 1000 : undefined} placeholder={channel === 'email' ? `Écrire à ${prenom}…` : `SMS à ${prenom}${phone ? ' (' + phone + ')' : ''}…`} style={{ width: '100%', minHeight: 84, resize: 'vertical', fontFamily: "'Manrope',sans-serif", fontSize: 13, lineHeight: 1.5, padding: '10px 12px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none', boxSizing: 'border-box' }} />
+        <button disabled={!canSend} onClick={() => sendMut.mutate()} style={{ width: '100%', marginTop: 8, fontSize: 13.5, fontWeight: 800, background: canSend ? (channel === 'sms' ? '#2C6B3F' : '#22177A') : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: 11, cursor: canSend ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Send size={14} />{sendMut.isPending ? 'Envoi…' : (channel === 'email' ? "Envoyer l'email" : 'Envoyer le SMS')}</button>
+        {channel === 'sms' && !phone && <div style={{ fontSize: 11, color: '#B0361F', marginTop: 6 }}>Aucun numéro de téléphone renseigné pour ce candidat.</div>}
       </div>
     </div>
   );

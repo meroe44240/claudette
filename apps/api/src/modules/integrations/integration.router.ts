@@ -257,6 +257,31 @@ export default async function integrationRouter(fastify: FastifyInstance) {
     },
   });
 
+  // POST /allo/sms - Envoyer un SMS à un candidat/client via Allo
+  fastify.post('/allo/sms', {
+    schema: {
+      description: 'Envoyer un SMS via Allo depuis le numéro du recruteur',
+      tags: ['Integrations - Allo'],
+      body: {
+        type: 'object',
+        required: ['to', 'message'],
+        properties: {
+          to: { type: 'string' },
+          message: { type: 'string' },
+          entiteType: { type: 'string' },
+          entiteId: { type: 'string' },
+        },
+      },
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { to, message, entiteType, entiteId } = request.body as any;
+      const result = await alloService.sendSms(request.userId, to, message, { entiteType, entiteId });
+      if (!result.success) throw new ValidationError(result.error || "Échec de l'envoi du SMS");
+      return result;
+    },
+  });
+
   // POST /allo/process-transcripts - AI-analyze all unprocessed Allo calls
   fastify.post('/allo/process-transcripts', {
     schema: {
