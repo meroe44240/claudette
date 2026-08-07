@@ -9,10 +9,14 @@ export function domainFrom(domaine?: string | null, siteWeb?: string | null): st
   return d.toLowerCase();
 }
 
-/** URL du logo via Clearbit (gratuit, sans clé) à partir du domaine. */
+/**
+ * URL du logo/icône de marque à partir du domaine, via DuckDuckGo icons
+ * (gratuit, sans clé, fiable). NB : Clearbit (logo.clearbit.com) a été
+ * discontinué après le rachat HubSpot — on utilise DuckDuckGo à la place.
+ */
 export function clearbitLogo(domaine?: string | null, siteWeb?: string | null): string | null {
   const d = domainFrom(domaine, siteWeb);
-  return d ? `https://logo.clearbit.com/${d}` : null;
+  return d ? `https://icons.duckduckgo.com/ip3/${d}.ico` : null;
 }
 
 function initials(nom: string): string {
