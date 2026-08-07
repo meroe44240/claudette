@@ -10,6 +10,7 @@ import Skeleton, { SkeletonCard } from '../../components/ui/Skeleton';
 import MandatTimeline from '../../components/activity/MandatTimeline';
 import DeleteConfirmModal from '../../components/ui/DeleteConfirmModal';
 import { toast } from '../../components/ui/Toast';
+import { useStageChange } from '../../components/mandats/useStageChange';
 
 // ─── BRAND TOKENS ───────────────────────────────────
 const NAVY = '#22177A';
@@ -402,27 +403,18 @@ export default function MandatDetailPage() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['mandat', id] }); toast('success', 'Candidat ajouté au pipeline'); },
     onError: (e: any) => toast('error', e.message || 'Erreur lors de l\'ajout'),
   });
-  // Déplacer un candidat entre les colonnes du pipeline (drag & drop)
-  const moveStageMut = useMutation({
-    mutationFn: ({ candId, stage }: { candId: string; stage: string }) => api.put(`/candidatures/${candId}`, { stage }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['mandat', id] }); toast('success', 'Candidat déplacé'); },
-    onError: (e: any) => toast('error', e.message || 'Erreur lors du déplacement'),
-  });
-  // Étapes qui exigent une saisie obligatoire (comme les modales du Kanban) →
-  // on renvoie vers le Kanban complet pour les renseigner.
-  const GATED_STAGES = ['ENTRETIEN_CLIENT', 'PLACE', 'REFUSE'];
+  // Déplacer un candidat entre colonnes du pipeline (drag & drop), AVEC les
+  // modales obligatoires (Perdu / RDV client / Placé) via le hook partagé.
+  const { requestMove: requestStageMove, modals: stageModals } = useStageChange(
+    () => queryClient.invalidateQueries({ queryKey: ['mandat', id] }),
+  );
   const handlePipelineDrop = (targetStage: string) => {
     const candId = draggedCandId;
     setDraggedCandId(null);
     if (!candId) return;
     const cand = mandat?.candidatures.find((c) => c.id === candId);
     if (!cand || cand.stage === targetStage) return;
-    if (GATED_STAGES.includes(targetStage)) {
-      toast('info', 'Cette étape demande des infos — complète sur le Kanban');
-      navigate(`/mandats/${id}/kanban`);
-      return;
-    }
-    moveStageMut.mutate({ candId, stage: targetStage });
+    requestStageMove(candId, targetStage, { candidatName: `${cand.candidat.prenom || ''} ${cand.candidat.nom}`.trim() });
   };
   // Créer un nouveau candidat depuis la recherche puis l'ajouter au pipeline
   const createCandMut = useMutation({
@@ -1369,6 +1361,9 @@ export default function MandatDetailPage() {
         entityName={`le mandat ${mandat.titrePoste}`}
         isLoading={deleteMutation.isPending}
       />
+
+      {/* Modales obligatoires de changement d'étape (Perdu / RDV client / Placé) */}
+      {stageModals}
 
       <style>{`
         @keyframes atsRise{ from{ opacity:0; transform:translateY(18px);} to{ opacity:1; transform:none;} }
