@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useStageChange } from '../../components/mandats/useStageChange';
 import { useNavigate } from 'react-router';
 import { format, differenceInMinutes, isToday as isTodayFn } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -149,6 +150,13 @@ export default function DashboardPage() {
     queryKey: ['dashboard', 'spa', apiPeriod],
     queryFn: () => api.get<SpaData>(`/dashboard/spa?period=${apiPeriod}&team=false`),
   });
+
+  // Drag & drop des candidats sur le pipeline « mandats en cours » + modales obligatoires
+  const qc = useQueryClient();
+  const [dashDrag, setDashDrag] = useState<{ candidatureId: string; mandatId: string; from: string; name: string } | null>(null);
+  const { requestMove: dashRequestMove, modals: dashStageModals } = useStageChange(
+    () => qc.invalidateQueries({ queryKey: ['dashboard'] }),
+  );
 
   const { data: calEvents } = useQuery({
     queryKey: ['calendar', 'events'],
@@ -495,7 +503,15 @@ export default function DashboardPage() {
                       const shown = people.slice(0, 2);
                       const more = people.length - shown.length;
                       return (
-                        <div key={st.key} className="kstage" style={{ background: active ? '#FCFCF5' : 'rgba(252,252,245,.5)', border: `1px solid ${active ? 'rgba(34,23,122,.11)' : 'rgba(34,23,122,.06)'}`, borderRadius: 12, padding: '9px 9px 10px', minHeight: 104 }}>
+                        <div key={st.key} className="kstage"
+                          onDragOver={(e) => { if (dashDrag && dashDrag.mandatId === m.id) e.preventDefault(); }}
+                          onDrop={() => {
+                            if (dashDrag && dashDrag.mandatId === m.id && dashDrag.from !== st.key) {
+                              dashRequestMove(dashDrag.candidatureId, st.key, { candidatName: dashDrag.name });
+                            }
+                            setDashDrag(null);
+                          }}
+                          style={{ background: dashDrag && dashDrag.mandatId === m.id ? '#F5F4E4' : (active ? '#FCFCF5' : 'rgba(252,252,245,.5)'), border: `1px ${dashDrag && dashDrag.mandatId === m.id ? 'dashed' : 'solid'} ${dashDrag && dashDrag.mandatId === m.id ? 'rgba(34,23,122,.28)' : (active ? 'rgba(34,23,122,.11)' : 'rgba(34,23,122,.06)')}`, borderRadius: 12, padding: '9px 9px 10px', minHeight: 104, transition: 'background .15s, border-color .15s' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 5 }}>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
                               <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.dot, flexShrink: 0 }} />
@@ -508,7 +524,12 @@ export default function DashboardPage() {
                               const nom = `${p.prenom ? p.prenom + ' ' : ''}${p.nom}`.trim();
                               const [bg, fg] = AV[(i + j) % 3];
                               return (
-                                <a key={p.id} onClick={() => navigate(`/candidats/${p.candidatId}`)} className="pcard" style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid rgba(34,23,122,.1)', borderRadius: 8, padding: '5px 6px', boxShadow: '0 1px 2px rgba(34,23,122,.05)', cursor: 'pointer' }}>
+                                <a key={p.id} className="pcard"
+                                  draggable
+                                  onDragStart={(e) => { setDashDrag({ candidatureId: p.id, mandatId: m.id, from: st.key, name: nom }); e.dataTransfer.effectAllowed = 'move'; }}
+                                  onDragEnd={() => setDashDrag(null)}
+                                  onClick={() => { if (!dashDrag) navigate(`/candidats/${p.candidatId}`); }}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid rgba(34,23,122,.1)', borderRadius: 8, padding: '5px 6px', boxShadow: '0 1px 2px rgba(34,23,122,.05)', cursor: 'grab', opacity: dashDrag?.candidatureId === p.id ? 0.4 : 1 }}>
                                   <span style={{ flexShrink: 0, width: 19, height: 19, borderRadius: '50%', background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black', sans-serif", fontSize: 8 }}>{initials(nom)}</span>
                                   <span style={{ fontSize: 10.5, fontWeight: 700, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{nom}</span>
                                 </a>
@@ -541,6 +562,9 @@ export default function DashboardPage() {
           })}
         </div>
       </div>
+
+      {/* Modales obligatoires de changement d'étape (Perdu / RDV client / Placé) */}
+      {dashStageModals}
     </div>
   );
 }
