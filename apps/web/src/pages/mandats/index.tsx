@@ -5,6 +5,7 @@ import { Plus, Search, ChevronDown, X, List, Columns3, Users } from 'lucide-reac
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
+import MandatCreateModal from '../../components/mandats/MandatCreateModal';
 
 // ─── TYPES ──────────────────────────────────────────
 interface UserRef { id: string; nom: string | null; prenom: string | null }
@@ -103,6 +104,7 @@ export default function MandatsPage() {
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'ADMIN';
 
+  const [createOpen, setCreateOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debSearch, setDebSearch] = useState('');
@@ -179,7 +181,7 @@ export default function MandatsPage() {
             <button title="Liste" style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#22177A', border: 'none', cursor: 'pointer' }}><List size={16} color="#E6E9AF" /></button>
             <button title="Kanban" onClick={() => navigate('/mandats/kanban')} style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: 'none', cursor: 'pointer' }}><Columns3 size={16} color="#8A8699" /></button>
           </div>
-          <button onClick={() => navigate('/mandats/new')} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />Nouveau mandat</button>
+          <button onClick={() => setCreateOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />Nouveau mandat</button>
         </div>
       </div>
 
@@ -217,7 +219,7 @@ export default function MandatsPage() {
               : isAdmin ? (who !== 'all' ? "Cette personne n'a aucun mandat (ni commercial, ni recruteur)." : "Aucun mandat pour l'instant.")
               : "Aucun mandat où vous êtes le commercial ou le recruteur."
             }</div>
-            <button onClick={() => navigate('/mandats/new')} style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 13.5, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: '10px 18px', cursor: 'pointer' }}><Plus size={15} strokeWidth={2.4} />Créer un mandat</button>
+            <button onClick={() => setCreateOpen(true)} style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 13.5, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: '10px 18px', cursor: 'pointer' }}><Plus size={15} strokeWidth={2.4} />Créer un mandat</button>
           </div>
         ) : rows.map(m => {
           const st = STATUT_META[m.statut] ?? STATUT_META.OUVERT;
@@ -252,6 +254,8 @@ export default function MandatsPage() {
           </div>
         )}
       </div>
+
+      <MandatCreateModal isOpen={createOpen} onClose={() => setCreateOpen(false)} />
     </div>
   );
 }
