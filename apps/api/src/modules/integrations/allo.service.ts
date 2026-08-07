@@ -355,6 +355,11 @@ export async function processAlloWebhook(
   alloContactMap?: Map<string, AlloContact>,
   overrideRecruiterId?: string,
 ) {
+  // SMS entrants/sortants Allo → traités séparément (fil Messages)
+  if (payload.event === 'SMS_RECEIVED' || payload.event === 'SMS_SENT') {
+    return processSmsWebhook(payload);
+  }
+
   const callEndedEvents = ['call.ended', 'call_finished', 'Call Finished', 'call.finished'];
   if (!callEndedEvents.includes(payload.event)) {
     return { processed: false, reason: `Event ${payload.event} not handled` };
@@ -702,8 +707,9 @@ export async function syncCalls(userId: string) {
           );
 
           synced++;
-          if (result.contactType === 'CANDIDAT') created.candidats++;
-          if (result.contactType === 'CLIENT') created.clients++;
+          const ct = (result as { contactType?: string }).contactType;
+          if (ct === 'CANDIDAT') created.candidats++;
+          if (ct === 'CLIENT') created.clients++;
         }
       }
 
@@ -904,6 +910,117 @@ export async function autoProcessTranscripts(userId: string) {
     errors: errors.length > 0 ? errors : undefined,
     message: `${processed} appels analysés par IA. ${namesUpdated} noms mis à jour, ${tasksCreated} notifications envoyées. Validez les actions proposées depuis vos notifications.`,
   };
+}
+
+// ─── SMS (via Allo) ────────────────────────────────
+function toE164(phone: string): string {
+  let e164 = phone.replace(/[\s.\-()]/g, '');
+  if (!e164.startsWith('+')) {
+    if (e164.startsWith('0') && e164.length === 10) e164 = '+33' + e164.slice(1);
+    else e164 = '+' + e164;
+  }
+  return e164;
+}
+
+/**
+ * Envoie un SMS via Allo depuis le numéro Allo du recruteur, puis logge
+ * l'activité SMS sortante (type NOTE + metadata.channel='SMS' — pas de
+ * migration d'enum nécessaire), affichée dans l'onglet Messages de la fiche.
+ */
+export async function sendSms(
+  userId: string,
+  toPhone: string,
+  message: string,
+  entite?: { entiteType?: string; entiteId?: string },
+): Promise<{ success: boolean; error?: string }> {
+  const apiKey = process.env.ALLO_API_KEY;
+  const baseUrl = process.env.ALLO_BASE_URL || 'https://api.withallo.com';
+  if (!apiKey) return { success: false, error: 'Allo non configuré (ALLO_API_KEY manquant)' };
+  if (!toPhone) return { success: false, error: 'Numéro du destinataire manquant' };
+  if (!message.trim()) return { success: false, error: 'Message vide' };
+
+  const config = await prisma.integrationConfig.findFirst({ where: { userId, provider: 'allo' } });
+  const from = (config?.config as any)?.alloNumber as string | undefined;
+  if (!from) return { success: false, error: "Aucun numéro Allo configuré pour ton compte" };
+
+  const to = toE164(toPhone);
+  try {
+    const res = await fetch(`${baseUrl}/v1/api/sms/fr`, {
+      method: 'POST',
+      headers: { Authorization: apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, message: message.trim() }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('[Allo] SMS send failed:', res.status, errText);
+      return { success: false, error: `Erreur API Allo (${res.status})` };
+    }
+    const result = (await res.json().catch(() => ({}))) as any;
+
+    if (entite?.entiteType && entite?.entiteId) {
+      await prisma.activite.create({
+        data: {
+          type: 'NOTE',
+          direction: 'SORTANT',
+          entiteType: entite.entiteType as any,
+          entiteId: entite.entiteId,
+          userId,
+          titre: 'SMS envoyé',
+          contenu: message.trim(),
+          source: 'ALLO',
+          metadata: { channel: 'SMS', from, to, smsId: result?.data?.id ?? result?.id ?? undefined },
+        },
+      });
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('[Allo] SMS send error:', err);
+    return { success: false, error: "Erreur réseau lors de l'envoi du SMS" };
+  }
+}
+
+/**
+ * Traite un webhook SMS entrant Allo (SMS_RECEIVED) : associe le numéro à un
+ * candidat/client et logge l'activité SMS entrante. Les SMS_SENT sont déjà
+ * loggés à l'envoi (sendSms) → ignorés ici pour éviter les doublons.
+ */
+export async function processSmsWebhook(payload: any): Promise<{ processed: boolean; reason?: string }> {
+  if (payload.event !== 'SMS_RECEIVED') {
+    return { processed: false, reason: `SMS event ${payload.event} ignoré` };
+  }
+  const externalPhone = payload.from || payload.fromNumber || '';
+  const alloNumber = payload.to || payload.toNumber || '';
+  const text = payload.message || payload.text || payload.body || '';
+  if (!externalPhone || !text) return { processed: false, reason: 'payload SMS incomplet' };
+
+  const match = await matchPhoneNumber(externalPhone);
+
+  let recruiterId: string | undefined;
+  if (alloNumber) {
+    const configs = await prisma.integrationConfig.findMany({ where: { provider: 'allo' } });
+    const owner = configs.find(
+      (c) => (c.config as any)?.alloNumber && normalisePhone((c.config as any).alloNumber) === normalisePhone(alloNumber),
+    );
+    if (owner) recruiterId = owner.userId;
+  }
+
+  if (!match) return { processed: false, reason: `Numéro ${externalPhone} non associé` };
+
+  await prisma.activite.create({
+    data: {
+      type: 'NOTE',
+      direction: 'ENTRANT',
+      entiteType: match.type as any,
+      entiteId: match.id,
+      ...(recruiterId ? { userId: recruiterId } : {}),
+      titre: 'SMS reçu',
+      contenu: text,
+      source: 'ALLO',
+      metadata: { channel: 'SMS', from: externalPhone, to: alloNumber },
+    },
+  });
+
+  return { processed: true };
 }
 
 // ─── PUSH CONTACT TO ALLO ──────────────────────────
