@@ -26,7 +26,12 @@ import Skeleton from '../../components/ui/Skeleton';
 // Types
 // ---------------------------------------------------------------------------
 
-type EntityType = 'candidats' | 'clients' | 'entreprises' | 'mandats';
+type EntityType = 'candidats' | 'clients' | 'entreprises' | 'mandats' | 'leads';
+
+// Le back-end attend le type au singulier
+const API_ENTITY: Record<EntityType, string> = {
+  candidats: 'candidat', clients: 'client', entreprises: 'entreprise', mandats: 'mandat', leads: 'lead',
+};
 
 interface UploadResponse {
   headers: string[];
@@ -99,6 +104,17 @@ const fieldOptions: Record<string, { value: string; label: string }[]> = {
     { value: 'salaireMax', label: 'Salaire max' },
     { value: 'notes', label: 'Notes' },
   ],
+  leads: [
+    { value: '', label: '— Ignorer —' },
+    { value: 'company', label: 'Entreprise' },
+    { value: 'contact', label: 'Contact (nom)' },
+    { value: 'email', label: 'Email' },
+    { value: 'phone', label: 'Téléphone' },
+    { value: 'role', label: 'Poste / fonction' },
+    { value: 'city', label: 'Ville' },
+    { value: 'sector', label: 'Secteur' },
+    { value: 'source', label: 'Source' },
+  ],
 };
 
 const entityOptions: { value: EntityType; label: string }[] = [
@@ -106,6 +122,7 @@ const entityOptions: { value: EntityType; label: string }[] = [
   { value: 'clients', label: 'Clients' },
   { value: 'entreprises', label: 'Entreprises' },
   { value: 'mandats', label: 'Mandats' },
+  { value: 'leads', label: 'Leads' },
 ];
 
 const entityRoutes: Record<EntityType, string> = {
@@ -113,6 +130,7 @@ const entityRoutes: Record<EntityType, string> = {
   clients: '/clients',
   entreprises: '/entreprises',
   mandats: '/mandats',
+  leads: '/leads',
 };
 
 const entityLabels: Record<EntityType, string> = {
@@ -120,6 +138,7 @@ const entityLabels: Record<EntityType, string> = {
   clients: 'clients',
   entreprises: 'entreprises',
   mandats: 'mandats',
+  leads: 'leads',
 };
 
 // ---------------------------------------------------------------------------
@@ -207,7 +226,10 @@ export default function ImportPage() {
   const [loading, setLoading] = useState(false);
 
   // Step 1 state
-  const [entityType, setEntityType] = useState<EntityType>('candidats');
+  const [entityType, setEntityType] = useState<EntityType>(() => {
+    const q = new URLSearchParams(window.location.search).get('entity');
+    return (['candidats', 'clients', 'entreprises', 'mandats', 'leads'] as const).includes(q as EntityType) ? (q as EntityType) : 'candidats';
+  });
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -286,7 +308,7 @@ export default function ImportPage() {
       const formData = new FormData();
       formData.append('file', file);
       const res = await fetch(
-        `/api/v1/import/upload?entityType=${entityType}`,
+        `/api/v1/import/upload?entityType=${API_ENTITY[entityType]}`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
@@ -319,7 +341,7 @@ export default function ImportPage() {
       const data = await api.post<PreviewResponse>('/import/preview', {
         rows,
         mapping,
-        entityType,
+        entityType: API_ENTITY[entityType],
       });
       setPreview(data.preview);
       setDuplicates(data.duplicates);
@@ -340,7 +362,7 @@ export default function ImportPage() {
       const data = await api.post<ExecuteResponse>('/import/execute', {
         rows,
         mapping,
-        entityType,
+        entityType: API_ENTITY[entityType],
         skipDuplicates,
       });
       setResult(data);
