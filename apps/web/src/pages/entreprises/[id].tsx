@@ -6,6 +6,7 @@ import {
   Users, FileText, ExternalLink, Hash,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import CompanyLogo from '../../components/entreprises/CompanyLogo';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import NoteContent from '../../components/activity/NoteContent';
 
@@ -31,7 +32,6 @@ const MANDAT_STATUT: Record<string, { label: string; bg: string; fg: string; dot
 };
 const TAILLE_LABELS: Record<string, string> = { TPE: 'TPE', PME: 'PME', ETI: 'ETI', GRAND_GROUPE: 'Grand groupe', STARTUP: 'Start-up' };
 
-function mono(name: string) { return name.split(/\s+/).map(w => w[0]).filter(Boolean).join('').slice(0, 2).toUpperCase(); }
 function initials(prenom: string | null, nom: string) { return `${(prenom?.[0] ?? '')}${nom?.[0] ?? ''}`.toUpperCase() || '?'; }
 function relTime(iso: string) { const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000); if (d <= 0) return "aujourd'hui"; if (d === 1) return 'hier'; if (d < 30) return `il y a ${d} j`; return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }); }
 function fmtEur(n: number) { return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k€` : `${n}€`; }
@@ -94,8 +94,8 @@ export default function EntrepriseDetailPage() {
         <div>
           {/* BANDEAU */}
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20 }}>
-            <span style={{ flexShrink: 0, width: 72, height: 72, borderRadius: 18, background: '#fff', border: '1px solid rgba(34,23,122,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: 8, boxShadow: '0 10px 28px -16px rgba(34,23,122,.5)' }}>
-              {e.logoUrl ? <img src={e.logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} /> : <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, color: '#22177A' }}>{mono(e.nom)}</span>}
+            <span style={{ flexShrink: 0, boxShadow: '0 10px 28px -16px rgba(34,23,122,.5)', borderRadius: 18 }}>
+              <CompanyLogo nom={e.nom} domaine={(e as any).domaine} siteWeb={e.siteWeb} logoUrl={e.logoUrl} size={72} height={72} radius={18} />
             </span>
             <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
               <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 29, letterSpacing: '-.035em', color: '#1A1533' }}>{e.nom}</h1>

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, ChevronDown, X, Users } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
+import CompanyLogo from '../../components/entreprises/CompanyLogo';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Entreprise {
@@ -198,9 +199,8 @@ export default function EntreprisesPage() {
           return (
             <div key={e.id} className="crow" onClick={() => navigate(`/entreprises/${e.id}`)} style={{ cursor: 'pointer', display: 'grid', gridTemplateColumns: GRID, gap: 14, alignItems: 'center', padding: '14px 22px', borderBottom: '1px solid rgba(34,23,122,0.05)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
-                {e.logoUrl
-                  ? <span style={{ flexShrink: 0, width: 36, height: 28, borderRadius: 8, background: '#fff', border: '1px solid rgba(34,23,122,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: 3 }}><img src={e.logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} /></span>
-                  : <span style={{ flexShrink: 0, width: 36, height: 28, borderRadius: 8, background: '#F2F3D8', border: '1px solid rgba(34,23,122,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 11, color: '#22177A' }}>{mono(e.nom)}</span>}
+                <CompanyLogo nom={e.nom} domaine={(e as any).domaine} siteWeb={e.siteWeb} logoUrl={e.logoUrl} size={36} height={28} />
+                {false && <span>{mono(e.nom)}</span>}
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.nom}</div>
                   <div style={{ fontSize: 11.5, color: '#8A8699', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.effectif || e.taille || '—'}</div>
