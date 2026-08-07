@@ -5,6 +5,8 @@ import * as service from './booking.service.js';
 
 const windowSchema = z.object({ day: z.number().int().min(0).max(6), start: z.string(), end: z.string() });
 const settingsSchema = z.object({
+  kind: z.enum(['GENERIC', 'DISCOVERY', 'QUALIFICATION']).optional(),
+  mandatId: z.string().uuid().nullable().optional(),
   slug: z.string().min(1).optional(),
   title: z.string().min(1).optional(),
   durationMin: z.number().int().min(5).max(480).optional(),
@@ -17,10 +19,27 @@ const settingsSchema = z.object({
 
 // ── ATS (authentifié) : /api/v1/booking ──
 export default async function bookingRouter(fastify: FastifyInstance) {
+  // Liste des types de page de réservation
   fastify.get('/settings', {
     schema: { tags: ['Booking'] }, preHandler: [authenticate],
-    handler: (request) => service.getSettings(request.userId),
+    handler: (request) => service.listSettings(request.userId),
   });
+  // Créer un type
+  fastify.post('/settings', {
+    schema: { tags: ['Booking'] }, preHandler: [authenticate],
+    handler: (request) => service.saveType(request.userId, settingsSchema.parse(request.body)),
+  });
+  // Mettre à jour un type
+  fastify.put('/settings/:id', {
+    schema: { tags: ['Booking'], params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } }, preHandler: [authenticate],
+    handler: (request) => service.saveType(request.userId, { ...settingsSchema.parse(request.body), id: (request.params as { id: string }).id }),
+  });
+  // Supprimer un type
+  fastify.delete('/settings/:id', {
+    schema: { tags: ['Booking'], params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } }, preHandler: [authenticate],
+    handler: (request) => service.deleteType(request.userId, (request.params as { id: string }).id),
+  });
+  // Rétro-compat : ancien PUT /settings (met à jour le 1er type)
   fastify.put('/settings', {
     schema: { tags: ['Booking'] }, preHandler: [authenticate],
     handler: (request) => service.upsertSettings(request.userId, settingsSchema.parse(request.body)),

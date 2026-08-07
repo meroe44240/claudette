@@ -9,30 +9,46 @@ function slugify(s: string): string {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'moi';
 }
 
-async function uniqueSlug(base: string, excludeUserId?: string): Promise<string> {
+async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
   let slug = slugify(base); let i = 1;
   // eslint-disable-next-line no-constant-condition
   while (true) {
     const ex = await prisma.bookingSettings.findUnique({ where: { slug } });
-    if (!ex || ex.userId === excludeUserId) return slug;
+    if (!ex || ex.id === excludeId) return slug;
     slug = `${slugify(base)}-${++i}`;
   }
 }
 
-// ── Settings (recruteur) ────────────────────────────
-export async function getSettings(userId: string) {
-  return prisma.bookingSettings.findUnique({ where: { userId } });
+// ── Types de page de réservation (recruteur) ─────────
+// Un user peut avoir PLUSIEURS types (Discovery client, Qualification candidat…).
+export async function listSettings(userId: string) {
+  return prisma.bookingSettings.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } });
 }
 
-export async function upsertSettings(userId: string, data: {
+// Rétro-compat : renvoie le premier type (ou null)
+export async function getSettings(userId: string) {
+  return prisma.bookingSettings.findFirst({ where: { userId }, orderBy: { createdAt: 'asc' } });
+}
+
+export interface SaveTypeInput {
+  id?: string; kind?: string; mandatId?: string | null;
   slug?: string; title?: string; durationMin?: number; timezone?: string;
   availability?: AvailabilityWindow[]; bufferMin?: number; advanceDays?: number; isActive?: boolean;
-}) {
+}
+
+/** Crée (id absent) ou met à jour (id présent) un type de page de réservation. */
+export async function saveType(userId: string, data: SaveTypeInput) {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { prenom: true, nom: true } });
-  const existing = await prisma.bookingSettings.findUnique({ where: { userId } });
-  const baseSlug = data.slug || existing?.slug || `${user?.prenom || ''}-${user?.nom || 'moi'}`.trim();
-  const slug = await uniqueSlug(baseSlug, userId);
-  const payload = {
+  const existing = data.id
+    ? await prisma.bookingSettings.findFirst({ where: { id: data.id, userId } })
+    : null;
+  if (data.id && !existing) throw new NotFoundError('Type de réservation', data.id);
+
+  const baseSlug = data.slug || existing?.slug || `${user?.prenom || ''}-${user?.nom || 'moi'}-${data.kind || 'rdv'}`.trim();
+  const slug = await uniqueSlug(baseSlug, existing?.id);
+  const payload: any = {
+    kind: data.kind ?? (existing as any)?.kind ?? 'GENERIC',
+    mandatId: data.mandatId !== undefined ? data.mandatId : (existing as any)?.mandatId ?? null,
     slug,
     title: data.title ?? existing?.title ?? 'Prendre rendez-vous',
     durationMin: data.durationMin ?? existing?.durationMin ?? 30,
@@ -42,8 +58,21 @@ export async function upsertSettings(userId: string, data: {
     advanceDays: data.advanceDays ?? existing?.advanceDays ?? 14,
     isActive: data.isActive ?? existing?.isActive ?? true,
   };
-  if (existing) return prisma.bookingSettings.update({ where: { userId }, data: payload });
+  if (existing) return prisma.bookingSettings.update({ where: { id: existing.id }, data: payload });
   return prisma.bookingSettings.create({ data: { userId, ...payload } });
+}
+
+export async function deleteType(userId: string, id: string) {
+  const existing = await prisma.bookingSettings.findFirst({ where: { id, userId } });
+  if (!existing) throw new NotFoundError('Type de réservation', id);
+  await prisma.bookingSettings.delete({ where: { id } });
+  return { deleted: true };
+}
+
+// Rétro-compat pour l'ancien PUT /settings (met à jour le 1er type ou en crée un)
+export async function upsertSettings(userId: string, data: SaveTypeInput) {
+  const first = await prisma.bookingSettings.findFirst({ where: { userId }, orderBy: { createdAt: 'asc' } });
+  return saveType(userId, { ...data, id: first?.id });
 }
 
 // ── Calcul des créneaux disponibles ─────────────────
@@ -98,12 +127,18 @@ export async function getPublicPage(slug: string) {
   if (!settings || !settings.isActive) throw new NotFoundError('Page de réservation', slug);
   const user = await prisma.user.findUnique({ where: { id: settings.userId }, select: { prenom: true, nom: true, avatarUrl: true } });
   const slots = await computeSlots(settings.userId, settings);
+  const mandatId = (settings as any).mandatId as string | null;
+  const mandat = mandatId
+    ? await prisma.mandat.findUnique({ where: { id: mandatId }, select: { id: true, titrePoste: true, entreprise: { select: { nom: true } } } })
+    : null;
   return {
     slug: settings.slug,
+    kind: (settings as any).kind ?? 'GENERIC',
     title: settings.title,
     durationMin: settings.durationMin,
     timezone: settings.timezone,
     host: { name: `${user?.prenom ? user.prenom + ' ' : ''}${user?.nom ?? ''}`.trim() || 'HumanUp', avatarUrl: user?.avatarUrl ?? null },
+    mandat: mandat ? { id: mandat.id, titrePoste: mandat.titrePoste, entreprise: mandat.entreprise?.nom ?? null } : null,
     slots,
   };
 }
@@ -159,6 +194,19 @@ export async function createBooking(slug: string, data: { name: string; email: s
       candidatId: candidat?.id ?? null,
     },
   });
+
+  // Qualification liée à un mandat + candidat identifié → rattache le candidat au mandat
+  const qualMandatId = (settings as any).kind === 'QUALIFICATION' ? ((settings as any).mandatId as string | null) : null;
+  if (qualMandatId && candidat?.id) {
+    try {
+      const already = await prisma.candidature.findFirst({ where: { mandatId: qualMandatId, candidatId: candidat.id }, select: { id: true } });
+      if (!already) {
+        await prisma.candidature.create({ data: { mandatId: qualMandatId, candidatId: candidat.id, stage: 'CONTACTE', createdById: settings.userId } });
+      }
+    } catch (e) {
+      console.warn('[Booking] rattachement candidat->mandat échoué', (e as Error).message);
+    }
+  }
 
   return {
     id: booking.id,
