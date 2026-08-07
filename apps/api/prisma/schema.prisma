@@ -1022,7 +1022,9 @@ model JobOffer {
 
 model BookingSettings {
   id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @unique @db.Uuid
+  userId       String   @db.Uuid
+  kind         String   @default("GENERIC") @db.VarChar(20) // GENERIC | DISCOVERY | QUALIFICATION
+  mandatId     String?  @db.Uuid // pour QUALIFICATION : mandat rattaché (optionnel)
   slug         String   @unique @db.VarChar(120)
   title        String   @db.VarChar(200)
   durationMin  Int      @default(30)
@@ -1034,6 +1036,7 @@ model BookingSettings {
   createdAt    DateTime @default(now()) @db.Timestamptz()
   updatedAt    DateTime @updatedAt @db.Timestamptz()
 
+  @@index([userId])
   @@map("booking_settings")
 }
 
