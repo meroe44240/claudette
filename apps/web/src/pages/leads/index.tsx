@@ -141,6 +141,9 @@ export default function LeadsPage() {
           <div style={{ fontSize: 13, color: '#8A8699', marginTop: 4 }}>{leads.length} leads · glisse une carte pour relancer, jusqu'à « RDV obtenu »</div>
         </div>
         <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
+          <button onClick={() => navigate('/import?entity=leads')} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: MANROPE, fontWeight: 700, fontSize: 13, background: '#fff', color: NAVY, border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 11, padding: '10px 16px', cursor: 'pointer' }}>
+            <ArrowRight size={15} style={{ transform: 'rotate(90deg)' }} /> Importer CSV
+          </button>
           <button onClick={startSession} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: MANROPE, fontWeight: 700, fontSize: 13, background: '#fff', color: NAVY, border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 11, padding: '10px 16px', cursor: 'pointer' }}>
             <PhoneCall size={15} /> Session d'appels
           </button>

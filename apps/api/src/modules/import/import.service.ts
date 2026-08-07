@@ -93,9 +93,31 @@ const MAPPING_DICTIONARIES: Record<string, Record<string, string>> = {
     salaire_min: 'salaireMin',
     salaire_max: 'salaireMax',
   },
+  lead: {
+    entreprise: 'company',
+    company: 'company',
+    societe: 'company',
+    'société': 'company',
+    contact: 'contact',
+    nom: 'contact',
+    email: 'email',
+    mail: 'email',
+    telephone: 'phone',
+    'téléphone': 'phone',
+    phone: 'phone',
+    tel: 'phone',
+    poste: 'role',
+    fonction: 'role',
+    role: 'role',
+    ville: 'city',
+    city: 'city',
+    secteur: 'sector',
+    sector: 'sector',
+    source: 'source',
+  },
 };
 
-const VALID_ENTITY_TYPES = ['candidat', 'client', 'entreprise', 'mandat'] as const;
+const VALID_ENTITY_TYPES = ['candidat', 'client', 'entreprise', 'mandat', 'lead'] as const;
 type EntityType = (typeof VALID_ENTITY_TYPES)[number];
 
 // ─── CSV PARSING ────────────────────────────────────
@@ -451,6 +473,28 @@ async function isDuplicate(record: Record<string, unknown>, entityType: string):
     return existing ? existing.id : null;
   }
 
+  if (entityType === 'lead') {
+    // Dédup par email, sinon par entreprise + contact
+    if (record.email && typeof record.email === 'string' && record.email.trim() !== '') {
+      const existing = await prisma.lead.findFirst({
+        where: { email: { equals: record.email.trim(), mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (existing) return existing.id;
+    }
+    if (record.company && record.contact) {
+      const existing = await prisma.lead.findFirst({
+        where: {
+          company: { equals: String(record.company).trim(), mode: 'insensitive' },
+          contact: { equals: String(record.contact).trim(), mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+      if (existing) return existing.id;
+    }
+    return null;
+  }
+
   return null;
 }
 
@@ -573,6 +617,32 @@ export async function executeImport(
             salaireMin: record.salaireMin as number | undefined,
             salaireMax: record.salaireMax as number | undefined,
             createdById: userId,
+          },
+        });
+        imported++;
+      } else if (entityType === 'lead') {
+        if (!record.company || (typeof record.company === 'string' && record.company.trim() === '')) {
+          errors.push({ row: i, error: 'Champ "entreprise" requis pour un lead' });
+          continue;
+        }
+        if (!record.contact || (typeof record.contact === 'string' && record.contact.trim() === '')) {
+          errors.push({ row: i, error: 'Champ "contact" requis pour un lead' });
+          continue;
+        }
+        await prisma.lead.create({
+          data: {
+            company: record.company as string,
+            contact: record.contact as string,
+            role: record.role as string | undefined,
+            city: record.city as string | undefined,
+            sector: record.sector as string | undefined,
+            phone: record.phone as string | undefined,
+            email: record.email as string | undefined,
+            source: (record.source as string | undefined) ?? 'Import CSV',
+            src: 'cold',
+            stage: 'nouveau',
+            ownerId: userId,
+            lastContactAt: new Date(),
           },
         });
         imported++;

@@ -6,7 +6,7 @@ import * as importService from './import.service.js';
 
 // ─── ZOD SCHEMAS ────────────────────────────────────
 
-const entityTypeSchema = z.enum(['candidat', 'client', 'entreprise', 'mandat']);
+const entityTypeSchema = z.enum(['candidat', 'client', 'entreprise', 'mandat', 'lead']);
 
 const previewSchema = z.object({
   rows: z.array(z.array(z.string())),
@@ -35,7 +35,7 @@ export default async function importRouter(fastify: FastifyInstance) {
         properties: {
           entityType: {
             type: 'string',
-            enum: ['candidat', 'client', 'entreprise', 'mandat'],
+            enum: ['candidat', 'client', 'entreprise', 'mandat', 'lead'],
           },
         },
       },
