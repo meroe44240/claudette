@@ -73,7 +73,8 @@ export default async function importRouter(fastify: FastifyInstance) {
         headers: parsed.headers,
         rows: limitedRows,
         rowCount: parsed.rows.length,
-        autoMapping,
+        // mapping à plat (header -> champ) attendu par le front + /execute
+        autoMapping: autoMapping.mapping,
       };
     },
   });
