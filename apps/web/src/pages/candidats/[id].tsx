@@ -451,15 +451,7 @@ export default function CandidatDetailPage() {
                 <button onClick={submitEval} style={{ width: '100%', marginTop: 10, fontSize: 13.5, fontWeight: 800, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: 11, cursor: 'pointer' }}>Enregistrer l'évaluation</button>
               </>
             )}
-            {railTab === 'msg' && (
-              <div style={{ textAlign: 'center', padding: '24px 10px' }}>
-                <div style={{ fontSize: 13, color: '#6E6A85' }}>Envoyer un message à {c.prenom || c.nom}</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
-                  <a href={c.email ? `mailto:${c.email}` : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', border: '1px solid rgba(34,23,122,.12)', borderRadius: 12, textDecoration: 'none', opacity: c.email ? 1 : 0.5 }}><Mail size={16} color="#5B4B9E" /><span style={{ fontSize: 13.5, fontWeight: 700, color: '#1A1533' }}>Email · {c.email || '—'}</span></a>
-                  <a href={c.telephone ? `tel:${c.telephone}` : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', border: '1px solid rgba(34,23,122,.12)', borderRadius: 12, textDecoration: 'none', opacity: c.telephone ? 1 : 0.5 }}><Phone size={16} color="#2C6B3F" /><span style={{ fontSize: 13.5, fontWeight: 700, color: '#1A1533' }}>Appel · {c.telephone || '—'}</span></a>
-                </div>
-              </div>
-            )}
+            {railTab === 'msg' && <MessagesTab candidat={c} />}
           </div>
         </aside>
       </div>
@@ -500,6 +492,80 @@ export default function CandidatDetailPage() {
 
       {/* EXPORT MODAL */}
       {exportOpen && <ExportModal name={fullName} onClose={() => setExportOpen(false)} />}
+    </div>
+  );
+}
+
+// ─── MESSAGES (fil des échanges email avec le candidat) ──────────
+interface GmailMsg { id: string; threadId: string; from: { name: string; email: string }; to?: string; subject: string; snippet: string; date: string; isRead: boolean; isSent?: boolean }
+
+function MessagesTab({ candidat }: { candidat: CandidatDetail }) {
+  const qc = useQueryClient();
+  const email = candidat.email;
+  const prenom = candidat.prenom || candidat.nom;
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+
+  const { data, isLoading, isError } = useQuery<{ messages: GmailMsg[] }>({
+    queryKey: ['candidat-messages', email],
+    queryFn: () => api.get(`/integrations/gmail/messages?q=${encodeURIComponent(email ?? '')}&maxResults=40&filter=all`),
+    enabled: !!email,
+    retry: false,
+  });
+
+  const messages = useMemo(
+    () => [...(data?.messages ?? [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [data],
+  );
+
+  const sendMut = useMutation({
+    mutationFn: () => api.post('/integrations/gmail/send', {
+      to: email,
+      subject: subject.trim() || `Message pour ${prenom}`,
+      body: body.trim(),
+      entiteType: 'CANDIDAT',
+      entiteId: candidat.id,
+    }),
+    onSuccess: () => { setBody(''); toast('success', 'Email envoyé'); qc.invalidateQueries({ queryKey: ['candidat-messages', email] }); },
+    onError: (e: any) => toast('error', e?.message || "Échec de l'envoi"),
+  });
+
+  if (!email) {
+    return <div style={{ textAlign: 'center', padding: '30px 12px', color: '#8A8699', fontSize: 13 }}>Aucun email renseigné pour {prenom}. Ajoute une adresse pour échanger ici.</div>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {isLoading && <div style={{ textAlign: 'center', color: '#8A8699', fontSize: 12.5, padding: 20 }}>Chargement des échanges…</div>}
+      {isError && (
+        <div style={{ background: '#FBF3E7', border: '1px solid #F0D9B5', borderRadius: 12, padding: '12px 14px', fontSize: 12.5, lineHeight: 1.5, color: '#8A6A2E' }}>
+          Connecte ta boîte <strong>Gmail</strong> dans <strong>Réglages → Intégrations</strong> pour voir et envoyer les emails ici.
+        </div>
+      )}
+      {!isLoading && !isError && messages.length === 0 && (
+        <div style={{ textAlign: 'center', color: '#8A8699', fontSize: 12.5, padding: '18px 10px' }}>Aucun échange avec {email} pour l'instant. Écris le premier message ci-dessous.</div>
+      )}
+
+      {messages.map((m) => {
+        const out = !!m.isSent;
+        return (
+          <div key={m.id} style={{ alignSelf: out ? 'flex-end' : 'flex-start', maxWidth: '90%', background: out ? '#ECE7FA' : '#F5F4EA', border: `1px solid ${out ? 'rgba(34,23,122,.16)' : 'rgba(34,23,122,.08)'}`, borderRadius: 14, borderBottomRightRadius: out ? 4 : 14, borderBottomLeftRadius: out ? 14 : 4, padding: '10px 13px' }}>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.02em', marginBottom: 4, display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+              <span style={{ color: out ? '#22177A' : '#4A4568', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{out ? 'Vous' : (m.from?.name || m.from?.email || 'Candidat')}</span>
+              <span style={{ flexShrink: 0, color: '#9A96AE' }}>{new Date(m.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
+            </div>
+            {m.subject && m.subject !== '(Sans objet)' && <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1A1533', marginBottom: 3, lineHeight: 1.35 }}>{m.subject}</div>}
+            <div style={{ fontSize: 13, lineHeight: 1.5, color: '#3A3550', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.snippet}</div>
+          </div>
+        );
+      })}
+
+      {/* COMPOSE / RÉPONDRE */}
+      <div style={{ borderTop: '1px solid rgba(34,23,122,.1)', paddingTop: 12, marginTop: 2 }}>
+        <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Objet (optionnel)" style={{ width: '100%', fontFamily: "'Manrope'", fontSize: 12.5, padding: '9px 11px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none', marginBottom: 7, boxSizing: 'border-box' }} />
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder={`Écrire à ${prenom}…`} style={{ width: '100%', minHeight: 84, resize: 'vertical', fontFamily: "'Manrope',sans-serif", fontSize: 13, lineHeight: 1.5, padding: '10px 12px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none', boxSizing: 'border-box' }} />
+        <button disabled={!body.trim() || sendMut.isPending} onClick={() => sendMut.mutate()} style={{ width: '100%', marginTop: 8, fontSize: 13.5, fontWeight: 800, background: body.trim() && !sendMut.isPending ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: 11, cursor: body.trim() && !sendMut.isPending ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Send size={14} />{sendMut.isPending ? 'Envoi…' : "Envoyer l'email"}</button>
+      </div>
     </div>
   );
 }
