@@ -988,6 +988,40 @@ export async function notifyAssignation(data: {
 }
 
 /**
+ * Notify Slack (#general) quand quelqu'un est @mentionne dans une note/commentaire.
+ */
+export async function notifyMention(data: {
+  mentionedNames: string[];
+  byName: string | null;
+  contextLabel: string; // ex: "candidat Jean Dupont"
+  excerpt: string;
+}): Promise<void> {
+  const config = await getSlackConfig();
+  if (!config || !config.enabled || data.mentionedNames.length === 0) return;
+  const payload = {
+    channel: '#general',
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: [
+            `💬 *${data.byName || 'Quelqu\'un'}* a mentionné ${data.mentionedNames.map((n) => `*${n}*`).join(', ')}`,
+            `sur ${data.contextLabel}`,
+            data.excerpt ? `> ${data.excerpt.slice(0, 240)}` : '',
+          ].filter(Boolean).join('\n'),
+        },
+      },
+    ],
+  };
+  try {
+    await sendToWebhook(config.webhookUrl, payload);
+  } catch (err) {
+    console.error('[Slack] Failed to send mention notification:', err);
+  }
+}
+
+/**
  * Notify Slack (#general) quand un candidat est ajoute au pipeline d'un mandat.
  * Informe notamment le SALES (commercial) du mandat qu'un nouveau profil est arrive.
  */

@@ -3,7 +3,7 @@ import { NotFoundError } from '../../lib/errors.js';
 import { paginatedResult, paginationToSkipTake } from '../../lib/pagination.js';
 import type { PaginationParams } from '../../lib/pagination.js';
 import type { CreateActiviteInput, UpdateActiviteInput } from './activite.schema.js';
-import { notifyNewMeeting } from '../slack/slack.service.js';
+import { notifyNewMeeting, notifyMention } from '../slack/slack.service.js';
 
 interface ListFilters {
   entiteType?: string;
@@ -122,7 +122,52 @@ export async function create(data: CreateActiviteInput, userId: string) {
     })();
   }
 
+  // @mentions → notif Slack aux personnes mentionnées
+  if (data.mentionedUserIds && data.mentionedUserIds.length > 0) {
+    (async () => {
+      try {
+        const ids = data.mentionedUserIds!.filter((id) => id !== userId);
+        if (!ids.length) return;
+        const [author, mentioned] = await Promise.all([
+          prisma.user.findUnique({ where: { id: userId }, select: { prenom: true, nom: true } }),
+          prisma.user.findMany({ where: { id: { in: ids } }, select: { prenom: true, nom: true } }),
+        ]);
+        await notifyMention({
+          mentionedNames: mentioned.map((u) => `${u.prenom || ''} ${u.nom || ''}`.trim()).filter(Boolean),
+          byName: author ? `${author.prenom || ''} ${author.nom || ''}`.trim() : null,
+          contextLabel: await mentionContext(data.entiteType, data.entiteId),
+          excerpt: data.contenu || data.titre || '',
+        });
+      } catch (err) {
+        console.error('[Slack] mention notif failed:', err);
+      }
+    })();
+  }
+
   return result;
+}
+
+/** Libellé lisible de l'entité pour la notif de mention (ex: "le candidat Jean Dupont"). */
+async function mentionContext(entiteType: string, entiteId: string): Promise<string> {
+  try {
+    if (entiteType === 'CANDIDAT') {
+      const c = await prisma.candidat.findUnique({ where: { id: entiteId }, select: { prenom: true, nom: true } });
+      return c ? `le candidat ${[c.prenom, c.nom].filter(Boolean).join(' ')}` : 'un candidat';
+    }
+    if (entiteType === 'CLIENT') {
+      const c = await prisma.client.findUnique({ where: { id: entiteId }, select: { prenom: true, nom: true } });
+      return c ? `le client ${[c.prenom, c.nom].filter(Boolean).join(' ')}` : 'un client';
+    }
+    if (entiteType === 'ENTREPRISE') {
+      const e = await prisma.entreprise.findUnique({ where: { id: entiteId }, select: { nom: true } });
+      return e ? `la société ${e.nom}` : 'une société';
+    }
+    if (entiteType === 'MANDAT') {
+      const m = await prisma.mandat.findUnique({ where: { id: entiteId }, select: { titrePoste: true } });
+      return m ? `le mandat ${m.titrePoste}` : 'un mandat';
+    }
+  } catch { /* ignore */ }
+  return 'une fiche';
 }
 
 export async function update(id: string, data: UpdateActiviteInput) {
