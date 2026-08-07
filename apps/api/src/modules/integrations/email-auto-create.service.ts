@@ -34,6 +34,7 @@ interface EmailAutoCreateStats {
   candidats: number;
   clients: number;
   entreprises: number;
+  leads: number;
   activities: number;
   skipped: number;
 }
@@ -328,7 +329,7 @@ async function processEmail(
   email: GmailMessage,
   userId: string,
   knownMessageIds: Set<string>,
-): Promise<'candidats' | 'clients' | 'entreprises' | 'activities' | 'skipped'> {
+): Promise<'candidats' | 'clients' | 'entreprises' | 'leads' | 'activities' | 'skipped'> {
   // Already processed?
   if (knownMessageIds.has(email.id)) return 'skipped';
 
@@ -340,6 +341,35 @@ async function processEmail(
 
   // Skip internal emails
   if (INTERNAL_DOMAINS.includes(domain)) return 'skipped';
+
+  // ── Calendly : la réservation arrive par email → créer le candidat ──
+  // (avant le skip "automatisé" car calendly.com est dans AUTOMATED_DOMAINS)
+  if (domain === 'calendly.com' || /calendly/i.test(from.email)) {
+    const subj = email.subject || '';
+    // "New Event: Jean Dupont - 30 min", "Nouvel événement : Jean Dupont", "Invitation acceptée : …"
+    let invitee = (subj.match(/(?:new event|nouvel? [ée]v[ée]nement|invitation(?: accept[ée]e?)?|rendez-vous)\s*:?\s*([^-–|:]+)/i)?.[1] || '').trim();
+    if (!/[A-Za-zÀ-ÿ]{2,}\s+[A-Za-zÀ-ÿ]{2,}/.test(invitee)) {
+      invitee = subj.match(/([A-ZÀ-Ÿ][a-zà-ÿ'-]+ [A-ZÀ-Ÿ][a-zà-ÿ'-]+)/)?.[1] || '';
+    }
+    const parts = invitee.split(/\s+/).filter((w) => w.replace(/[^\p{L}]/gu, '').length >= 2);
+    if (parts.length < 2) return 'skipped'; // pas de vrai nom exploitable
+    const prenom = parts[0];
+    const nom = parts.slice(1).join(' ');
+    const emailInBody = (email.snippet || '').match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0];
+    const inviteeEmail = emailInBody && !/calendly\.com/i.test(emailInBody) ? emailInBody.toLowerCase() : undefined;
+    if (inviteeEmail) {
+      const already = await prisma.candidat.findFirst({ where: { email: { equals: inviteeEmail, mode: 'insensitive' } }, select: { id: true } });
+      if (already) return 'skipped';
+    }
+    const candidat = await prisma.candidat.create({
+      data: { nom, prenom, email: inviteeEmail, source: 'Calendly', notes: `Créé depuis une réservation Calendly : "${subj}"`, createdById: userId },
+    });
+    await prisma.activite.create({
+      data: { type: 'MEETING', entiteType: 'CANDIDAT', entiteId: candidat.id, userId, titre: `RDV Calendly : ${subj}`, contenu: email.snippet || '', source: 'GMAIL', metadata: { gmailMessageId: email.id, autoCreated: true, autoCreatedType: 'CANDIDAT', calendly: true } },
+    });
+    console.log(`[EmailAutoCreate] CANDIDAT créé via Calendly: ${prenom} ${nom}`);
+    return 'candidats';
+  }
 
   // Skip automated emails
   if (isAutomatedEmail(senderEmail, email.headers)) return 'skipped';
@@ -428,72 +458,42 @@ async function processEmail(
     return 'candidats';
 
   } else {
-    // ── EMAIL PRO → ENTREPRISE + CLIENT ──
+    // ── EMAIL PRO INCONNU → LEAD (prospection inbound) ──
+    // Les CLIENTS ne sont créés QUE manuellement (via conversion lead → client).
+    // Un pro inconnu qui nous écrit = un lead à qualifier (il peut nous prospecter).
+    const companyName = signatureInfo?.company || deriveCompanyName(domain);
+    const contactName = `${firstName} ${lastName}`.trim() || senderEmail.split('@')[0];
 
-    // Find or create entreprise by domain
-    let entreprise = await prisma.entreprise.findFirst({
-      where: {
-        OR: [
-          { siteWeb: { contains: domain, mode: 'insensitive' } },
-          { nom: { equals: deriveCompanyName(domain), mode: 'insensitive' } },
-        ],
-      },
-    });
+    // Déjà client → ne rien créer
+    const existingClient = await prisma.client.findFirst({ where: { email: { equals: senderEmail, mode: 'insensitive' } }, select: { id: true } });
+    if (existingClient) return 'skipped';
 
-    let entrepriseCreated = false;
-
-    if (!entreprise) {
-      const companyName = signatureInfo?.company || deriveCompanyName(domain);
-      entreprise = await prisma.entreprise.create({
-        data: {
-          nom: companyName,
-          siteWeb: signatureInfo?.website || `https://www.${domain}`,
-          createdById: userId,
-        },
-      });
-      entrepriseCreated = true;
-      console.log(`[EmailAutoCreate] ENTREPRISE créée: ${companyName} (${domain})`);
+    // Déjà lead → logger l'échange et sortir
+    const existingLead = await prisma.lead.findFirst({ where: { email: { equals: senderEmail, mode: 'insensitive' } }, select: { id: true } });
+    if (existingLead) {
+      await prisma.leadInteraction.create({ data: { leadId: existingLead.id, type: 'email', text: `Email reçu : ${email.subject}\n${email.snippet || ''}`.trim(), createdById: userId } });
+      await prisma.lead.update({ where: { id: existingLead.id }, data: { lastContactAt: new Date() } });
+      return 'skipped';
     }
 
-    // Create client
-    const client = await prisma.client.create({
+    const lead = await prisma.lead.create({
       data: {
-        nom: lastName || firstName || senderEmail.split('@')[0],
-        prenom: lastName ? firstName : undefined,
+        company: companyName,
+        contact: contactName,
         email: senderEmail,
-        telephone: signatureInfo?.phone || undefined,
-        poste: signatureInfo?.title || undefined,
-        entrepriseId: entreprise.id,
-        notes: `Créé automatiquement depuis l'email : "${email.subject}"`,
-        createdById: userId,
+        phone: signatureInfo?.phone || null,
+        role: signatureInfo?.title || null,
+        source: 'Email entrant',
+        src: 'cold',
+        stage: 'nouveau',
+        ownerId: userId,
+        lastContactAt: new Date(),
       },
     });
+    await prisma.leadInteraction.create({ data: { leadId: lead.id, type: 'email', text: `Email reçu : ${email.subject}\n${email.snippet || ''}`.trim(), createdById: userId } });
 
-    // Log activity on the new client
-    await prisma.activite.create({
-      data: {
-        type: 'EMAIL',
-        direction: 'ENTRANT',
-        entiteType: 'CLIENT',
-        entiteId: client.id,
-        userId,
-        titre: `Email reçu : ${email.subject}`,
-        contenu: email.snippet || `Email de ${from.name || senderEmail}`,
-        source: 'GMAIL',
-        metadata: {
-          gmailMessageId: email.id,
-          from: email.from,
-          subject: email.subject,
-          autoCreated: true,
-          autoCreatedType: 'CLIENT',
-          entrepriseId: entreprise.id,
-          entrepriseCreated,
-        },
-      },
-    });
-
-    console.log(`[EmailAutoCreate] CLIENT créé: ${firstName} ${lastName} <${senderEmail}> @ ${entreprise.nom}`);
-    return entrepriseCreated ? 'entreprises' : 'clients';
+    console.log(`[EmailAutoCreate] LEAD créé (inbound): ${contactName} <${senderEmail}> @ ${companyName}`);
+    return 'leads';
   }
 }
 
@@ -504,7 +504,7 @@ async function processEmail(
  * Called by the cron job every 15 minutes.
  */
 export async function processIncomingEmailsForUser(userId: string): Promise<EmailAutoCreateStats> {
-  const stats: EmailAutoCreateStats = { candidats: 0, clients: 0, entreprises: 0, activities: 0, skipped: 0 };
+  const stats: EmailAutoCreateStats = { candidats: 0, clients: 0, entreprises: 0, leads: 0, activities: 0, skipped: 0 };
 
   const accessToken = await getValidAccessToken(userId);
   if (!accessToken) return stats;
@@ -579,7 +579,7 @@ export async function processIncomingEmailsForUser(userId: string): Promise<Emai
  * Called by the cron job.
  */
 export async function processAllIncomingEmails(): Promise<EmailAutoCreateStats> {
-  const totalStats: EmailAutoCreateStats = { candidats: 0, clients: 0, entreprises: 0, activities: 0, skipped: 0 };
+  const totalStats: EmailAutoCreateStats = { candidats: 0, clients: 0, entreprises: 0, leads: 0, activities: 0, skipped: 0 };
 
   const gmailConfigs = await prisma.integrationConfig.findMany({
     where: { provider: 'gmail', enabled: true },
@@ -594,6 +594,7 @@ export async function processAllIncomingEmails(): Promise<EmailAutoCreateStats> 
       totalStats.candidats += userStats.candidats;
       totalStats.clients += userStats.clients;
       totalStats.entreprises += userStats.entreprises;
+      totalStats.leads += userStats.leads;
       totalStats.activities += userStats.activities;
       totalStats.skipped += userStats.skipped;
     } catch (err) {
