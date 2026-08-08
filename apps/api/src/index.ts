@@ -16,6 +16,7 @@ import entrepriseRouter from './modules/entreprises/entreprise.router.js';
 import clientRouter from './modules/clients/client.router.js';
 import candidatRouter from './modules/candidats/candidat.router.js';
 import mandatRouter from './modules/mandats/mandat.router.js';
+import trameRouter from './modules/trames/trame.router.js';
 import candidatureRouter from './modules/candidatures/candidature.router.js';
 import searchRouter from './modules/search/search.router.js';
 import activiteRouter from './modules/activites/activite.router.js';
@@ -146,6 +147,7 @@ async function buildApp() {
   await app.register(clientRouter, { prefix: '/api/v1/clients' });
   await app.register(candidatRouter, { prefix: '/api/v1/candidats' });
   await app.register(mandatRouter, { prefix: '/api/v1/mandats' });
+  await app.register(trameRouter, { prefix: '/api/v1/trames' });
   await app.register(candidatureRouter, { prefix: '/api/v1/candidatures' });
   await app.register(searchRouter, { prefix: '/api/v1/search' });
   await app.register(activiteRouter, { prefix: '/api/v1/activites' });
