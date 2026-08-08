@@ -262,16 +262,16 @@ export default function IntegrationsSettingsPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Mes intégrations"
-        subtitle="Connectez vos outils pour une expérience unifiée"
-        breadcrumbs={[{ label: 'Mes intégrations' }]}
-        actions={
-          <Button variant="secondary" onClick={() => navigate('/settings/integrations/guide')}>
-            📖 Guide de connexion
-          </Button>
-        }
-      />
+      <div className="rise" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 24 }}>
+        <div>
+          <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>Administration</div>
+          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Mes intégrations</h1>
+          <div style={{ fontSize: 13.5, color: '#6E6A85', marginTop: 6 }}>Connectez vos outils pour une expérience unifiée.</div>
+        </div>
+        <Button variant="secondary" onClick={() => navigate('/settings/integrations/guide')}>
+          📖 Guide de connexion
+        </Button>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Allo Card */}
@@ -376,7 +376,7 @@ export default function IntegrationsSettingsPage() {
                 value={alloApiKey}
                 onChange={e => setAlloApiKey(e.target.value)}
                 placeholder="Clé API Allo (ex: allo_xxxxxxxxxxxx)"
-                className="w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+                className="w-full rounded-lg border border-[rgba(34,23,122,0.14)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(34,23,122,0.1)] focus:border-[#22177A]"
                 autoFocus
               />
               <div className="flex gap-2 mt-4">
@@ -570,7 +570,7 @@ export default function IntegrationsSettingsPage() {
                     value={driveFolderId}
                     onChange={(e) => setDriveFolderId(e.target.value)}
                     placeholder="ID du dossier Drive (ex: 1a2B3c...)"
-                    className="w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+                    className="w-full rounded-lg border border-[rgba(34,23,122,0.14)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(34,23,122,0.1)] focus:border-[#22177A]"
                   />
                   <Button
                     size="sm"
@@ -644,7 +644,7 @@ export default function IntegrationsSettingsPage() {
                   setSlackDirty(true);
                 }}
                 placeholder="https://hooks.slack.com/services/..."
-                className="w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+                className="w-full rounded-lg border border-[rgba(34,23,122,0.14)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(34,23,122,0.1)] focus:border-[#22177A]"
               />
             </div>
 
@@ -657,7 +657,7 @@ export default function IntegrationsSettingsPage() {
                   setSlackEnabled(e.target.checked);
                   setSlackDirty(true);
                 }}
-                className="h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500/30"
+                className="h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-[rgba(34,23,122,0.1)]"
               />
               <span className="text-sm text-neutral-700">
                 Résumé quotidien (lundi-vendredi)
