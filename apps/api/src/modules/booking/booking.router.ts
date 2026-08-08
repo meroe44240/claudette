@@ -60,7 +60,17 @@ export async function bookingPublicRouter(fastify: FastifyInstance) {
     schema: { tags: ['Public'], params: { type: 'object', required: ['slug'], properties: { slug: { type: 'string' } } } },
     handler: (request, reply) => {
       const { slug } = request.params as { slug: string };
-      const body = z.object({ name: z.string().min(1), email: z.string().email(), note: z.string().optional(), slotStart: z.string() }).parse(request.body);
+      const body = z.object({
+        name: z.string().min(1),
+        email: z.string().email(),
+        note: z.string().optional(),
+        slotStart: z.string(),
+        poste: z.string().optional(),
+        societe: z.string().optional(),
+        phone: z.string().optional(),
+        roleHiring: z.string().optional(),
+        timeline: z.string().optional(),
+      }).parse(request.body);
       reply.code(201);
       return service.createBooking(slug, body);
     },

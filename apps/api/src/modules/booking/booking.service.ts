@@ -1,6 +1,7 @@
 import prisma from '../../lib/db.js';
 import { NotFoundError, ValidationError } from '../../lib/errors.js';
 import { createEvent, getBusyTimes } from '../integrations/calendar.service.js';
+import { isPersonalEmail } from '../integrations/allo.service.js';
 
 interface AvailabilityWindow { day: number; start: string; end: string } // day 0=dim..6=sam, "HH:MM"
 
@@ -143,10 +144,29 @@ export async function getPublicPage(slug: string) {
   };
 }
 
-export async function createBooking(slug: string, data: { name: string; email: string; note?: string; slotStart: string }) {
+export async function createBooking(slug: string, data: {
+  name: string; email: string; note?: string; slotStart: string;
+  poste?: string; societe?: string; phone?: string; roleHiring?: string; timeline?: string;
+}) {
   const settings = await prisma.bookingSettings.findUnique({ where: { slug } });
   if (!settings || !settings.isActive) throw new NotFoundError('Page de réservation', slug);
   if (!data.name?.trim() || !data.email?.trim()) throw new ValidationError('Nom et email requis');
+
+  // Un Discovery call (client) exige un email PRO — les adresses perso sont refusées.
+  const kind = (settings as any).kind ?? 'GENERIC';
+  if (kind === 'DISCOVERY' && isPersonalEmail(data.email.trim())) {
+    throw new ValidationError('Merci d’utiliser votre email professionnel (une adresse gmail/générique ne permet pas de réserver).');
+  }
+
+  // Note enrichie avec les réponses d'intake
+  const intakeNote = [
+    data.poste ? `Poste : ${data.poste}` : '',
+    data.societe ? `Société : ${data.societe}` : '',
+    data.phone ? `Téléphone : ${data.phone}` : '',
+    data.roleHiring ? `Recrute pour / poste : ${data.roleHiring}` : '',
+    data.timeline ? `Échéance : ${data.timeline}` : '',
+    data.note?.trim() ? `Message : ${data.note.trim()}` : '',
+  ].filter(Boolean).join('\n') || null;
 
   const start = new Date(data.slotStart);
   if (isNaN(start.getTime())) throw new ValidationError('Créneau invalide');
@@ -189,7 +209,7 @@ export async function createBooking(slug: string, data: { name: string; email: s
       userId: settings.userId,
       slotStart: start, slotEnd: end,
       inviteeName: data.name.trim(), inviteeEmail: data.email.trim(),
-      inviteeNote: data.note?.trim() || null,
+      inviteeNote: intakeNote,
       meetLink, googleEventId,
       candidatId: candidat?.id ?? null,
     },
