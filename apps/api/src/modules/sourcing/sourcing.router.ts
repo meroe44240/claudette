@@ -16,11 +16,19 @@ export default async function sourcingRouter(fastify: FastifyInstance) {
     schema: { description: 'Créer une market-list', tags: ['Sourcing'] },
     preHandler: [authenticate],
     handler: async (request, reply) => {
+      const ctxSchema = z.object({
+        materiaux: z.array(z.string()).optional(),
+        technos: z.array(z.string()).optional(),
+        production: z.array(z.string()).optional(),
+        application: z.array(z.string()).optional(),
+      }).optional();
       const input = z.object({
         name: z.string().min(1),
         sectorTags: z.array(z.string()).optional(),
         zones: z.array(z.string()).optional(),
         excludedCompanies: z.array(z.string()).optional(),
+        candidatId: z.string().uuid().nullable().optional(),
+        candidatCtx: ctxSchema,
       }).parse(request.body);
       const list = await sourcingService.createList(input, request.userId);
       reply.code(201);
