@@ -39,6 +39,25 @@ export async function pushEstablishment(
   });
   if (!est) throw new NotFoundError('Établissement', establishmentId);
 
+  // Chaque push crée (ou fusionne) une société côté CRM, marquée "Prospect".
+  let entrepriseId = est.entrepriseId ?? null;
+  if (!entrepriseId) {
+    const existing = await prisma.entreprise.findFirst({
+      where: { nom: { equals: est.name, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (existing) {
+      entrepriseId = existing.id;
+    } else {
+      const ent = await prisma.entreprise.create({
+        data: { nom: est.name, secteur: est.sector, localisation: est.city, createdById: userId } as any,
+      });
+      entrepriseId = ent.id;
+    }
+    // relie l'établissement à la société
+    await prisma.marketListEstablishment.update({ where: { id: establishmentId }, data: { entrepriseId } });
+  }
+
   const lead = await leadService.createLead(
     {
       company: est.name,
@@ -51,7 +70,7 @@ export async function pushEstablishment(
       source: `List Push · ${est.marketList.name}`,
       src: 'push',
       stage: 'nouveau',
-      entrepriseId: est.entrepriseId ?? null,
+      entrepriseId,
       pushedCandidat: data.candidat ?? null,
     },
     userId,
