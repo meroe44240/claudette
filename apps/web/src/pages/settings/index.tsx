@@ -420,7 +420,7 @@ export default function SettingsPage() {
               patch: { fonction: e.target.value as Fonction },
             })
           }
-          className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700 focus:border-primary-500 focus:outline-none"
+          className="rounded-lg border border-[rgba(34,23,122,0.14)] bg-white px-2 py-1 text-xs text-neutral-700 focus:border-[#22177A] focus:outline-none"
         >
           {fonctionOptions.map((o) => (
             <option key={o.value} value={o.value}>
@@ -527,31 +527,35 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Paramètres"
-        breadcrumbs={[{ label: 'Paramètres' }]}
-      />
+      <div className="rise" style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>Administration</div>
+        <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Paramètres</h1>
+      </div>
 
       <div className="flex gap-8">
         {/* Sidebar */}
-        <nav className="w-[200px] shrink-0">
+        <nav className="w-[200px] shrink-0 rise">
           <div className="space-y-1">
-            {sidebarItems.map((item) => (
+            {sidebarItems.map((item) => {
+              const on = activeSection === item.id;
+              return (
               <button
                 key={item.id}
                 onClick={() => {
                   setActiveSection(item.id);
                 }}
-                className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors ${
-                  activeSection === item.id
-                    ? 'bg-primary-50 text-primary-500 font-semibold'
-                    : 'text-neutral-500 hover:bg-neutral-50'
-                }`}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors"
+                style={on
+                  ? { background: '#F2F3D8', color: '#22177A', fontWeight: 700, boxShadow: 'inset 3px 0 0 #E6E9AF' }
+                  : { color: '#6E6A85' }}
+                onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = '#FAFAF2'; }}
+                onMouseLeave={(e) => { if (!on) e.currentTarget.style.background = 'transparent'; }}
               >
                 {item.icon}
                 {item.label}
               </button>
-            ))}
+              );
+            })}
           </div>
         </nav>
 
@@ -661,7 +665,7 @@ export default function SettingsPage() {
               </Button>
 
               {/* AI Configuration Section */}
-              <div className="rounded-xl border border-neutral-200 bg-white p-6 space-y-5">
+              <div className="rounded-2xl border border-[rgba(34,23,122,0.08)] bg-white shadow-[0_1px_2px_rgba(34,23,122,0.04)] p-6 space-y-5">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-100">
                     <Sparkles size={18} className="text-purple-600" />
@@ -710,7 +714,7 @@ export default function SettingsPage() {
                           value={aiApiKey}
                           onChange={(e) => setAiApiKey(e.target.value)}
                           placeholder={aiConfigData?.data?.hasApiKey ? 'Cle deja configuree (laisser vide pour garder)' : 'Entrez votre cle API...'}
-                          className="w-full rounded-lg border-[1.5px] border-neutral-100 bg-white px-3 py-2.5 pr-10 text-sm outline-none transition-all placeholder:text-text-tertiary focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
+                          className="w-full rounded-lg border-[1.5px] border-neutral-100 bg-white px-3 py-2.5 pr-10 text-sm outline-none transition-all placeholder:text-text-tertiary focus:border-[#22177A] focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
                         />
                         <button
                           type="button"
@@ -786,7 +790,7 @@ export default function SettingsPage() {
 
               {/* Link preview card */}
               {bookingSlug && (
-                <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                <div className="rounded-2xl border border-[rgba(34,23,122,0.08)] bg-white shadow-[0_1px_2px_rgba(34,23,122,0.04)] p-4">
                   <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500 mb-2">
                     Votre lien de booking
                   </label>
@@ -797,7 +801,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={() => copyToClipboard(`https://ats.propium.co/book/${bookingSlug}`)}
-                      className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-600 transition-colors hover:bg-neutral-50"
+                      className="flex items-center gap-1.5 rounded-lg border border-[rgba(34,23,122,0.14)] bg-white px-3 py-2 text-sm text-neutral-600 transition-colors hover:bg-neutral-50"
                     >
                       <Copy size={14} />
                       Copier
@@ -991,7 +995,7 @@ export default function SettingsPage() {
                     {mandatLinksData.data.map((mandat: any) => (
                       <div
                         key={mandat.id}
-                        className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-4 py-3"
+                        className="flex items-center justify-between rounded-2xl border border-[rgba(34,23,122,0.08)] bg-white shadow-[0_1px_2px_rgba(34,23,122,0.04)] px-4 py-3"
                       >
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-neutral-900 truncate">
