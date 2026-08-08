@@ -10,6 +10,7 @@ import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
 import NoteContent from '../../components/activity/NoteContent';
+import TrameAnswers from '../../components/mandats/TrameAnswers';
 import MentionTextarea from '../../components/activity/MentionTextarea';
 
 // ─── TYPES ──────────────────────────────────────────
@@ -69,7 +70,7 @@ export default function CandidatDetailPage() {
   const [detOpen, setDetOpen] = useState(true);
   const [cvOpen, setCvOpen] = useState(true);
   const [cvTab, setCvTab] = useState<'synth' | 'chrono' | 'full'>('synth');
-  const [railTab, setRailTab] = useState<'act' | 'com' | 'task' | 'eval' | 'msg'>('act');
+  const [railTab, setRailTab] = useState<'act' | 'com' | 'task' | 'eval' | 'msg' | 'trame'>('act');
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [mentionIds, setMentionIds] = useState<string[]>([]);
@@ -127,7 +128,7 @@ export default function CandidatDetailPage() {
   const submitEval = () => { if (!rating) { toast('error', 'Choisissez une note'); return; } actMut.mutate({ type: 'NOTE', titre: `Évaluation ${'★'.repeat(rating)}`, contenu: comment.trim() || `Note ${rating}/5` }); setComment(''); toast('success', 'Évaluation ajoutée'); };
   const advance = (cand: Candidature) => { const i = STAGES.indexOf(cand.stage); if (i < 0 || i >= STAGES.length - 1) { toast('error', 'Déjà à la dernière étape'); return; } advanceMut.mutate({ candId: cand.id, stage: STAGES[i + 1] }); };
 
-  const railTabs: [typeof railTab, string][] = [['act', 'Activité'], ['com', 'Commentaires'], ['task', 'Tâches'], ['eval', 'Évaluation'], ['msg', 'Messages']];
+  const railTabs: [typeof railTab, string][] = [['act', 'Activité'], ['com', 'Commentaires'], ['task', 'Tâches'], ['eval', 'Évaluation'], ['trame', 'Trame'], ['msg', 'Messages']];
   const actions: { label: string; Icon: typeof Ban; color: string; run: () => void }[] = [
     { label: 'Rejeter', Icon: Ban, color: '#F3A6A0', run: () => { if (firstCand) setLost({ candId: firstCand.id, titre: firstCand.mandat.titrePoste, company: firstCand.mandat.entreprise.nom }); else toast('error', 'Aucun mandat'); } },
     { label: 'Étape suivante', Icon: ArrowRight, color: '#E6E9AF', run: () => { if (firstCand) advance(firstCand); else toast('error', 'Aucun mandat'); } },
@@ -453,6 +454,9 @@ export default function CandidatDetailPage() {
                 <button onClick={submitEval} style={{ width: '100%', marginTop: 10, fontSize: 13.5, fontWeight: 800, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: 11, cursor: 'pointer' }}>Enregistrer l'évaluation</button>
               </>
             )}
+            {railTab === 'trame' && (firstCand
+              ? <TrameAnswers candidatureId={firstCand.id} mandatId={firstCand.mandat.id} />
+              : <div style={{ fontSize: 12.5, color: '#8A8699', lineHeight: 1.6 }}>Ce candidat n'est rattaché à aucun mandat — la trame de qualification est définie par mandat.</div>)}
             {railTab === 'msg' && <MessagesTab candidat={c} />}
           </div>
         </aside>
