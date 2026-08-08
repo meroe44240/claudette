@@ -11,6 +11,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Upload, Target, ArrowRight, Trash2, Users, MapPin, Send, X } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { useAuthStore } from '../../stores/auth-store';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
@@ -105,6 +106,31 @@ function matchTone(score: number): { bg: string; fg: string } {
   if (score >= 40) return { bg: '#FBF3E7', fg: '#8A6A2E' };
   return { bg: 'rgba(34,23,122,.06)', fg: '#8A8699' };
 }
+/** Highlights = intersection ctx candidat ∩ ctx établissement (repli sur points forts génériques). */
+function intersectionHighlights(cand?: Ctx | null, est?: Ctx | null): string[] {
+  if (!cand) return [];
+  if (!est) return ctxValues(cand).slice(0, 4);
+  const out: string[] = [];
+  for (const c of CTX_CATS) {
+    const cv = cand[c.key] ?? [];
+    const ev = (est[c.key] ?? []).map((s) => s.toLowerCase());
+    out.push(...cv.filter((v) => ev.some((e) => e.includes(v.toLowerCase()) || v.toLowerCase().includes(e))));
+  }
+  return (out.length ? out : ctxValues(cand)).slice(0, 4);
+}
+/** Email pro déduit : initiale-prénom.nom@societe.fr (sans initiale si prénom inconnu). */
+function deduceEmail(prenom: string, nom: string, company: string): string {
+  const dom = company.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '').slice(0, 24);
+  if (!nom || !dom) return '';
+  const local = prenom ? `${prenom[0].toLowerCase()}.${nom.toLowerCase()}` : nom.toLowerCase();
+  return `${local}@${dom}.fr`;
+}
+/** Email de push anonyme, orienté décideur. Le nom du candidat n'apparaît JAMAIS. */
+function buildPushEmail(o: { role?: string | null; exp?: string | null; dispo?: string | null; accroche: string; highlights: string[]; userName: string }): string {
+  const bullets = o.highlights.length ? o.highlights.map((h) => `· ${h}`).join('\n') : '· profil senior, opérationnel rapidement';
+  const qual = [o.exp ? `${o.exp} d'expérience` : '', o.dispo ? `disponible ${o.dispo}` : ''].filter(Boolean).join(', ');
+  return `Bonjour ${o.accroche || ''},\n\nJ'ai un ${o.role || 'profil'}${qual ? ` (${qual})` : ''} dans mon portefeuille.\n\n${bullets}\n\nJe vous joins son dossier de compétences anonymisé.\n\nÇa vous intéresse ? Répondez-moi et je vous le présente.\n\n${o.userName} — HumanUp`;
+}
 
 export default function ListPushPage() {
   usePageTitle('List Push — Sourcing');
@@ -112,7 +138,9 @@ export default function ListPushPage() {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [pushFor, setPushFor] = useState<Establishment | null>(null);
-  const [pushForm, setPushForm] = useState({ decideurName: '', decideurEmail: '', decideurPhone: '', candidatName: '', candidatRole: '' });
+  const [pushForm, setPushForm] = useState({ civilite: '', prenom: '', nom: '', email: '', phone: '', highlights: [] as string[], emailBody: '' });
+  const { user } = useAuthStore();
+  const userName = `${user?.prenom || ''} ${user?.nom || ''}`.trim() || 'HumanUp';
   const [form, setForm] = useState({
     name: '',
     sectorTags: '',
@@ -208,18 +236,37 @@ export default function ListPushPage() {
     onError: () => toast('error', 'Erreur lors du push'),
   });
 
+  // Ouvre la modale de push : pré-remplit décideur (depuis e.contact), highlights (∩) et email généré.
+  const openPush = (e: Establishment) => {
+    const cand = detail?.candidat;
+    const contact = e.contact ?? {};
+    const civ = contact.civilite ?? '';
+    const prenom = contact.prenom ?? '';
+    const nom = contact.nom ?? '';
+    const highlights = intersectionHighlights(detail?.candidatCtx, e.contexte);
+    const accroche = prenom || (civ ? `${civ} ${nom}`.trim() : nom) || '';
+    const emailBody = buildPushEmail({ role: cand?.posteActuel, accroche, highlights, userName });
+    setPushForm({
+      civilite: civ, prenom, nom,
+      email: contact.email || deduceEmail(prenom, nom, e.name),
+      phone: contact.phone ?? '',
+      highlights, emailBody,
+    });
+    setPushFor(e);
+  };
+
   const submitPush = () => {
     if (!pushFor) return;
-    if (!pushForm.decideurName.trim()) { toast('error', 'Nom du décideur requis'); return; }
+    const decideurName = `${pushForm.prenom} ${pushForm.nom}`.trim() || `${pushForm.civilite} ${pushForm.nom}`.trim();
+    if (!decideurName.trim()) { toast('error', 'Nom du décideur requis'); return; }
+    const cand = detail?.candidat;
     pushMutation.mutate({
       estId: pushFor.id,
       body: {
-        decideurName: pushForm.decideurName.trim(),
-        decideurEmail: pushForm.decideurEmail.trim() || null,
-        decideurPhone: pushForm.decideurPhone.trim() || null,
-        candidat: pushForm.candidatName.trim()
-          ? { name: pushForm.candidatName.trim(), role: pushForm.candidatRole.trim() || null }
-          : null,
+        decideurName,
+        decideurEmail: pushForm.email.trim() || null,
+        decideurPhone: pushForm.phone.trim() || null,
+        candidat: cand ? { name: `${cand.prenom || ''} ${cand.nom}`.trim(), role: cand.posteActuel ?? null } : null,
       },
     });
   };
@@ -438,22 +485,39 @@ export default function ListPushPage() {
                         <tr className="border-b border-neutral-100 text-left text-[11px] uppercase tracking-wider text-text-tertiary">
                           <th className="py-2 pr-3 font-semibold">Boîte</th>
                           <th className="py-2 pr-3 font-semibold">Ville / Secteur</th>
-                          <th className="py-2 pr-3 font-semibold">Postes vus</th>
-                          <th className="py-2 pr-3 font-semibold text-right">Fréquence</th>
+                          <th className="py-2 pr-3 font-semibold">Postes recrutés</th>
+                          <th className="py-2 pr-3 font-semibold">Contexte technique</th>
+                          <th className="py-2 pr-3 font-semibold text-right">Cand.</th>
                           <th className="py-2 pr-3 font-semibold">Statut</th>
                           <th className="py-2 font-semibold">Action</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {detail.establishments.map((e) => (
+                        {[...detail.establishments].sort((a, b) => (matchScore(detail.candidatCtx, b.contexte) ?? -1) - (matchScore(detail.candidatCtx, a.contexte) ?? -1)).map((e) => (
                           <tr key={e.id} className="border-b border-neutral-50 last:border-0">
                             <td className="py-3 pr-3 font-medium text-text-primary">{e.name}</td>
                             <td className="py-3 pr-3 text-[12px] text-text-secondary">
                               {[e.city, e.sector].filter(Boolean).join(' · ') || '—'}
                             </td>
-                            <td className="py-3 pr-3 text-[12px] text-text-secondary">
-                              {e.titles.slice(0, 2).join(', ') || '—'}
-                              {e.titles.length > 2 && ` +${e.titles.length - 2}`}
+                            <td className="py-3 pr-3">
+                              <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
+                                {e.titles.slice(0, 3).map((t) => (
+                                  <span key={t} style={{ background: '#EDEAF9', color: '#5B4B9E', borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>{t}</span>
+                                ))}
+                                {e.titles.length > 3 && <span style={{ fontSize: 11, color: '#8A8699', alignSelf: 'center' }}>+{e.titles.length - 3}</span>}
+                                {e.titles.length === 0 && <span style={{ fontSize: 12, color: '#C4C1D0' }}>—</span>}
+                              </span>
+                            </td>
+                            <td className="py-3 pr-3">
+                              {ctxValues(e.contexte).length === 0 ? (
+                                <span style={{ fontSize: 11.5, color: '#C4C1D0' }}>non renseigné</span>
+                              ) : (
+                                <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4, maxWidth: 260 }}>
+                                  {CTX_CATS.flatMap((c) => (e.contexte?.[c.key] ?? []).slice(0, 2).map((v) => (
+                                    <span key={c.key + v} style={{ background: c.bg, color: c.fg, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>{v}</span>
+                                  ))).slice(0, 6)}
+                                </span>
+                              )}
                             </td>
                             <td className="py-3 pr-3 text-right font-bold tabular-nums text-text-primary">
                               {e.frequency}
@@ -467,9 +531,12 @@ export default function ListPushPage() {
                               </span>
                             </td>
                             <td className="py-3">
+                              {(() => { const sc = matchScore(detail.candidatCtx, e.contexte); return sc !== null ? (
+                                <span title="Recoupement contexte candidat ∩ établissement" style={{ display: 'inline-block', marginRight: 8, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 800, background: matchTone(sc).bg, color: matchTone(sc).fg }}>Match {sc}%</span>
+                              ) : null; })()}
                               {(e.status === 'NEW' || e.status === 'PROSPECTION' || e.status === 'CLIENT_EXISTING') && (
                                 <button
-                                  onClick={() => { setPushFor(e); setPushForm({ decideurName: '', decideurEmail: '', decideurPhone: '', candidatName: '', candidatRole: '' }); }}
+                                  onClick={() => openPush(e)}
                                   className="mr-1 inline-flex items-center gap-1 rounded-md bg-primary-800 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-primary-900"
                                   title="Pusher un candidat à cet établissement"
                                 >
@@ -609,23 +676,54 @@ export default function ListPushPage() {
               </div>
               <button onClick={() => setPushFor(null)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer' }}><X size={15} /></button>
             </div>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.09em', color: '#8A8699', margin: '18px 0 8px' }}>Le candidat poussé</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <input value={pushForm.candidatName} onChange={(e) => setPushForm((f) => ({ ...f, candidatName: e.target.value }))} placeholder="Nom du candidat" style={pushInputStyle} />
-              <input value={pushForm.candidatRole} onChange={(e) => setPushForm((f) => ({ ...f, candidatRole: e.target.value }))} placeholder="Poste / expertise" style={pushInputStyle} />
-            </div>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.09em', color: '#8A8699', margin: '18px 0 8px' }}>Le décideur</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <input value={pushForm.decideurName} onChange={(e) => setPushForm((f) => ({ ...f, decideurName: e.target.value }))} placeholder="Nom du décideur *" style={pushInputStyle} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <input value={pushForm.decideurEmail} onChange={(e) => setPushForm((f) => ({ ...f, decideurEmail: e.target.value }))} placeholder="Email" style={pushInputStyle} />
-                <input value={pushForm.decideurPhone} onChange={(e) => setPushForm((f) => ({ ...f, decideurPhone: e.target.value }))} placeholder="Téléphone" style={pushInputStyle} />
+            {(() => { const sc = matchScore(detail?.candidatCtx, pushFor.contexte); return sc !== null ? (
+              <div style={{ marginTop: 12, fontSize: 12, color: matchTone(sc).fg, background: matchTone(sc).bg, borderRadius: 10, padding: '8px 12px', fontWeight: 700 }}>Match {sc}% — {sc >= 75 ? 'recoupement fort, les points communs sont repris tels quels.' : sc >= 40 ? 'recoupement partiel, vérifie les highlights.' : 'peu de recoupement — ce profil n\'est peut-être pas le bon.'}</div>
+            ) : null; })()}
+
+            {/* Profil poussé = candidat de la liste (verrouillé) */}
+            <div style={pushLabel}>Le profil poussé</div>
+            {detail?.candidat ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F2F3D8', border: '1px solid rgba(34,23,122,.14)', borderRadius: 11, padding: '10px 13px' }}>
+                <span style={{ width: 32, height: 32, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 11, flexShrink: 0 }}>{`${(detail.candidat.prenom?.[0] || '')}${detail.candidat.nom[0] || ''}`.toUpperCase()}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1A1533' }}>{`${detail.candidat.prenom || ''} ${detail.candidat.nom}`.trim()}</div>
+                  {detail.candidat.posteActuel && <div style={{ fontSize: 12, color: '#8A8699' }}>{detail.candidat.posteActuel}</div>}
+                </div>
+                <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 800, color: '#2C6B3F', background: '#EAF3EC', borderRadius: 999, padding: '3px 9px', whiteSpace: 'nowrap' }}>Dossier prêt · anonymisé</span>
               </div>
+            ) : (
+              <div style={{ background: '#FBF3E7', border: '1px solid #F0D9B5', borderRadius: 11, padding: '10px 13px', fontSize: 12.5, color: '#8A6A2E' }}>Rattache un profil à cette liste pour pouvoir pusher.</div>
+            )}
+
+            {/* Décideur */}
+            <div style={pushLabel}>Le décideur</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '78px 1fr 1fr', gap: 10 }}>
+              <input value={pushForm.civilite} onChange={(e) => setPushForm((f) => ({ ...f, civilite: e.target.value }))} placeholder="Civ." style={pushInputStyle} />
+              <input value={pushForm.prenom} onChange={(e) => setPushForm((f) => ({ ...f, prenom: e.target.value }))} placeholder="Prénom" style={pushInputStyle} />
+              <input value={pushForm.nom} onChange={(e) => setPushForm((f) => ({ ...f, nom: e.target.value }))} placeholder="Nom *" style={pushInputStyle} />
             </div>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 14, padding: '10px 12px', background: '#F2F3D8', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 11, fontSize: 12, color: '#4A4568' }}>
-              Le dossier est anonymisé. Le push crée un <strong style={{ color: '#22177A' }}>&nbsp;lead&nbsp;</strong> dans le pipeline commercial.
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+              <input value={pushForm.email} onChange={(e) => setPushForm((f) => ({ ...f, email: e.target.value }))} placeholder="Email pro" style={pushInputStyle} />
+              <input value={pushForm.phone} onChange={(e) => setPushForm((f) => ({ ...f, phone: e.target.value }))} placeholder="Téléphone" style={pushInputStyle} />
             </div>
-            <button onClick={submitPush} disabled={pushMutation.isPending} style={{ width: '100%', marginTop: 16, fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 15, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 13, cursor: 'pointer', opacity: pushMutation.isPending ? 0.6 : 1 }}>{pushMutation.isPending ? 'Push…' : 'Envoyer et créer le lead'}</button>
+
+            {/* Highlights */}
+            <div style={pushLabel}>Highlights (recoupement)</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {pushForm.highlights.length ? pushForm.highlights.map((h) => (
+                <span key={h} style={{ background: '#EAF3EC', color: '#2C6B3F', borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 700 }}>{h}</span>
+              )) : <span style={{ fontSize: 12, color: '#8A8699' }}>Points forts génériques du candidat (pas de contexte établissement).</span>}
+            </div>
+
+            {/* Email anonyme généré (éditable) */}
+            <div style={pushLabel}>Email de push (anonyme)</div>
+            <textarea value={pushForm.emailBody} onChange={(e) => setPushForm((f) => ({ ...f, emailBody: e.target.value }))} style={{ ...pushInputStyle, minHeight: 190, resize: 'vertical', lineHeight: 1.5 }} />
+            <div style={{ fontSize: 11, color: '#8A8699', marginTop: 4 }}>Le nom du candidat n'apparaît jamais. Pièce jointe : dossier de compétences anonymisé.</div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button onClick={() => setPushFor(null)} style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 14, background: '#fff', color: '#22177A', border: '1.5px solid rgba(34,23,122,.2)', borderRadius: 12, padding: '12px 18px', cursor: 'pointer' }}>Annuler</button>
+              <button onClick={submitPush} disabled={pushMutation.isPending || !detail?.candidat} style={{ flex: 1, fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 15, background: detail?.candidat ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 13, cursor: detail?.candidat ? 'pointer' : 'not-allowed', opacity: pushMutation.isPending ? 0.6 : 1 }}>{pushMutation.isPending ? 'Envoi…' : 'Envoyer et créer le lead'}</button>
+            </div>
           </div>
         </div>
       )}
@@ -633,4 +731,5 @@ export default function ListPushPage() {
   );
 }
 
-const pushInputStyle: React.CSSProperties = { width: '100%', fontFamily: "'Manrope',sans-serif", fontSize: 14, padding: '10px 12px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,0.14)', background: '#FCFCF5', color: '#1A1533', outline: 'none' };
+const pushInputStyle: React.CSSProperties = { width: '100%', fontFamily: "'Manrope',sans-serif", fontSize: 14, padding: '10px 12px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,0.14)', background: '#FCFCF5', color: '#1A1533', outline: 'none', boxSizing: 'border-box' };
+const pushLabel: React.CSSProperties = { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.09em', color: '#8A8699', margin: '18px 0 8px' };
