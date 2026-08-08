@@ -306,6 +306,8 @@ model Mandat {
   createdAt        DateTime     @default(now()) @db.Timestamptz()
   updatedAt        DateTime     @updatedAt @db.Timestamptz()
 
+  trame               Json?                 // trame de qualification : [{ id, text }]
+
   candidatures        Candidature[]
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionMandat")
   contractApprovals   ContractApproval[]
@@ -542,6 +544,8 @@ model Candidature {
   createdAt           DateTime         @default(now()) @db.Timestamptz()
   updatedAt           DateTime         @updatedAt @db.Timestamptz()
 
+  trameAnswers        Json?                 // réponses IA à la trame : [{ questionId, answer, source, filledAt }]
+
   stageHistory        StageHistory[]
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionCandidature")
   portalDecisions     PortalDecision[]       @relation("PortalDecisionCandidature")
@@ -549,6 +553,21 @@ model Candidature {
 
   @@unique([mandatId, candidatId])
   @@map("candidatures")
+}
+
+// Bibliothèque de trames de qualification (réutilisables, à copier sur un mandat)
+model QuestionTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(200)
+  description String?  @db.Text
+  category    String?  @db.VarChar(80)
+  questions   Json     @default("[]") // [{ id, text }]
+  isSystem    Boolean  @default(false) // trames pré-faites livrées avec l'app
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz()
+  updatedAt   DateTime @updatedAt @db.Timestamptz()
+
+  @@map("question_templates")
 }
 
 enum StageCandidature {
