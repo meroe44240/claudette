@@ -73,6 +73,8 @@ export async function createList(
     sectorTags?: string[];
     zones?: string[];
     excludedCompanies?: string[];
+    candidatId?: string | null;
+    candidatCtx?: unknown;
   },
   createdById: string,
 ) {
@@ -84,24 +86,30 @@ export async function createList(
       zones: data.zones ?? [],
       excludedCompanies: data.excludedCompanies ?? [],
       createdById,
-    },
+      ...(data.candidatId ? { candidatId: data.candidatId } : {}),
+      ...(data.candidatCtx ? { candidatCtx: data.candidatCtx } : {}),
+    } as any,
   });
 }
 
+async function attachCandidat(list: any): Promise<any> {
+  const cid = list?.candidatId as string | null | undefined;
+  if (!cid) return { ...list, candidat: null };
+  const c = await prisma.candidat.findUnique({ where: { id: cid }, select: { id: true, nom: true, prenom: true, posteActuel: true, photoUrl: true } });
+  return { ...list, candidat: c ?? null };
+}
+
 export async function listLists() {
-  return prisma.marketList.findMany({
+  const lists: any[] = await prisma.marketList.findMany({
     orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      name: true,
-      sectorTags: true,
-      zones: true,
-      excludedCompanies: true,
-      createdAt: true,
-      updatedAt: true,
-      _count: { select: { establishments: true } },
-    },
+    include: { _count: { select: { establishments: true } } },
   });
+  const ids = lists.map((l) => l.candidatId).filter(Boolean);
+  const cands = ids.length
+    ? await prisma.candidat.findMany({ where: { id: { in: ids } }, select: { id: true, nom: true, prenom: true, photoUrl: true } })
+    : [];
+  const map = new Map(cands.map((c) => [c.id, c]));
+  return lists.map((l) => ({ ...l, candidat: l.candidatId ? map.get(l.candidatId) ?? null : null }));
 }
 
 export async function getList(id: string) {
@@ -114,7 +122,7 @@ export async function getList(id: string) {
     },
   });
   if (!list) throw new NotFoundError('MarketList', id);
-  return list;
+  return attachCandidat(list);
 }
 
 export async function updateEstablishmentStatus(
@@ -263,7 +271,7 @@ export async function generateProspectionLeads(listId: string, createdById: stri
   const list = await getList(listId);
 
   const targets = list.establishments.filter(
-    (e) => e.status !== 'EXCLUDED' && e.status !== 'CLIENT_EXISTING',
+    (e: any) => e.status !== 'EXCLUDED' && e.status !== 'CLIENT_EXISTING',
   );
 
   let created = 0;

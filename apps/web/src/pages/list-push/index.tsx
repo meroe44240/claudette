@@ -23,12 +23,16 @@ import { toast } from '../../components/ui/Toast';
 
 type EstablishmentStatus = 'NEW' | 'EXCLUDED' | 'PROSPECTION' | 'CLIENT_EXISTING';
 
+interface Ctx { materiaux?: string[]; technos?: string[]; production?: string[]; application?: string[] }
+interface CandidatRef { id: string; nom: string; prenom: string | null; posteActuel?: string | null; photoUrl?: string | null }
+
 interface MarketList {
   id: string;
   name: string;
   sectorTags: string[];
   zones: string[];
   excludedCompanies: string[];
+  candidat?: CandidatRef | null;
   createdAt: string;
   _count: { establishments: number };
 }
@@ -43,6 +47,8 @@ interface Establishment {
   frequency: number;
   status: EstablishmentStatus;
   entrepriseId: string | null;
+  contexte?: Ctx | null;
+  contact?: { civilite?: string; prenom?: string; nom?: string; email?: string; phone?: string } | null;
 }
 
 interface MarketListDetail {
@@ -51,6 +57,8 @@ interface MarketListDetail {
   sectorTags: string[];
   zones: string[];
   excludedCompanies: string[];
+  candidat?: CandidatRef | null;
+  candidatCtx?: Ctx | null;
   establishments: Establishment[];
 }
 
@@ -67,6 +75,37 @@ const STATUS_TONE: Record<EstablishmentStatus, { bg: string; fg: string }> = {
   CLIENT_EXISTING: { bg: '#eaf3ec', fg: '#3b9a54' },
 };
 
+// ─── Contexte technique + match (cœur du ciblage) ───
+const CTX_CATS: { key: keyof Ctx; label: string; bg: string; fg: string }[] = [
+  { key: 'materiaux', label: 'Matériaux', bg: '#FBF3E7', fg: '#8A6A2E' },
+  { key: 'technos', label: 'Technologies', bg: '#E8EEF9', fg: '#2A4A8A' },
+  { key: 'production', label: 'Production', bg: '#EAF3EC', fg: '#2C6B3F' },
+  { key: 'application', label: 'Application', bg: '#EDEAF9', fg: '#5B4B9E' },
+];
+function ctxValues(ctx?: Ctx | null): string[] {
+  if (!ctx) return [];
+  return CTX_CATS.flatMap((c) => ctx[c.key] ?? []);
+}
+function ctxLine(ctx?: Ctx | null): string { return ctxValues(ctx).slice(0, 5).join(' · '); }
+/** Match = % des catégories renseignées du candidat recoupées par l'établissement. */
+function matchScore(cand?: Ctx | null, est?: Ctx | null): number | null {
+  if (!cand || !est) return null;
+  const filled = CTX_CATS.filter((c) => (cand[c.key]?.length ?? 0) > 0);
+  if (!filled.length) return null;
+  let hits = 0;
+  for (const c of filled) {
+    const cv = (cand[c.key] ?? []).map((s) => s.toLowerCase());
+    const ev = (est[c.key] ?? []).map((s) => s.toLowerCase());
+    if (cv.some((a) => ev.some((b) => b.includes(a) || a.includes(b)))) hits++;
+  }
+  return Math.round((hits / filled.length) * 100);
+}
+function matchTone(score: number): { bg: string; fg: string } {
+  if (score >= 75) return { bg: '#EAF3EC', fg: '#2C6B3F' };
+  if (score >= 40) return { bg: '#FBF3E7', fg: '#8A6A2E' };
+  return { bg: 'rgba(34,23,122,.06)', fg: '#8A8699' };
+}
+
 export default function ListPushPage() {
   usePageTitle('List Push — Sourcing');
   const qc = useQueryClient();
@@ -81,6 +120,13 @@ export default function ListPushPage() {
     excludedCompanies: '',
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [candQuery, setCandQuery] = useState('');
+  const [selectedCand, setSelectedCand] = useState<CandidatRef | null>(null);
+  const { data: candResults } = useQuery({
+    queryKey: ['candidats-search-lp', candQuery],
+    queryFn: () => api.get<{ data: CandidatRef[] }>(`/candidats?search=${encodeURIComponent(candQuery)}&perPage=6`),
+    enabled: candQuery.trim().length >= 2,
+  });
 
   const { data: lists, isLoading: listsLoading } = useQuery({
     queryKey: ['market-lists'],
@@ -94,13 +140,14 @@ export default function ListPushPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: { name: string; sectorTags: string[]; zones: string[]; excludedCompanies: string[] }) =>
+    mutationFn: (data: { name: string; sectorTags: string[]; zones: string[]; excludedCompanies: string[]; candidatId?: string | null }) =>
       api.post<MarketList>('/sourcing/market-lists', data),
     onSuccess: (list) => {
       qc.invalidateQueries({ queryKey: ['market-lists'] });
       setSelectedListId(list.id);
       setCreateOpen(false);
       setForm({ name: '', sectorTags: '', zones: '', excludedCompanies: '' });
+      setSelectedCand(null); setCandQuery('');
       toast('success', `Liste "${list.name}" créée`);
     },
     onError: () => toast('error', 'Erreur lors de la création'),
@@ -323,6 +370,24 @@ export default function ListPushPage() {
                         <Users size={12} strokeWidth={2} /> {detail.establishments.length} boîtes
                       </span>
                     </div>
+
+                    {/* Bandeau profil rattaché (lime) ou avertissement (ambre) */}
+                    {detail.candidat ? (
+                      <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12, background: '#F2F3D8', border: '1px solid rgba(34,23,122,.14)', borderRadius: 12, padding: '10px 14px' }}>
+                        {detail.candidat.photoUrl
+                          ? <img src={detail.candidat.photoUrl} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                          : <span style={{ width: 38, height: 38, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, flexShrink: 0 }}>{`${(detail.candidat.prenom?.[0] || '')}${detail.candidat.nom[0] || ''}`.toUpperCase()}</span>}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: '#8A6A2E' }}>Profil rattaché — la liste lui appartient</div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: '#1A1533' }}>{`${detail.candidat.prenom || ''} ${detail.candidat.nom}`.trim()}{detail.candidat.posteActuel ? ` · ${detail.candidat.posteActuel}` : ''}</div>
+                          {ctxLine(detail.candidatCtx) && <div style={{ fontSize: 12, color: '#5B4B9E', marginTop: 1 }}>{ctxLine(detail.candidatCtx)}</div>}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: 14, background: '#FBF3E7', border: '1px solid #F0D9B5', borderRadius: 12, padding: '10px 14px', fontSize: 12.5, color: '#8A6A2E' }}>
+                        ⚠ Aucun profil rattaché — le matching et le push ciblé sont désactivés. Rattache un A-player à cette liste.
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col gap-2">
                     <input
@@ -456,6 +521,34 @@ export default function ListPushPage() {
           <p className="text-sm text-text-secondary">
             Une liste = une campagne de reverse-sourcing (ex : "SDR Paris Q3", "CTO SaaS France").
           </p>
+
+          {/* 1. Le profil à placer — choisi en premier (il définit le métier) */}
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-text-secondary">Profil à placer (A-player)</label>
+            {selectedCand ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F2F3D8', border: '1px solid rgba(34,23,122,.16)', borderRadius: 11, padding: '9px 12px' }}>
+                <span style={{ width: 30, height: 30, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 11, flexShrink: 0 }}>{`${(selectedCand.prenom?.[0] || '')}${selectedCand.nom[0] || ''}`.toUpperCase()}</span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 700, color: '#1A1533' }}>{`${selectedCand.prenom || ''} ${selectedCand.nom}`.trim()}{selectedCand.posteActuel ? ` · ${selectedCand.posteActuel}` : ''}</span>
+                <button onClick={() => { setSelectedCand(null); setCandQuery(''); }} style={{ border: 'none', background: 'transparent', color: '#8A8699', cursor: 'pointer' }}><X size={15} /></button>
+              </div>
+            ) : (
+              <div style={{ position: 'relative' }}>
+                <input value={candQuery} onChange={(e) => setCandQuery(e.target.value)} placeholder="Rechercher un candidat…" style={pushInputStyle} />
+                {candQuery.trim().length >= 2 && (candResults?.data?.length ?? 0) > 0 && (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 20, background: '#fff', border: '1px solid rgba(34,23,122,.14)', borderRadius: 11, boxShadow: '0 20px 44px -20px rgba(34,23,122,.4)', padding: 5, maxHeight: 220, overflowY: 'auto' }}>
+                    {candResults!.data.map((c) => (
+                      <button key={c.id} onClick={() => { setSelectedCand(c); if (!form.name.trim()) setForm((f) => ({ ...f, name: `${c.prenom || ''} ${c.nom}`.trim() })); }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 9px', borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+                        <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#F2F3D8', color: '#22177A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 9, flexShrink: 0 }}>{`${(c.prenom?.[0] || '')}${c.nom[0] || ''}`.toUpperCase()}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1533' }}>{`${c.prenom || ''} ${c.nom}`.trim()}{c.posteActuel ? ` · ${c.posteActuel}` : ''}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[11px] text-text-tertiary" style={{ marginTop: 4 }}>La liste appartient au candidat — c'est lui qui définit le métier ciblé.</p>
+              </div>
+            )}
+          </div>
+
           <Input
             label="Nom de la liste"
             placeholder="SDR Paris Q3 2026"
@@ -494,6 +587,7 @@ export default function ListPushPage() {
                   sectorTags: form.sectorTags.split(',').map((s) => s.trim()).filter(Boolean),
                   zones: form.zones.split(',').map((s) => s.trim()).filter(Boolean),
                   excludedCompanies: form.excludedCompanies.split(',').map((s) => s.trim()).filter(Boolean),
+                  candidatId: selectedCand?.id ?? null,
                 })
               }
               disabled={!form.name.trim() || createMutation.isPending}

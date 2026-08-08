@@ -454,6 +454,8 @@ model MarketList {
   sectorTags        String[]                   @default([])  // metier(s) ciblé(s)
   zones             String[]                   @default([])  // départements/villes/régions
   excludedCompanies String[]                   @default([])  // sociétés a ne pas prospecter
+  candidatId        String?                    @db.Uuid // A-player rattaché : la liste lui appartient
+  candidatCtx       Json?                      // ctx technique dénormalisé { materiaux, technos, production, application }
   createdById       String?                    @db.Uuid
   createdAt         DateTime                   @default(now()) @db.Timestamptz()
   updatedAt         DateTime                   @updatedAt @db.Timestamptz()
@@ -461,6 +463,7 @@ model MarketList {
   establishments MarketListEstablishment[]
 
   @@index([createdById])
+  @@index([candidatId])
   @@map("market_lists")
 }
 
@@ -475,6 +478,8 @@ model MarketListEstablishment {
   effectif      String?                 @db.VarChar(60)
   titles        String[]                @default([])  // intitulés de postes trouvés dans les CV
   frequency     Int                     @default(1)    // combien de candidats ingérés ont travaillé ici
+  contexte      Json?                   // ctx technique { materiaux, technos, production, application } (matching + highlights)
+  contact       Json?                   // décideur résolu { civilite, prenom, nom, email, phone }
   status        MarketEstablishmentStatus @default(NEW)
   // Lien optionnel vers l'Entreprise du CRM si créée
   entrepriseId  String?                 @db.Uuid
