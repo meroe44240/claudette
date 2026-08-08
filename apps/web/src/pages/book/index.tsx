@@ -27,6 +27,7 @@ const TXT = {
     lang: 'FR', minutes: 'minutes', meet: 'Google Meet (lien envoyé automatiquement)', tz: 'Fuseau',
     chooseSlot: 'Choisissez un créneau', noSlot: 'Aucun créneau disponible pour l\'instant.',
     changeSlot: 'Changer de créneau', confirm: 'Vos informations', slotN: (n: number) => `${n} créneau${n > 1 ? 'x' : ''}`,
+    yourInfo: 'Vos informations', seeSlots: 'Voir les créneaux', backInfo: 'Modifier mes infos',
     name: 'Nom & prénom', poste: 'Votre poste', societe: 'Société', email: 'Email professionnel', emailCand: 'Votre email',
     phone: 'Téléphone', roleHiring: 'Quel poste recrutez-vous ?', timeline: 'Pour quand ?', roleApproached: 'Pour quel poste avez-vous été approché ?',
     message: 'Message (optionnel)', submit: 'Confirmer le rendez-vous', submitting: 'Réservation…',
@@ -59,6 +60,7 @@ Le lien de visioconférence est dans l'invitation. Si vous ne pouvez pas être p
     lang: 'EN', minutes: 'minutes', meet: 'Google Meet (link sent automatically)', tz: 'Timezone',
     chooseSlot: 'Pick a time', noSlot: 'No slots available right now.',
     changeSlot: 'Change time', confirm: 'Your details', slotN: (n: number) => `${n} slot${n > 1 ? 's' : ''}`,
+    yourInfo: 'Your details', seeSlots: 'See availability', backInfo: 'Edit my details',
     name: 'Full name', poste: 'Your role', societe: 'Company', email: 'Work email', emailCand: 'Your email',
     phone: 'Phone', roleHiring: 'What role are you hiring for?', timeline: 'By when?', roleApproached: 'Which role were you approached for?',
     message: 'Message (optional)', submit: 'Confirm the meeting', submitting: 'Booking…',
@@ -100,8 +102,8 @@ export default function BookPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [lang, setLang] = useState<Lang>('fr');
+  const [step, setStep] = useState<'info' | 'slot'>('info');
   const [selDay, setSelDay] = useState<string | null>(null);
-  const [selSlot, setSelSlot] = useState<string | null>(null);
   const [f, setF] = useState({ name: '', email: '', phone: '', poste: '', societe: '', roleHiring: '', timeline: '', note: '' });
   const [busy, setBusy] = useState(false);
   const [confirmed, setConfirmed] = useState<Confirmed | null>(null);
@@ -138,18 +140,18 @@ export default function BookPage() {
   const emailProValid = !isPro || (!!emailDomain && !emailIsPersonal);
   const fixedMandat = isCand ? page?.mandat ?? null : null;
 
-  const canSubmit = !!f.name.trim() && !!f.email.trim() && emailProValid && !busy
+  const infoValid = !!f.name.trim() && !!f.email.trim() && emailProValid
     && (!isPro || (!!f.poste.trim() && !!f.societe.trim() && !!f.roleHiring.trim() && !!f.timeline.trim()));
 
-  const submit = async () => {
-    if (!selSlot || !canSubmit) return;
+  const submit = async (slot: string) => {
+    if (!slot || !infoValid || busy) return;
     setBusy(true); setErr('');
     try {
       const roleHiring = fixedMandat ? fixedMandat.titrePoste : f.roleHiring.trim() || undefined;
       const res = await fetch(`/api/v1/public/booking/${slug}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: f.name.trim(), email: f.email.trim(), slotStart: selSlot,
+          name: f.name.trim(), email: f.email.trim(), slotStart: slot,
           phone: f.phone.trim() || undefined,
           poste: f.poste.trim() || undefined,
           societe: f.societe.trim() || undefined,
@@ -214,9 +216,12 @@ export default function BookPage() {
               <p style={{ fontSize: 13.5, color: '#6E6A85', lineHeight: 1.6, marginTop: 12 }}>{confirmed.message}</p>
               {confirmed.meetLink && <a href={confirmed.meetLink} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 18, fontSize: 13.5, fontWeight: 700, color: '#E6E9AF', background: '#22177A', borderRadius: 12, padding: '12px 20px', textDecoration: 'none' }}><Video size={15} />{t.join}</a>}
             </div>
-          ) : !selSlot ? (
+          ) : step === 'slot' ? (
             <>
+              <button onClick={() => { setStep('info'); setErr(''); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: '#4A4568', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 12 }}><ArrowLeft size={14} />{t.backInfo}</button>
               <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, color: '#1A1533' }}>{t.chooseSlot}</div>
+              {busy && <div style={{ fontSize: 12.5, color: '#22177A', fontWeight: 700, marginTop: 8 }}>{t.submitting}</div>}
+              {err && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#B3261E', fontWeight: 600, marginTop: 8 }}><AlertCircle size={14} />{err}</div>}
               {days.length === 0 ? (
                 <div style={{ marginTop: 20, padding: '30px 16px', textAlign: 'center', color: '#8A8699', fontSize: 14, border: '1.5px dashed rgba(34,23,122,.2)', borderRadius: 14 }}>{t.noSlot}</div>
               ) : (
@@ -228,7 +233,7 @@ export default function BookPage() {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(88px,1fr))', gap: 8, alignContent: 'start', maxHeight: 380, overflowY: 'auto' }}>
                     {daySlots.map(s => (
-                      <button key={s} className="bk-slot" onClick={() => setSelSlot(s)} style={{ padding: '11px 8px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.16)', background: '#fff', cursor: 'pointer', fontSize: 13.5, fontWeight: 700, color: '#22177A', transition: 'border-color .15s' }}>{fmtTime(s, lang)}</button>
+                      <button key={s} className="bk-slot" disabled={busy} onClick={() => submit(s)} style={{ padding: '11px 8px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.16)', background: '#fff', cursor: busy ? 'wait' : 'pointer', fontSize: 13.5, fontWeight: 700, color: '#22177A', transition: 'border-color .15s', opacity: busy ? 0.5 : 1 }}>{fmtTime(s, lang)}</button>
                     ))}
                   </div>
                 </div>
@@ -236,20 +241,17 @@ export default function BookPage() {
             </>
           ) : (
             <>
-              <button onClick={() => { setSelSlot(null); setErr(''); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: '#4A4568', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}><ArrowLeft size={14} />{t.changeSlot}</button>
-
               {/* Bloc conditions (pro) ou intro (candidat) */}
               {(isPro || isCand) && (
-                <div style={{ marginTop: 14, background: isPro ? '#FBF3E7' : '#F2F3D8', border: `1px solid ${isPro ? '#F0D9B5' : 'rgba(34,23,122,.14)'}`, borderRadius: 14, padding: '14px 16px' }}>
+                <div style={{ marginTop: 6, background: isPro ? '#FBF3E7' : '#F2F3D8', border: `1px solid ${isPro ? '#F0D9B5' : 'rgba(34,23,122,.14)'}`, borderRadius: 14, padding: '14px 16px' }}>
                   <div style={{ fontWeight: 800, fontSize: 13.5, color: isPro ? '#8A6A2E' : '#22177A', marginBottom: 6 }}>{isPro ? t.proTitle : t.candTitle}</div>
                   <div style={{ fontSize: 12.5, color: '#4A4568', lineHeight: 1.55, whiteSpace: 'pre-line', maxHeight: 210, overflowY: 'auto' }}>{isPro ? t.proText : t.candText}</div>
                 </div>
               )}
 
-              <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 18, color: '#1A1533', marginTop: 16 }}>{t.confirm}</div>
-              <div style={{ fontSize: 14, color: '#22177A', fontWeight: 700, marginTop: 4, textTransform: 'capitalize' }}>{fmtDay(selSlot, lang)} · {fmtTime(selSlot, lang)}</div>
+              <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 18, color: '#1A1533', marginTop: 16 }}>{t.yourInfo}</div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16, maxWidth: 460 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12, maxWidth: 460 }}>
                 <div><label style={lbl}>{t.name}</label><input value={f.name} onChange={set('name')} style={inp} placeholder={lang === 'fr' ? 'Jean Dupont' : 'John Doe'} /></div>
 
                 {isPro && (
@@ -286,7 +288,7 @@ export default function BookPage() {
                 {!isPro && <div><label style={lbl}>{t.message}</label><textarea value={f.note} onChange={set('note')} style={{ ...inp, minHeight: 64, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={lang === 'fr' ? 'Un mot pour le recruteur…' : 'A word for the recruiter…'} /></div>}
 
                 {err && <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#B3261E', fontWeight: 600 }}><AlertCircle size={14} />{err}</div>}
-                <button disabled={!canSubmit} onClick={submit} style={{ fontSize: 14.5, fontWeight: 800, background: canSubmit ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 14, cursor: canSubmit ? 'pointer' : 'not-allowed' }}>{busy ? t.submitting : t.submit}</button>
+                <button disabled={!infoValid} onClick={() => { setErr(''); setStep('slot'); }} style={{ fontSize: 14.5, fontWeight: 800, background: infoValid ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 14, cursor: infoValid ? 'pointer' : 'not-allowed', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>{t.seeSlots}<ArrowLeft size={15} style={{ transform: 'rotate(180deg)' }} /></button>
               </div>
             </>
           )}
