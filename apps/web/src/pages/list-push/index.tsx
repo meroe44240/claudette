@@ -138,6 +138,7 @@ export default function ListPushPage() {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [pushFor, setPushFor] = useState<Establishment | null>(null);
+  const [serie, setSerie] = useState<{ queue: Establishment[]; idx: number } | null>(null);
   const [pushForm, setPushForm] = useState({ civilite: '', prenom: '', nom: '', email: '', phone: '', highlights: [] as string[], emailBody: '' });
   const { user } = useAuthStore();
   const userName = `${user?.prenom || ''} ${user?.nom || ''}`.trim() || 'HumanUp';
@@ -230,8 +231,6 @@ export default function ListPushPage() {
       api.post(`/sourcing/market-lists/establishments/${p.estId}/push`, p.body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['market-lists', selectedListId] });
-      toast('success', 'Lead créé — visible dans Leads');
-      setPushFor(null);
     },
     onError: () => toast('error', 'Erreur lors du push'),
   });
@@ -255,6 +254,22 @@ export default function ListPushPage() {
     setPushFor(e);
   };
 
+  // Power dialer : enchaîne les établissements à pusher un par un.
+  const serieAdvance = () => {
+    if (!serie) { setPushFor(null); return; }
+    const next = serie.idx + 1;
+    if (next >= serie.queue.length) { setSerie(null); setPushFor(null); toast('success', `File terminée — ${serie.queue.length} établissement(s) traité(s)`); return; }
+    setSerie({ ...serie, idx: next });
+    openPush(serie.queue[next]);
+  };
+  const startSerie = () => {
+    if (!detail?.candidat) { toast('error', 'Rattache un profil à cette liste'); return; }
+    const q = detail.establishments.filter((e) => e.status === 'NEW' || e.status === 'PROSPECTION');
+    if (!q.length) { toast('info', 'Aucun établissement à pusher'); return; }
+    setSerie({ queue: q, idx: 0 });
+    openPush(q[0]);
+  };
+
   const submitPush = () => {
     if (!pushFor) return;
     const decideurName = `${pushForm.prenom} ${pushForm.nom}`.trim() || `${pushForm.civilite} ${pushForm.nom}`.trim();
@@ -268,6 +283,8 @@ export default function ListPushPage() {
         decideurPhone: pushForm.phone.trim() || null,
         candidat: cand ? { name: `${cand.prenom || ''} ${cand.nom}`.trim(), role: cand.posteActuel ?? null } : null,
       },
+    }, {
+      onSuccess: () => { toast('success', 'Lead créé — visible dans Leads'); if (serie) serieAdvance(); else setPushFor(null); },
     });
   };
 
@@ -465,6 +482,16 @@ export default function ListPushPage() {
                     >
                       <ArrowRight size={14} /> Générer les leads
                     </Button>
+                    {(() => { const n = detail.establishments.filter((e) => e.status === 'NEW' || e.status === 'PROSPECTION').length; return (
+                      <button
+                        onClick={startSerie}
+                        disabled={!detail.candidat || n === 0}
+                        title={!detail.candidat ? 'Rattache un profil à cette liste' : 'Enchaîner les pushs un par un'}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 13.5, background: (!detail.candidat || n === 0) ? '#EDEAF9' : '#E6E9AF', color: '#22177A', border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 11, padding: '9px 15px', cursor: (!detail.candidat || n === 0) ? 'not-allowed' : 'pointer', opacity: (!detail.candidat || n === 0) ? 0.6 : 1 }}
+                      >
+                        <Send size={14} /> Push en série ({n})
+                      </button>
+                    ); })()}
                   </div>
                 </div>
               </Card>
@@ -667,14 +694,17 @@ export default function ListPushPage() {
 
       {/* Modale push ciblé → crée un vrai Lead */}
       {pushFor && (
-        <div onClick={() => setPushFor(null)} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(26,21,51,.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <div onClick={() => { setPushFor(null); setSerie(null); }} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(26,21,51,.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: 460, maxWidth: '100%', background: '#fff', borderRadius: 20, boxShadow: '0 40px 90px -40px rgba(26,21,51,0.6)', padding: 24, fontFamily: "'Manrope',sans-serif" }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
               <div>
-                <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 19, color: '#1A1533' }}>Pusher un profil</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 19, color: '#1A1533' }}>Pusher un profil</span>
+                  {serie && <span style={{ fontSize: 11, fontWeight: 800, color: '#22177A', background: '#E6E9AF', borderRadius: 999, padding: '3px 10px' }}>Push {serie.idx + 1} / {serie.queue.length}</span>}
+                </div>
                 <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 3 }}>{pushFor.name}{pushFor.city ? ` · ${pushFor.city}` : ''}</div>
               </div>
-              <button onClick={() => setPushFor(null)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer' }}><X size={15} /></button>
+              <button onClick={() => { setPushFor(null); setSerie(null); }} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer' }}><X size={15} /></button>
             </div>
             {(() => { const sc = matchScore(detail?.candidatCtx, pushFor.contexte); return sc !== null ? (
               <div style={{ marginTop: 12, fontSize: 12, color: matchTone(sc).fg, background: matchTone(sc).bg, borderRadius: 10, padding: '8px 12px', fontWeight: 700 }}>Match {sc}% — {sc >= 75 ? 'recoupement fort, les points communs sont repris tels quels.' : sc >= 40 ? 'recoupement partiel, vérifie les highlights.' : 'peu de recoupement — ce profil n\'est peut-être pas le bon.'}</div>
@@ -721,8 +751,9 @@ export default function ListPushPage() {
             <div style={{ fontSize: 11, color: '#8A8699', marginTop: 4 }}>Le nom du candidat n'apparaît jamais. Pièce jointe : dossier de compétences anonymisé.</div>
 
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-              <button onClick={() => setPushFor(null)} style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 14, background: '#fff', color: '#22177A', border: '1.5px solid rgba(34,23,122,.2)', borderRadius: 12, padding: '12px 18px', cursor: 'pointer' }}>Annuler</button>
-              <button onClick={submitPush} disabled={pushMutation.isPending || !detail?.candidat} style={{ flex: 1, fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 15, background: detail?.candidat ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 13, cursor: detail?.candidat ? 'pointer' : 'not-allowed', opacity: pushMutation.isPending ? 0.6 : 1 }}>{pushMutation.isPending ? 'Envoi…' : 'Envoyer et créer le lead'}</button>
+              <button onClick={() => { setPushFor(null); setSerie(null); }} style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 14, background: '#fff', color: '#22177A', border: '1.5px solid rgba(34,23,122,.2)', borderRadius: 12, padding: '12px 18px', cursor: 'pointer' }}>Annuler</button>
+              {serie && <button onClick={serieAdvance} style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 14, background: '#F5F4EA', color: '#6E6A85', border: 'none', borderRadius: 12, padding: '12px 18px', cursor: 'pointer' }}>Passer</button>}
+              <button onClick={submitPush} disabled={pushMutation.isPending || !detail?.candidat} style={{ flex: 1, fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 15, background: detail?.candidat ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 13, cursor: detail?.candidat ? 'pointer' : 'not-allowed', opacity: pushMutation.isPending ? 0.6 : 1 }}>{pushMutation.isPending ? 'Envoi…' : (serie ? 'Envoyer et suivant' : 'Envoyer et créer le lead')}</button>
             </div>
           </div>
         </div>
