@@ -105,11 +105,13 @@ export async function list(
   }
 
   if (statut) {
-    where.statut = statut;
+    const arr = statut.split(',').map((s) => s.trim()).filter(Boolean);
+    where.statut = arr.length > 1 ? { in: arr } : arr[0];
   }
 
   if (priorite) {
-    where.priorite = priorite;
+    const arr = priorite.split(',').map((s) => s.trim()).filter(Boolean);
+    where.priorite = arr.length > 1 ? { in: arr } : arr[0];
   }
 
   if (entrepriseId) {
