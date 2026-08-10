@@ -344,6 +344,8 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
         if (data.sourceLead !== undefined) {
           mandatUpdate.sourceLead = data.sourceLead;
         }
+        // Close won → le mandat est GAGNÉ (donc archivé : exclu des vues actives OUVERT/EN_COURS)
+        mandatUpdate.statut = 'GAGNE';
         await tx.mandat.update({ where: { id: existing.mandatId }, data: mandatUpdate });
         return updated;
       })
