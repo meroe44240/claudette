@@ -109,7 +109,7 @@ export default function MandatsPage() {
   const [search, setSearch] = useState('');
   const [debSearch, setDebSearch] = useState('');
   const [openChip, setOpenChip] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Record<string, string[]>>({});
+  const [filters, setFilters] = useState<Record<string, string[]>>({ statut: ['OUVERT', 'EN_COURS'] });
   const [who, setWho] = useState<string>('all'); // filtre personne (admin) : 'all' ou userId
 
   useEffect(() => { const t = setTimeout(() => { setDebSearch(search); setPage(1); }, 350); return () => clearTimeout(t); }, [search]);
@@ -193,6 +193,22 @@ export default function MandatsPage() {
         </div>
         <ChipDropdown label="Statut" options={STATUT_OPTIONS} value={filters.statut} open={openChip === 'statut'} onToggle={() => setOpenChip(openChip === 'statut' ? null : 'statut')} onChange={v => setFilter('statut', v)} />
         <ChipDropdown label="Priorité" options={PRIO_OPTIONS} value={filters.priorite} open={openChip === 'prio'} onToggle={() => setOpenChip(openChip === 'prio' ? null : 'prio')} onChange={v => setFilter('priorite', v)} />
+      </div>
+
+      {/* QUICK STATUT — Actifs / Gagnés / Perdus / Tous */}
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 12 }}>
+        {([
+          { label: 'Actifs', v: ['OUVERT', 'EN_COURS'] },
+          { label: 'Gagnés', v: ['GAGNE'] },
+          { label: 'Perdus', v: ['PERDU'] },
+          { label: 'Tous', v: [] as string[] },
+        ]).map(q => {
+          const cur = (filters.statut ?? []).slice().sort().join(',');
+          const on = cur === q.v.slice().sort().join(',');
+          return (
+            <button key={q.label} onClick={() => setFilter('statut', [...q.v])} style={{ fontSize: 12.5, fontWeight: 700, padding: '6px 14px', borderRadius: 999, border: `1.5px solid ${on ? '#22177A' : 'rgba(34,23,122,.14)'}`, background: on ? '#22177A' : '#fff', color: on ? '#E6E9AF' : '#4A4568', cursor: 'pointer' }}>{q.label}</button>
+          );
+        })}
       </div>
 
       {/* ACTIVE CHIPS */}
