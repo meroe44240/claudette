@@ -145,7 +145,9 @@ html,body{margin:0;padding:0;background:#fff;color:#312C4A;font-family:'Inter',s
 .wordmark{line-height:1}
 .wm-name{font-size:18pt;color:#E6E9AF;letter-spacing:.015em}
 .wm-sub{font-size:7.5pt;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:rgba(230,233,175,.6);margin-top:5px}
+.hdr-right{display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex-shrink:0}
 .badge{font-size:8pt;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#E6E9AF;border:1px solid rgba(230,233,175,.5);border-radius:999px;padding:6px 13px;white-space:nowrap}
+.offices{font-size:7.5pt;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:rgba(230,233,175,.55);white-space:nowrap}
 .hrule{height:1px;background:rgba(230,233,175,.22);margin:14px 0 13px}
 .eyebrow{font-size:8.5pt;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:rgba(230,233,175,.62)}
 .h1{font-size:22pt;margin-top:5px;color:#E6E9AF;line-height:1.08}
@@ -156,6 +158,13 @@ html,body{margin:0;padding:0;background:#fff;color:#312C4A;font-family:'Inter',s
 .para{font-size:10.5pt;line-height:1.7;color:#312C4A;text-align:justify;margin:0}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font-size:9.5pt;font-weight:700;border-radius:999px;padding:5px 12px;background:#F2F3D8;color:#22177A}
+.kpis{margin-top:15px;background:#22177A;border-radius:14px;padding:16px 18px}
+.kpis-t{font-size:8.5pt;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(230,233,175,.72);margin-bottom:11px;display:flex;align-items:center;gap:8px}
+.kpis-t:before{content:"";width:14px;height:2px;background:#E6E9AF;display:inline-block}
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px 22px}
+.kpi{display:flex;gap:9px}
+.kpi .b{flex-shrink:0;width:16px;height:16px;border-radius:50%;background:#E6E9AF;color:#22177A;font-weight:800;font-size:8.5pt;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.kpi span{font-size:10pt;line-height:1.42;color:#F4F4E9;font-weight:600}
 .strengths{display:grid;grid-template-columns:1fr 1fr;gap:7px 20px;margin-top:2px}
 .strength{display:flex;gap:8px;font-size:10pt;line-height:1.45;color:#312C4A}
 .strength .ck{flex-shrink:0;width:15px;height:15px;border-radius:50%;background:#22177A;color:#E6E9AF;font-size:9pt;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:1px}
@@ -193,8 +202,8 @@ html,body{margin:0;padding:0;background:#fff;color:#312C4A;font-family:'Inter',s
 
 // One-pager de PUSH : anonymisé (pas de nom/coordonnées/photo candidat), mais
 // boîtes réelles + réalisations visibles, brandé HumanUp + bloc recruteur (trust).
-function pushHtml(cand: CandidatLite, rec: Recruiter, opts: { lang: Lang; keepCity: boolean }): string {
-  const { lang, keepCity } = opts;
+function pushHtml(cand: CandidatLite, rec: Recruiter, opts: { lang: Lang; keepCity: boolean; highlightAch: boolean }): string {
+  const { lang, keepCity, highlightAch } = opts;
   const T = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   const origin = window.location.origin;
   const logoMarkCream = `${origin}/brand/logo-mark-cream.png`; // marque claire — sur le bandeau navy
@@ -215,6 +224,14 @@ function pushHtml(cand: CandidatLite, rec: Recruiter, opts: { lang: Lang; keepCi
     keepCity ? cand.localisation : null,
     exps.length ? `${exps.length} ${T('expériences', 'roles')}` : null,
   ].filter(Boolean);
+
+  // Réalisations clés (bandeau highlight) : priorité aux highlights chiffrés, sinon selling points.
+  const allHighlights = exps.flatMap(e => (e.highlights ?? [])).filter(Boolean);
+  const ranked = allHighlights.slice().sort((a, b) => (/\d/.test(b) ? 1 : 0) - (/\d/.test(a) ? 1 : 0));
+  const keyAch = (ranked.length ? ranked : (cand.aiSellingPoints || [])).slice(0, 4);
+  const kpisHtml = highlightAch && keyAch.length
+    ? `<div class="kpis"><div class="kpis-t">${T('Réalisations clés', 'Key achievements')}</div><div class="kpi-grid">${keyAch.map(a => `<div class="kpi"><span class="b">✓</span><span>${esc(a)}</span></div>`).join('')}</div></div>`
+    : '';
 
   const strengthsHtml = strengths.length
     ? `<div class="sec mt ab">${T('Points forts', 'Key strengths')}</div><div class="strengths">${strengths.map(s => `<div class="strength"><span class="ck">✓</span><span>${esc(s)}</span></div>`).join('')}</div>`
@@ -248,7 +265,10 @@ function pushHtml(cand: CandidatLite, rec: Recruiter, opts: { lang: Lang; keepCi
       <img class="mark" src="${logoMarkCream}" alt="HumanUp"/>
       <div class="wordmark"><div class="wm-name ab">HUMANUP</div><div class="wm-sub">Recruitment Agency&nbsp; ·&nbsp; humanup.io</div></div>
     </div>
-    <span class="badge">${T('Profil confidentiel', 'Confidential profile')}</span>
+    <div class="hdr-right">
+      <span class="badge">${T('Profil confidentiel', 'Confidential profile')}</span>
+      <div class="offices">Hong Kong&nbsp; ·&nbsp; Londres</div>
+    </div>
   </div>
   <div class="hrule"></div>
   <div class="eyebrow">${T('Profil présenté par HumanUp', 'Profile presented by HumanUp')}</div>
@@ -258,6 +278,7 @@ function pushHtml(cand: CandidatLite, rec: Recruiter, opts: { lang: Lang; keepCi
 <div class="body">
   <div class="sec ab">${T('En bref', 'Summary')}</div>
   <p class="para">${esc(summary)}</p>
+  ${kpisHtml}
   ${strengthsHtml}
   ${skillsHtml}
   ${expsHtml}
@@ -272,7 +293,7 @@ function pushHtml(cand: CandidatLite, rec: Recruiter, opts: { lang: Lang; keepCi
   </div>
   <img class="rec-logo" src="${logoMark}" alt="HumanUp"/>
 </div>
-<div class="foot">${T('Document confidentiel — HumanUp Recruitment Agency. Profil anonymisé, transmis pour évaluation uniquement.', 'Confidential — HumanUp Recruitment Agency. Anonymised profile, shared for evaluation only.')}</div>
+<div class="foot">${T('HumanUp Recruitment Agency · Hong Kong · Londres · humanup.io — Profil anonymisé, transmis pour évaluation uniquement.', 'HumanUp Recruitment Agency · Hong Kong · London · humanup.io — Anonymised profile, shared for evaluation only.')}</div>
 </body></html>`;
 }
 
@@ -445,6 +466,7 @@ function ContratTool() {
 function CvTool() {
   const [lang, setLang] = useState<Lang>('fr');
   const [keepCity, setKeepCity] = useState(false);
+  const [highlightAch, setHighlightAch] = useState(true);
   const [q, setQ] = useState('');
   const [debQ, setDebQ] = useState('');
   const [selId, setSelId] = useState<string | null>(null);
@@ -489,8 +511,8 @@ function CvTool() {
     avatarUrl: recPhoto || null,
   };
   const html = useMemo(
-    () => (cand ? pushHtml(cand, recruiter, { lang, keepCity }) : ''),
-    [cand, recEmail, recPhone, recPhoto, member?.nom, member?.prenom, lang, keepCity],
+    () => (cand ? pushHtml(cand, recruiter, { lang, keepCity, highlightAch }) : ''),
+    [cand, recEmail, recPhone, recPhoto, member?.nom, member?.prenom, lang, keepCity, highlightAch],
   );
 
   async function onPhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -576,7 +598,11 @@ function CvTool() {
             </div>
           )}
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 14, cursor: 'pointer' }} onClick={() => setKeepCity(v => !v)}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 14, cursor: 'pointer' }} onClick={() => setHighlightAch(v => !v)}>
+            <span style={{ width: 19, height: 19, borderRadius: 6, border: `1.5px solid ${highlightAch ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: highlightAch ? '#E6E9AF' : '#fff', flexShrink: 0 }} />
+            <span style={{ fontSize: 12.5, color: '#4A4568' }}>Bandeau « Réalisations clés » (highlight)</span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 10, cursor: 'pointer' }} onClick={() => setKeepCity(v => !v)}>
             <span style={{ width: 19, height: 19, borderRadius: 6, border: `1.5px solid ${keepCity ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: keepCity ? '#E6E9AF' : '#fff', flexShrink: 0 }} />
             <span style={{ fontSize: 12.5, color: '#4A4568' }}>Afficher la ville (sinon masquée)</span>
           </label>
@@ -610,7 +636,7 @@ function CvTool() {
           )}
         </div>
 
-        {cand && <button onClick={() => printDoc(pushHtml(cand, recruiter, { lang, keepCity }))} style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 12, padding: 14, cursor: 'pointer', boxShadow: '0 10px 24px -12px rgba(34,23,122,.6)' }}><Printer size={16} />Exporter le one-pager (PDF)</button>}
+        {cand && <button onClick={() => printDoc(pushHtml(cand, recruiter, { lang, keepCity, highlightAch }))} style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 12, padding: 14, cursor: 'pointer', boxShadow: '0 10px 24px -12px rgba(34,23,122,.6)' }}><Printer size={16} />Exporter le one-pager (PDF)</button>}
       </div>
 
       {/* APERÇU WYSIWYG (= le document exporté) */}
