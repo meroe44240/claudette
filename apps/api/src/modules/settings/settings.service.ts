@@ -3,6 +3,7 @@ import { NotFoundError, ConflictError, ValidationError } from '../../lib/errors.
 import { hashPassword } from '../../lib/password.js';
 import type { Role, Fonction } from '@prisma/client';
 
+// avatarUrl/telephone : client Prisma régénéré au build prod (cast pour le dev local)
 const userSelect = {
   id: true,
   email: true,
@@ -10,10 +11,12 @@ const userSelect = {
   prenom: true,
   role: true,
   fonction: true,
+  avatarUrl: true,
+  telephone: true,
   excludeFromTeamStats: true,
   lastLoginAt: true,
   createdAt: true,
-} as const;
+} as any;
 
 export async function listUsers() {
   return prisma.user.findMany({
@@ -22,11 +25,22 @@ export async function listUsers() {
   });
 }
 
-export async function listTeamMembers() {
-  return prisma.user.findMany({
-    select: { id: true, nom: true, prenom: true },
+export interface TeamMember {
+  id: string;
+  nom: string;
+  prenom: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  telephone: string | null;
+  fonction: string;
+}
+
+export async function listTeamMembers(): Promise<TeamMember[]> {
+  // telephone/avatarUrl : client Prisma régénéré au build prod (cast pour le dev local)
+  return (await prisma.user.findMany({
+    select: { id: true, nom: true, prenom: true, email: true, avatarUrl: true, telephone: true, fonction: true } as any,
     orderBy: { nom: 'asc' },
-  });
+  })) as unknown as TeamMember[];
 }
 
 export async function createUser(data: {
@@ -68,6 +82,8 @@ export async function updateUser(
     role?: Role;
     fonction?: Fonction;
     excludeFromTeamStats?: boolean;
+    telephone?: string;
+    avatarUrl?: string;
     password?: string;
   },
 ) {
@@ -81,6 +97,8 @@ export async function updateUser(
   if (data.fonction !== undefined) updateData.fonction = data.fonction;
   if (data.excludeFromTeamStats !== undefined)
     updateData.excludeFromTeamStats = data.excludeFromTeamStats;
+  if (data.telephone !== undefined) updateData.telephone = data.telephone;
+  if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl;
   // Reset du mot de passe par un admin : hash + ne force pas le changement.
   if (data.password) {
     updateData.passwordHash = await hashPassword(data.password);

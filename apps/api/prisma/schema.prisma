@@ -16,6 +16,7 @@ model User {
   nom                String    @db.VarChar(255)
   prenom             String?   @db.VarChar(255)
   avatarUrl          String?   @db.VarChar(500)
+  telephone          String?   @db.VarChar(50)
   role               Role      @default(RECRUTEUR)
   mustChangePassword Boolean   @default(true)
   apiKey             String?   @unique @db.VarChar(255)

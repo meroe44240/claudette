@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { FileText, IdCard, ArrowRight, ArrowLeft, Send, Printer, Search, Building2, ShieldCheck } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { FileText, IdCard, ArrowRight, ArrowLeft, Send, Printer, Search, Building2, ShieldCheck, Upload, Loader2 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
+import { useAuthStore } from '../../stores/auth-store';
 
 type Tool = 'home' | 'contrat' | 'cv';
 type Lang = 'fr' | 'en';
@@ -73,8 +74,15 @@ interface ContractForm {
 interface CandidatLite {
   id: string; nom: string; prenom: string | null; posteActuel: string | null; entrepriseActuelle: string | null;
   localisation: string | null; aiPitchLong: string | null; aiPitchShort: string | null; tags: string[];
-  experiences?: { id: string; titre: string; entreprise: string; anneeDebut: number; anneeFin: number | null }[];
+  aiIdealFor?: string | null;
+  aiSellingPoints?: string[] | null;
+  aiAnonymizedProfile?: { title?: string; summary?: string; bullet_points?: string[] } | null;
+  experiences?: { id: string; titre: string; entreprise: string; anneeDebut: number; anneeFin: number | null; highlights?: string[] }[];
 }
+
+// Recruteur (bloc trust sur le one-pager)
+interface TeamMember { id: string; nom: string; prenom: string | null; email: string | null; avatarUrl: string | null; telephone: string | null; fonction?: string }
+interface Recruiter { nom: string; email: string; telephone: string; avatarUrl: string | null }
 
 // ─── EXPORT PDF (impression iframe dédiée) ──────────
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, c => (({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c]));
@@ -105,23 +113,41 @@ const DOC_HEAD = `<meta charset="utf-8"><meta name="viewport" content="width=dev
 @page{size:A4;margin:0}
 html,body{margin:0;padding:0;background:#fff;color:#312C4A;font-family:'Inter',system-ui,-apple-system,Arial,sans-serif;-webkit-font-smoothing:antialiased}
 .ab{font-family:'Archivo Black','Arial Black',system-ui,sans-serif}
-.hdr{background:#22177A;color:#fff;padding:22mm 18mm 15mm}
+.hdr{background:#22177A;color:#fff;padding:16mm 18mm 14mm;position:relative}
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.logo{height:30px;width:auto;display:block}
+.badge{font-size:8pt;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#E6E9AF;border:1px solid rgba(230,233,175,.5);border-radius:999px;padding:5px 12px}
 .eyebrow{font-size:9.5pt;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:rgba(230,233,175,.7)}
-.h1{font-size:24pt;margin-top:7px;color:#E6E9AF;line-height:1.05}
-.sub{font-size:11pt;color:rgba(230,233,175,.85);margin-top:6px}
-.body{padding:12mm 18mm 18mm}
+.h1{font-size:23pt;margin-top:2px;color:#E6E9AF;line-height:1.06}
+.sub{font-size:10.5pt;color:rgba(230,233,175,.85);margin-top:7px}
+.body{padding:12mm 18mm 10mm}
 .sec{font-size:11pt;color:#22177A;margin:0 0 8px}
-.sec.mt{margin-top:18px}
+.sec.mt{margin-top:17px}
 .para{font-size:10.5pt;line-height:1.7;color:#312C4A;text-align:justify;margin:0}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font-size:9.5pt;font-weight:700;border-radius:999px;padding:5px 12px;background:#F2F3D8;color:#22177A}
-.xps{display:flex;flex-direction:column;gap:11px}
+.strengths{display:grid;grid-template-columns:1fr 1fr;gap:7px 20px;margin-top:2px}
+.strength{display:flex;gap:8px;font-size:10pt;line-height:1.45;color:#312C4A}
+.strength .ck{flex-shrink:0;width:15px;height:15px;border-radius:50%;background:#22177A;color:#E6E9AF;font-size:9pt;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.xps{display:flex;flex-direction:column;gap:12px;margin-top:2px}
 .xp{display:flex;gap:12px;page-break-inside:avoid}
-.yr{flex-shrink:0;font-family:ui-monospace,Menlo,monospace;font-size:9pt;font-weight:700;color:#8A8699;background:#F7F7F0;border-radius:6px;padding:3px 9px;height:fit-content}
+.yr{flex-shrink:0;font-family:ui-monospace,Menlo,monospace;font-size:8.5pt;font-weight:700;color:#8A8699;background:#F7F7F0;border-radius:6px;padding:3px 9px;height:fit-content;min-width:74px;text-align:center}
 .xt{font-size:10.5pt;font-weight:800;color:#1A1533}
-.xe{font-size:10pt;color:#22177A;font-weight:600}
-.foot{display:flex;align-items:center;gap:9px;margin-top:26px;padding-top:14px;border-top:1px solid rgba(34,23,122,.14);font-size:9.5pt;color:#6E6A85}
-.dot{width:9px;height:9px;border-radius:2px;background:#22177A;flex-shrink:0}
+.xe{font-size:10pt;color:#22177A;font-weight:700;margin-top:1px}
+.hl{margin:6px 0 0;padding:0 0 0 2px;list-style:none}
+.hl li{font-size:9.5pt;line-height:1.5;color:#3C3654;padding-left:14px;position:relative;margin-bottom:2px}
+.hl li:before{content:"";position:absolute;left:0;top:6px;width:5px;height:5px;border-radius:50%;background:#E6E9AF;box-shadow:0 0 0 1.5px #22177A}
+.ideal{margin-top:16px;background:#F2F3D8;border-radius:12px;padding:12px 16px;font-size:10pt;color:#22177A;line-height:1.5}
+.ideal b{font-weight:800;text-transform:uppercase;letter-spacing:.08em;font-size:8.5pt;display:block;margin-bottom:3px;color:#4A4290}
+.rec{margin:0 18mm 12mm;background:#FBFBF2;border:1px solid rgba(34,23,122,.14);border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:14px;page-break-inside:avoid}
+.rec-photo{width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;background:#22177A;color:#E6E9AF;display:flex;align-items:center;justify-content:center;font-family:'Archivo Black',sans-serif;font-size:15pt;border:2px solid #E6E9AF}
+.rec-info{flex:1;min-width:0}
+.rec-name{font-size:11.5pt;font-weight:800;color:#1A1533}
+.rec-role{font-size:9pt;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8A7F5A;margin-top:1px}
+.rec-contact{display:flex;gap:16px;flex-wrap:wrap;margin-top:6px}
+.rec-contact span{font-size:9.5pt;color:#312C4A;font-weight:600}
+.rec-logo{height:22px;width:auto;flex-shrink:0;opacity:.9}
+.foot{text-align:center;font-size:8pt;color:#9A96AE;padding:0 18mm 10mm;letter-spacing:.03em}
 .art{page-break-inside:avoid}
 .art .sec{margin:20px 0 9px;padding-bottom:6px;border-bottom:1px solid rgba(34,23,122,.1)}
 .art .para{font-size:9.5pt;line-height:1.72}
@@ -135,27 +161,80 @@ html,body{margin:0;padding:0;background:#fff;color:#312C4A;font-family:'Inter',s
 .psub{font-size:9.5pt;color:rgba(230,233,175,.75);margin-top:2px}
 </style>`;
 
-function dossierHtml(cand: CandidatLite, name: string, anon: boolean, lang: Lang): string {
+// One-pager de PUSH : anonymisé (pas de nom/coordonnées/photo candidat), mais
+// boîtes réelles + réalisations visibles, brandé HumanUp + bloc recruteur (trust).
+function pushHtml(cand: CandidatLite, rec: Recruiter, opts: { lang: Lang; keepCity: boolean }): string {
+  const { lang, keepCity } = opts;
   const T = (fr: string, en: string) => (lang === 'fr' ? fr : en);
-  const sub = [cand.posteActuel, anon ? null : cand.entrepriseActuelle, anon ? null : cand.localisation].filter(Boolean).join(' · ') || '—';
-  const pitch = cand.aiPitchLong || cand.aiPitchShort || T('Synthèse à générer depuis la fiche candidat.', 'Summary to be generated from the candidate profile.');
-  const skills = (cand.tags ?? []);
-  const exps = (cand.experiences ?? []);
-  const skillsHtml = skills.length ? `<div class="sec mt ab">${T('Compétences', 'Skills')}</div><div class="chips">${skills.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : '';
-  const expsHtml = exps.length ? `<div class="sec mt ab">${T('Parcours', 'Experience')}</div><div class="xps">${exps.map(e => `<div class="xp"><span class="yr">${esc(e.anneeDebut)}–${e.anneeFin ? esc(e.anneeFin) : T('auj.', 'now')}</span><div><div class="xt">${esc(e.titre)}</div><div class="xe">${anon ? '—' : esc(e.entreprise)}</div></div></div>`).join('')}</div>` : '';
-  return `<!doctype html><html lang="${lang}"><head>${DOC_HEAD}<title>${T('Dossier', 'File')} — ${esc(name)}</title></head><body>
+  const origin = window.location.origin;
+  const logoLockup = `${origin}/brand/logo-lockup-on-navy.png`;
+  const logoMark = `${origin}/brand/logo-mark-navy.png`;
+
+  const exps = (cand.experiences ?? []).slice().sort((a, b) => (b.anneeDebut || 0) - (a.anneeDebut || 0));
+  const starts = exps.map(e => e.anneeDebut).filter((n): n is number => !!n);
+  const years = starts.length ? Math.max(1, new Date().getFullYear() - Math.min(...starts)) : 0;
+
+  const anon = cand.aiAnonymizedProfile || {};
+  const title = anon.title || cand.posteActuel || T('Profil confidentiel', 'Confidential profile');
+  const summary = anon.summary || cand.aiPitchLong || cand.aiPitchShort || T('Synthèse en cours de génération.', 'Summary being generated.');
+  const strengths = (anon.bullet_points && anon.bullet_points.length ? anon.bullet_points : (cand.aiSellingPoints || [])).slice(0, 6);
+  const skills = (cand.tags ?? []).slice(0, 12);
+
+  const metaBits = [
+    years ? `${years} ${T('ans d’expérience', 'years of experience')}` : null,
+    keepCity ? cand.localisation : null,
+    exps.length ? `${exps.length} ${T('expériences', 'roles')}` : null,
+  ].filter(Boolean);
+
+  const strengthsHtml = strengths.length
+    ? `<div class="sec mt ab">${T('Points forts', 'Key strengths')}</div><div class="strengths">${strengths.map(s => `<div class="strength"><span class="ck">✓</span><span>${esc(s)}</span></div>`).join('')}</div>`
+    : '';
+  const skillsHtml = skills.length
+    ? `<div class="sec mt ab">${T('Compétences', 'Skills')}</div><div class="chips">${skills.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>`
+    : '';
+  const expsHtml = exps.length
+    ? `<div class="sec mt ab">${T('Parcours & réalisations', 'Track record')}</div><div class="xps">${exps.map(e => {
+        const hl = (e.highlights ?? []).filter(Boolean);
+        return `<div class="xp"><span class="yr">${esc(e.anneeDebut || '—')}–${e.anneeFin ? esc(e.anneeFin) : T('auj.', 'now')}</span><div style="min-width:0"><div class="xt">${esc(e.titre)}</div><div class="xe">${esc(e.entreprise || '—')}</div>${hl.length ? `<ul class="hl">${hl.map(h => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}</div></div>`;
+      }).join('')}</div>`
+    : '';
+  const idealHtml = cand.aiIdealFor
+    ? `<div class="ideal"><b>${T('Idéal pour', 'Ideal for')}</b>${esc(cand.aiIdealFor)}</div>`
+    : '';
+
+  const recInitials = (rec.nom || 'HU').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const recPhoto = rec.avatarUrl
+    ? `<img class="rec-photo" src="${esc(rec.avatarUrl)}" alt="${esc(rec.nom)}"/>`
+    : `<div class="rec-photo">${esc(recInitials)}</div>`;
+  const recContact = [
+    rec.email ? `<span>✉&nbsp; ${esc(rec.email)}</span>` : '',
+    rec.telephone ? `<span>☎&nbsp; ${esc(rec.telephone)}</span>` : '',
+  ].filter(Boolean).join('');
+
+  return `<!doctype html><html lang="${lang}"><head>${DOC_HEAD}<title>${T('Profil', 'Profile')} — ${esc(title)}</title></head><body>
 <div class="hdr">
-  <div class="eyebrow">${T('Dossier de compétences', 'Competency file')}</div>
-  <div class="h1 ab">${anon ? 'HUMANUP' : esc(name)}</div>
-  <div class="sub">${esc(sub)}</div>
+  <div class="top"><img class="logo" src="${logoLockup}" alt="HumanUp"/><span class="badge">${T('Profil confidentiel', 'Confidential profile')}</span></div>
+  <div class="h1 ab">${esc(title)}</div>
+  <div class="sub">${esc(metaBits.join('  ·  ') || T('Présenté par HumanUp', 'Presented by HumanUp'))}</div>
 </div>
 <div class="body">
-  <div class="sec ab">${T('Présentation', 'Summary')}</div>
-  <p class="para">${esc(pitch)}</p>
+  <div class="sec ab">${T('En bref', 'Summary')}</div>
+  <p class="para">${esc(summary)}</p>
+  ${strengthsHtml}
   ${skillsHtml}
   ${expsHtml}
-  <div class="foot"><span class="dot"></span><span>${T('Dossier confidentiel — présenté par HumanUp Recruitment Agency.', 'Confidential file — presented by HumanUp Recruitment Agency.')}</span></div>
+  ${idealHtml}
 </div>
+<div class="rec">
+  ${recPhoto}
+  <div class="rec-info">
+    <div class="rec-name">${esc(rec.nom || 'HumanUp')}</div>
+    <div class="rec-role">${T('Votre contact chez HumanUp', 'Your contact at HumanUp')}</div>
+    ${recContact ? `<div class="rec-contact">${recContact}</div>` : ''}
+  </div>
+  <img class="rec-logo" src="${logoMark}" alt="HumanUp"/>
+</div>
+<div class="foot">${T('Document confidentiel — HumanUp Recruitment Agency. Profil anonymisé, transmis pour évaluation uniquement.', 'Confidential — HumanUp Recruitment Agency. Anonymised profile, shared for evaluation only.')}</div>
 </body></html>`;
 }
 
@@ -193,6 +272,7 @@ export default function OutilsPage() {
         .st-card:hover{ transform:translateY(-5px); box-shadow:0 30px 56px -30px rgba(34,23,122,.45); border-color:rgba(34,23,122,.28) !important; }
         .st-in{ transition:border-color .18s ease, box-shadow .2s ease; }
         .st-in:focus{ outline:none; border-color:#22177A; box-shadow:0 0 0 3px rgba(34,23,122,.1); }
+        .st-spin{ animation:st-rot 1s linear infinite; } @keyframes st-rot{ to{ transform:rotate(360deg); } }
       `}</style>
 
       {/* HEADER */}
@@ -323,93 +403,163 @@ function ContratTool() {
   );
 }
 
-// ─── CV & DOSSIER TOOL ──────────────────────────────
+// ─── CV & DOSSIER TOOL (one-pager de push) ──────────
 function CvTool() {
   const [lang, setLang] = useState<Lang>('fr');
-  const [anon, setAnon] = useState(false);
+  const [keepCity, setKeepCity] = useState(false);
   const [q, setQ] = useState('');
   const [debQ, setDebQ] = useState('');
   const [selId, setSelId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
+  const { user } = useAuthStore();
   useEffect(() => { const t = setTimeout(() => setDebQ(q), 300); return () => clearTimeout(t); }, [q]);
 
   const { data: list } = useQuery({ queryKey: ['candidats', 'cvtool', debQ], queryFn: () => api.get<{ data: CandidatLite[] }>(`/candidats?perPage=8${debQ ? `&search=${encodeURIComponent(debQ)}` : ''}`) });
   const { data: cand } = useQuery({ queryKey: ['candidat', 'cvtool', selId], queryFn: () => api.get<CandidatLite>(`/candidats/${selId}`), enabled: !!selId });
+  const { data: team } = useQuery({ queryKey: ['team', 'cvtool'], queryFn: () => api.get<TeamMember[]>('/settings/team') });
 
-  const results = list?.data ?? [];
-  const name = cand ? (anon ? 'Candidat HumanUp' : `${cand.prenom ? cand.prenom + ' ' : ''}${cand.nom}`) : '';
+  // Recruteur : défaut = utilisateur connecté, sinon 1er membre
+  const [recruiterId, setRecruiterId] = useState<string | null>(null);
+  useEffect(() => {
+    if (recruiterId || !team?.length) return;
+    const me = user ? team.find(m => m.id === (user as any).id || m.email === user.email) : null;
+    setRecruiterId((me || team[0]).id);
+  }, [team, user, recruiterId]);
+  const member = (team ?? []).find(m => m.id === recruiterId) || null;
+
+  // Coordonnées recruteur éditables (pré-remplies depuis le membre choisi)
+  const [recEmail, setRecEmail] = useState('');
+  const [recPhone, setRecPhone] = useState('');
+  const [recPhoto, setRecPhoto] = useState('');
+  useEffect(() => {
+    if (!member) return;
+    setRecEmail(member.email || '');
+    setRecPhone(member.telephone || '');
+    setRecPhoto(member.avatarUrl || '');
+  }, [recruiterId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const T = (fr: string, en: string) => (lang === 'fr' ? fr : en);
+  const results = list?.data ?? [];
+
+  const recruiter: Recruiter = {
+    nom: member ? `${member.prenom ? member.prenom + ' ' : ''}${member.nom}` : (user ? `${(user as any).prenom ? (user as any).prenom + ' ' : ''}${(user as any).nom ?? ''}`.trim() : 'HumanUp'),
+    email: recEmail,
+    telephone: recPhone,
+    avatarUrl: recPhoto || null,
+  };
+  const html = useMemo(
+    () => (cand ? pushHtml(cand, recruiter, { lang, keepCity }) : ''),
+    [cand, recEmail, recPhone, recPhoto, member?.nom, member?.prenom, lang, keepCity],
+  );
+
+  async function saveMyPhone() {
+    if (!member || member.id !== (user as any)?.id) return;
+    try { await api.put('/settings/me', { telephone: recPhone, avatarUrl: recPhoto }); toast('success', 'Profil mis à jour'); qc.invalidateQueries({ queryKey: ['team'] }); }
+    catch { toast('error', 'Échec de la sauvegarde'); }
+  }
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') { toast('error', 'PDF uniquement pour l’instant.'); if (fileRef.current) fileRef.current.value = ''; return; }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch('/api/v1/ai/create-from-cv', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd, credentials: 'include' });
+      if (!res.ok) { const d = await res.json().catch(() => ({} as any)); throw new Error(d?.message || 'Échec de l’analyse du CV'); }
+      const json = await res.json();
+      const id = json?.data?.candidatId as string | undefined;
+      toast('success', 'CV analysé — profil créé et anonymisé.');
+      qc.invalidateQueries({ queryKey: ['candidats'] });
+      if (id) { setSelId(id); setQ(''); }
+    } catch (err: any) {
+      toast('error', err?.message || 'Erreur lors de l’analyse');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  const inStyle: React.CSSProperties = { width: '100%', fontSize: 12.5, padding: '8px 10px', borderRadius: 9, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none', color: '#1A1533' };
+  const lbl: React.CSSProperties = { display: 'block', fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: '#8A8699', margin: '0 0 4px' };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, marginTop: 22, alignItems: 'start' }}>
-      {/* PICKER */}
-      <div style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 16, padding: 18, boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <span style={{ fontWeight: 800, fontSize: 15, color: '#1A1533' }}>Candidat</span>
-          <div style={{ display: 'flex', background: '#EFEFE6', borderRadius: 9, padding: 3 }}>
-            {(['fr', 'en'] as const).map(l => <button key={l} onClick={() => setLang(l)} style={{ fontSize: 12, fontWeight: 800, padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', background: lang === l ? '#fff' : 'transparent', color: lang === l ? '#22177A' : '#8A7F5A' }}>{l.toUpperCase()}</button>)}
+    <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20, marginTop: 22, alignItems: 'start' }}>
+      {/* PANNEAU GAUCHE */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Source du profil */}
+        <div style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 16, padding: 18, boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <span style={{ fontWeight: 800, fontSize: 15, color: '#1A1533' }}>Profil</span>
+            <div style={{ display: 'flex', background: '#EFEFE6', borderRadius: 9, padding: 3 }}>
+              {(['fr', 'en'] as const).map(l => <button key={l} onClick={() => setLang(l)} style={{ fontSize: 12, fontWeight: 800, padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', background: lang === l ? '#fff' : 'transparent', color: lang === l ? '#22177A' : '#8A7F5A' }}>{l.toUpperCase()}</button>)}
+            </div>
           </div>
+
+          {/* Upload CV */}
+          <input ref={fileRef} type="file" accept="application/pdf" onChange={onFile} style={{ display: 'none' }} />
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{ width: '100%', marginTop: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '18px 12px', borderRadius: 12, border: '1.5px dashed rgba(34,23,122,.28)', background: '#F7F7FB', cursor: uploading ? 'wait' : 'pointer' }}>
+            {uploading ? <Loader2 size={20} color="#22177A" className="st-spin" /> : <Upload size={20} color="#22177A" />}
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A' }}>{uploading ? 'Analyse du CV par l’IA…' : 'Ajouter un CV (PDF)'}</span>
+            <span style={{ fontSize: 11, color: '#9A96AE' }}>{uploading ? 'Extraction boîtes + réalisations' : 'Anonymisé automatiquement, enregistré en base'}</span>
+          </button>
+
+          {/* Recherche candidat existant */}
+          <div style={{ position: 'relative', marginTop: 14 }}>
+            <Search size={15} color="#9A96AE" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
+            <input className="st-in" value={q} onChange={e => setQ(e.target.value)} placeholder="…ou choisir un candidat existant" style={{ width: '100%', fontSize: 13, padding: '10px 12px 10px 34px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
+          </div>
+          {results.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, maxHeight: 260, overflowY: 'auto' }}>
+              {results.map(c => (
+                <button key={c.id} onClick={() => setSelId(c.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 10, border: `1px solid ${selId === c.id ? '#22177A' : 'rgba(34,23,122,.1)'}`, background: selId === c.id ? '#F2F3D8' : '#fff', cursor: 'pointer', textAlign: 'left' }}>
+                  <span style={{ flexShrink: 0, width: 30, height: 30, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 10 }}>{`${(c.prenom?.[0] ?? '')}${c.nom[0] ?? ''}`.toUpperCase()}</span>
+                  <div style={{ minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${c.prenom ? c.prenom + ' ' : ''}${c.nom}`}</div><div style={{ fontSize: 11.5, color: '#8A8699', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.posteActuel || '—'}</div></div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 14, cursor: 'pointer' }} onClick={() => setKeepCity(v => !v)}>
+            <span style={{ width: 19, height: 19, borderRadius: 6, border: `1.5px solid ${keepCity ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: keepCity ? '#E6E9AF' : '#fff', flexShrink: 0 }} />
+            <span style={{ fontSize: 12.5, color: '#4A4568' }}>Afficher la ville (sinon masquée)</span>
+          </label>
         </div>
-        <div style={{ position: 'relative', marginTop: 14 }}>
-          <Search size={15} color="#9A96AE" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
-          <input className="st-in" value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher un candidat…" style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 34px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
+
+        {/* Bloc recruteur (trust) */}
+        <div style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 16, padding: 18, boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <ShieldCheck size={15} color="#22177A" />
+            <span style={{ fontWeight: 800, fontSize: 14, color: '#1A1533' }}>Contact HumanUp (trust)</span>
+          </div>
+          <label style={lbl}>Recruteur</label>
+          <select value={recruiterId ?? ''} onChange={e => setRecruiterId(e.target.value)} style={{ ...inStyle, cursor: 'pointer' }}>
+            {(team ?? []).map(m => <option key={m.id} value={m.id}>{`${m.prenom ? m.prenom + ' ' : ''}${m.nom}`}</option>)}
+          </select>
+          <div style={{ marginTop: 10 }}><label style={lbl}>E-mail</label><input className="st-in" value={recEmail} onChange={e => setRecEmail(e.target.value)} placeholder="prenom@humanup.io" style={inStyle} /></div>
+          <div style={{ marginTop: 10 }}><label style={lbl}>Téléphone</label><input className="st-in" value={recPhone} onChange={e => setRecPhone(e.target.value)} placeholder="+33 6 12 34 56 78" style={inStyle} /></div>
+          <div style={{ marginTop: 10 }}><label style={lbl}>Photo (URL)</label><input className="st-in" value={recPhoto} onChange={e => setRecPhoto(e.target.value)} placeholder="https://…/photo.jpg" style={inStyle} /></div>
+          {member && member.id === (user as any)?.id && (
+            <button onClick={saveMyPhone} style={{ marginTop: 10, width: '100%', fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: 'none', borderRadius: 9, padding: '8px 10px', cursor: 'pointer' }}>Enregistrer dans mon profil</button>
+          )}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
-          {results.map(c => (
-            <button key={c.id} onClick={() => setSelId(c.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 10, border: `1px solid ${selId === c.id ? '#22177A' : 'rgba(34,23,122,.1)'}`, background: selId === c.id ? '#F2F3D8' : '#fff', cursor: 'pointer', textAlign: 'left' }}>
-              <span style={{ flexShrink: 0, width: 30, height: 30, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 10 }}>{`${(c.prenom?.[0] ?? '')}${c.nom[0] ?? ''}`.toUpperCase()}</span>
-              <div style={{ minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{`${c.prenom ? c.prenom + ' ' : ''}${c.nom}`}</div><div style={{ fontSize: 11.5, color: '#8A8699', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.posteActuel || '—'}</div></div>
-            </button>
-          ))}
-        </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 14, cursor: 'pointer' }}>
-          <span onClick={() => setAnon(a => !a)} style={{ width: 19, height: 19, borderRadius: 6, border: `1.5px solid ${anon ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: anon ? '#E6E9AF' : '#fff', flexShrink: 0 }} />
-          <span style={{ fontSize: 12.5, color: '#4A4568' }}>Anonymiser (logo HumanUp au lieu du nom)</span>
-        </label>
-        {cand && <button onClick={() => printDoc(dossierHtml(cand, name, anon, lang))} style={{ width: '100%', marginTop: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 11, padding: 12, cursor: 'pointer' }}><Printer size={15} />Exporter (PDF)</button>}
+
+        {cand && <button onClick={() => printDoc(pushHtml(cand, recruiter, { lang, keepCity }))} style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 12, padding: 14, cursor: 'pointer', boxShadow: '0 10px 24px -12px rgba(34,23,122,.6)' }}><Printer size={16} />Exporter le one-pager (PDF)</button>}
       </div>
 
-      {/* PREVIEW */}
-      <div id="print-area" style={{ background: '#fff', border: '1px solid rgba(34,23,122,.1)', borderRadius: 16, boxShadow: '0 1px 2px rgba(34,23,122,.04)', overflow: 'hidden', minHeight: 400 }}>
+      {/* APERÇU WYSIWYG (= le document exporté) */}
+      <div style={{ background: '#EFEFE6', border: '1px solid rgba(34,23,122,.1)', borderRadius: 16, boxShadow: '0 1px 2px rgba(34,23,122,.04)', overflow: 'hidden', minHeight: 500 }}>
         {!cand ? (
-          <div style={{ padding: 60, textAlign: 'center', color: '#9A96AE', fontSize: 14 }}>Choisissez un candidat pour générer son dossier au format HumanUp.</div>
+          <div style={{ padding: '80px 40px', textAlign: 'center', color: '#9A96AE', fontSize: 14, lineHeight: 1.6 }}>
+            <FileText size={30} color="#C4C0D6" style={{ marginBottom: 12 }} /><br />
+            Ajoutez un CV (PDF) ou choisissez un candidat.<br />HumanUp génère un one-pager <strong style={{ color: '#6E6A85' }}>anonymisé</strong> — boîtes et réalisations visibles, coordonnées masquées.
+          </div>
         ) : (
-          <>
-            <div style={{ background: '#22177A', color: '#fff', padding: '28px 36px' }}>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.2em', textTransform: 'uppercase', color: 'rgba(230,233,175,.7)' }}>{T('Dossier de compétences', 'Competency file')}</div>
-              <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 26, marginTop: 8, color: '#E6E9AF' }}>{anon ? 'HUMANUP' : name}</div>
-              <div style={{ fontSize: 13, color: 'rgba(230,233,175,.85)', marginTop: 4 }}>{[cand.posteActuel, anon ? null : cand.entrepriseActuelle, anon ? null : cand.localisation].filter(Boolean).join(' · ') || '—'}</div>
-            </div>
-            <div style={{ padding: '24px 36px 36px' }}>
-              <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 13, color: '#22177A', marginBottom: 8 }}>{T('Présentation', 'Summary')}</div>
-              <p style={{ fontSize: 13, lineHeight: 1.7, color: '#312C4A', textAlign: 'justify' }}>{cand.aiPitchLong || cand.aiPitchShort || T('Synthèse à générer depuis la fiche candidat.', 'Summary to be generated from the candidate profile.')}</p>
-
-              {cand.tags?.length > 0 && (
-                <>
-                  <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 13, color: '#22177A', margin: '22px 0 8px' }}>{T('Compétences', 'Skills')}</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>{cand.tags.map(t => <span key={t} style={{ fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '5px 12px', background: '#F2F3D8', color: '#22177A' }}>{t}</span>)}</div>
-                </>
-              )}
-
-              {(cand.experiences?.length ?? 0) > 0 && (
-                <>
-                  <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 13, color: '#22177A', margin: '22px 0 10px' }}>{T('Parcours', 'Experience')}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {cand.experiences!.map(e => (
-                      <div key={e.id} style={{ display: 'flex', gap: 12 }}>
-                        <span style={{ flexShrink: 0, fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11, fontWeight: 700, color: '#8A8699', background: '#F7F7F0', borderRadius: 6, padding: '3px 9px', height: 'fit-content' }}>{e.anneeDebut}–{e.anneeFin ?? 'auj.'}</span>
-                        <div><div style={{ fontSize: 13, fontWeight: 800, color: '#1A1533' }}>{e.titre}</div><div style={{ fontSize: 12.5, color: '#22177A', fontWeight: 600 }}>{anon ? '—' : e.entreprise}</div></div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 30, paddingTop: 16, borderTop: '1px solid rgba(34,23,122,.12)' }}>
-                <Building2 size={16} color="#22177A" />
-                <span style={{ fontSize: 11.5, color: '#6E6A85' }}>{T('Dossier confidentiel — présenté par HumanUp Recruitment Agency.', 'Confidential file — presented by HumanUp Recruitment Agency.')}</span>
-              </div>
-            </div>
-          </>
+          <iframe title="one-pager" srcDoc={html} style={{ width: '100%', height: 1040, border: 0, display: 'block', background: '#EFEFE6' }} />
         )}
       </div>
     </div>

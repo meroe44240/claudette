@@ -22,8 +22,17 @@ const updateUserSchema = z.object({
   role: z.enum(['ADMIN', 'RECRUTEUR']).optional(),
   fonction: fonctionEnum.optional(),
   excludeFromTeamStats: z.boolean().optional(),
+  telephone: z.string().max(50).optional(),
+  avatarUrl: z.string().max(1000).optional(),
   // Reinitialisation du mot de passe par un admin (optionnel).
   password: z.string().min(8, 'Minimum 8 caractères').optional(),
+});
+
+// Auto-édition de son propre profil (téléphone + photo) — tout utilisateur authentifié.
+const updateMeSchema = z.object({
+  telephone: z.string().max(50).optional(),
+  avatarUrl: z.string().max(1000).optional(),
+  prenom: z.string().optional(),
 });
 
 export default async function settingsRouter(fastify: FastifyInstance) {
@@ -36,6 +45,19 @@ export default async function settingsRouter(fastify: FastifyInstance) {
     preHandler: [authenticate],
     handler: async () => {
       return settingsService.listTeamMembers();
+    },
+  });
+
+  // PUT /me - Auto-édition de son profil (téléphone + photo)
+  fastify.put('/me', {
+    schema: {
+      description: 'Mettre à jour son propre profil (téléphone, photo)',
+      tags: ['Settings'],
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const input = updateMeSchema.parse(request.body);
+      return settingsService.updateUser(request.userId, input);
     },
   });
 
