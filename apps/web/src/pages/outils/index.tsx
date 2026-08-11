@@ -138,12 +138,17 @@ const DOC_HEAD = `<meta charset="utf-8"><meta name="viewport" content="width=dev
 @page{size:A4;margin:0}
 html,body{margin:0;padding:0;background:#fff;color:#312C4A;font-family:'Inter',system-ui,-apple-system,Arial,sans-serif;-webkit-font-smoothing:antialiased}
 .ab{font-family:'Archivo Black','Arial Black',system-ui,sans-serif}
-.hdr{background:#22177A;color:#fff;padding:16mm 18mm 14mm;position:relative}
-.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.logo{height:30px;width:auto;display:block}
-.badge{font-size:8pt;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#E6E9AF;border:1px solid rgba(230,233,175,.5);border-radius:999px;padding:5px 12px}
-.eyebrow{font-size:9.5pt;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:rgba(230,233,175,.7)}
-.h1{font-size:23pt;margin-top:2px;color:#E6E9AF;line-height:1.06}
+.hdr{background:#22177A;color:#fff;padding:15mm 18mm 13mm;position:relative}
+.brandbar{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.brand{display:flex;align-items:center;gap:13px}
+.mark{height:46px;width:auto;display:block}
+.wordmark{line-height:1}
+.wm-name{font-size:18pt;color:#E6E9AF;letter-spacing:.015em}
+.wm-sub{font-size:7.5pt;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:rgba(230,233,175,.6);margin-top:5px}
+.badge{font-size:8pt;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#E6E9AF;border:1px solid rgba(230,233,175,.5);border-radius:999px;padding:6px 13px;white-space:nowrap}
+.hrule{height:1px;background:rgba(230,233,175,.22);margin:14px 0 13px}
+.eyebrow{font-size:8.5pt;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:rgba(230,233,175,.62)}
+.h1{font-size:22pt;margin-top:5px;color:#E6E9AF;line-height:1.08}
 .sub{font-size:10.5pt;color:rgba(230,233,175,.85);margin-top:7px}
 .body{padding:12mm 18mm 10mm}
 .sec{font-size:11pt;color:#22177A;margin:0 0 8px}
@@ -192,8 +197,8 @@ function pushHtml(cand: CandidatLite, rec: Recruiter, opts: { lang: Lang; keepCi
   const { lang, keepCity } = opts;
   const T = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   const origin = window.location.origin;
-  const logoLockup = `${origin}/brand/logo-lockup-on-navy.png`;
-  const logoMark = `${origin}/brand/logo-mark-navy.png`;
+  const logoMarkCream = `${origin}/brand/logo-mark-cream.png`; // marque claire — sur le bandeau navy
+  const logoMark = `${origin}/brand/logo-mark-navy.png`;       // marque foncée — sur le bloc recruteur crème
 
   const exps = (cand.experiences ?? []).slice().sort((a, b) => (b.anneeDebut || 0) - (a.anneeDebut || 0));
   const starts = exps.map(e => e.anneeDebut).filter((n): n is number => !!n);
@@ -238,7 +243,15 @@ function pushHtml(cand: CandidatLite, rec: Recruiter, opts: { lang: Lang; keepCi
 
   return `<!doctype html><html lang="${lang}"><head>${DOC_HEAD}<title>${T('Profil', 'Profile')} — ${esc(title)}</title></head><body>
 <div class="hdr">
-  <div class="top"><img class="logo" src="${logoLockup}" alt="HumanUp"/><span class="badge">${T('Profil confidentiel', 'Confidential profile')}</span></div>
+  <div class="brandbar">
+    <div class="brand">
+      <img class="mark" src="${logoMarkCream}" alt="HumanUp"/>
+      <div class="wordmark"><div class="wm-name ab">HUMANUP</div><div class="wm-sub">Recruitment Agency&nbsp; ·&nbsp; humanup.io</div></div>
+    </div>
+    <span class="badge">${T('Profil confidentiel', 'Confidential profile')}</span>
+  </div>
+  <div class="hrule"></div>
+  <div class="eyebrow">${T('Profil présenté par HumanUp', 'Profile presented by HumanUp')}</div>
   <div class="h1 ab">${esc(title)}</div>
   <div class="sub">${esc(metaBits.join('  ·  ') || T('Présenté par HumanUp', 'Presented by HumanUp'))}</div>
 </div>
