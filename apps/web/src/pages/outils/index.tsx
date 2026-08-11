@@ -81,8 +81,33 @@ interface CandidatLite {
 }
 
 // Recruteur (bloc trust sur le one-pager)
-interface TeamMember { id: string; nom: string; prenom: string | null; email: string | null; avatarUrl: string | null; telephone: string | null; fonction?: string }
+interface TeamMember { id: string; nom: string; prenom: string | null; email: string | null; avatarUrl: string | null; avatarData?: string | null; telephone: string | null; fonction?: string }
 interface Recruiter { nom: string; email: string; telephone: string; avatarUrl: string | null }
+
+// Compresse une image en petite vignette carrée (data-URI JPEG) pour le bloc recruteur.
+function fileToThumbnail(file: File, max = 320): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Lecture impossible'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Image invalide'));
+      img.onload = () => {
+        const side = Math.min(img.width, img.height); // recadrage carré centré
+        const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+        const out = Math.min(max, side);
+        const canvas = document.createElement('canvas');
+        canvas.width = out; canvas.height = out;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Canvas indisponible'));
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, out, out);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 // ─── EXPORT PDF (impression iframe dédiée) ──────────
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, c => (({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c]));
@@ -412,6 +437,7 @@ function CvTool() {
   const [selId, setSelId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
   const { user } = useAuthStore();
   useEffect(() => { const t = setTimeout(() => setDebQ(q), 300); return () => clearTimeout(t); }, [q]);
@@ -437,7 +463,7 @@ function CvTool() {
     if (!member) return;
     setRecEmail(member.email || '');
     setRecPhone(member.telephone || '');
-    setRecPhoto(member.avatarUrl || '');
+    setRecPhoto(member.avatarData || member.avatarUrl || '');
   }, [recruiterId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const T = (fr: string, en: string) => (lang === 'fr' ? fr : en);
@@ -454,9 +480,22 @@ function CvTool() {
     [cand, recEmail, recPhone, recPhoto, member?.nom, member?.prenom, lang, keepCity],
   );
 
+  async function onPhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast('error', 'Image uniquement (JPG/PNG).'); }
+    else {
+      try { setRecPhoto(await fileToThumbnail(file)); }
+      catch (err: any) { toast('error', err?.message || 'Image illisible'); }
+    }
+    if (photoRef.current) photoRef.current.value = '';
+  }
+
   async function saveMyPhone() {
     if (!member || member.id !== (user as any)?.id) return;
-    try { await api.put('/settings/me', { telephone: recPhone, avatarUrl: recPhoto }); toast('success', 'Profil mis à jour'); qc.invalidateQueries({ queryKey: ['team'] }); }
+    const body: Record<string, string> = { telephone: recPhone };
+    if (recPhoto.startsWith('data:')) body.avatarData = recPhoto; else body.avatarUrl = recPhoto;
+    try { await api.put('/settings/me', body); toast('success', 'Profil mis à jour'); qc.invalidateQueries({ queryKey: ['team'] }); }
     catch { toast('error', 'Échec de la sauvegarde'); }
   }
 
@@ -542,7 +581,17 @@ function CvTool() {
           </select>
           <div style={{ marginTop: 10 }}><label style={lbl}>E-mail</label><input className="st-in" value={recEmail} onChange={e => setRecEmail(e.target.value)} placeholder="prenom@humanup.io" style={inStyle} /></div>
           <div style={{ marginTop: 10 }}><label style={lbl}>Téléphone</label><input className="st-in" value={recPhone} onChange={e => setRecPhone(e.target.value)} placeholder="+33 6 12 34 56 78" style={inStyle} /></div>
-          <div style={{ marginTop: 10 }}><label style={lbl}>Photo (URL)</label><input className="st-in" value={recPhoto} onChange={e => setRecPhoto(e.target.value)} placeholder="https://…/photo.jpg" style={inStyle} /></div>
+          <div style={{ marginTop: 10 }}>
+            <label style={lbl}>Photo</label>
+            <input ref={photoRef} type="file" accept="image/*" onChange={onPhotoFile} style={{ display: 'none' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {recPhoto
+                ? <img src={recPhoto} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(34,23,122,.2)', flexShrink: 0 }} />
+                : <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#EFEFE6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Upload size={15} color="#9A96AE" /></div>}
+              <button onClick={() => photoRef.current?.click()} style={{ flex: 1, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#fff', border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 10px', cursor: 'pointer' }}>{recPhoto ? 'Changer la photo' : 'Téléverser une photo'}</button>
+              {recPhoto && <button onClick={() => setRecPhoto('')} title="Retirer" style={{ fontSize: 13, color: '#9A96AE', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>✕</button>}
+            </div>
+          </div>
           {member && member.id === (user as any)?.id && (
             <button onClick={saveMyPhone} style={{ marginTop: 10, width: '100%', fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: 'none', borderRadius: 9, padding: '8px 10px', cursor: 'pointer' }}>Enregistrer dans mon profil</button>
           )}

@@ -3,7 +3,7 @@ import { NotFoundError, ConflictError, ValidationError } from '../../lib/errors.
 import { hashPassword } from '../../lib/password.js';
 import type { Role, Fonction } from '@prisma/client';
 
-// avatarUrl/telephone : client Prisma régénéré au build prod (cast pour le dev local)
+// avatarUrl/avatarData/telephone : client Prisma régénéré au build prod (cast pour le dev local)
 const userSelect = {
   id: true,
   email: true,
@@ -31,14 +31,15 @@ export interface TeamMember {
   prenom: string | null;
   email: string | null;
   avatarUrl: string | null;
+  avatarData: string | null;
   telephone: string | null;
   fonction: string;
 }
 
 export async function listTeamMembers(): Promise<TeamMember[]> {
-  // telephone/avatarUrl : client Prisma régénéré au build prod (cast pour le dev local)
+  // telephone/avatarUrl/avatarData : client Prisma régénéré au build prod (cast pour le dev local)
   return (await prisma.user.findMany({
-    select: { id: true, nom: true, prenom: true, email: true, avatarUrl: true, telephone: true, fonction: true } as any,
+    select: { id: true, nom: true, prenom: true, email: true, avatarUrl: true, avatarData: true, telephone: true, fonction: true } as any,
     orderBy: { nom: 'asc' },
   })) as unknown as TeamMember[];
 }
@@ -84,6 +85,7 @@ export async function updateUser(
     excludeFromTeamStats?: boolean;
     telephone?: string;
     avatarUrl?: string;
+    avatarData?: string;
     password?: string;
   },
 ) {
@@ -99,6 +101,7 @@ export async function updateUser(
     updateData.excludeFromTeamStats = data.excludeFromTeamStats;
   if (data.telephone !== undefined) updateData.telephone = data.telephone;
   if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl;
+  if (data.avatarData !== undefined) updateData.avatarData = data.avatarData;
   // Reset du mot de passe par un admin : hash + ne force pas le changement.
   if (data.password) {
     updateData.passwordHash = await hashPassword(data.password);
