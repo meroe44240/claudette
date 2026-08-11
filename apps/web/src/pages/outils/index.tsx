@@ -76,6 +76,111 @@ interface CandidatLite {
   experiences?: { id: string; titre: string; entreprise: string; anneeDebut: number; anneeFin: number | null }[];
 }
 
+// ─── EXPORT PDF (impression iframe dédiée) ──────────
+const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, c => (({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c]));
+
+// Ouvre un document autonome dans un iframe caché et lance l'impression (Enregistrer en PDF).
+// Évite les pièges de window.print() sur la page : fonds de couleur conservés (print-color-adjust),
+// format A4 net, pas de sidebar ni de pages blanches.
+function printDoc(html: string) {
+  const iframe = document.createElement('iframe');
+  Object.assign(iframe.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0', visibility: 'hidden' });
+  document.body.appendChild(iframe);
+  const win = iframe.contentWindow;
+  const doc = win?.document;
+  if (!win || !doc) { document.body.removeChild(iframe); return; }
+  const cleanup = () => { setTimeout(() => { try { document.body.removeChild(iframe); } catch { /* déjà retiré */ } }, 800); };
+  win.onafterprint = cleanup;
+  doc.open();
+  doc.write(html);
+  doc.close();
+  // Laisse le temps au layout + polices de se charger avant l'impression.
+  setTimeout(() => { try { win.focus(); win.print(); } catch { cleanup(); } }, 450);
+}
+
+const DOC_HEAD = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;600;700;800&display=swap');
+*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@page{size:A4;margin:0}
+html,body{margin:0;padding:0;background:#fff;color:#312C4A;font-family:'Inter',system-ui,-apple-system,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.ab{font-family:'Archivo Black','Arial Black',system-ui,sans-serif}
+.hdr{background:#22177A;color:#fff;padding:22mm 18mm 15mm}
+.eyebrow{font-size:9.5pt;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:rgba(230,233,175,.7)}
+.h1{font-size:24pt;margin-top:7px;color:#E6E9AF;line-height:1.05}
+.sub{font-size:11pt;color:rgba(230,233,175,.85);margin-top:6px}
+.body{padding:12mm 18mm 18mm}
+.sec{font-size:11pt;color:#22177A;margin:0 0 8px}
+.sec.mt{margin-top:18px}
+.para{font-size:10.5pt;line-height:1.7;color:#312C4A;text-align:justify;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:9.5pt;font-weight:700;border-radius:999px;padding:5px 12px;background:#F2F3D8;color:#22177A}
+.xps{display:flex;flex-direction:column;gap:11px}
+.xp{display:flex;gap:12px;page-break-inside:avoid}
+.yr{flex-shrink:0;font-family:ui-monospace,Menlo,monospace;font-size:9pt;font-weight:700;color:#8A8699;background:#F7F7F0;border-radius:6px;padding:3px 9px;height:fit-content}
+.xt{font-size:10.5pt;font-weight:800;color:#1A1533}
+.xe{font-size:10pt;color:#22177A;font-weight:600}
+.foot{display:flex;align-items:center;gap:9px;margin-top:26px;padding-top:14px;border-top:1px solid rgba(34,23,122,.14);font-size:9.5pt;color:#6E6A85}
+.dot{width:9px;height:9px;border-radius:2px;background:#22177A;flex-shrink:0}
+.art{page-break-inside:avoid}
+.art .sec{margin:20px 0 9px;padding-bottom:6px;border-bottom:1px solid rgba(34,23,122,.1)}
+.art .para{font-size:9.5pt;line-height:1.72}
+.sign{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:34px;padding-top:18px;border-top:1px solid rgba(34,23,122,.14);page-break-inside:avoid}
+.sign .cap{font-size:9pt;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#9A96AE}
+.sign .ln{height:52px;border-bottom:1px solid rgba(34,23,122,.25);margin-top:10px}
+.sign .nm{font-size:9.5pt;color:#6E6A85;margin-top:6px}
+.parties{display:flex;gap:34px;flex-wrap:wrap;margin-top:18px}
+.pcap{font-size:8.5pt;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:rgba(230,233,175,.55)}
+.pnm{font-size:11pt;font-weight:700;margin-top:4px}
+.psub{font-size:9.5pt;color:rgba(230,233,175,.75);margin-top:2px}
+</style>`;
+
+function dossierHtml(cand: CandidatLite, name: string, anon: boolean, lang: Lang): string {
+  const T = (fr: string, en: string) => (lang === 'fr' ? fr : en);
+  const sub = [cand.posteActuel, anon ? null : cand.entrepriseActuelle, anon ? null : cand.localisation].filter(Boolean).join(' · ') || '—';
+  const pitch = cand.aiPitchLong || cand.aiPitchShort || T('Synthèse à générer depuis la fiche candidat.', 'Summary to be generated from the candidate profile.');
+  const skills = (cand.tags ?? []);
+  const exps = (cand.experiences ?? []);
+  const skillsHtml = skills.length ? `<div class="sec mt ab">${T('Compétences', 'Skills')}</div><div class="chips">${skills.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : '';
+  const expsHtml = exps.length ? `<div class="sec mt ab">${T('Parcours', 'Experience')}</div><div class="xps">${exps.map(e => `<div class="xp"><span class="yr">${esc(e.anneeDebut)}–${e.anneeFin ? esc(e.anneeFin) : T('auj.', 'now')}</span><div><div class="xt">${esc(e.titre)}</div><div class="xe">${anon ? '—' : esc(e.entreprise)}</div></div></div>`).join('')}</div>` : '';
+  return `<!doctype html><html lang="${lang}"><head>${DOC_HEAD}<title>${T('Dossier', 'File')} — ${esc(name)}</title></head><body>
+<div class="hdr">
+  <div class="eyebrow">${T('Dossier de compétences', 'Competency file')}</div>
+  <div class="h1 ab">${anon ? 'HUMANUP' : esc(name)}</div>
+  <div class="sub">${esc(sub)}</div>
+</div>
+<div class="body">
+  <div class="sec ab">${T('Présentation', 'Summary')}</div>
+  <p class="para">${esc(pitch)}</p>
+  ${skillsHtml}
+  ${expsHtml}
+  <div class="foot"><span class="dot"></span><span>${T('Dossier confidentiel — présenté par HumanUp Recruitment Agency.', 'Confidential file — presented by HumanUp Recruitment Agency.')}</span></div>
+</div>
+</body></html>`;
+}
+
+function contratHtml(f: ContractForm, lang: Lang): string {
+  const t = (fr: string, en: string) => (lang === 'fr' ? fr : en);
+  const articles = ARTICLES.map((a, i) => `<div class="art"><div class="sec ab">Article ${i + 1}${i === 8 ? ' bis' : ''} — ${esc(lang === 'fr' ? a.fr : a.en)}</div><p class="para">${esc(articleBody(i, lang, f))}</p></div>`).join('');
+  return `<!doctype html><html lang="${lang}"><head>${DOC_HEAD}<title>${t('Contrat', 'Agreement')} — ${esc(f.client || 'HumanUp')}</title></head><body>
+<div class="hdr">
+  <div class="eyebrow">${t('Contrat de prestation de recrutement', 'Recruitment services agreement')}</div>
+  <div class="h1 ab">${esc(f.poste || t('Mission de recrutement', 'Recruitment engagement'))}</div>
+  <div class="parties">
+    <div><div class="pcap">${t('Le Client', 'The Client')}</div><div class="pnm">${esc(f.client || '[Client]')}</div><div class="psub">${esc(f.rep || '—')}${f.siret ? ' · ' + esc(f.siret) : ''}</div></div>
+    <div><div class="pcap">${t('Le Prestataire', 'The Provider')}</div><div class="pnm">HumanUp Recruitment Agency</div><div class="psub">${t('Représenté par le consultant en charge', 'Represented by the consultant in charge')}</div></div>
+  </div>
+</div>
+<div class="body">
+  ${articles}
+  <div class="sign">
+    <div><div class="cap">${t('Pour le Client', 'For the Client')}</div><div class="ln"></div><div class="nm">${esc(f.rep || f.client || '—')}</div></div>
+    <div><div class="cap">${t('Pour HumanUp', 'For HumanUp')}</div><div class="ln"></div><div class="nm">HumanUp Recruitment Agency</div></div>
+  </div>
+</div>
+</body></html>`;
+}
+
 // ═════════════════════════════════════════════════════
 export default function OutilsPage() {
   usePageTitle('Outil Recruteurs');
@@ -88,7 +193,6 @@ export default function OutilsPage() {
         .st-card:hover{ transform:translateY(-5px); box-shadow:0 30px 56px -30px rgba(34,23,122,.45); border-color:rgba(34,23,122,.28) !important; }
         .st-in{ transition:border-color .18s ease, box-shadow .2s ease; }
         .st-in:focus{ outline:none; border-color:#22177A; box-shadow:0 0 0 3px rgba(34,23,122,.1); }
-        @media print { body * { visibility:hidden; } #print-area, #print-area * { visibility:visible; } #print-area{ position:absolute; left:0; top:0; width:100%; } }
       `}</style>
 
       {/* HEADER */}
@@ -186,7 +290,7 @@ function ContratTool() {
         {sent && <div style={{ marginTop: 14, background: '#D6F3E3', color: '#1F7A4D', fontWeight: 700, fontSize: 13, padding: '10px 12px', borderRadius: 10, textAlign: 'center' }}>✓ Prêt — envoi en signature à {f.email}</div>}
 
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-          <button onClick={() => window.print()} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 11, padding: 12, cursor: 'pointer' }}><Printer size={15} />Imprimer</button>
+          <button onClick={() => printDoc(contratHtml(f, lang))} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 11, padding: 12, cursor: 'pointer' }}><Printer size={15} />Exporter (PDF)</button>
           <button onClick={send} style={{ flex: 1.3, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 11, padding: 12, cursor: 'pointer' }}><Send size={15} />Envoyer en signature</button>
         </div>
         <div style={{ marginTop: 10, fontSize: 11, color: '#9A96AE', lineHeight: 1.5, display: 'flex', gap: 7 }}><ShieldCheck size={13} style={{ flexShrink: 0, marginTop: 1 }} />L'e-signature (Yousign/DocuSign) sera branchée à la finalisation ; le contrat est déjà généré et imprimable.</div>
@@ -261,7 +365,7 @@ function CvTool() {
           <span onClick={() => setAnon(a => !a)} style={{ width: 19, height: 19, borderRadius: 6, border: `1.5px solid ${anon ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: anon ? '#E6E9AF' : '#fff', flexShrink: 0 }} />
           <span style={{ fontSize: 12.5, color: '#4A4568' }}>Anonymiser (logo HumanUp au lieu du nom)</span>
         </label>
-        {cand && <button onClick={() => window.print()} style={{ width: '100%', marginTop: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 11, padding: 12, cursor: 'pointer' }}><Printer size={15} />Exporter (PDF)</button>}
+        {cand && <button onClick={() => printDoc(dossierHtml(cand, name, anon, lang))} style={{ width: '100%', marginTop: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 11, padding: 12, cursor: 'pointer' }}><Printer size={15} />Exporter (PDF)</button>}
       </div>
 
       {/* PREVIEW */}
