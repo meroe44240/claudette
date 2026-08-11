@@ -511,6 +511,40 @@ export default async function aiRouter(fastify: FastifyInstance) {
     },
   });
 
+  // POST /create-from-cv — Parse a CV (PDF) AND create a new candidat (Studio de push)
+  fastify.post('/create-from-cv', {
+    schema: {
+      description: 'Parser un CV (PDF) et créer un nouveau candidat en base (Studio de push)',
+      tags: ['AI'],
+      consumes: ['multipart/form-data'],
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const data = await request.file();
+      if (!data) throw new ValidationError('Aucun fichier envoyé');
+
+      if (!['application/pdf'].includes(data.mimetype)) {
+        throw new ValidationError('Format non supporté. Seuls les fichiers PDF sont acceptés.');
+      }
+
+      const chunks: Buffer[] = [];
+      for await (const chunk of data.file) chunks.push(chunk);
+      const fileBuffer = Buffer.concat(chunks);
+
+      if (fileBuffer.length > 10 * 1024 * 1024) {
+        throw new ValidationError('Le fichier est trop volumineux. Taille maximale : 10 Mo.');
+      }
+
+      const { parsed, candidat } = await cvParsingService.createCandidatFromCv(
+        fileBuffer,
+        data.filename,
+        request.userId,
+      );
+      reply.status(201);
+      return { data: { candidatId: candidat.id, parsed } };
+    },
+  });
+
   // ─── AI CANDIDATE MATCHING ─────────────────────────────
 
   // POST /matching/:mandatId — AI candidate matching for a mandat

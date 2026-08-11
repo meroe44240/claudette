@@ -215,6 +215,62 @@ export async function updateCandidatFromCv(
   return { parsed, candidat };
 }
 
+// ─── CREATE CANDIDAT FROM CV (Studio de push) ───────────
+// Crée un NOUVEAU candidat depuis un CV uploadé (données réelles conservées :
+// noms de boîtes + réalisations). L'anonymisation se fait au rendu du one-pager.
+export async function createCandidatFromCv(
+  buffer: Buffer,
+  filename: string,
+  userId: string,
+): Promise<{ parsed: CvParsingResult; candidat: any }> {
+  const parsed = await parseCv(buffer, filename, userId);
+  const c = parsed.candidate;
+
+  const candidat = await prisma.candidat.create({
+    data: {
+      nom: c.last_name || 'Candidat',
+      prenom: c.first_name || null,
+      email: c.email || null,
+      telephone: c.phone || null,
+      posteActuel: c.current_title || null,
+      entrepriseActuelle: c.current_company || null,
+      localisation: c.city || null,
+      linkedinUrl: c.linkedin_url || null,
+      tags: Array.isArray(c.skills) ? c.skills : [],
+      source: 'cv_studio',
+      createdById: userId,
+      assignedToId: userId,
+      aiPitchShort: parsed.pitch.short,
+      aiPitchLong: parsed.pitch.long,
+      aiSellingPoints: parsed.pitch.key_selling_points as any,
+      aiIdealFor: parsed.pitch.ideal_for,
+      aiAnonymizedProfile: parsed.anonymized_profile as any,
+      aiParsedAt: new Date(),
+    } as any,
+  });
+
+  if (parsed.candidate.experience && parsed.candidate.experience.length > 0) {
+    try {
+      const { bulkCreateExperiences } = await import('../candidats/candidat.service.js');
+      await bulkCreateExperiences(
+        candidat.id,
+        parsed.candidate.experience.map((exp) => ({
+          titre: exp.title,
+          entreprise: exp.company,
+          anneeDebut: exp.start_year,
+          anneeFin: exp.end_year ?? null,
+          highlights: exp.highlights || [],
+          source: 'cv' as const,
+        })),
+      );
+    } catch (err: any) {
+      console.error('[cv-parsing] Failed to save experiences (create):', err.message);
+    }
+  }
+
+  return { parsed, candidat };
+}
+
 // ─── VALIDATION / CLEANUP ───────────────────────────────
 
 function validateAndCleanResult(content: any): CvParsingResult {
