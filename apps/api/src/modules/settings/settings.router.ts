@@ -24,6 +24,7 @@ const updateUserSchema = z.object({
   excludeFromTeamStats: z.boolean().optional(),
   telephone: z.string().max(50).optional(),
   avatarUrl: z.string().max(1000).optional(),
+  avatarData: z.string().max(3_000_000).optional(),
   // Reinitialisation du mot de passe par un admin (optionnel).
   password: z.string().min(8, 'Minimum 8 caractères').optional(),
 });
@@ -32,6 +33,7 @@ const updateUserSchema = z.object({
 const updateMeSchema = z.object({
   telephone: z.string().max(50).optional(),
   avatarUrl: z.string().max(1000).optional(),
+  avatarData: z.string().max(3_000_000).optional(), // vignette base64 (data-URI)
   prenom: z.string().optional(),
 });
 
