@@ -151,6 +151,7 @@ html,body{margin:0;padding:0;background:#fff;color:#312C4A;font-family:'Inter',s
 .hrule{height:1px;background:rgba(230,233,175,.22);margin:14px 0 13px}
 .eyebrow{font-size:8.5pt;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:rgba(230,233,175,.62)}
 .h1{font-size:22pt;margin-top:5px;color:#E6E9AF;line-height:1.08}
+.poste{font-size:12pt;font-weight:700;color:#F2F3D8;margin-top:5px}
 .sub{font-size:10.5pt;color:rgba(230,233,175,.85);margin-top:7px}
 .body{padding:12mm 18mm 10mm}
 .sec{font-size:11pt;color:#22177A;margin:0 0 8px}
@@ -198,67 +199,136 @@ html,body{margin:0;padding:0;background:#fff;color:#312C4A;font-family:'Inter',s
 .pcap{font-size:8.5pt;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:rgba(230,233,175,.55)}
 .pnm{font-size:11pt;font-weight:700;margin-top:4px}
 .psub{font-size:9.5pt;color:rgba(230,233,175,.75);margin-top:2px}
+.dc .body{padding:14mm 20mm 12mm}
+.dc .sec{font-size:12pt;margin-top:22px}
+.dc .para{font-size:11pt;line-height:1.75}
+.dc .h1{font-size:24pt}
+.dc .strength{font-size:10.5pt}
+.dc .xp{page-break-inside:avoid;margin-bottom:3px}
+.dc .hl li{font-size:10pt}
 </style>`;
 
 // One-pager de PUSH : anonymisé (pas de nom/coordonnées/photo candidat), mais
 // boîtes réelles + réalisations visibles, brandé HumanUp + bloc recruteur (trust).
-function pushHtml(cand: CandidatLite, rec: Recruiter, opts: { lang: Lang; keepCity: boolean; highlightAch: boolean }): string {
-  const { lang, keepCity, highlightAch } = opts;
+// ─── MODÈLE DE DOCUMENT (Studio de proposition) ─────
+type DocFormat = 'onepager' | 'dc';
+type SecKind = 'summary' | 'strengths' | 'skills' | 'experience' | 'pitch' | 'availability';
+interface SecItem { id: string; text: string; on: boolean; hi: boolean }
+interface ExpEntry { id: string; on: boolean; titre: string; entreprise: string; anneeDebut: string; anneeFin: string; highlights: SecItem[] }
+interface DocSection { id: string; kind: SecKind; title: string; on: boolean; body?: string; items?: SecItem[]; exps?: ExpEntry[] }
+interface AnonCfg { name: boolean; currentCompany: boolean; allCompanies: boolean; city: boolean }
+interface DocConfig { format: DocFormat; anon: AnonCfg; target: string; sections: DocSection[] }
+
+// Construit les sections par défaut depuis le candidat (l'utilisateur les édite ensuite).
+function buildSections(cand: CandidatLite, lang: Lang): DocSection[] {
+  const T = (fr: string, en: string) => (lang === 'fr' ? fr : en);
+  const anon = cand.aiAnonymizedProfile || {};
+  const exps = (cand.experiences ?? []).slice().sort((a, b) => (b.anneeDebut || 0) - (a.anneeDebut || 0));
+  const numericKeys = new Set(
+    exps.flatMap((e, ei) => (e.highlights ?? []).map((h, hi) => ({ h, k: `${ei}-${hi}` })))
+      .filter(x => /\d/.test(x.h)).slice(0, 4).map(x => x.k),
+  );
+  const strengthsSeed = (anon.bullet_points && anon.bullet_points.length ? anon.bullet_points : (cand.aiSellingPoints || [])).slice(0, 6);
+  return [
+    { id: 'summary', kind: 'summary', title: T('En bref', 'Summary'), on: true, body: anon.summary || cand.aiPitchLong || cand.aiPitchShort || '' },
+    { id: 'strengths', kind: 'strengths', title: T('Points forts', 'Key strengths'), on: true, items: strengthsSeed.map((t, i) => ({ id: `s${i}`, text: t, on: true, hi: false })) },
+    { id: 'skills', kind: 'skills', title: T('Compétences', 'Skills'), on: true, items: (cand.tags ?? []).slice(0, 16).map((t, i) => ({ id: `k${i}`, text: t, on: true, hi: false })) },
+    {
+      id: 'experience', kind: 'experience', title: T('Parcours & réalisations', 'Track record'), on: true,
+      exps: exps.map((e, ei) => ({
+        id: `x${ei}`, on: true, titre: e.titre, entreprise: e.entreprise, anneeDebut: String(e.anneeDebut ?? ''), anneeFin: e.anneeFin ? String(e.anneeFin) : '',
+        highlights: (e.highlights ?? []).map((h, hi) => ({ id: `x${ei}h${hi}`, text: h, on: true, hi: numericKeys.has(`${ei}-${hi}`) })),
+      })),
+    },
+    { id: 'pitch', kind: 'pitch', title: T('Pourquoi ce candidat', 'Why this candidate'), on: false, body: cand.aiIdealFor || '' },
+    { id: 'availability', kind: 'availability', title: T('Disponibilité & prétentions', 'Availability & expectations'), on: false, body: '' },
+  ];
+}
+
+// Moteur de rendu du document (one-pager OU DC) piloté par la config.
+function docHtml(cand: CandidatLite, cfg: DocConfig, rec: Recruiter, lang: Lang): string {
   const T = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   const origin = window.location.origin;
-  const logoMarkCream = `${origin}/brand/logo-mark-cream.png`; // marque claire — sur le bandeau navy
-  const logoMark = `${origin}/brand/logo-mark-navy.png`;       // marque foncée — sur le bloc recruteur crème
+  const logoMarkCream = `${origin}/brand/logo-mark-cream.png`;
+  const logoMark = `${origin}/brand/logo-mark-navy.png`;
+  const { anon } = cfg;
+  const isDc = cfg.format === 'dc';
 
-  const exps = (cand.experiences ?? []).slice().sort((a, b) => (b.anneeDebut || 0) - (a.anneeDebut || 0));
+  const exps = (cand.experiences ?? []);
   const starts = exps.map(e => e.anneeDebut).filter((n): n is number => !!n);
   const years = starts.length ? Math.max(1, new Date().getFullYear() - Math.min(...starts)) : 0;
 
-  const anon = cand.aiAnonymizedProfile || {};
-  const title = anon.title || cand.posteActuel || T('Profil confidentiel', 'Confidential profile');
-  const summary = anon.summary || cand.aiPitchLong || cand.aiPitchShort || T('Synthèse en cours de génération.', 'Summary being generated.');
-  const strengths = (anon.bullet_points && anon.bullet_points.length ? anon.bullet_points : (cand.aiSellingPoints || [])).slice(0, 6);
-  const skills = (cand.tags ?? []).slice(0, 12);
+  const anonProfile = cand.aiAnonymizedProfile || {};
+  const fullName = `${cand.prenom ? cand.prenom + ' ' : ''}${cand.nom}`.trim();
+  const jobTitle = anonProfile.title || cand.posteActuel || T('Profil', 'Profile');
+  const showName = !anon.name && !!fullName;
+  const h1 = showName ? fullName : jobTitle;
+  const posteLine = showName && cand.posteActuel ? esc(cand.posteActuel) : '';
 
   const metaBits = [
     years ? `${years} ${T('ans d’expérience', 'years of experience')}` : null,
-    keepCity ? cand.localisation : null,
     exps.length ? `${exps.length} ${T('expériences', 'roles')}` : null,
+    !anon.city && cand.localisation ? cand.localisation : null,
   ].filter(Boolean);
 
-  // Réalisations clés (bandeau highlight) : priorité aux highlights chiffrés, sinon selling points.
-  const allHighlights = exps.flatMap(e => (e.highlights ?? [])).filter(Boolean);
-  const ranked = allHighlights.slice().sort((a, b) => (/\d/.test(b) ? 1 : 0) - (/\d/.test(a) ? 1 : 0));
-  const keyAch = (ranked.length ? ranked : (cand.aiSellingPoints || [])).slice(0, 4);
-  const kpisHtml = highlightAch && keyAch.length
-    ? `<div class="kpis"><div class="kpis-t">${T('Réalisations clés', 'Key achievements')}</div><div class="kpi-grid">${keyAch.map(a => `<div class="kpi"><span class="b">✓</span><span>${esc(a)}</span></div>`).join('')}</div></div>`
+  // Bandeau highlight = tous les éléments étoilés (points forts + réalisations de parcours).
+  const starred: string[] = [];
+  for (const s of cfg.sections) {
+    if (!s.on) continue;
+    if (s.items) starred.push(...s.items.filter(i => i.on && i.hi).map(i => i.text));
+    if (s.exps) for (const x of s.exps) if (x.on) starred.push(...x.highlights.filter(h => h.on && h.hi).map(h => h.text));
+  }
+  const kpisHtml = starred.length
+    ? `<div class="kpis"><div class="kpis-t">${T('Réalisations clés', 'Key achievements')}</div><div class="kpi-grid">${starred.slice(0, isDc ? 8 : 4).map(a => `<div class="kpi"><span class="b">✓</span><span>${esc(a)}</span></div>`).join('')}</div></div>`
     : '';
 
-  const strengthsHtml = strengths.length
-    ? `<div class="sec mt ab">${T('Points forts', 'Key strengths')}</div><div class="strengths">${strengths.map(s => `<div class="strength"><span class="ck">✓</span><span>${esc(s)}</span></div>`).join('')}</div>`
-    : '';
-  const skillsHtml = skills.length
-    ? `<div class="sec mt ab">${T('Compétences', 'Skills')}</div><div class="chips">${skills.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>`
-    : '';
-  const expsHtml = exps.length
-    ? `<div class="sec mt ab">${T('Parcours & réalisations', 'Track record')}</div><div class="xps">${exps.map(e => {
-        const hl = (e.highlights ?? []).filter(Boolean);
-        return `<div class="xp"><span class="yr">${esc(e.anneeDebut || '—')}–${e.anneeFin ? esc(e.anneeFin) : T('auj.', 'now')}</span><div style="min-width:0"><div class="xt">${esc(e.titre)}</div><div class="xe">${esc(e.entreprise || '—')}</div>${hl.length ? `<ul class="hl">${hl.map(h => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}</div></div>`;
-      }).join('')}</div>`
-    : '';
-  const idealHtml = cand.aiIdealFor
-    ? `<div class="ideal"><b>${T('Idéal pour', 'Ideal for')}</b>${esc(cand.aiIdealFor)}</div>`
-    : '';
+  const companyLabel = (entreprise: string, isRecent: boolean): string => {
+    if (anon.allCompanies || (anon.currentCompany && isRecent)) return T('Entreprise confidentielle', 'Confidential company');
+    return entreprise || '—';
+  };
+
+  const sectionsHtml = cfg.sections.filter(s => s.on).map(s => {
+    if (s.kind === 'summary' || s.kind === 'availability') {
+      const body = (s.body || '').trim();
+      return body ? `<div class="sec mt ab">${esc(s.title)}</div><p class="para">${esc(body)}</p>` : '';
+    }
+    if (s.kind === 'pitch') {
+      const body = (s.body || '').trim();
+      return body ? `<div class="ideal"><b>${esc(s.title)}${cfg.target ? ` — ${esc(cfg.target)}` : ''}</b>${esc(body)}</div>` : '';
+    }
+    if (s.kind === 'strengths') {
+      const items = (s.items ?? []).filter(i => i.on && !i.hi); // les étoilés remontent dans le bandeau
+      return items.length ? `<div class="sec mt ab">${esc(s.title)}</div><div class="strengths">${items.map(i => `<div class="strength"><span class="ck">✓</span><span>${esc(i.text)}</span></div>`).join('')}</div>` : '';
+    }
+    if (s.kind === 'skills') {
+      const items = (s.items ?? []).filter(i => i.on);
+      return items.length ? `<div class="sec mt ab">${esc(s.title)}</div><div class="chips">${items.map(i => `<span class="chip">${esc(i.text)}</span>`).join('')}</div>` : '';
+    }
+    if (s.kind === 'experience') {
+      const list = (s.exps ?? []).filter(x => x.on);
+      if (!list.length) return '';
+      return `<div class="sec mt ab">${esc(s.title)}</div><div class="xps">${list.map((x, idx) => {
+        const hl = x.highlights.filter(h => h.on && !h.hi);
+        return `<div class="xp"><span class="yr">${esc(x.anneeDebut || '—')}–${x.anneeFin ? esc(x.anneeFin) : T('auj.', 'now')}</span><div style="min-width:0"><div class="xt">${esc(x.titre)}</div><div class="xe">${esc(companyLabel(x.entreprise, idx === 0))}</div>${hl.length ? `<ul class="hl">${hl.map(h => `<li>${esc(h.text)}</li>`).join('')}</ul>` : ''}</div></div>`;
+      }).join('')}</div>`;
+    }
+    return '';
+  }).join('\n  ');
 
   const recInitials = (rec.nom || 'HU').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
-  const recPhoto = rec.avatarUrl
-    ? `<img class="rec-photo" src="${esc(rec.avatarUrl)}" alt="${esc(rec.nom)}"/>`
-    : `<div class="rec-photo">${esc(recInitials)}</div>`;
+  const recPhoto = rec.avatarUrl ? `<img class="rec-photo" src="${esc(rec.avatarUrl)}" alt="${esc(rec.nom)}"/>` : `<div class="rec-photo">${esc(recInitials)}</div>`;
   const recContact = [
     rec.email ? `<span>✉&nbsp; ${esc(rec.email)}</span>` : '',
     rec.telephone ? `<span>☎&nbsp; ${esc(rec.telephone)}</span>` : '',
   ].filter(Boolean).join('');
 
-  return `<!doctype html><html lang="${lang}"><head>${DOC_HEAD}<title>${T('Profil', 'Profile')} — ${esc(title)}</title></head><body>
+  const badge = isDc ? T('Dossier de compétences', 'Competency file') : T('Profil confidentiel', 'Confidential profile');
+  const eyebrow = cfg.target
+    ? `${T('Proposé pour', 'Proposed for')} ${esc(cfg.target)}`
+    : (isDc ? T('Dossier de compétences — HumanUp', 'Competency file — HumanUp') : T('Profil présenté par HumanUp', 'Profile presented by HumanUp'));
+  const footAnon = anon.name ? T('Profil anonymisé, transmis pour évaluation uniquement.', 'Anonymised profile, shared for evaluation only.') : T('Document transmis pour évaluation uniquement.', 'Shared for evaluation only.');
+
+  return `<!doctype html><html lang="${lang}"><head>${DOC_HEAD}<title>${isDc ? 'DC' : T('Profil', 'Profile')} — ${esc(h1)}</title></head><body class="doc ${isDc ? 'dc' : 'op'}">
 <div class="hdr">
   <div class="brandbar">
     <div class="brand">
@@ -266,23 +336,19 @@ function pushHtml(cand: CandidatLite, rec: Recruiter, opts: { lang: Lang; keepCi
       <div class="wordmark"><div class="wm-name ab">HUMANUP</div><div class="wm-sub">Recruitment Agency&nbsp; ·&nbsp; humanup.io</div></div>
     </div>
     <div class="hdr-right">
-      <span class="badge">${T('Profil confidentiel', 'Confidential profile')}</span>
+      <span class="badge">${badge}</span>
       <div class="offices">Hong Kong&nbsp; ·&nbsp; Londres</div>
     </div>
   </div>
   <div class="hrule"></div>
-  <div class="eyebrow">${T('Profil présenté par HumanUp', 'Profile presented by HumanUp')}</div>
-  <div class="h1 ab">${esc(title)}</div>
+  <div class="eyebrow">${eyebrow}</div>
+  <div class="h1 ab">${esc(h1)}</div>
+  ${posteLine ? `<div class="poste">${posteLine}</div>` : ''}
   <div class="sub">${esc(metaBits.join('  ·  ') || T('Présenté par HumanUp', 'Presented by HumanUp'))}</div>
 </div>
 <div class="body">
-  <div class="sec ab">${T('En bref', 'Summary')}</div>
-  <p class="para">${esc(summary)}</p>
   ${kpisHtml}
-  ${strengthsHtml}
-  ${skillsHtml}
-  ${expsHtml}
-  ${idealHtml}
+  ${sectionsHtml}
 </div>
 <div class="rec">
   ${recPhoto}
@@ -293,7 +359,7 @@ function pushHtml(cand: CandidatLite, rec: Recruiter, opts: { lang: Lang; keepCi
   </div>
   <img class="rec-logo" src="${logoMark}" alt="HumanUp"/>
 </div>
-<div class="foot">${T('HumanUp Recruitment Agency · Hong Kong · Londres · humanup.io — Profil anonymisé, transmis pour évaluation uniquement.', 'HumanUp Recruitment Agency · Hong Kong · London · humanup.io — Anonymised profile, shared for evaluation only.')}</div>
+<div class="foot">HumanUp Recruitment Agency · Hong Kong · Londres · humanup.io — ${footAnon}</div>
 </body></html>`;
 }
 
@@ -462,11 +528,16 @@ function ContratTool() {
   );
 }
 
-// ─── CV & DOSSIER TOOL (one-pager de push) ──────────
+// ─── STUDIO DE PROPOSITION (one-pager / DC) ─────────
 function CvTool() {
   const [lang, setLang] = useState<Lang>('fr');
-  const [keepCity, setKeepCity] = useState(false);
-  const [highlightAch, setHighlightAch] = useState(true);
+  const [format, setFormat] = useState<DocFormat>('onepager');
+  const [anon, setAnon] = useState<AnonCfg>({ name: true, currentCompany: false, allCompanies: false, city: true });
+  const [targetMode, setTargetMode] = useState<'none' | 'mandat' | 'free'>('none');
+  const [mandatId, setMandatId] = useState('');
+  const [targetFree, setTargetFree] = useState('');
+  const [sections, setSections] = useState<DocSection[]>([]);
+  const [openSec, setOpenSec] = useState<Set<string>>(() => new Set(['strengths', 'experience']));
   const [q, setQ] = useState('');
   const [debQ, setDebQ] = useState('');
   const [selId, setSelId] = useState<string | null>(null);
@@ -480,6 +551,10 @@ function CvTool() {
   const { data: list } = useQuery({ queryKey: ['candidats', 'cvtool', debQ], queryFn: () => api.get<{ data: CandidatLite[] }>(`/candidats?perPage=8${debQ ? `&search=${encodeURIComponent(debQ)}` : ''}`) });
   const { data: cand } = useQuery({ queryKey: ['candidat', 'cvtool', selId], queryFn: () => api.get<CandidatLite>(`/candidats/${selId}`), enabled: !!selId });
   const { data: team } = useQuery({ queryKey: ['team', 'cvtool'], queryFn: () => api.get<TeamMember[]>('/settings/team') });
+  const { data: mandats } = useQuery({ queryKey: ['mandats', 'cvtarget'], queryFn: () => api.get<{ data: { id: string; titrePoste: string; entreprise: { nom: string } }[] }>('/mandats?perPage=100&scope=all'), enabled: targetMode === 'mandat' });
+
+  // (Re)construit les sections quand on change de candidat
+  useEffect(() => { if (cand) setSections(buildSections(cand, lang)); }, [cand?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recruteur : défaut = utilisateur connecté, sinon 1er membre
   const [recruiterId, setRecruiterId] = useState<string | null>(null);
@@ -490,7 +565,6 @@ function CvTool() {
   }, [team, user, recruiterId]);
   const member = (team ?? []).find(m => m.id === recruiterId) || null;
 
-  // Coordonnées recruteur éditables (pré-remplies depuis le membre choisi)
   const [recEmail, setRecEmail] = useState('');
   const [recPhone, setRecPhone] = useState('');
   const [recPhoto, setRecPhoto] = useState('');
@@ -501,31 +575,39 @@ function CvTool() {
     setRecPhoto(member.avatarData || member.avatarUrl || '');
   }, [recruiterId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const T = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   const results = list?.data ?? [];
+  const selMandat = (mandats?.data ?? []).find(m => m.id === mandatId);
+  const targetLabel = targetMode === 'free' ? targetFree.trim()
+    : targetMode === 'mandat' && selMandat ? `${selMandat.titrePoste} · ${selMandat.entreprise?.nom ?? ''}`.trim().replace(/ · $/, '')
+      : '';
 
   const recruiter: Recruiter = {
     nom: member ? `${member.prenom ? member.prenom + ' ' : ''}${member.nom}` : (user ? `${(user as any).prenom ? (user as any).prenom + ' ' : ''}${(user as any).nom ?? ''}`.trim() : 'HumanUp'),
-    email: recEmail,
-    telephone: recPhone,
-    avatarUrl: recPhoto || null,
+    email: recEmail, telephone: recPhone, avatarUrl: recPhoto || null,
   };
+  const cfg: DocConfig = { format, anon, target: targetLabel, sections };
   const html = useMemo(
-    () => (cand ? pushHtml(cand, recruiter, { lang, keepCity, highlightAch }) : ''),
-    [cand, recEmail, recPhone, recPhoto, member?.nom, member?.prenom, lang, keepCity, highlightAch],
+    () => (cand ? docHtml(cand, cfg, recruiter, lang) : ''),
+    [cand, sections, format, anon, targetLabel, recEmail, recPhone, recPhoto, member?.nom, member?.prenom, lang],
   );
+
+  // ── mutateurs de sections ──
+  const patchSec = (id: string, patch: Partial<DocSection>) => setSections(ss => ss.map(s => s.id === id ? { ...s, ...patch } : s));
+  const moveSec = (id: string, dir: -1 | 1) => setSections(ss => { const i = ss.findIndex(s => s.id === id); const j = i + dir; if (i < 0 || j < 0 || j >= ss.length) return ss; const c = ss.slice(); [c[i], c[j]] = [c[j], c[i]]; return c; });
+  const patchItem = (sid: string, iid: string, p: Partial<SecItem>) => setSections(ss => ss.map(s => s.id === sid ? { ...s, items: s.items?.map(it => it.id === iid ? { ...it, ...p } : it) } : s));
+  const addItem = (sid: string) => setSections(ss => ss.map(s => s.id === sid ? { ...s, items: [...(s.items ?? []), { id: `n${sid}${(s.items?.length ?? 0)}${q.length}`, text: '', on: true, hi: false }] } : s));
+  const rmItem = (sid: string, iid: string) => setSections(ss => ss.map(s => s.id === sid ? { ...s, items: s.items?.filter(it => it.id !== iid) } : s));
+  const patchExp = (sid: string, xid: string, p: Partial<ExpEntry>) => setSections(ss => ss.map(s => s.id === sid ? { ...s, exps: s.exps?.map(x => x.id === xid ? { ...x, ...p } : x) } : s));
+  const patchHl = (sid: string, xid: string, hid: string, p: Partial<SecItem>) => setSections(ss => ss.map(s => s.id === sid ? { ...s, exps: s.exps?.map(x => x.id === xid ? { ...x, highlights: x.highlights.map(h => h.id === hid ? { ...h, ...p } : h) } : x) } : s));
+  const toggleOpen = (id: string) => setOpenSec(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   async function onPhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) { toast('error', 'Image uniquement (JPG/PNG).'); }
-    else {
-      try { setRecPhoto(await fileToThumbnail(file)); }
-      catch (err: any) { toast('error', err?.message || 'Image illisible'); }
-    }
+    else { try { setRecPhoto(await fileToThumbnail(file)); } catch (err: any) { toast('error', err?.message || 'Image illisible'); } }
     if (photoRef.current) photoRef.current.value = '';
   }
-
   async function saveMyPhone() {
     if (!member || member.id !== (user as any)?.id) return;
     const body: Record<string, string> = { telephone: recPhone };
@@ -533,62 +615,63 @@ function CvTool() {
     try { await api.put('/settings/me', body); toast('success', 'Profil mis à jour'); qc.invalidateQueries({ queryKey: ['team'] }); }
     catch { toast('error', 'Échec de la sauvegarde'); }
   }
-
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.type !== 'application/pdf') { toast('error', 'PDF uniquement pour l’instant.'); if (fileRef.current) fileRef.current.value = ''; return; }
     setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
+      const fd = new FormData(); fd.append('file', file);
       const token = localStorage.getItem('accessToken');
       const res = await fetch('/api/v1/ai/create-from-cv', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd, credentials: 'include' });
       if (!res.ok) { const d = await res.json().catch(() => ({} as any)); throw new Error(d?.message || 'Échec de l’analyse du CV'); }
       const json = await res.json();
       const id = json?.data?.candidatId as string | undefined;
-      toast('success', 'CV analysé — profil créé et anonymisé.');
+      toast('success', 'CV analysé — profil créé.');
       qc.invalidateQueries({ queryKey: ['candidats'] });
       if (id) { setSelId(id); setQ(''); }
-    } catch (err: any) {
-      toast('error', err?.message || 'Erreur lors de l’analyse');
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
+    } catch (err: any) { toast('error', err?.message || 'Erreur lors de l’analyse'); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
   }
 
+  // ── styles ──
+  const card: React.CSSProperties = { background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 16, padding: 18, boxShadow: '0 1px 2px rgba(34,23,122,.04)' };
   const inStyle: React.CSSProperties = { width: '100%', fontSize: 12.5, padding: '8px 10px', borderRadius: 9, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none', color: '#1A1533' };
   const lbl: React.CSSProperties = { display: 'block', fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: '#8A8699', margin: '0 0 4px' };
+  const cbox = (on: boolean): React.CSSProperties => ({ width: 17, height: 17, borderRadius: 5, border: `1.5px solid ${on ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: on ? '#E6E9AF' : '#fff', flexShrink: 0, cursor: 'pointer' });
+  const starBtn = (hi: boolean): React.CSSProperties => ({ fontSize: 14, lineHeight: 1, color: hi ? '#C9A400' : '#C7C3D6', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px', flexShrink: 0 });
+  const iconBtn: React.CSSProperties = { fontSize: 12, color: '#8A8699', background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 5px', flexShrink: 0 };
+  const seg = (active: boolean): React.CSSProperties => ({ flex: 1, fontSize: 12, fontWeight: 800, padding: '7px 6px', borderRadius: 7, border: 'none', cursor: 'pointer', background: active ? '#22177A' : 'transparent', color: active ? '#E6E9AF' : '#8A7F5A' });
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20, marginTop: 22, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 20, marginTop: 22, alignItems: 'start' }}>
       {/* PANNEAU GAUCHE */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {/* Source du profil */}
-        <div style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 16, padding: 18, boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
+        {/* Source + format */}
+        <div style={card}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <span style={{ fontWeight: 800, fontSize: 15, color: '#1A1533' }}>Profil</span>
+            <span style={{ fontWeight: 800, fontSize: 15, color: '#1A1533' }}>Document</span>
             <div style={{ display: 'flex', background: '#EFEFE6', borderRadius: 9, padding: 3 }}>
               {(['fr', 'en'] as const).map(l => <button key={l} onClick={() => setLang(l)} style={{ fontSize: 12, fontWeight: 800, padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', background: lang === l ? '#fff' : 'transparent', color: lang === l ? '#22177A' : '#8A7F5A' }}>{l.toUpperCase()}</button>)}
             </div>
           </div>
+          <div style={{ display: 'flex', gap: 4, background: '#EFEFE6', borderRadius: 9, padding: 3, marginTop: 12 }}>
+            <button onClick={() => setFormat('onepager')} style={seg(format === 'onepager')}>One-pager</button>
+            <button onClick={() => setFormat('dc')} style={seg(format === 'dc')}>Dossier (DC)</button>
+          </div>
 
-          {/* Upload CV */}
           <input ref={fileRef} type="file" accept="application/pdf" onChange={onFile} style={{ display: 'none' }} />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{ width: '100%', marginTop: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '18px 12px', borderRadius: 12, border: '1.5px dashed rgba(34,23,122,.28)', background: '#F7F7FB', cursor: uploading ? 'wait' : 'pointer' }}>
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{ width: '100%', marginTop: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '16px 12px', borderRadius: 12, border: '1.5px dashed rgba(34,23,122,.28)', background: '#F7F7FB', cursor: uploading ? 'wait' : 'pointer' }}>
             {uploading ? <Loader2 size={20} color="#22177A" className="st-spin" /> : <Upload size={20} color="#22177A" />}
             <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A' }}>{uploading ? 'Analyse du CV par l’IA…' : 'Ajouter un CV (PDF)'}</span>
-            <span style={{ fontSize: 11, color: '#9A96AE' }}>{uploading ? 'Extraction boîtes + réalisations' : 'Anonymisé automatiquement, enregistré en base'}</span>
+            <span style={{ fontSize: 11, color: '#9A96AE' }}>{uploading ? 'Extraction boîtes + réalisations' : 'Crée un profil réutilisable'}</span>
           </button>
-
-          {/* Recherche candidat existant */}
-          <div style={{ position: 'relative', marginTop: 14 }}>
+          <div style={{ position: 'relative', marginTop: 12 }}>
             <Search size={15} color="#9A96AE" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
-            <input className="st-in" value={q} onChange={e => setQ(e.target.value)} placeholder="…ou choisir un candidat existant" style={{ width: '100%', fontSize: 13, padding: '10px 12px 10px 34px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="…ou choisir un candidat existant" style={{ width: '100%', fontSize: 13, padding: '10px 12px 10px 34px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
           </div>
           {results.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, maxHeight: 260, overflowY: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, maxHeight: 220, overflowY: 'auto' }}>
               {results.map(c => (
                 <button key={c.id} onClick={() => setSelId(c.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 10, border: `1px solid ${selId === c.id ? '#22177A' : 'rgba(34,23,122,.1)'}`, background: selId === c.id ? '#F2F3D8' : '#fff', cursor: 'pointer', textAlign: 'left' }}>
                   <span style={{ flexShrink: 0, width: 30, height: 30, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 10 }}>{`${(c.prenom?.[0] ?? '')}${c.nom[0] ?? ''}`.toUpperCase()}</span>
@@ -597,57 +680,138 @@ function CvTool() {
               ))}
             </div>
           )}
-
-          <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 14, cursor: 'pointer' }} onClick={() => setHighlightAch(v => !v)}>
-            <span style={{ width: 19, height: 19, borderRadius: 6, border: `1.5px solid ${highlightAch ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: highlightAch ? '#E6E9AF' : '#fff', flexShrink: 0 }} />
-            <span style={{ fontSize: 12.5, color: '#4A4568' }}>Bandeau « Réalisations clés » (highlight)</span>
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 10, cursor: 'pointer' }} onClick={() => setKeepCity(v => !v)}>
-            <span style={{ width: 19, height: 19, borderRadius: 6, border: `1.5px solid ${keepCity ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: keepCity ? '#E6E9AF' : '#fff', flexShrink: 0 }} />
-            <span style={{ fontSize: 12.5, color: '#4A4568' }}>Afficher la ville (sinon masquée)</span>
-          </label>
         </div>
 
-        {/* Bloc recruteur (trust) */}
-        <div style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 16, padding: 18, boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <ShieldCheck size={15} color="#22177A" />
-            <span style={{ fontWeight: 800, fontSize: 14, color: '#1A1533' }}>Contact HumanUp (trust)</span>
+        {cand && <>
+          {/* Anonymisation */}
+          <div style={card}>
+            <div style={{ fontWeight: 800, fontSize: 14, color: '#1A1533', marginBottom: 10 }}>Anonymisation</div>
+            {([
+              { k: 'name', label: 'Masquer le nom du candidat' },
+              { k: 'currentCompany', label: 'Masquer l’entreprise actuelle' },
+              { k: 'allCompanies', label: 'Masquer toutes les entreprises' },
+              { k: 'city', label: 'Masquer la ville' },
+            ] as const).map(o => (
+              <label key={o.k} style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8, cursor: 'pointer' }} onClick={() => setAnon(a => ({ ...a, [o.k]: !a[o.k] }))}>
+                <span style={cbox(anon[o.k])} />
+                <span style={{ fontSize: 12.5, color: '#4A4568' }}>{o.label}</span>
+              </label>
+            ))}
           </div>
-          <label style={lbl}>Recruteur</label>
-          <select value={recruiterId ?? ''} onChange={e => setRecruiterId(e.target.value)} style={{ ...inStyle, cursor: 'pointer' }}>
-            {(team ?? []).map(m => <option key={m.id} value={m.id}>{`${m.prenom ? m.prenom + ' ' : ''}${m.nom}`}</option>)}
-          </select>
-          <div style={{ marginTop: 10 }}><label style={lbl}>E-mail</label><input className="st-in" value={recEmail} onChange={e => setRecEmail(e.target.value)} placeholder="prenom@humanup.io" style={inStyle} /></div>
-          <div style={{ marginTop: 10 }}><label style={lbl}>Téléphone</label><input className="st-in" value={recPhone} onChange={e => setRecPhone(e.target.value)} placeholder="+33 6 12 34 56 78" style={inStyle} /></div>
-          <div style={{ marginTop: 10 }}>
-            <label style={lbl}>Photo</label>
-            <input ref={photoRef} type="file" accept="image/*" onChange={onPhotoFile} style={{ display: 'none' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {recPhoto
-                ? <img src={recPhoto} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(34,23,122,.2)', flexShrink: 0 }} />
-                : <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#EFEFE6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Upload size={15} color="#9A96AE" /></div>}
-              <button onClick={() => photoRef.current?.click()} style={{ flex: 1, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#fff', border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 10px', cursor: 'pointer' }}>{recPhoto ? 'Changer la photo' : 'Téléverser une photo'}</button>
-              {recPhoto && <button onClick={() => setRecPhoto('')} title="Retirer" style={{ fontSize: 13, color: '#9A96AE', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>✕</button>}
+
+          {/* Cible (proposition) */}
+          <div style={card}>
+            <div style={{ fontWeight: 800, fontSize: 14, color: '#1A1533', marginBottom: 10 }}>Cible (optionnel)</div>
+            <div style={{ display: 'flex', gap: 4, background: '#EFEFE6', borderRadius: 9, padding: 3 }}>
+              {([['none', 'Aucune'], ['mandat', 'Mandat'], ['free', 'Libre']] as const).map(([m, lab]) => <button key={m} onClick={() => setTargetMode(m)} style={seg(targetMode === m)}>{lab}</button>)}
             </div>
+            {targetMode === 'mandat' && (
+              <select value={mandatId} onChange={e => setMandatId(e.target.value)} style={{ ...inStyle, cursor: 'pointer', marginTop: 10 }}>
+                <option value="">— Choisir un mandat —</option>
+                {(mandats?.data ?? []).map(m => <option key={m.id} value={m.id}>{m.titrePoste} · {m.entreprise?.nom}</option>)}
+              </select>
+            )}
+            {targetMode === 'free' && <input value={targetFree} onChange={e => setTargetFree(e.target.value)} placeholder="Ex. Directeur Commercial chez Acme" style={{ ...inStyle, marginTop: 10 }} />}
+            {targetLabel && <div style={{ fontSize: 11.5, color: '#22177A', marginTop: 8 }}>Proposé pour <strong>{targetLabel}</strong> — pense à activer la section « Pourquoi ce candidat ».</div>}
           </div>
-          {member && member.id === (user as any)?.id && (
-            <button onClick={saveMyPhone} style={{ marginTop: 10, width: '100%', fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: 'none', borderRadius: 9, padding: '8px 10px', cursor: 'pointer' }}>Enregistrer dans mon profil</button>
-          )}
-        </div>
 
-        {cand && <button onClick={() => printDoc(pushHtml(cand, recruiter, { lang, keepCity, highlightAch }))} style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 12, padding: 14, cursor: 'pointer', boxShadow: '0 10px 24px -12px rgba(34,23,122,.6)' }}><Printer size={16} />Exporter le one-pager (PDF)</button>}
+          {/* Éditeur de sections */}
+          <div style={card}>
+            <div style={{ fontWeight: 800, fontSize: 14, color: '#1A1533' }}>Sections du document</div>
+            <div style={{ fontSize: 11.5, color: '#9A96AE', margin: '3px 0 12px' }}>Coche pour inclure · ★ met en highlight (bandeau) · édite le texte</div>
+            {sections.map((s, idx) => (
+              <div key={s.id} style={{ border: '1px solid rgba(34,23,122,.1)', borderRadius: 11, marginBottom: 8, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', background: s.on ? '#F7F7FB' : '#fff' }}>
+                  <span onClick={() => patchSec(s.id, { on: !s.on })} style={cbox(s.on)} />
+                  <span onClick={() => toggleOpen(s.id)} style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: s.on ? '#1A1533' : '#9A96AE', cursor: 'pointer' }}>{s.title}</span>
+                  <button onClick={() => moveSec(s.id, -1)} disabled={idx === 0} style={{ ...iconBtn, opacity: idx === 0 ? .3 : 1 }}>↑</button>
+                  <button onClick={() => moveSec(s.id, 1)} disabled={idx === sections.length - 1} style={{ ...iconBtn, opacity: idx === sections.length - 1 ? .3 : 1 }}>↓</button>
+                  <button onClick={() => toggleOpen(s.id)} style={iconBtn}>{openSec.has(s.id) ? '▾' : '▸'}</button>
+                </div>
+                {openSec.has(s.id) && (
+                  <div style={{ padding: 10, borderTop: '1px solid rgba(34,23,122,.08)' }}>
+                    <input value={s.title} onChange={e => patchSec(s.id, { title: e.target.value })} style={{ ...inStyle, fontSize: 11.5, marginBottom: 8, fontWeight: 700 }} />
+                    {(s.kind === 'summary' || s.kind === 'pitch' || s.kind === 'availability') && (
+                      <textarea value={s.body || ''} onChange={e => patchSec(s.id, { body: e.target.value })} rows={s.kind === 'summary' ? 5 : 3} style={{ ...inStyle, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }} placeholder="Texte…" />
+                    )}
+                    {(s.kind === 'strengths' || s.kind === 'skills') && (<>
+                      {(s.items ?? []).map(it => (
+                        <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                          <span onClick={() => patchItem(s.id, it.id, { on: !it.on })} style={cbox(it.on)} />
+                          {s.kind !== 'skills' && <button onClick={() => patchItem(s.id, it.id, { hi: !it.hi })} title="Highlight" style={starBtn(it.hi)}>{it.hi ? '★' : '☆'}</button>}
+                          <input value={it.text} onChange={e => patchItem(s.id, it.id, { text: e.target.value })} style={{ ...inStyle, fontSize: 11.5, padding: '6px 8px' }} />
+                          <button onClick={() => rmItem(s.id, it.id)} style={iconBtn}>✕</button>
+                        </div>
+                      ))}
+                      <button onClick={() => addItem(s.id)} style={{ fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', marginTop: 2 }}>+ Ajouter</button>
+                    </>)}
+                    {s.kind === 'experience' && (s.exps ?? []).map(x => (
+                      <div key={x.id} style={{ border: '1px solid rgba(34,23,122,.08)', borderRadius: 9, padding: 8, marginBottom: 7, background: x.on ? '#fff' : '#FAFAF7' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span onClick={() => patchExp(s.id, x.id, { on: !x.on })} style={cbox(x.on)} />
+                          <input value={x.titre} onChange={e => patchExp(s.id, x.id, { titre: e.target.value })} style={{ ...inStyle, fontSize: 11.5, fontWeight: 700, padding: '5px 7px' }} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 5 }}>
+                          <input value={x.entreprise} onChange={e => patchExp(s.id, x.id, { entreprise: e.target.value })} placeholder="Entreprise" style={{ ...inStyle, fontSize: 11, padding: '5px 7px', flex: 2 }} />
+                          <input value={x.anneeDebut} onChange={e => patchExp(s.id, x.id, { anneeDebut: e.target.value })} placeholder="Début" style={{ ...inStyle, fontSize: 11, padding: '5px 7px', width: 58 }} />
+                          <input value={x.anneeFin} onChange={e => patchExp(s.id, x.id, { anneeFin: e.target.value })} placeholder="Fin" style={{ ...inStyle, fontSize: 11, padding: '5px 7px', width: 58 }} />
+                        </div>
+                        {x.highlights.map(h => (
+                          <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
+                            <span onClick={() => patchHl(s.id, x.id, h.id, { on: !h.on })} style={cbox(h.on)} />
+                            <button onClick={() => patchHl(s.id, x.id, h.id, { hi: !h.hi })} title="Highlight" style={starBtn(h.hi)}>{h.hi ? '★' : '☆'}</button>
+                            <input value={h.text} onChange={e => patchHl(s.id, x.id, h.id, { text: e.target.value })} style={{ ...inStyle, fontSize: 11, padding: '5px 7px' }} />
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Bloc recruteur (trust) */}
+          <div style={card}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <ShieldCheck size={15} color="#22177A" />
+              <span style={{ fontWeight: 800, fontSize: 14, color: '#1A1533' }}>Contact HumanUp (trust)</span>
+            </div>
+            <label style={lbl}>Recruteur</label>
+            <select value={recruiterId ?? ''} onChange={e => setRecruiterId(e.target.value)} style={{ ...inStyle, cursor: 'pointer' }}>
+              {(team ?? []).map(m => <option key={m.id} value={m.id}>{`${m.prenom ? m.prenom + ' ' : ''}${m.nom}`}</option>)}
+            </select>
+            <div style={{ marginTop: 10 }}><label style={lbl}>E-mail</label><input value={recEmail} onChange={e => setRecEmail(e.target.value)} placeholder="prenom@humanup.io" style={inStyle} /></div>
+            <div style={{ marginTop: 10 }}><label style={lbl}>Téléphone</label><input value={recPhone} onChange={e => setRecPhone(e.target.value)} placeholder="+33 6 12 34 56 78" style={inStyle} /></div>
+            <div style={{ marginTop: 10 }}>
+              <label style={lbl}>Photo</label>
+              <input ref={photoRef} type="file" accept="image/*" onChange={onPhotoFile} style={{ display: 'none' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {recPhoto
+                  ? <img src={recPhoto} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(34,23,122,.2)', flexShrink: 0 }} />
+                  : <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#EFEFE6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Upload size={15} color="#9A96AE" /></div>}
+                <button onClick={() => photoRef.current?.click()} style={{ flex: 1, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#fff', border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 10px', cursor: 'pointer' }}>{recPhoto ? 'Changer la photo' : 'Téléverser une photo'}</button>
+                {recPhoto && <button onClick={() => setRecPhoto('')} title="Retirer" style={{ fontSize: 13, color: '#9A96AE', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>✕</button>}
+              </div>
+            </div>
+            {member && member.id === (user as any)?.id && (
+              <button onClick={saveMyPhone} style={{ marginTop: 10, width: '100%', fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: 'none', borderRadius: 9, padding: '8px 10px', cursor: 'pointer' }}>Enregistrer dans mon profil</button>
+            )}
+          </div>
+
+          <button onClick={() => printDoc(docHtml(cand, cfg, recruiter, lang))} style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 12, padding: 14, cursor: 'pointer', boxShadow: '0 10px 24px -12px rgba(34,23,122,.6)' }}><Printer size={16} />{format === 'dc' ? 'Exporter le DC (PDF)' : 'Exporter le one-pager (PDF)'}</button>
+        </>}
       </div>
 
       {/* APERÇU WYSIWYG (= le document exporté) */}
-      <div style={{ background: '#EFEFE6', border: '1px solid rgba(34,23,122,.1)', borderRadius: 16, boxShadow: '0 1px 2px rgba(34,23,122,.04)', overflow: 'hidden', minHeight: 500 }}>
+      <div style={{ background: '#EFEFE6', border: '1px solid rgba(34,23,122,.1)', borderRadius: 16, boxShadow: '0 1px 2px rgba(34,23,122,.04)', overflow: 'hidden', minHeight: 500, position: 'sticky', top: 20 }}>
         {!cand ? (
           <div style={{ padding: '80px 40px', textAlign: 'center', color: '#9A96AE', fontSize: 14, lineHeight: 1.6 }}>
             <FileText size={30} color="#C4C0D6" style={{ marginBottom: 12 }} /><br />
-            Ajoutez un CV (PDF) ou choisissez un candidat.<br />HumanUp génère un one-pager <strong style={{ color: '#6E6A85' }}>anonymisé</strong> — boîtes et réalisations visibles, coordonnées masquées.
+            Ajoutez un CV (PDF) ou choisissez un candidat.<br />HumanUp compose une <strong style={{ color: '#6E6A85' }}>proposition</strong> — one-pager ou dossier — dont vous choisissez les sections, ce qui est masqué et ce qui est mis en avant.
           </div>
         ) : (
-          <iframe title="one-pager" srcDoc={html} style={{ width: '100%', height: 1040, border: 0, display: 'block', background: '#EFEFE6' }} />
+          <iframe title="document" srcDoc={html} style={{ width: '100%', height: 1040, border: 0, display: 'block', background: '#EFEFE6' }} />
         )}
       </div>
     </div>
