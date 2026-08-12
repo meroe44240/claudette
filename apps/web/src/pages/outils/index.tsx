@@ -159,19 +159,17 @@ html,body{margin:0;padding:0;background:#fff;color:#312C4A;font-family:'Inter',s
 .para{font-size:10.5pt;line-height:1.7;color:#312C4A;text-align:justify;margin:0}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font-size:9.5pt;font-weight:700;border-radius:999px;padding:5px 12px;background:#F2F3D8;color:#22177A}
-.kpis{margin-top:15px;background:#22177A;border-radius:14px;padding:16px 18px}
-.kpis-t{font-size:8.5pt;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(230,233,175,.72);margin-bottom:11px;display:flex;align-items:center;gap:8px}
-.kpis-t:before{content:"";width:14px;height:2px;background:#E6E9AF;display:inline-block}
-.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px 22px}
-.kpi{display:flex;gap:9px}
-.kpi .b{flex-shrink:0;width:16px;height:16px;border-radius:50%;background:#E6E9AF;color:#22177A;font-weight:800;font-size:8.5pt;display:flex;align-items:center;justify-content:center;margin-top:1px}
-.kpi span{font-size:10pt;line-height:1.42;color:#F4F4E9;font-weight:600}
-.strengths{display:grid;grid-template-columns:1fr 1fr;gap:7px 20px;margin-top:2px}
-.strength{display:flex;gap:8px;font-size:10pt;line-height:1.45;color:#312C4A}
-.strength .ck{flex-shrink:0;width:15px;height:15px;border-radius:50%;background:#22177A;color:#E6E9AF;font-size:9pt;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.kpis{margin-top:16px;background:#F7F7EE;border-left:3px solid #E6E9AF;padding:13px 18px}
+.kpis-t{font-size:8pt;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#8A7F5A;margin-bottom:9px}
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px}
+.kpi{font-size:10.5pt;line-height:1.4;color:#22177A;font-weight:700}
+.strengths{display:flex;flex-direction:column;gap:6px;margin-top:2px}
+.strength{display:flex;gap:10px;font-size:10.5pt;line-height:1.5;color:#312C4A}
+.strength .ck{flex-shrink:0;width:5px;height:5px;border-radius:1px;background:#22177A;margin-top:7px}
 .xps{display:flex;flex-direction:column;gap:12px;margin-top:2px}
 .xp{display:flex;gap:12px;page-break-inside:avoid}
 .yr{flex-shrink:0;font-family:ui-monospace,Menlo,monospace;font-size:8.5pt;font-weight:700;color:#8A8699;background:#F7F7F0;border-radius:6px;padding:3px 9px;height:fit-content;min-width:74px;text-align:center}
+.yr.np{background:transparent;box-shadow:none}
 .xt{font-size:10.5pt;font-weight:800;color:#1A1533}
 .xe{font-size:10pt;color:#22177A;font-weight:700;margin-top:1px}
 .hl{margin:6px 0 0;padding:0 0 0 2px;list-style:none}
@@ -232,7 +230,6 @@ function buildSections(cand: CandidatLite, lang: Lang): DocSection[] {
   return [
     { id: 'summary', kind: 'summary', title: T('En bref', 'Summary'), on: true, body: anon.summary || cand.aiPitchLong || cand.aiPitchShort || '' },
     { id: 'strengths', kind: 'strengths', title: T('Points forts', 'Key strengths'), on: true, items: strengthsSeed.map((t, i) => ({ id: `s${i}`, text: t, on: true, hi: false })) },
-    { id: 'skills', kind: 'skills', title: T('Compétences', 'Skills'), on: true, items: (cand.tags ?? []).slice(0, 16).map((t, i) => ({ id: `k${i}`, text: t, on: true, hi: false })) },
     {
       id: 'experience', kind: 'experience', title: T('Parcours & réalisations', 'Track record'), on: true,
       exps: exps.map((e, ei) => ({
@@ -250,7 +247,6 @@ function docHtml(cand: CandidatLite, cfg: DocConfig, rec: Recruiter, lang: Lang)
   const T = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   const origin = window.location.origin;
   const logoMarkCream = `${origin}/brand/logo-mark-cream.png`;
-  const logoMark = `${origin}/brand/logo-mark-navy.png`;
   const { anon } = cfg;
   const isDc = cfg.format === 'dc';
 
@@ -279,12 +275,12 @@ function docHtml(cand: CandidatLite, cfg: DocConfig, rec: Recruiter, lang: Lang)
     if (s.exps) for (const x of s.exps) if (x.on) starred.push(...x.highlights.filter(h => h.on && h.hi).map(h => h.text));
   }
   const kpisHtml = starred.length
-    ? `<div class="kpis"><div class="kpis-t">${T('Réalisations clés', 'Key achievements')}</div><div class="kpi-grid">${starred.slice(0, isDc ? 8 : 4).map(a => `<div class="kpi"><span class="b">✓</span><span>${esc(a)}</span></div>`).join('')}</div></div>`
+    ? `<div class="kpis"><div class="kpis-t">${T('Réalisations clés', 'Key achievements')}</div><div class="kpi-grid">${starred.slice(0, isDc ? 8 : 4).map(a => `<div class="kpi">${esc(a)}</div>`).join('')}</div></div>`
     : '';
 
   const companyLabel = (entreprise: string, isRecent: boolean): string => {
     if (anon.allCompanies || (anon.currentCompany && isRecent)) return T('Entreprise confidentielle', 'Confidential company');
-    return entreprise || '—';
+    return entreprise || '';
   };
 
   const sectionsHtml = cfg.sections.filter(s => s.on).map(s => {
@@ -298,7 +294,7 @@ function docHtml(cand: CandidatLite, cfg: DocConfig, rec: Recruiter, lang: Lang)
     }
     if (s.kind === 'strengths') {
       const items = (s.items ?? []).filter(i => i.on && !i.hi); // les étoilés remontent dans le bandeau
-      return items.length ? `<div class="sec mt ab">${esc(s.title)}</div><div class="strengths">${items.map(i => `<div class="strength"><span class="ck">✓</span><span>${esc(i.text)}</span></div>`).join('')}</div>` : '';
+      return items.length ? `<div class="sec mt ab">${esc(s.title)}</div><div class="strengths">${items.map(i => `<div class="strength"><span class="ck"></span><span>${esc(i.text)}</span></div>`).join('')}</div>` : '';
     }
     if (s.kind === 'skills') {
       const items = (s.items ?? []).filter(i => i.on);
@@ -309,7 +305,9 @@ function docHtml(cand: CandidatLite, cfg: DocConfig, rec: Recruiter, lang: Lang)
       if (!list.length) return '';
       return `<div class="sec mt ab">${esc(s.title)}</div><div class="xps">${list.map((x, idx) => {
         const hl = x.highlights.filter(h => h.on && !h.hi);
-        return `<div class="xp"><span class="yr">${esc(x.anneeDebut || '—')}–${x.anneeFin ? esc(x.anneeFin) : T('auj.', 'now')}</span><div style="min-width:0"><div class="xt">${esc(x.titre)}</div><div class="xe">${esc(companyLabel(x.entreprise, idx === 0))}</div>${hl.length ? `<ul class="hl">${hl.map(h => `<li>${esc(h.text)}</li>`).join('')}</ul>` : ''}</div></div>`;
+        const period = x.anneeDebut ? `${esc(x.anneeDebut)}–${x.anneeFin ? esc(x.anneeFin) : T('auj.', 'now')}` : (x.anneeFin ? esc(x.anneeFin) : '');
+        const company = companyLabel(x.entreprise, idx === 0);
+        return `<div class="xp">${period ? `<span class="yr">${period}</span>` : '<span class="yr np"></span>'}<div style="min-width:0"><div class="xt">${esc(x.titre)}</div>${company ? `<div class="xe">${esc(company)}</div>` : ''}${hl.length ? `<ul class="hl">${hl.map(h => `<li>${esc(h.text)}</li>`).join('')}</ul>` : ''}</div></div>`;
       }).join('')}</div>`;
     }
     return '';
@@ -318,14 +316,12 @@ function docHtml(cand: CandidatLite, cfg: DocConfig, rec: Recruiter, lang: Lang)
   const recInitials = (rec.nom || 'HU').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
   const recPhoto = rec.avatarUrl ? `<img class="rec-photo" src="${esc(rec.avatarUrl)}" alt="${esc(rec.nom)}"/>` : `<div class="rec-photo">${esc(recInitials)}</div>`;
   const recContact = [
-    rec.email ? `<span>✉&nbsp; ${esc(rec.email)}</span>` : '',
-    rec.telephone ? `<span>☎&nbsp; ${esc(rec.telephone)}</span>` : '',
+    rec.email ? `<span>${esc(rec.email)}</span>` : '',
+    rec.telephone ? `<span>${esc(rec.telephone)}</span>` : '',
   ].filter(Boolean).join('');
 
   const badge = isDc ? T('Dossier de compétences', 'Competency file') : T('Profil confidentiel', 'Confidential profile');
-  const eyebrow = cfg.target
-    ? `${T('Proposé pour', 'Proposed for')} ${esc(cfg.target)}`
-    : (isDc ? T('Dossier de compétences — HumanUp', 'Competency file — HumanUp') : T('Profil présenté par HumanUp', 'Profile presented by HumanUp'));
+  const eyebrow = cfg.target ? `${T('Proposé pour', 'Proposed for')} ${esc(cfg.target)}` : '';
   const footAnon = anon.name ? T('Profil anonymisé, transmis pour évaluation uniquement.', 'Anonymised profile, shared for evaluation only.') : T('Document transmis pour évaluation uniquement.', 'Shared for evaluation only.');
 
   return `<!doctype html><html lang="${lang}"><head>${DOC_HEAD}<title>${isDc ? 'DC' : T('Profil', 'Profile')} — ${esc(h1)}</title></head><body class="doc ${isDc ? 'dc' : 'op'}">
@@ -337,14 +333,14 @@ function docHtml(cand: CandidatLite, cfg: DocConfig, rec: Recruiter, lang: Lang)
     </div>
     <div class="hdr-right">
       <span class="badge">${badge}</span>
-      <div class="offices">Hong Kong&nbsp; ·&nbsp; Londres</div>
+      <div class="offices">Hong Kong&nbsp; ·&nbsp; Canada</div>
     </div>
   </div>
   <div class="hrule"></div>
-  <div class="eyebrow">${eyebrow}</div>
+  ${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}
   <div class="h1 ab">${esc(h1)}</div>
   ${posteLine ? `<div class="poste">${posteLine}</div>` : ''}
-  <div class="sub">${esc(metaBits.join('  ·  ') || T('Présenté par HumanUp', 'Presented by HumanUp'))}</div>
+  ${metaBits.length ? `<div class="sub">${esc(metaBits.join('  ·  '))}</div>` : ''}
 </div>
 <div class="body">
   ${kpisHtml}
@@ -354,12 +350,11 @@ function docHtml(cand: CandidatLite, cfg: DocConfig, rec: Recruiter, lang: Lang)
   ${recPhoto}
   <div class="rec-info">
     <div class="rec-name">${esc(rec.nom || 'HumanUp')}</div>
-    <div class="rec-role">${T('Votre contact chez HumanUp', 'Your contact at HumanUp')}</div>
+    <div class="rec-role">International Recruiter</div>
     ${recContact ? `<div class="rec-contact">${recContact}</div>` : ''}
   </div>
-  <img class="rec-logo" src="${logoMark}" alt="HumanUp"/>
 </div>
-<div class="foot">HumanUp Recruitment Agency · Hong Kong · Londres · humanup.io — ${footAnon}</div>
+<div class="foot">Hong Kong · Canada · humanup.io — ${footAnon}</div>
 </body></html>`;
 }
 
