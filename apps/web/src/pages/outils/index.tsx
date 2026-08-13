@@ -215,7 +215,7 @@ interface SecItem { id: string; text: string; on: boolean; hi: boolean }
 interface ExpEntry { id: string; on: boolean; titre: string; entreprise: string; anneeDebut: string; anneeFin: string; highlights: SecItem[] }
 interface DocSection { id: string; kind: SecKind; title: string; on: boolean; body?: string; items?: SecItem[]; exps?: ExpEntry[] }
 interface AnonCfg { name: boolean; currentCompany: boolean; allCompanies: boolean; city: boolean }
-interface DocConfig { format: DocFormat; anon: AnonCfg; target: string; sections: DocSection[] }
+interface DocConfig { format: DocFormat; anon: AnonCfg; target: string; sections: DocSection[]; hideOffices: boolean }
 
 // Construit les sections par défaut depuis le candidat (l'utilisateur les édite ensuite).
 function buildSections(cand: CandidatLite, lang: Lang): DocSection[] {
@@ -333,7 +333,7 @@ function docHtml(cand: CandidatLite, cfg: DocConfig, rec: Recruiter, lang: Lang)
     </div>
     <div class="hdr-right">
       <span class="badge">${badge}</span>
-      <div class="offices">Hong Kong&nbsp; ·&nbsp; Canada</div>
+      ${cfg.hideOffices ? '' : '<div class="offices">Hong Kong&nbsp; ·&nbsp; Canada</div>'}
     </div>
   </div>
   <div class="hrule"></div>
@@ -354,7 +354,7 @@ function docHtml(cand: CandidatLite, cfg: DocConfig, rec: Recruiter, lang: Lang)
     ${recContact ? `<div class="rec-contact">${recContact}</div>` : ''}
   </div>
 </div>
-<div class="foot">Hong Kong · Canada · humanup.io — ${footAnon}</div>
+<div class="foot">${cfg.hideOffices ? '' : 'Hong Kong · Canada · '}humanup.io — ${footAnon}</div>
 </body></html>`;
 }
 
@@ -528,6 +528,7 @@ function CvTool() {
   const [lang, setLang] = useState<Lang>('fr');
   const [format, setFormat] = useState<DocFormat>('onepager');
   const [anon, setAnon] = useState<AnonCfg>({ name: true, currentCompany: false, allCompanies: false, city: true });
+  const [hideOffices, setHideOffices] = useState(false);
   const [targetMode, setTargetMode] = useState<'none' | 'mandat' | 'free'>('none');
   const [mandatId, setMandatId] = useState('');
   const [targetFree, setTargetFree] = useState('');
@@ -580,10 +581,10 @@ function CvTool() {
     nom: member ? `${member.prenom ? member.prenom + ' ' : ''}${member.nom}` : (user ? `${(user as any).prenom ? (user as any).prenom + ' ' : ''}${(user as any).nom ?? ''}`.trim() : 'HumanUp'),
     email: recEmail, telephone: recPhone, avatarUrl: recPhoto || null,
   };
-  const cfg: DocConfig = { format, anon, target: targetLabel, sections };
+  const cfg: DocConfig = { format, anon, target: targetLabel, sections, hideOffices };
   const html = useMemo(
     () => (cand ? docHtml(cand, cfg, recruiter, lang) : ''),
-    [cand, sections, format, anon, targetLabel, recEmail, recPhone, recPhoto, member?.nom, member?.prenom, lang],
+    [cand, sections, format, anon, hideOffices, targetLabel, recEmail, recPhone, recPhoto, member?.nom, member?.prenom, lang],
   );
 
   // ── mutateurs de sections ──
@@ -692,6 +693,10 @@ function CvTool() {
                 <span style={{ fontSize: 12.5, color: '#4A4568' }}>{o.label}</span>
               </label>
             ))}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }} onClick={() => setHideOffices(v => !v)}>
+              <span style={cbox(hideOffices)} />
+              <span style={{ fontSize: 12.5, color: '#4A4568' }}>Masquer les bureaux (Hong Kong · Canada)</span>
+            </label>
           </div>
 
           {/* Cible (proposition) */}
