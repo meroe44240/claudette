@@ -2,6 +2,7 @@ import prisma from '../../lib/db.js';
 import { NotFoundError, ValidationError } from '../../lib/errors.js';
 import { createEvent, getBusyTimes } from '../integrations/calendar.service.js';
 import { sendRawEmail } from '../integrations/gmail.service.js';
+import * as leadService from '../leads/lead.service.js';
 import { isPersonalEmail } from '../integrations/allo.service.js';
 
 interface AvailabilityWindow { day: number; start: string; end: string } // day 0=dim..6=sam, "HH:MM"
@@ -363,6 +364,34 @@ export async function createBooking(slug: string, data: {
         htmlBody: recruiterBookingEmail({ name: data.name, email: data.email.trim(), dateL1, dateL2, meetLink, note: intakeNote }),
       });
     } catch (e) { console.warn('[Booking] email recruteur échoué', (e as Error).message); }
+  }
+
+  // Discovery (entreprise qui recrute) → crée/enrichit un LEAD au stade "rdv" dans le CRM.
+  if (kind === 'DISCOVERY') {
+    try {
+      const map: Record<string, string> = {};
+      for (const line of (intakeNote || '').split('\n')) { const i = line.indexOf(':'); if (i > 0) map[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
+      const interactionText = `RDV réservé : ${dateL1} ${dateL2}${meetLink ? ` · ${meetLink}` : ''}${intakeNote ? `\n${intakeNote}` : ''}`;
+      const existing = await prisma.lead.findFirst({ where: { email: { equals: data.email.trim(), mode: 'insensitive' } }, select: { id: true } });
+      if (existing) {
+        await leadService.addInteraction(existing.id, 'note', interactionText, settings.userId);
+        await prisma.lead.update({ where: { id: existing.id }, data: { lastContactAt: new Date() } });
+      } else {
+        const lead = await leadService.createLead({
+          company: map['Société'] || data.societe || data.name.trim(),
+          contact: data.name.trim(),
+          role: map['Fonction du contact'] || null,
+          sector: map['Secteur'] || null,
+          phone: map['Tél'] || data.phone || null,
+          email: data.email.trim(),
+          source: 'Prise de RDV (site)',
+          src: 'cold',
+          stage: 'rdv',
+          ownerId: settings.userId,
+        });
+        await leadService.addInteraction(lead.id, 'note', interactionText, settings.userId);
+      }
+    } catch (e) { console.warn('[Booking] création lead échouée', (e as Error).message); }
   }
 
   // Qualification liée à un mandat + candidat identifié → rattache le candidat au mandat
