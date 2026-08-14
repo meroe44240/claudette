@@ -422,6 +422,26 @@ function createMimeMessage(
 }
 
 /**
+ * Envoi Gmail « brut » : envoie l'email sans logguer d'activité ni matcher de
+ * contact. Pour les emails transactionnels (confirmations booking, etc.).
+ */
+export async function sendRawEmail(userId: string, params: SendEmailParams): Promise<void> {
+  const accessToken = await getValidAccessToken(userId);
+  const rawMessage = createMimeMessage(params.to, params.subject, params.body, {
+    htmlBody: params.htmlBody, cc: params.cc, bcc: params.bcc, inReplyTo: params.inReplyTo,
+  });
+  const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ raw: rawMessage }),
+  });
+  if (!response.ok) {
+    const err = await response.text().catch(() => '');
+    throw new Error(`Gmail send ${response.status}: ${err}`);
+  }
+}
+
+/**
  * Send an email via Gmail API using stored OAuth token.
  */
 export async function sendEmail(userId: string, params: SendEmailParams) {
