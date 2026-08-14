@@ -344,6 +344,8 @@ export async function createBooking(slug: string, data: {
   const hostName = `${host?.prenom ? host.prenom + ' ' : ''}${host?.nom ?? ''}`.trim() || 'HumanUp';
   const { l1: dateL1, l2: dateL2 } = dateLines(start);
   const hostPhotoUrl = typeof host?.avatarUrl === 'string' && host.avatarUrl.startsWith('http') ? host.avatarUrl : null;
+  // Récap propre : la note du site est déjà formatée "Label : Valeur" par ligne.
+  const recapNote = (data.note && data.note.includes(':')) ? data.note.trim() : intakeNote;
   try {
     await sendRawEmail(settings.userId, {
       to: data.email.trim(),
@@ -351,7 +353,7 @@ export async function createBooking(slug: string, data: {
       body: `Bonjour ${firstNameOf(data.name)},\n\nVotre échange avec HumanUp est confirmé : ${dateL1} ${dateL2}.${meetLink ? `\nLien Google Meet : ${meetLink}` : ''}\n\nÀ très vite,\n${hostName}`,
       htmlBody: clientBookingEmail({
         name: data.name, dateL1, dateL2, durationMin: settings.durationMin, meetLink,
-        hostName, hostTitle: 'International Recruiter', hostPhone: host?.telephone ?? null, hostEmail: host?.email ?? 'meroe@humanup.io', hostPhotoUrl, note: intakeNote,
+        hostName, hostTitle: 'International Recruiter', hostPhone: host?.telephone ?? null, hostEmail: host?.email ?? 'meroe@humanup.io', hostPhotoUrl, note: recapNote,
       }),
     });
   } catch (e) { console.warn('[Booking] email client échoué', (e as Error).message); }
@@ -361,7 +363,7 @@ export async function createBooking(slug: string, data: {
         to: host.email,
         subject: `Nouveau RDV — ${data.name}${data.societe ? ' · ' + data.societe : ''}`,
         body: `${data.name} (${data.email}) a réservé un échange le ${dateL1} ${dateL2}.${intakeNote ? `\n\n${intakeNote}` : ''}${meetLink ? `\n\nMeet : ${meetLink}` : ''}`,
-        htmlBody: recruiterBookingEmail({ name: data.name, email: data.email.trim(), dateL1, dateL2, meetLink, note: intakeNote }),
+        htmlBody: recruiterBookingEmail({ name: data.name, email: data.email.trim(), dateL1, dateL2, meetLink, note: recapNote }),
       });
     } catch (e) { console.warn('[Booking] email recruteur échoué', (e as Error).message); }
   }
@@ -369,9 +371,11 @@ export async function createBooking(slug: string, data: {
   // Discovery (entreprise qui recrute) → crée/enrichit un LEAD au stade "rdv" dans le CRM.
   if (kind === 'DISCOVERY') {
     try {
+      // On parse la note brute du site ("Société : …\nFonction du contact : …\n…").
+      const rawNote = (data.note || '').trim();
       const map: Record<string, string> = {};
-      for (const line of (intakeNote || '').split('\n')) { const i = line.indexOf(':'); if (i > 0) map[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
-      const interactionText = `RDV réservé : ${dateL1} ${dateL2}${meetLink ? ` · ${meetLink}` : ''}${intakeNote ? `\n${intakeNote}` : ''}`;
+      for (const line of rawNote.split('\n')) { const i = line.indexOf(':'); if (i > 0) map[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
+      const interactionText = `RDV réservé : ${dateL1} ${dateL2}${meetLink ? ` · ${meetLink}` : ''}${rawNote ? `\n${rawNote}` : ''}`;
       const existing = await prisma.lead.findFirst({ where: { email: { equals: data.email.trim(), mode: 'insensitive' } }, select: { id: true } });
       if (existing) {
         await leadService.addInteraction(existing.id, 'note', interactionText, settings.userId);
