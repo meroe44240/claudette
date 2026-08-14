@@ -7,58 +7,126 @@ import { isPersonalEmail } from '../integrations/allo.service.js';
 interface AvailabilityWindow { day: number; start: string; end: string } // day 0=dim..6=sam, "HH:MM"
 
 // ── Emails de confirmation (envoyés via le Gmail connecté du recruteur) ──
+// Design email-safe (pack_emails) : tables, Arial, URLs absolues, contrastes WCAG.
+const IMG_BASE = 'https://ats.propium.co/brand/';
 const escHtml = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => (({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as Record<string, string>)[c]));
 const firstNameOf = (n: string) => String(n || '').trim().split(/\s+/)[0] || '';
-function fmtDateFr(d: Date): string {
+const capFirst = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+function dateLines(d: Date): { l1: string; l2: string } {
   try {
-    return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).format(d);
-  } catch { return d.toISOString(); }
+    const l1 = capFirst(new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Paris' }).format(d));
+    const l2 = 'à ' + new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).format(d);
+    return { l1, l2 };
+  } catch { return { l1: d.toISOString(), l2: '' }; }
 }
-const emailShell = (inner: string) => `<div style="background:#EDEDF2;padding:28px 12px;font-family:-apple-system,Segoe UI,Inter,Arial,sans-serif">
-<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 30px rgba(34,23,122,.12)">
-<div style="background:#22177A;padding:26px 32px">
-  <div style="font-family:'Archivo Black',Arial Black,sans-serif;font-weight:800;font-size:19px;letter-spacing:.02em;color:#E6E9AF">HUMANUP</div>
-  <div style="font-size:10px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:rgba(230,233,175,.6);margin-top:5px">Recruitment Agency · humanup.io</div>
-</div>
-${inner}
-<div style="padding:18px 32px 26px;border-top:1px solid #ECECF3;color:#9A96AE;font-size:12px;line-height:1.6">
-  Hong Kong · Canada · <a href="https://humanup.io" style="color:#8A8699;text-decoration:none">humanup.io</a><br/>
-  Une question ? Répondez simplement à cet email.
-</div></div></div>`;
 
-function clientBookingEmail(o: { name: string; dateStr: string; meetLink: string | null; hostName: string; note?: string | null }): string {
-  const recap = String(o.note || '').split('\n').filter(Boolean)
-    .map((l) => `<tr><td style="padding:3px 0;font-size:14px;color:#312C4A">${escHtml(l)}</td></tr>`).join('');
-  return emailShell(`<div style="padding:30px 32px 8px">
-  <div style="font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#8A7F5A">Rendez-vous confirmé</div>
-  <h1 style="font-family:'Archivo Black',Arial Black,sans-serif;font-size:23px;color:#1A1533;margin:8px 0 14px;line-height:1.15">Bonjour ${escHtml(firstNameOf(o.name))}, c'est confirmé.</h1>
-  <p style="font-size:15px;line-height:1.65;color:#312C4A;margin:0 0 18px">Merci d'avoir réservé un premier échange avec HumanUp. On a hâte d'échanger sur votre projet de recrutement.</p>
-  <div style="background:#F7F7EE;border-left:3px solid #E6E9AF;border-radius:4px;padding:14px 18px;margin:0 0 18px">
-    <div style="font-size:13px;color:#8A7F5A;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Votre créneau</div>
-    <div style="font-size:16px;font-weight:700;color:#22177A;text-transform:capitalize">${escHtml(o.dateStr)}</div>
-    <div style="font-size:13px;color:#6E6A85;margin-top:2px">Échange de 30–45 min${o.hostName ? ` avec ${escHtml(o.hostName)}` : ''} · en visio</div>
+interface ClientEmailData {
+  name: string; dateL1: string; dateL2: string; durationMin: number; meetLink: string | null;
+  hostName: string; hostTitle: string; hostPhone: string | null; hostEmail: string; hostPhotoUrl: string | null; note?: string | null;
+}
+function clientBookingEmail(o: ClientEmailData): string {
+  const reschedule = `mailto:${o.hostEmail}?subject=${encodeURIComponent('Décaler mon rendez-vous')}`;
+  const cancel = `mailto:${o.hostEmail}?subject=${encodeURIComponent('Annuler mon rendez-vous')}`;
+  const noteLines = String(o.note || '').split('\n').filter(Boolean);
+  const noteRows = noteLines.map((l, i) => {
+    const idx = l.indexOf(':'); const k = idx > 0 ? l.slice(0, idx).trim() : 'Info'; const v = idx > 0 ? l.slice(idx + 1).trim() : l;
+    const bb = i < noteLines.length - 1 ? 'border-bottom:1px solid #eceaf4' : '';
+    return `<tr><td style="width:88px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:1.2px;text-transform:uppercase;color:#6E6A85;padding:8px 0;${bb}">${escHtml(k)}</td><td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#1A1533;padding:8px 0;${bb}">${escHtml(v)}</td></tr>`;
+  }).join('');
+  const photo = o.hostPhotoUrl ? `<img src="${escHtml(o.hostPhotoUrl)}" width="38" height="38" alt="" style="width:38px;height:38px;border-radius:50%;display:inline-block;vertical-align:middle">` : '';
+  return `<div style="background:#EDEDF2;padding:24px 10px;font-family:Arial,Helvetica,sans-serif">
+<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;max-width:600px;margin:0 auto;background:#FCFCF5;border-radius:18px;overflow:hidden">
+ <tr><td style="background:#22177A;padding:26px 32px 24px;border-bottom:3px solid #E6E9AF">
+  <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%"><tr>
+   <td style="vertical-align:middle">
+    <img src="${IMG_BASE}logo-mark-cream.png" width="30" alt="" style="width:30px;display:inline-block;vertical-align:middle">
+    <span style="display:inline-block;vertical-align:middle;padding-left:10px">
+     <span style="display:block;font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:bold;letter-spacing:.5px;color:#E6E9AF;line-height:1">HUMANUP</span>
+     <span style="display:block;font-family:Arial,Helvetica,sans-serif;font-size:8px;font-weight:bold;letter-spacing:2.6px;text-transform:uppercase;color:#b9bb96;padding-top:5px">Recruitment Agency</span>
+    </span>
+   </td>
+   <td style="vertical-align:middle;text-align:right"><a href="https://humanup.io" style="font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:1.4px;text-transform:uppercase;color:#E6E9AF;text-decoration:none">humanup.io</a></td>
+  </tr></table>
+ </td></tr>
+ <tr><td style="padding:34px 32px 0">
+  <div style="font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;letter-spacing:2.2px;text-transform:uppercase;color:#6E6A85">Rendez-vous confirmé</div>
+  <div style="font-family:Arial,Helvetica,sans-serif;font-size:30px;font-weight:bold;line-height:1.08;color:#1A1533;padding-top:11px">Bonjour ${escHtml(firstNameOf(o.name))},<br>c'est confirmé.</div>
+  <p style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.65;color:#4A4568;padding-top:12px">Merci d'avoir réservé un premier échange avec HumanUp. On a hâte d'échanger sur votre projet de recrutement.</p>
+ </td></tr>
+ <tr><td style="padding:24px 32px 0">
+  <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;background:#22177A;border-radius:16px"><tr>
+   <td style="padding:24px 26px">
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:9.5px;font-weight:bold;letter-spacing:2.4px;text-transform:uppercase;color:#b9bb96">Votre créneau</div>
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:26px;font-weight:bold;line-height:1.1;color:#E6E9AF;padding-top:11px">${escHtml(o.dateL1)}<br>${escHtml(o.dateL2)}</div>
+    <div style="border-top:1px solid #3a2f8a;margin-top:15px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;color:#b9bb96">${o.durationMin} minutes en visio avec <strong style="color:#ffffff">${escHtml(o.hostName)}</strong></div>
+   </td>
+  </tr></table>
+ </td></tr>
+ <tr><td style="padding:22px 32px 0">
+  ${o.meetLink ? `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse"><tr><td style="background:#E6E9AF;border-radius:11px"><a href="${escHtml(o.meetLink)}" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;letter-spacing:.2px;color:#22177A;text-decoration:none;padding:16px 32px">Rejoindre le Google Meet</a></td></tr></table>` : ''}
+  <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-top:12px"><tr>
+   <td style="padding-right:8px"><a href="${reschedule}" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;font-weight:bold;color:#22177A;text-decoration:none;border:1px solid #9a95c1;border-radius:11px;padding:10px 16px">Décaler le rendez-vous</a></td>
+   <td><a href="${cancel}" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;font-weight:bold;color:#4A4568;text-decoration:none;border:1px solid #9a95c1;border-radius:11px;padding:10px 16px">Annuler</a></td>
+  </tr></table>
+  <p style="font-family:Arial,Helvetica,sans-serif;font-size:11.5px;color:#4A4568;padding-top:12px">Le lien est aussi dans l'invitation agenda que vous venez de recevoir.</p>
+ </td></tr>
+ <tr><td style="padding:28px 32px 0">
+  <div style="border-top:1px solid #dcdaea;padding-top:20px">
+   <div style="display:inline-block;background:#E6E9AF;border-radius:999px;padding:5px 12px;font-family:Arial,Helvetica,sans-serif;font-size:9.5px;font-weight:bold;letter-spacing:2.2px;text-transform:uppercase;color:#22177A">Le but de l'appel</div>
+   <p style="font-family:Arial,Helvetica,sans-serif;font-size:13.5px;line-height:1.65;color:#4A4568;padding-top:11px">Le but est de <strong style="color:#1A1533">bien comprendre votre entreprise et le poste</strong> : votre contexte, ce que la personne devra réellement accomplir, l'équipe qu'elle rejoint et l'échéance.</p>
+   <p style="font-family:Arial,Helvetica,sans-serif;font-size:13.5px;line-height:1.65;color:#4A4568;padding-top:10px">Sans engagement. Si un autre acteur est plus adapté, on vous le dit. À la fin, vous repartez avec une lecture claire de votre marché.</p>
   </div>
-  ${o.meetLink ? `<a href="${escHtml(o.meetLink)}" style="display:inline-block;background:#22177A;color:#E6E9AF;text-decoration:none;font-weight:700;font-size:15px;padding:13px 22px;border-radius:11px">Rejoindre le Google Meet</a>
-  <div style="font-size:12px;color:#9A96AE;margin:8px 0 20px">Le lien est aussi dans l'invitation agenda que vous venez de recevoir.</div>` : `<div style="font-size:13px;color:#6E6A85;margin-bottom:20px">Vous recevez le lien de visio dans l'invitation agenda.</div>`}
-  <div style="font-family:'Archivo Black',Arial Black,sans-serif;font-size:14px;color:#22177A;margin:6px 0 8px">Le but de cet échange</div>
-  <p style="font-size:14px;line-height:1.65;color:#312C4A;margin:0 0 6px">30 minutes pour <b>cadrer le poste</b> : le problème à résoudre, le profil idéal, le contexte et l'échéance. On part de votre enjeu réel, pas d'une liste de compétences.</p>
-  <p style="font-size:14px;line-height:1.65;color:#312C4A;margin:0 0 18px">Sans engagement — si un autre acteur est plus adapté, on vous le dit. À la fin, vous repartez avec une lecture claire de votre marché.</p>
-  ${recap ? `<div style="font-family:'Archivo Black',Arial Black,sans-serif;font-size:14px;color:#22177A;margin:0 0 6px">Ce qu'on a noté</div>
-  <table style="width:100%;border-collapse:collapse;margin:0 0 6px">${recap}</table>` : ''}
-</div>`);
+ </td></tr>
+ ${noteRows ? `<tr><td style="padding:26px 32px 0">
+  <div style="border-top:1px solid #dcdaea;padding-top:18px">
+   <div style="display:inline-block;background:#E6E9AF;border-radius:999px;padding:5px 12px;font-family:Arial,Helvetica,sans-serif;font-size:9.5px;font-weight:bold;letter-spacing:2.2px;text-transform:uppercase;color:#22177A">Ce qu'on a noté</div>
+   <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;margin-top:6px">${noteRows}</table>
+  </div>
+ </td></tr>` : ''}
+ <tr><td style="padding:28px 0 0">
+  <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;background:#22177A">
+   <tr><td style="padding:24px 32px 20px;border-top:3px solid #E6E9AF">
+    <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%"><tr>
+     <td style="vertical-align:middle">${photo}<span style="display:inline-block;vertical-align:middle;${photo ? 'padding-left:11px' : ''}">
+       <span style="display:block;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;font-weight:bold;color:#ffffff">${escHtml(o.hostName)}</span>
+       <span style="display:block;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#E6E9AF;padding-top:3px">${escHtml(o.hostTitle)}</span>
+      </span></td>
+     <td style="vertical-align:middle;text-align:right">
+      ${o.hostPhone ? `<a href="tel:${escHtml(o.hostPhone)}" style="display:block;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#E6E9AF;text-decoration:none">${escHtml(o.hostPhone)}</a>` : ''}
+      <a href="mailto:${escHtml(o.hostEmail)}" style="display:block;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#b9bb96;text-decoration:none;padding-top:3px">${escHtml(o.hostEmail)}</a>
+     </td>
+    </tr></table>
+   </td></tr>
+   <tr><td style="padding:0 32px 22px">
+    <div style="border-top:1px solid #3a2f8a;padding-top:13px;text-align:center">
+     <a href="https://humanup.io" style="font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;letter-spacing:2.4px;text-transform:uppercase;color:#E6E9AF;text-decoration:none">humanup.io</a>
+     <div style="font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#b9bb96;padding-top:7px">Une question ? Répondez simplement à cet email.</div>
+    </div>
+   </td></tr>
+  </table>
+ </td></tr>
+</table></div>`;
 }
 
-function recruiterBookingEmail(o: { name: string; email: string; dateStr: string; meetLink: string | null; note?: string | null }): string {
-  const rows = ([['Contact', o.name], ['Email', o.email], ['Créneau', o.dateStr]] as [string, string][])
+function recruiterBookingEmail(o: { name: string; email: string; dateL1: string; dateL2: string; meetLink: string | null; note?: string | null }): string {
+  const rows = ([['Contact', o.name], ['Email', o.email], ['Créneau', `${o.dateL1} ${o.dateL2}`]] as [string, string][])
     .concat(String(o.note || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf(':'); return (i > 0 ? [l.slice(0, i).trim(), l.slice(i + 1).trim()] : ['Info', l]) as [string, string]; }))
-    .map(([k, v]) => `<tr><td style="padding:6px 14px 6px 0;font-size:13px;color:#8A8699;white-space:nowrap;vertical-align:top">${escHtml(k)}</td><td style="padding:6px 0;font-size:14px;color:#1A1533;font-weight:600">${escHtml(v)}</td></tr>`).join('');
-  return emailShell(`<div style="padding:28px 32px 10px">
-  <div style="font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#8A7F5A">Nouveau rendez-vous</div>
-  <h1 style="font-family:'Archivo Black',Arial Black,sans-serif;font-size:21px;color:#1A1533;margin:8px 0 16px">${escHtml(o.name)} a réservé un échange</h1>
-  <table style="width:100%;border-collapse:collapse;margin:0 0 16px">${rows}</table>
-  ${o.meetLink ? `<a href="${escHtml(o.meetLink)}" style="display:inline-block;background:#22177A;color:#E6E9AF;text-decoration:none;font-weight:700;font-size:14px;padding:11px 18px;border-radius:10px">Ouvrir le Google Meet</a>` : ''}
-  <p style="font-size:12px;color:#9A96AE;margin:16px 0 0">L'événement est dans votre Google Agenda.</p>
-</div>`);
+    .map(([k, v]) => `<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#6E6A85;padding:7px 14px 7px 0;white-space:nowrap;vertical-align:top">${escHtml(k)}</td><td style="font-family:Arial,Helvetica,sans-serif;font-size:13.5px;color:#1A1533;font-weight:bold;padding:7px 0">${escHtml(v)}</td></tr>`).join('');
+  return `<div style="background:#EDEDF2;padding:24px 10px;font-family:Arial,Helvetica,sans-serif">
+<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;max-width:600px;margin:0 auto;background:#FCFCF5;border-radius:18px;overflow:hidden">
+ <tr><td style="background:#22177A;padding:22px 30px;border-bottom:3px solid #E6E9AF">
+  <span style="font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;letter-spacing:.5px;color:#E6E9AF">HUMANUP</span>
+  <span style="font-family:Arial,Helvetica,sans-serif;font-size:8px;font-weight:bold;letter-spacing:2.4px;text-transform:uppercase;color:#b9bb96;padding-left:10px">Nouveau rendez-vous</span>
+ </td></tr>
+ <tr><td style="padding:28px 30px 6px">
+  <div style="font-family:Arial,Helvetica,sans-serif;font-size:21px;font-weight:bold;color:#1A1533">${escHtml(o.name)} a réservé un échange</div>
+  <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;margin-top:14px">${rows}</table>
+ </td></tr>
+ <tr><td style="padding:8px 30px 28px">
+  ${o.meetLink ? `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse"><tr><td style="background:#E6E9AF;border-radius:11px"><a href="${escHtml(o.meetLink)}" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;font-weight:bold;color:#22177A;text-decoration:none;padding:13px 24px">Ouvrir le Google Meet</a></td></tr></table>` : ''}
+  <p style="font-family:Arial,Helvetica,sans-serif;font-size:11.5px;color:#4A4568;padding-top:14px">L'événement est dans votre Google Agenda. Répondez à cet email pour écrire au client.</p>
+ </td></tr>
+</table></div>`;
 }
 
 function slugify(s: string): string {
@@ -239,7 +307,7 @@ export async function createBooking(slug: string, data: {
   const candidat = await prisma.candidat.findFirst({ where: { email: { equals: data.email.trim(), mode: 'insensitive' } }, select: { id: true } });
 
   // Crée l'événement Google Calendar (invitation auto au candidat) + lien Meet
-  const host = await prisma.user.findUnique({ where: { id: settings.userId }, select: { prenom: true, nom: true, email: true } });
+  const host = await prisma.user.findUnique({ where: { id: settings.userId }, select: { prenom: true, nom: true, email: true, telephone: true, avatarUrl: true } as any }) as any;
   let meetLink: string | null = null;
   let googleEventId: string | null = null;
   try {
@@ -273,13 +341,17 @@ export async function createBooking(slug: string, data: {
 
   // Emails de confirmation (envoyés depuis le Gmail connecté du recruteur — best-effort).
   const hostName = `${host?.prenom ? host.prenom + ' ' : ''}${host?.nom ?? ''}`.trim() || 'HumanUp';
-  const dateStr = fmtDateFr(start);
+  const { l1: dateL1, l2: dateL2 } = dateLines(start);
+  const hostPhotoUrl = typeof host?.avatarUrl === 'string' && host.avatarUrl.startsWith('http') ? host.avatarUrl : null;
   try {
     await sendRawEmail(settings.userId, {
       to: data.email.trim(),
       subject: 'Votre rendez-vous avec HumanUp est confirmé',
-      body: `Bonjour ${firstNameOf(data.name)},\n\nVotre échange avec HumanUp est confirmé : ${dateStr}.${meetLink ? `\nLien Google Meet : ${meetLink}` : ''}\n\nÀ très vite,\n${hostName}`,
-      htmlBody: clientBookingEmail({ name: data.name, dateStr, meetLink, hostName, note: intakeNote }),
+      body: `Bonjour ${firstNameOf(data.name)},\n\nVotre échange avec HumanUp est confirmé : ${dateL1} ${dateL2}.${meetLink ? `\nLien Google Meet : ${meetLink}` : ''}\n\nÀ très vite,\n${hostName}`,
+      htmlBody: clientBookingEmail({
+        name: data.name, dateL1, dateL2, durationMin: settings.durationMin, meetLink,
+        hostName, hostTitle: 'International Recruiter', hostPhone: host?.telephone ?? null, hostEmail: host?.email ?? 'meroe@humanup.io', hostPhotoUrl, note: intakeNote,
+      }),
     });
   } catch (e) { console.warn('[Booking] email client échoué', (e as Error).message); }
   if (host?.email) {
@@ -287,8 +359,8 @@ export async function createBooking(slug: string, data: {
       await sendRawEmail(settings.userId, {
         to: host.email,
         subject: `Nouveau RDV — ${data.name}${data.societe ? ' · ' + data.societe : ''}`,
-        body: `${data.name} (${data.email}) a réservé un échange le ${dateStr}.${intakeNote ? `\n\n${intakeNote}` : ''}${meetLink ? `\n\nMeet : ${meetLink}` : ''}`,
-        htmlBody: recruiterBookingEmail({ name: data.name, email: data.email.trim(), dateStr, meetLink, note: intakeNote }),
+        body: `${data.name} (${data.email}) a réservé un échange le ${dateL1} ${dateL2}.${intakeNote ? `\n\n${intakeNote}` : ''}${meetLink ? `\n\nMeet : ${meetLink}` : ''}`,
+        htmlBody: recruiterBookingEmail({ name: data.name, email: data.email.trim(), dateL1, dateL2, meetLink, note: intakeNote }),
       });
     } catch (e) { console.warn('[Booking] email recruteur échoué', (e as Error).message); }
   }
