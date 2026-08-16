@@ -30,6 +30,8 @@ model User {
   slackUserId        String?   @db.VarChar(30) // Slack user id (e.g. U0123ABC) for DMs
   fonction             Fonction @default(RECRUTEUR)
   excludeFromTeamStats Boolean  @default(false)
+  status               String    @default("ACTIVE") @db.VarChar(20) // ACTIVE | ARCHIVED
+  dateSortie           DateTime? @map("date_sortie") @db.Timestamptz()
   createdAt          DateTime  @default(now()) @db.Timestamptz()
   updatedAt          DateTime  @updatedAt @db.Timestamptz()
 
@@ -265,6 +267,7 @@ model Mandat {
   feeMontantFacture Int?
   feeStatut        FeeStatut    @default(NON_FACTURE)
   statut           StatutMandat @default(OUVERT)
+  isDormant        Boolean      @default(false) @map("is_dormant") // marqué à la main (rapport standup)
   priorite         Priorite     @default(NORMALE)
   // Étape du board cycle-de-vie (Prospection, 1er rendez-vous, Signature du mandat, Sourcing, Placé, Perdu)
   etapeCycle       String?      @db.VarChar(60)
@@ -537,6 +540,8 @@ model Candidature {
   notes               String?          @db.Text
   datePresentation    DateTime?        @db.Timestamptz()
   dateEntretienClient DateTime?        @db.Timestamptz()
+  interlocuteurClient String?          @map("interlocuteur_client") @db.VarChar(255) // présentation : personne côté client
+  googleEventId       String?          @map("google_event_id") @db.VarChar(255)      // event agenda rattaché
   dateDemarrage       DateTime?        @db.Date
   sourcePlacement     String?          @db.VarChar(255)
   motifRefus          MotifRefus?
@@ -917,6 +922,18 @@ model RecruiterObjective {
 
   @@unique([userId, period, metric])
   @@map("recruiter_objectives")
+}
+
+// Seuils du rapport standup, par RÔLE (évolutifs, stockés en base).
+model ReportThreshold {
+  id     String @id @default(uuid()) @db.Uuid
+  role   String @db.VarChar(20) // SALES | RECRUTEUR
+  metric String @db.VarChar(40) // calls | rdv_nouveaux | push | presentations | screenings | nouvelles_personnes
+  period String @db.VarChar(20) // day | week
+  target Int
+
+  @@unique([role, metric, period])
+  @@map("report_thresholds")
 }
 
 model AiPendingValidation {

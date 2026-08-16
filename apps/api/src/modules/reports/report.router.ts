@@ -1,8 +1,19 @@
 import { FastifyInstance } from 'fastify';
 import * as reportService from './report.service.js';
-import { authenticate } from '../../middleware/auth.js';
+import { getTeamDailyReport } from './team-daily-report.service.js';
+import { authenticate, requireRole } from '../../middleware/auth.js';
 
 export default async function reportRouter(fastify: FastifyInstance) {
+  // GET /team-daily?date=YYYY-MM-DD — rapport standup (admin, silencieux le temps de la vérif)
+  fastify.get('/team-daily', {
+    schema: { description: 'Rapport d\'activité quotidien par personne (standup)', tags: ['Reports'] },
+    preHandler: [authenticate, requireRole('ADMIN')],
+    handler: async (request) => {
+      const { date } = request.query as { date?: string };
+      return getTeamDailyReport(date);
+    },
+  });
+
   // GET /client/:clientId - Generate client report
   fastify.get('/client/:clientId', {
     schema: {
