@@ -14,6 +14,17 @@ export default async function reportRouter(fastify: FastifyInstance) {
     },
   });
 
+  // POST /team-daily/send?date=YYYY-MM-DD&to=email → envoie l'email standup (test)
+  fastify.post('/team-daily/send', {
+    schema: { description: 'Envoyer l\'email standup (test)', tags: ['Reports'] },
+    preHandler: [authenticate, requireRole('ADMIN')],
+    handler: async (request) => {
+      const { date, to } = request.query as { date?: string; to?: string };
+      const { runStandupReport } = await import('./standup.job.js');
+      return runStandupReport(date, to ? to.split(',').map((s) => s.trim()) : undefined);
+    },
+  });
+
   // GET /client/:clientId - Generate client report
   fastify.get('/client/:clientId', {
     schema: {
