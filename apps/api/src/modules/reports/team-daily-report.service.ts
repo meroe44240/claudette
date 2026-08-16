@@ -150,6 +150,47 @@ async function avg5d(fn: (uid: string, s: Date, e: Date) => Promise<number>, uid
   return Math.round((total / days.length) * 10) / 10;
 }
 
+// ─── Overview business (état à l'instant t) ─────────
+async function businessOverview(monthStart: Date, weekStart: Date, weekEnd: Date) {
+  const [mandatsActifs, mandatsDormants, enProcess, offresEnCours, prezSemaine, placementsMois] = await Promise.all([
+    prisma.mandat.count({ where: { statut: { in: ['OUVERT', 'EN_COURS'] }, isDormant: false } as any }),
+    prisma.mandat.count({ where: { statut: { in: ['OUVERT', 'EN_COURS'] }, isDormant: true } as any }),
+    prisma.candidature.count({ where: { stage: { notIn: ['PLACE', 'REFUSE'] as any } } }),
+    prisma.candidature.count({ where: { stage: 'OFFRE' as any } }),
+    prisma.stageHistory.count({ where: { toStage: 'ENTRETIEN_CLIENT' as any, changedAt: { gte: weekStart, lt: weekEnd } } }),
+    prisma.stageHistory.findMany({ where: { toStage: 'PLACE' as any, changedAt: { gte: monthStart } }, select: { candidature: { select: { mandat: { select: { feeMontantFacture: true } } } } } }),
+  ]);
+  const caMois = (placementsMois as any[]).reduce((s, r) => s + (r.candidature?.mandat?.feeMontantFacture || 0), 0);
+  return {
+    mandats_actifs: mandatsActifs, mandats_dormants: mandatsDormants,
+    candidats_en_process: enProcess, offres_en_cours: offresEnCours,
+    presentations_semaine: prezSemaine, placements_mois: (placementsMois as any[]).length, ca_mois: caMois,
+  };
+}
+
+// ─── Événements clés J-1 (offres + présentations) ───
+async function keyEvents(s: Date, e: Date, names: Map<string, string>) {
+  const rows = await prisma.stageHistory.findMany({
+    where: { toStage: { in: ['OFFRE', 'ENTRETIEN_CLIENT'] as any }, changedAt: { gte: s, lt: e } },
+    select: {
+      toStage: true, changedAt: true, changedById: true,
+      candidature: { select: { candidat: { select: { nom: true, prenom: true } }, mandat: { select: { titrePoste: true, entreprise: { select: { nom: true } } } }, interlocuteurClient: true } as any },
+    },
+    orderBy: { changedAt: 'asc' },
+  });
+  return (rows as any[]).map((r) => {
+    const c = r.candidature;
+    return {
+      type: r.toStage === 'OFFRE' ? 'offre' : 'presentation',
+      candidat: `${c?.candidat?.prenom ? c.candidat.prenom + ' ' : ''}${c?.candidat?.nom ?? '?'}`.trim(),
+      date: r.changedAt.toISOString().slice(0, 10),
+      mandat: c?.mandat?.titrePoste ? `${c.mandat.titrePoste}${c.mandat.entreprise?.nom ? ' · ' + c.mandat.entreprise.nom : ''}` : '—',
+      recruteur: r.changedById ? (names.get(r.changedById) ?? '—') : '—',
+      interlocuteur: c?.interlocuteurClient ?? null,
+    };
+  });
+}
+
 // ─── Seuils (par rôle, depuis report_thresholds) ────
 async function loadThresholds(): Promise<Record<string, Record<string, number>>> {
   const rows = await (prisma as any).reportThreshold.findMany();
@@ -170,6 +211,16 @@ export async function getTeamDailyReport(reportDateOverride?: string) {
   const weekStart = parisDayBounds(mon.y, mon.m, mon.d).start;
   const weekEnd = parisDayBounds(fri.y, fri.m, fri.d).end;
   const daysLeft = Math.max(0, 5 - (dowOf(base) === 0 ? 5 : dowOf(base))); // jours ouvrés restants après J (ven=0)
+  const monthStart = parisDayBounds(base.y, base.m, 1).start;
+
+  // Noms de tous les users (pour attribuer les événements, y compris archivés).
+  const allUsers = await prisma.user.findMany({ select: { id: true, nom: true, prenom: true } });
+  const names = new Map(allUsers.map((u) => [u.id, `${u.prenom ? u.prenom + ' ' : ''}${u.nom}`.trim()]));
+
+  const [overview, events] = await Promise.all([
+    businessOverview(monthStart, weekStart, weekEnd),
+    keyEvents(dayStart, dayEnd, names),
+  ]);
 
   const thresholds = await loadThresholds();
 
@@ -253,6 +304,8 @@ export async function getTeamDailyReport(reportDateOverride?: string) {
   return {
     date: `${base.y}-${String(base.m).padStart(2, '0')}-${String(base.d).padStart(2, '0')}`,
     generated_at: new Date().toISOString(),
+    overview,
+    events,
     rows,
   };
 }
