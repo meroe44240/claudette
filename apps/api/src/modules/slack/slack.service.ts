@@ -1073,6 +1073,7 @@ export async function notifyCloseWon(data: {
   contactNom?: string | null;
   mandatTitre: string;
   feeMontant: number | null | undefined;
+  feePct?: number | null;
   dateDemarrage?: Date | null;
   sourcePlacement?: string | null;
   sourceLead?: string | null;
@@ -1084,10 +1085,10 @@ export async function notifyCloseWon(data: {
   const candidatName = [data.candidatPrenom, data.candidatNom].filter(Boolean).join(' ');
   const recruteur = data.recruteurPrenom || 'Non assigné';
   const feeLine = data.feeMontant
-    ? `💰 Fee : ${data.feeMontant.toLocaleString('fr-FR')} €`
+    ? `💰 Fee : ${data.feePct ? `${Number(data.feePct)}% = ` : ''}${data.feeMontant.toLocaleString('fr-FR')} €`
     : `💰 Fee : _À confirmer_`;
   const startLine = data.dateDemarrage
-    ? `🚀 Démarrage : ${formatShortDateFr(new Date(data.dateDemarrage))}`
+    ? `🚀 Date d'intégration : ${formatShortDateFr(new Date(data.dateDemarrage))}`
     : null;
   const contactLine = data.contactNom
     ? `🤝 Client : ${data.contactNom} (${data.entrepriseNom})`
@@ -1106,7 +1107,7 @@ export async function notifyCloseWon(data: {
         text: {
           type: 'mrkdwn',
           text: [
-            `🏆 *CLOSE WON*`,
+            `🎉 *NOUVEAU PLACEMENT*`,
             ``,
             `👤 Candidat : ${candidatName}`,
             contactLine,

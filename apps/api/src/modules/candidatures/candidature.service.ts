@@ -362,6 +362,29 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
       })
     : await prisma.candidature.update({ where: { id }, data: updateData });
 
+  // Placement enregistré dans l'ATS (candidature → PLACE) → le mandat est GAGNÉ
+  // (archivé) dans la transaction ci-dessus ET on annonce le placement dans Slack.
+  // Ainsi, saisir dans l'ATS = fêter dans Slack (plus de close hors des chiffres).
+  if (isPlacement) {
+    (async () => {
+      const [cand, mnd] = await Promise.all([
+        prisma.candidat.findUnique({ where: { id: existing.candidatId }, select: { nom: true, prenom: true } }),
+        prisma.mandat.findUnique({ where: { id: existing.mandatId }, select: { titrePoste: true, feePourcentage: true, entreprise: { select: { nom: true } }, assignedTo: { select: { prenom: true } } } }),
+      ]);
+      await notifyCloseWon({
+        candidatPrenom: cand?.prenom ?? null,
+        candidatNom: cand?.nom ?? 'Candidat',
+        entrepriseNom: mnd?.entreprise?.nom || 'N/A',
+        mandatTitre: mnd?.titrePoste || '',
+        feeMontant: data.feeMontantFacture ?? null,
+        feePct: mnd?.feePourcentage ? Number(mnd.feePourcentage) : null,
+        dateDemarrage: data.dateDemarrage ? new Date(data.dateDemarrage) : null,
+        sourcePlacement: data.sourcePlacement ?? null,
+        recruteurPrenom: mnd?.assignedTo?.prenom ?? null,
+      });
+    })().catch((e) => console.warn('[Candidature] notif placement Slack échouée', (e as Error).message));
+  }
+
   // If stage changed, create StageHistory entry
   if (data.stage && data.stage !== existing.stage) {
     await prisma.stageHistory.create({
