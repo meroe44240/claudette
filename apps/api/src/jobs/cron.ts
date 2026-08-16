@@ -17,6 +17,7 @@ const intervals: ReturnType<typeof setInterval>[] = [];
 let lastSlackReportDate = '';
 let lastBatchEnrichDate = '';
 let lastRecapDate = '';
+let lastStandupDate = '';
 
 // ─── HELPERS ────────────────────────────────────────
 
@@ -301,6 +302,22 @@ async function checkBatchEnrichment(): Promise<void> {
 
 // ─── START / STOP ───────────────────────────────────
 
+// ─── STANDUP 7h30 (rapport d'activité quotidien par personne) ──
+async function checkStandupReport(): Promise<void> {
+  try {
+    const { hours, minutes, dayOfWeek, dateKey } = getParisTime();
+    if (!isWeekday(dayOfWeek)) return;      // Mon-Fri
+    if (lastStandupDate === dateKey) return; // une fois/jour
+    if (hours !== 7 || minutes < 30 || minutes > 40) return; // ~07:30 Paris
+    lastStandupDate = dateKey;
+    const { runStandupReport } = await import('../modules/reports/standup.job.js');
+    const res = await runStandupReport();
+    console.log(`[Cron] Standup envoyé (${res.date}) à ${res.recipients} destinataire(s), ${res.rows} lignes`);
+  } catch (err) {
+    console.error('[Cron] Standup report failed:', (err as Error).message);
+  }
+}
+
 export function startCronJobs(): void {
   if (cronStarted) {
     console.log('[Cron] Already started, skipping...');
@@ -367,6 +384,9 @@ export function startCronJobs(): void {
   intervals.push(batchEnrichInterval);
 
   // Recap bi-hebdo check every 60 seconds (runs Mon/Fri 08:00 ICT only)
+  const standupInterval = setInterval(checkStandupReport, 60 * 1000);
+  intervals.push(standupInterval);
+
   const recapInterval = setInterval(checkRecap, 60 * 1000);
   intervals.push(recapInterval);
 
