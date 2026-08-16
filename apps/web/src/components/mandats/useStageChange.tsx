@@ -43,6 +43,7 @@ export function useStageChange(onMoved?: () => void) {
   const [entretien, setEntretien] = useState<Ctx | null>(null);
   const [entretienDate, setEntretienDate] = useState('');
   const [entretienTime, setEntretienTime] = useState('');
+  const [entretienInter, setEntretienInter] = useState('');
   const [placement, setPlacement] = useState<Ctx | null>(null);
 
   const move = useMutation({
@@ -62,7 +63,7 @@ export function useStageChange(onMoved?: () => void) {
   ) {
     const ctx: Ctx = { candidatureId, candidatName: opts?.candidatName, defaultFee: opts?.defaultFee };
     if (targetStage === 'REFUSE') { setMotif(''); setMotifDetail(''); setRefusal(ctx); return; }
-    if (targetStage === 'ENTRETIEN_CLIENT') { setEntretienDate(''); setEntretienTime(''); setEntretien(ctx); return; }
+    if (targetStage === 'ENTRETIEN_CLIENT') { setEntretienDate(''); setEntretienTime(''); setEntretienInter(''); setEntretien(ctx); return; }
     if (targetStage === 'PLACE') { setPlacement(ctx); return; }
     move.mutate({ candidatureId, stage: targetStage });
   }
@@ -88,22 +89,23 @@ export function useStageChange(onMoved?: () => void) {
         </div>
       </Modal>
 
-      {/* RDV client (RDV obtenu) → date + heure obligatoires */}
-      <Modal isOpen={!!entretien} onClose={() => setEntretien(null)} title="RDV client — date & heure" size="sm">
+      {/* Présentation client → date + heure + interlocuteur obligatoires */}
+      <Modal isOpen={!!entretien} onClose={() => setEntretien(null)} title="Présentation client — date & interlocuteur" size="sm">
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
-            {entretien?.candidatName ? `Planifie l'entretien client pour ${entretien.candidatName}.` : "Planifie l'entretien client."}
+            {entretien?.candidatName ? `Planifie la présentation de ${entretien.candidatName} au client.` : 'Planifie la présentation au client.'}
           </p>
           <Input label="Date" type="date" value={entretienDate} onChange={(e) => setEntretienDate(e.target.value)} />
           <Input label="Heure" type="time" value={entretienTime} onChange={(e) => setEntretienTime(e.target.value)} />
+          <Input label="Interlocuteur côté client" value={entretienInter} onChange={(e) => setEntretienInter(e.target.value)} placeholder="Ex. DRH, N+1, dirigeant…" />
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setEntretien(null)}>Annuler</Button>
-            <Button variant="primary" disabled={!entretienDate || !entretienTime || move.isPending} onClick={() => {
+            <Button variant="primary" disabled={!entretienDate || !entretienTime || !entretienInter.trim() || move.isPending} onClick={() => {
               if (!entretien) return;
               const iso = new Date(`${entretienDate}T${entretienTime}:00`).toISOString();
-              move.mutate({ candidatureId: entretien.candidatureId, stage: 'ENTRETIEN_CLIENT', dateEntretienClient: iso });
+              move.mutate({ candidatureId: entretien.candidatureId, stage: 'ENTRETIEN_CLIENT', dateEntretienClient: iso, interlocuteurClient: entretienInter.trim() });
               setEntretien(null);
-            }}>Confirmer le RDV</Button>
+            }}>Confirmer la présentation</Button>
           </div>
         </div>
       </Modal>

@@ -102,7 +102,7 @@ const mouvementsPipeline = (uid: string, s: Date, e: Date) =>
 // Présentations réalisées (semaine) avec détail candidat · date · mandat · interlocuteur.
 async function presentations(uid: string, s: Date, e: Date) {
   const rows = await prisma.stageHistory.findMany({
-    where: { changedById: uid, toStage: 'ENTRETIEN_CLIENT' as any, changedAt: { gte: s, lt: e } },
+    where: { changedById: uid, toStage: 'ENTRETIEN_CLIENT' as any, changedAt: { gte: s, lt: e }, candidature: { presentationNoShow: false } as any },
     select: {
       changedAt: true,
       candidature: {

@@ -542,6 +542,7 @@ model Candidature {
   dateEntretienClient DateTime?        @db.Timestamptz()
   interlocuteurClient String?          @map("interlocuteur_client") @db.VarChar(255) // présentation : personne côté client
   googleEventId       String?          @map("google_event_id") @db.VarChar(255)      // event agenda rattaché
+  presentationNoShow  Boolean          @default(false) @map("presentation_no_show")  // no-show : compte en RDV, pas en présentation
   dateDemarrage       DateTime?        @db.Date
   sourcePlacement     String?          @db.VarChar(255)
   motifRefus          MotifRefus?

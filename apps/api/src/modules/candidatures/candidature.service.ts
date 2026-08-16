@@ -315,6 +315,15 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
     }
   }
 
+  // Passage en ENTRETIEN_CLIENT (présentation) : date + interlocuteur OBLIGATOIRES.
+  // Fiabilise la métrique presentations (défense en profondeur, la modale front le force aussi).
+  if (data.stage === 'ENTRETIEN_CLIENT' && existing.stage !== 'ENTRETIEN_CLIENT') {
+    const hasDate = data.dateEntretienClient ?? existing.dateEntretienClient;
+    const hasInter = (data.interlocuteurClient ?? (existing as any).interlocuteurClient)?.toString().trim();
+    if (!hasDate) throw new ValidationError('La date de l\'entretien client est requise pour une présentation.');
+    if (!hasInter) throw new ValidationError('L\'interlocuteur côté client est requis pour une présentation.');
+  }
+
   const updateData: any = {};
 
   if (data.stage !== undefined) updateData.stage = data.stage;
@@ -323,6 +332,8 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
   if (data.motifRefusDetail !== undefined) updateData.motifRefusDetail = data.motifRefusDetail;
   if (data.datePresentation !== undefined) updateData.datePresentation = new Date(data.datePresentation);
   if (data.dateEntretienClient !== undefined) updateData.dateEntretienClient = new Date(data.dateEntretienClient);
+  if ((data as any).interlocuteurClient !== undefined) updateData.interlocuteurClient = (data as any).interlocuteurClient;
+  if ((data as any).presentationNoShow !== undefined) updateData.presentationNoShow = (data as any).presentationNoShow;
   if (data.dateDemarrage !== undefined) updateData.dateDemarrage = new Date(data.dateDemarrage);
   if (data.sourcePlacement !== undefined) updateData.sourcePlacement = data.sourcePlacement;
 
@@ -361,6 +372,30 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
         changedById,
       },
     });
+
+    // Présentation → crée l'event Google Agenda + stocke googleEventId (best-effort, spec §4).
+    if (data.stage === 'ENTRETIEN_CLIENT') {
+      const dt = updateData.dateEntretienClient || existing.dateEntretienClient;
+      if (dt) {
+        try {
+          const [cand, mnd] = await Promise.all([
+            prisma.candidat.findUnique({ where: { id: existing.candidatId }, select: { nom: true, prenom: true } }),
+            prisma.mandat.findUnique({ where: { id: existing.mandatId }, select: { titrePoste: true } }),
+          ]);
+          const { createEvent } = await import('../integrations/calendar.service.js');
+          const start = new Date(dt);
+          const ev: any = await createEvent(changedById, {
+            summary: `Présentation client — ${cand?.prenom ? cand.prenom + ' ' : ''}${cand?.nom ?? ''}${mnd?.titrePoste ? ' · ' + mnd.titrePoste : ''}`,
+            description: `Entretien client${updateData.interlocuteurClient ? ` avec ${updateData.interlocuteurClient}` : ''}. Planifié via Propium.`,
+            startTime: start.toISOString(),
+            endTime: new Date(start.getTime() + 45 * 60000).toISOString(),
+            entiteType: 'CANDIDAT', entiteId: existing.candidatId,
+            withMeet: false,
+          });
+          if (ev?.googleEventId) await prisma.candidature.update({ where: { id }, data: { googleEventId: ev.googleEventId } as any });
+        } catch (e) { console.warn('[Candidature] event présentation Google échoué', (e as Error).message); }
+      }
+    }
 
     // Log activity for stage change (audit trail)
     const stageLabels: Record<string, string> = {
