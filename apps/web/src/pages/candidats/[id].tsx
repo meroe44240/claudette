@@ -98,6 +98,7 @@ export default function CandidatDetailPage() {
   const advanceMut = useMutation({ mutationFn: ({ candId, stage }: { candId: string; stage: string }) => api.put(`/candidatures/${candId}`, { stage }), onSuccess: () => { invalidate(); toast('success', 'Étape mise à jour'); } });
   const loseMut = useMutation({ mutationFn: ({ candId, motifRefus, motifRefusDetail }: { candId: string; motifRefus: string; motifRefusDetail?: string }) => api.put(`/candidatures/${candId}`, { stage: 'REFUSE', motifRefus, motifRefusDetail }), onSuccess: () => { invalidate(); setLost(null); setLostReason(''); setLostNote(''); toast('success', 'Marqué perdu'); } });
   const removeMut = useMutation({ mutationFn: (candId: string) => api.delete(`/candidatures/${candId}`), onSuccess: () => { invalidate(); toast('success', 'Retiré du mandat'); } });
+  const noShowMut = useMutation({ mutationFn: (candId: string) => api.put(`/candidatures/${candId}`, { presentationNoShow: true }), onSuccess: () => { invalidate(); toast('success', 'Présentation marquée no-show'); } });
   const linkMut = useMutation({ mutationFn: (mandatId: string) => api.post('/candidatures', { candidatId: id, mandatId, stage: 'SOURCING' }), onSuccess: () => { invalidate(); setLinkSel(''); toast('success', 'Relié au mandat'); } });
   const sourceMut = useMutation({ mutationFn: (source: string) => api.put(`/candidats/${id}`, { source }), onSuccess: () => { invalidate(); toast('success', 'Source mise à jour'); } });
   const actMut = useMutation({ mutationFn: (body: Record<string, unknown>) => api.post('/activites', { entiteType: 'CANDIDAT', entiteId: id, ...body }), onSuccess: () => { invalidate(); } });
@@ -283,6 +284,9 @@ export default function CandidatDetailPage() {
                       {!lostState && (
                         <>
                           <button onClick={() => advance(cand)} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: '#22177A', background: '#F0EFC4', border: '1px solid transparent', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}>Faire avancer<ArrowRight size={13} strokeWidth={2.4} /></button>
+                          {cand.stage === 'ENTRETIEN_CLIENT' && (
+                            <button onClick={() => { if (confirm('Marquer cette présentation comme no-show ? (le RDV reste compté, mais pas comme présentation réalisée)')) noShowMut.mutate(cand.id); }} title="No-show : le client/candidat ne s'est pas présenté" style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: '#8A6A2E', background: '#fff', border: '1px solid rgba(201,162,39,.35)', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}>No‑show</button>
+                          )}
                           <button onClick={() => setLost({ candId: cand.id, titre: cand.mandat.titrePoste, company: cand.mandat.entreprise.nom })} style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: '#B3261E', background: '#fff', border: '1px solid rgba(176,54,31,.2)', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}>Perdu</button>
                         </>
                       )}

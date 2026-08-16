@@ -547,6 +547,7 @@ export default function MandatKanbanPage() {
   }>({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null });
   const [entretienDate, setEntretienDate] = useState('');
   const [entretienTime, setEntretienTime] = useState('');
+  const [entretienInter, setEntretienInter] = useState('');
 
   // Task suggestion after stage change
   const [taskSuggestion, setTaskSuggestion] = useState<{
@@ -732,6 +733,7 @@ export default function MandatKanbanPage() {
       feeMontantFacture?: number;
       dateDemarrage?: string;
       dateEntretienClient?: string;
+      interlocuteurClient?: string;
       sourcePlacement?: string;
       sourceLead?: string;
       notifyCandidate?: boolean;
@@ -745,6 +747,7 @@ export default function MandatKanbanPage() {
         ...(params.feeMontantFacture !== undefined ? { feeMontantFacture: params.feeMontantFacture } : {}),
         ...(params.dateDemarrage ? { dateDemarrage: params.dateDemarrage } : {}),
         ...(params.dateEntretienClient ? { dateEntretienClient: params.dateEntretienClient } : {}),
+        ...(params.interlocuteurClient ? { interlocuteurClient: params.interlocuteurClient } : {}),
         ...(params.sourcePlacement ? { sourcePlacement: params.sourcePlacement } : {}),
         ...(params.sourceLead ? { sourceLead: params.sourceLead } : {}),
         ...(params.notifyCandidate ? { notifyCandidate: true } : {}),
@@ -888,6 +891,7 @@ export default function MandatKanbanPage() {
       setEntretienModal({ open: true, candidatureId, sourceStage, candidatId: movedItem.candidat.id, candidatName });
       setEntretienDate('');
       setEntretienTime('');
+      setEntretienInter('');
       return;
     }
 
@@ -963,7 +967,7 @@ export default function MandatKanbanPage() {
 
   // Confirm entretien client (date + heure obligatoires)
   function handleConfirmEntretien() {
-    if (!entretienModal.candidatureId || !entretienDate) return;
+    if (!entretienModal.candidatureId || !entretienDate || !entretienInter.trim()) return;
     const iso = new Date(`${entretienDate}T${entretienTime || '09:00'}:00`).toISOString();
     updateStageMutation.mutate({
       candidatureId: entretienModal.candidatureId,
@@ -972,6 +976,7 @@ export default function MandatKanbanPage() {
       candidatId: entretienModal.candidatId || undefined,
       candidatName: entretienModal.candidatName || undefined,
       dateEntretienClient: iso,
+      interlocuteurClient: entretienInter.trim(),
     });
     setEntretienModal({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null });
   }
@@ -1282,10 +1287,11 @@ export default function MandatKanbanPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12, marginTop: 20 }}>
               <div><label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 6 }}>Date</label><input type="date" value={entretienDate} onChange={(e) => setEntretienDate(e.target.value)} style={{ width: '100%', fontSize: 13.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} /></div>
               <div><label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 6 }}>Heure</label><input type="time" value={entretienTime} onChange={(e) => setEntretienTime(e.target.value)} style={{ width: '100%', fontSize: 13.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} /></div>
+              <div style={{ gridColumn: '1 / -1' }}><label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 6 }}>Interlocuteur côté client</label><input value={entretienInter} onChange={(e) => setEntretienInter(e.target.value)} placeholder="Ex. DRH, N+1, dirigeant…" style={{ width: '100%', fontSize: 13.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} /></div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
               <button onClick={() => setEntretienModal({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null })} style={{ flex: 1, fontSize: 14, fontWeight: 700, background: '#F5F4EA', color: '#4A4568', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Annuler</button>
-              <button disabled={!entretienDate} onClick={handleConfirmEntretien} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: entretienDate ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 12, cursor: entretienDate ? 'pointer' : 'default' }}>Confirmer l'entretien</button>
+              <button disabled={!entretienDate || !entretienInter.trim()} onClick={handleConfirmEntretien} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: (entretienDate && entretienInter.trim()) ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 12, cursor: (entretienDate && entretienInter.trim()) ? 'pointer' : 'default' }}>Confirmer la présentation</button>
             </div>
           </div>
         </div>

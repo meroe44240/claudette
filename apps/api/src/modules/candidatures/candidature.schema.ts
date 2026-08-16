@@ -20,6 +20,8 @@ export const updateCandidatureSchema = z.object({
   motifRefusDetail: z.string().optional(),
   datePresentation: z.string().datetime().optional(),
   dateEntretienClient: z.string().datetime().optional(),
+  interlocuteurClient: z.string().max(255).optional(), // présentation : personne côté client (obligatoire au passage ENTRETIEN_CLIENT)
+  presentationNoShow: z.boolean().optional(),           // no-show : compte en RDV mais pas en présentation
   dateDemarrage: z.string().datetime().optional(),
   feeMontantFacture: z.number().int().nonnegative().optional(),
   sourcePlacement: z.string().max(255).optional(),

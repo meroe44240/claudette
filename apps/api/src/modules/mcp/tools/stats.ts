@@ -693,6 +693,19 @@ export function registerStatsTools(server: McpServer) {
     }),
   );
 
+  // ─── get_team_daily_report (admin only) ───────────────
+  server.tool(
+    'get_team_daily_report',
+    "[ADMIN] Rapport d'activite quotidien par personne (standup) : overview business (mandats actifs/dormants, candidats en process, offres en cours, presentations semaine, placements + CA du mois), evenements d'hier (offres & presentations avec candidat/mandat/recruteur/interlocuteur), et activite par personne (calls, rdv, push, presentations / screenings, nouvelles). Fenetre J-1 (jour ouvre, Europe/Paris ; lundi=vendredi).",
+    {
+      date: z.string().optional().describe('Jour du rapport YYYY-MM-DD. Defaut : jour ouvre precedent.'),
+    },
+    wrapTool('get_team_daily_report', async (args) => {
+      const { getTeamDailyReport } = await import('../../reports/team-daily-report.service.js');
+      return getTeamDailyReport(args.date as string | undefined);
+    }),
+  );
+
   // ─── get_team_brief (admin only) ──────────────────────
   server.tool(
     'get_team_brief',
