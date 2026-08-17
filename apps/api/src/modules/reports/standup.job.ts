@@ -24,8 +24,9 @@ function salesLines(m: any): string[] {
   ];
 }
 function recruteurLines(m: any): string[] {
+  const callsPart = m.calls ? `   ·   Calls ${m.calls.value}${m.calls.target ? '/' + m.calls.target : ''}` : '';
   return [
-    `Screenings ${m.screenings.value}/${m.screenings.target}${chk(m.screenings.value, m.screenings.target)} (moy. 5j : ${m.screenings.avg_5d})   ·   Nouvelles ${m.nouvelles_personnes.value}/${m.nouvelles_personnes.target}${chk(m.nouvelles_personnes.value, m.nouvelles_personnes.target)}`,
+    `Screenings ${m.screenings.value}/${m.screenings.target}${chk(m.screenings.value, m.screenings.target)} (moy. 5j : ${m.screenings.avg_5d})   ·   Nouvelles ${m.nouvelles_personnes.value}/${m.nouvelles_personnes.target}${chk(m.nouvelles_personnes.value, m.nouvelles_personnes.target)}${callsPart}`,
   ];
 }
 
@@ -228,7 +229,9 @@ function personCard(r: any, esc: (s: unknown) => string): string {
     ].join('');
   } else {
     cells = [
-      statCell(m.screenings.value, m.screenings.target, 'Screenings', true),
+      statCell(m.calls?.value ?? 0, m.calls?.target ?? null, 'Calls', true),
+      statCell(m.calls_connectes?.value ?? 0, null, 'Connectés', false),
+      statCell(m.screenings.value, m.screenings.target, 'Screenings', false),
       statCell(m.nouvelles_personnes.value, m.nouvelles_personnes.target, 'Nouvelles', false),
       statCell(r.mouvements_pipeline, null, 'Mouvements', false),
     ].join('');
