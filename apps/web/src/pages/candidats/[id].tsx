@@ -422,9 +422,9 @@ export default function CandidatDetailPage() {
                     <div style={{ fontSize: 13, lineHeight: 1.55, color: '#4A4568', marginTop: 6 }}>{cm.contenu}</div>
                   </div>
                 ))}
-                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                  <input value={comment} onChange={e => setComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitComment()} placeholder="Écrire un commentaire…" style={{ flex: 1, fontSize: 13, padding: '10px 13px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
-                  <button onClick={submitComment} style={{ flexShrink: 0, fontSize: 13, fontWeight: 700, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 10, padding: '10px 15px', cursor: 'pointer' }}>Envoyer</button>
+                <div style={{ marginTop: 12 }}>
+                  <MentionTextarea value={comment} onChange={(v, ids) => { setComment(v); setMentionIds(ids); }} placeholder="Écrire un commentaire… (tapez @ pour mentionner un collègue)" minHeight={70} />
+                  <button onClick={submitComment} style={{ width: '100%', marginTop: 8, fontSize: 13, fontWeight: 700, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 10, padding: '10px 15px', cursor: 'pointer' }}>Envoyer</button>
                 </div>
               </>
             )}
