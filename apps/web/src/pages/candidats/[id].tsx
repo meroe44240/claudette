@@ -82,6 +82,7 @@ export default function CandidatDetailPage() {
   const [lostMail, setLostMail] = useState(true);
   const [planOpen, setPlanOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const cvInputRef = useRef<HTMLInputElement>(null);
 
   const { data: c, isLoading } = useQuery({ queryKey: ['candidat', id], queryFn: () => api.get<CandidatDetail>(`/candidats/${id}`), enabled: !!id });
@@ -199,6 +200,7 @@ export default function CandidatDetailPage() {
                   {[1, 2, 3, 4, 5].map(n => <button key={n} onClick={() => setRating(n)} style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', lineHeight: 1 }}><Star size={21} fill={n <= rating ? '#E6C64A' : 'none'} color={n <= rating ? '#E6C64A' : '#C4C1D0'} /></button>)}
                 </div>
                 <button onClick={() => setRailTab('eval')} style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 14px', cursor: 'pointer' }}>Ajouter une évaluation</button>
+                <button onClick={() => setEditOpen(true)} style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 14px', cursor: 'pointer' }}>Modifier les infos</button>
                 <button onClick={() => setPlanOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 9, padding: '9px 15px', cursor: 'pointer' }}><Plus size={14} strokeWidth={2.2} />Prévoir une action</button>
               </div>
             </div>
@@ -502,7 +504,90 @@ export default function CandidatDetailPage() {
 
       {/* EXPORT MODAL */}
       {exportOpen && <ExportModal name={fullName} onClose={() => setExportOpen(false)} />}
+
+      {/* EDIT MODAL */}
+      {editOpen && <EditModal candidat={c} onClose={() => setEditOpen(false)} onSaved={() => { invalidate(); setEditOpen(false); toast('success', 'Fiche mise à jour'); }} />}
     </div>
+  );
+}
+
+// ─── EDIT MODAL (modifier les infos du candidat) ────────────────
+function EditModal({ candidat, onClose, onSaved }: { candidat: CandidatDetail; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({
+    prenom: candidat.prenom ?? '',
+    nom: candidat.nom ?? '',
+    email: candidat.email ?? '',
+    telephone: candidat.telephone ?? '',
+    linkedinUrl: candidat.linkedinUrl ?? '',
+    posteActuel: candidat.posteActuel ?? '',
+    entrepriseActuelle: candidat.entrepriseActuelle ?? '',
+    localisation: candidat.localisation ?? '',
+    disponibilite: candidat.disponibilite ?? '',
+    salaireSouhaite: candidat.salaireSouhaite != null ? String(candidat.salaireSouhaite) : '',
+    tags: (candidat.tags ?? []).join(', '),
+  });
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const saveMut = useMutation({
+    mutationFn: () => {
+      const sal = form.salaireSouhaite.trim() ? parseInt(form.salaireSouhaite.replace(/[^\d]/g, ''), 10) : null;
+      const body: Record<string, unknown> = {
+        prenom: form.prenom.trim() || null,
+        nom: form.nom.trim(),
+        email: form.email.trim() || null,
+        telephone: form.telephone.trim() || null,
+        linkedinUrl: form.linkedinUrl.trim() || null,
+        posteActuel: form.posteActuel.trim() || null,
+        entrepriseActuelle: form.entrepriseActuelle.trim() || null,
+        localisation: form.localisation.trim() || null,
+        disponibilite: form.disponibilite.trim() || null,
+        salaireSouhaite: sal && !Number.isNaN(sal) ? sal : null,
+        tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
+      };
+      return api.put(`/candidats/${candidat.id}`, body);
+    },
+    onSuccess: onSaved,
+    onError: (e: any) => toast('error', e?.message || 'Échec de la mise à jour'),
+  });
+
+  const inputStyle: React.CSSProperties = { width: '100%', fontFamily: "'Manrope',sans-serif", fontSize: 13.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.16)', background: '#FCFCF5', color: '#1A1533', outline: 'none' };
+  const labelStyle: React.CSSProperties = { display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.09em', textTransform: 'uppercase', color: '#8A8699', margin: '0 0 6px' };
+  const field = (label: string, k: keyof typeof form, placeholder?: string, span?: boolean) => (
+    <div key={k} style={{ gridColumn: span ? '1 / -1' : undefined }}>
+      <label style={labelStyle}>{label}</label>
+      <input value={form[k]} onChange={set(k)} placeholder={placeholder} style={inputStyle} />
+    </div>
+  );
+
+  const save = () => { if (!form.nom.trim()) { toast('error', 'Le nom est requis'); return; } saveMut.mutate(); };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 92, background: 'rgba(26,21,51,.42)' }} />
+      <div className="fmodal" style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 93, width: 620, maxWidth: '94vw', maxHeight: '92vh', overflowY: 'auto', background: '#fff', borderRadius: 22, boxShadow: '0 44px 96px -40px rgba(0,0,0,.55)', padding: '26px 28px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ fontWeight: 800, fontSize: 17.5, letterSpacing: '-.015em', color: '#1A1533' }}>Modifier la fiche</div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><X size={18} color="#8A8699" /></button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          {field('Prénom', 'prenom', 'Prénom')}
+          {field('Nom', 'nom', 'Nom')}
+          {field('Email', 'email', 'email@exemple.com')}
+          {field('Téléphone', 'telephone', '+33…')}
+          {field('Poste actuel', 'posteActuel', 'Intitulé de poste')}
+          {field('Entreprise actuelle', 'entrepriseActuelle', 'Société')}
+          {field('Localisation', 'localisation', 'Ville, pays')}
+          {field('Disponibilité', 'disponibilite', 'Immédiate, 3 mois…')}
+          {field('Salaire souhaité (€)', 'salaireSouhaite', '65000')}
+          {field('LinkedIn', 'linkedinUrl', 'https://linkedin.com/in/…')}
+          {field('Tags (séparés par des virgules)', 'tags', 'React, Senior, Paris', true)}
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
+          <button onClick={onClose} style={{ flex: 1, fontSize: 14, fontWeight: 700, background: '#F5F4EA', color: '#4A4568', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Annuler</button>
+          <button onClick={save} disabled={saveMut.isPending} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 12, cursor: saveMut.isPending ? 'default' : 'pointer', opacity: saveMut.isPending ? 0.6 : 1 }}>{saveMut.isPending ? 'Enregistrement…' : 'Enregistrer'}</button>
+        </div>
+      </div>
+    </>
   );
 }
 
