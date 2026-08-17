@@ -46,12 +46,11 @@ export default async function candidatRouter(fastify: FastifyInstance) {
       const salaireMax = query.salaireMax ? parseInt(query.salaireMax, 10) : undefined;
       const stages = query.stage ? (query.stage as string).split(',').map((s: string) => s.trim()) : undefined;
 
-      // Non-admin: auto-filter by own userId
-      // scope=all bypasses isolation (for cross-recruiter actions like adding candidatures)
+      // Le vivier est PARTAGÉ : tout utilisateur (recruteur inclus) voit tous les
+      // candidats — y compris ceux créés automatiquement via Calendar. Un filtre
+      // explicite reste possible : scope=mine (mes candidats) ou assignedToId=<uuid>.
       let assignedToId: string | undefined;
-      if (query.scope === 'all') {
-        // No isolation — allow seeing all candidats (e.g. for "ajouter candidat" dropdown)
-      } else if (request.userRole !== 'ADMIN') {
+      if (query.scope === 'mine') {
         assignedToId = request.userId;
       } else if (query.assignedToId && query.assignedToId !== 'all') {
         assignedToId = query.assignedToId;
