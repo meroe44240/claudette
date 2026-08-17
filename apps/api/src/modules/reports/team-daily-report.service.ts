@@ -270,10 +270,18 @@ export async function getTeamDailyReport(reportDateOverride?: string) {
         gaps.push(tgt > 0 ? v / tgt : 1);
       }
     } else {
-      const [scr, np] = await Promise.all([screenings(u.id, dayStart, dayEnd), nouvellesPersonnes(u.id, dayStart, dayEnd)]);
-      const [scrAvg, npAvg] = await Promise.all([avg5d(screenings, u.id, biz5), avg5d(nouvellesPersonnes, u.id, biz5)]);
+      const [scr, np, calls, connectes] = await Promise.all([
+        screenings(u.id, dayStart, dayEnd), nouvellesPersonnes(u.id, dayStart, dayEnd),
+        callsEmis(u.id, dayStart, dayEnd), callsConnectes(u.id, dayStart, dayEnd),
+      ]);
+      const [scrAvg, npAvg, callsAvg] = await Promise.all([
+        avg5d(screenings, u.id, biz5), avg5d(nouvellesPersonnes, u.id, biz5), avg5d(callsEmis, u.id, biz5),
+      ]);
       metrics.screenings = { value: scr, target: t.screenings ?? 5, avg_5d: scrAvg };
       metrics.nouvelles_personnes = { value: np, target: t.nouvelles_personnes ?? 2, avg_5d: npAvg };
+      // Calls suivis pour les recruteurs aussi (sans cible : simple visibilité de l'activité d'appel).
+      metrics.calls = { value: calls, target: t.calls ?? null, avg_5d: callsAvg };
+      metrics.calls_connectes = { value: connectes };
       for (const [k, v] of [['screenings', scr], ['nouvelles_personnes', np]] as [string, number][]) {
         const tgt = metrics[k].target as number;
         if (v <= 0) zeros.push(k);
