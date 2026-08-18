@@ -48,7 +48,16 @@ const STAGE_META: Record<string, { label: string; bg: string; fg: string; dot: s
 };
 const SEG_COLORS = ['#8E7CC3', '#8E7CC3', '#22177A', '#2A6BD8', '#E08A2B', '#C9A227', '#3B9A54'];
 const SOURCE_OPTIONS = ['LinkedIn', 'Kalent', 'List Push', 'Candidature spontanée', 'Cooptation', 'Indeed', 'Jobboard client', 'Réseau', 'Autre'];
-const LOST_REASONS = ['Ne convient pas au poste', 'Prétentions trop élevées', 'Refus du candidat', 'Contre-offre acceptée', 'Process trop long', 'Autre'];
+// value = enum backend (motifRefus), label = affichage
+const LOST_REASONS: { value: string; label: string }[] = [
+  { value: 'PROFIL_PAS_ALIGNE', label: 'Ne convient pas au poste' },
+  { value: 'SALAIRE', label: 'Prétentions trop élevées' },
+  { value: 'CANDIDAT_DECLINE', label: 'Refus / désistement du candidat' },
+  { value: 'CLIENT_REFUSE', label: 'Refusé par le client' },
+  { value: 'TIMING', label: 'Timing / process trop long' },
+  { value: 'POSTE_POURVU', label: 'Poste pourvu' },
+  { value: 'AUTRE', label: 'Autre' },
+];
 
 // ─── HELPERS ────────────────────────────────────────
 function initials(prenom: string | null, nom: string) { return `${(prenom?.[0] ?? '')}${nom?.[0] ?? ''}`.toUpperCase() || '?'; }
@@ -97,7 +106,7 @@ export default function CandidatDetailPage() {
   const invalidate = () => { qc.invalidateQueries({ queryKey: ['candidat', id] }); qc.invalidateQueries({ queryKey: ['activites', 'candidat', id] }); };
 
   const advanceMut = useMutation({ mutationFn: ({ candId, stage }: { candId: string; stage: string }) => api.put(`/candidatures/${candId}`, { stage }), onSuccess: () => { invalidate(); toast('success', 'Étape mise à jour'); } });
-  const loseMut = useMutation({ mutationFn: ({ candId, motifRefus, motifRefusDetail }: { candId: string; motifRefus: string; motifRefusDetail?: string }) => api.put(`/candidatures/${candId}`, { stage: 'REFUSE', motifRefus, motifRefusDetail }), onSuccess: () => { invalidate(); setLost(null); setLostReason(''); setLostNote(''); toast('success', 'Profil archivé (no-go)'); } });
+  const loseMut = useMutation({ mutationFn: ({ candId, motifRefus, motifRefusDetail }: { candId: string; motifRefus: string; motifRefusDetail?: string }) => api.put(`/candidatures/${candId}`, { stage: 'REFUSE', motifRefus, motifRefusDetail }), onSuccess: () => { invalidate(); setLost(null); setLostReason(''); setLostNote(''); toast('success', 'Profil archivé (no-go)'); }, onError: (e: any) => toast('error', e?.message || "Échec de l'archivage") });
   const removeMut = useMutation({ mutationFn: (candId: string) => api.delete(`/candidatures/${candId}`), onSuccess: () => { invalidate(); toast('success', 'Retiré du mandat'); } });
   const noShowMut = useMutation({ mutationFn: (candId: string) => api.put(`/candidatures/${candId}`, { presentationNoShow: true }), onSuccess: () => { invalidate(); toast('success', 'Présentation marquée no-show'); } });
   const linkMut = useMutation({ mutationFn: (mandatId: string) => api.post('/candidatures', { candidatId: id, mandatId, stage: 'SOURCING' }), onSuccess: () => { invalidate(); setLinkSel(''); toast('success', 'Relié au mandat'); } });
@@ -481,7 +490,7 @@ export default function CandidatDetailPage() {
             <div style={{ position: 'relative' }}>
               <select value={lostReason} onChange={e => setLostReason(e.target.value)} style={{ appearance: 'none', width: '100%', fontFamily: "'Manrope'", fontSize: 13.5, padding: '12px 34px 12px 14px', borderRadius: 12, border: '1.5px solid rgba(34,23,122,.16)', background: '#FCFCF5', color: '#1A1533', cursor: 'pointer', outline: 'none' }}>
                 <option value="">Sélectionnez un motif…</option>
-                {LOST_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                {LOST_REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
               <ChevronDown size={13} color="#8A8699" style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
             </div>

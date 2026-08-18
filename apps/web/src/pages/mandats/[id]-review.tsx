@@ -121,7 +121,7 @@ export default function FastReviewPage() {
       stageMutation.mutate({
         candidatureId: current.id,
         stage: REVIEW_STAGES.REJECT,
-        motifRefus: 'Profil non retenu (fast review)',
+        motifRefus: 'PROFIL_PAS_ALIGNE',
       });
       setStats(s => ({ ...s, reviewed: s.reviewed + 1, rejected: s.rejected + 1 }));
     } else if (action === 'shortlist') {
