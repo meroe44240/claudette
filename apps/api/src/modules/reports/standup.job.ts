@@ -25,8 +25,9 @@ function salesLines(m: any): string[] {
 }
 function recruteurLines(m: any): string[] {
   const callsPart = m.calls ? `   ·   Calls ${m.calls.value}${m.calls.target ? '/' + m.calls.target : ''}` : '';
+  const progPart = m.entretiens_programmes ? `   ·   Entretiens programmés ${m.entretiens_programmes.value}` : '';
   return [
-    `Screenings ${m.screenings.value}/${m.screenings.target}${chk(m.screenings.value, m.screenings.target)} (moy. 5j : ${m.screenings.avg_5d})   ·   Nouvelles ${m.nouvelles_personnes.value}/${m.nouvelles_personnes.target}${chk(m.nouvelles_personnes.value, m.nouvelles_personnes.target)}${callsPart}`,
+    `Screenings ${m.screenings.value}/${m.screenings.target}${chk(m.screenings.value, m.screenings.target)} (moy. 5j : ${m.screenings.avg_5d})   ·   Nouvelles ${m.nouvelles_personnes.value}/${m.nouvelles_personnes.target}${chk(m.nouvelles_personnes.value, m.nouvelles_personnes.target)}${progPart}${callsPart}`,
   ];
 }
 
@@ -247,13 +248,14 @@ function personCard(r: any, esc: (s: unknown) => string): string {
   const recCells = cellsFrom(dual
     ? [
         { n: m.screenings?.value ?? 0, t: m.screenings?.target ?? null, l: 'Screenings' },
+        { n: m.entretiens_programmes?.value ?? 0, t: null, l: 'Programmés' },
         { n: m.nouvelles_personnes?.value ?? 0, t: m.nouvelles_personnes?.target ?? null, l: 'Nouvelles' },
         { n: r.mouvements_pipeline, t: null, l: 'Mouvements' },
       ]
     : [
         { n: m.calls?.value ?? 0, t: m.calls?.target ?? null, l: 'Calls' },
-        { n: m.calls_connectes?.value ?? 0, t: null, l: 'Connectés' },
         { n: m.screenings?.value ?? 0, t: m.screenings?.target ?? null, l: 'Screenings' },
+        { n: m.entretiens_programmes?.value ?? 0, t: null, l: 'Programmés' },
         { n: m.nouvelles_personnes?.value ?? 0, t: m.nouvelles_personnes?.target ?? null, l: 'Nouvelles' },
         { n: r.mouvements_pipeline, t: null, l: 'Mouvements' },
       ]);
