@@ -38,7 +38,10 @@ export interface TeamMember {
 
 export async function listTeamMembers(): Promise<TeamMember[]> {
   // telephone/avatarUrl/avatarData : client Prisma régénéré au build prod (cast pour le dev local)
+  // Exclut les comptes archivés (ex-collaborateurs) : plus proposés dans les
+  // dropdowns d'assignation ni les @mentions.
   return (await prisma.user.findMany({
+    where: { status: 'ACTIVE' } as any,
     select: { id: true, nom: true, prenom: true, email: true, avatarUrl: true, avatarData: true, telephone: true, fonction: true } as any,
     orderBy: { nom: 'asc' },
   })) as unknown as TeamMember[];
