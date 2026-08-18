@@ -76,7 +76,7 @@ interface SentMessage {
 
 const CV_HINT = /\b(cv|dossier|profil|resume|candidat|r[ée]sum[ée])\b/i;
 // Docs qui ne sont PAS des CV (à exclure) : administratif / commercial.
-const NON_CV = /\b(facture|invoice|devis|contrat|contract|proforma|bon de commande|rib|kbis|attestation|bulletin|paie|avoir|acompte)\b/i;
+const NON_CV = /\b(facture|invoice|devis|contrat|contract|proforma|bon de commande|rib|kbis|attestation|bulletin|paie|paiement|honoraires?|r[èe]glement|remboursement|avoir|acompte|relev[ée])\b/i;
 const emailOf = (raw: string) => (raw.match(/<([^>]+)>/)?.[1] || raw).trim().toLowerCase();
 
 function collectAttachments(part: any, out: string[]): void {
