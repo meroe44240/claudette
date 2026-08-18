@@ -14,7 +14,7 @@ function frDate(ymd: string): string {
   const d = new Date(ymd + 'T12:00:00Z');
   return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Paris' }).format(d);
 }
-const roleLabel = (r: string) => (r === 'SALES' ? 'Sales' : 'Recruteur');
+const roleLabel = (r: string) => (r === 'SALES' ? 'Sales' : r === 'LES_DEUX' ? 'Sales + Recruteur' : 'Recruteur');
 const chk = (v: number, t: number) => (v >= t ? ' ✓' : '');
 
 function salesLines(m: any): string[] {
@@ -75,7 +75,7 @@ const gridOpen = `<table cellpadding="0" cellspacing="8" border="0" width="100%"
 
 // Bandeau « takeaway » : une phrase lisible qui résume la veille, juste sous l'en-tête.
 function heroStrip(rows: any[]): string {
-  const sales = rows.filter((r) => r.role === 'SALES');
+  const sales = rows.filter((r) => r.role === 'SALES' || r.role === 'LES_DEUX');
   const sumS = (fn: (r: any) => number) => sales.reduce((a, r) => a + (fn(r) || 0), 0);
   const calls = sumS((r) => r.metrics.calls?.value);
   const conn = sumS((r) => r.metrics.calls_connectes?.value);
@@ -113,7 +113,7 @@ function overviewHtml(o: any): string {
 
 // Section « Hier, en chiffres » : sommes équipe des activités J-1 (métriques réelles).
 function teamActivityHtml(rows: any[]): string {
-  const sales = rows.filter((r) => r.role === 'SALES');
+  const sales = rows.filter((r) => r.role === 'SALES' || r.role === 'LES_DEUX');
   const sum = (fn: (r: any) => number) => rows.reduce((a, r) => a + (fn(r) || 0), 0);
   const sumS = (fn: (r: any) => number) => sales.reduce((a, r) => a + (fn(r) || 0), 0);
   const calls = sumS((r) => r.metrics.calls?.value), tCalls = sumS((r) => r.metrics.calls?.target);
@@ -182,7 +182,9 @@ function textReport(rep: any): string {
   out.push('👥 ACTIVITÉ PAR PERSONNE');
   out.push('');
   for (const r of rep.rows) {
-    const lines = r.role === 'SALES' ? salesLines(r.metrics) : recruteurLines(r.metrics);
+    const lines = r.role === 'LES_DEUX'
+      ? [...salesLines(r.metrics), ...recruteurLines(r.metrics)]
+      : r.role === 'SALES' ? salesLines(r.metrics) : recruteurLines(r.metrics);
     out.push(`${DOT[r.status]} ${r.name.toUpperCase()} · ${roleLabel(r.role)}`);
     for (const l of lines) out.push(`   ${l}`);
     const dorm = r.mandats_dormants ? ` · dormants : ${r.mandats_dormants}` : '';
@@ -215,32 +217,56 @@ function statCell(n: number, target: number | null, label: string, first: boolea
   </td>`;
 }
 
+// Groupe de stats (une ligne de cellules), avec caption optionnel pour la double casquette.
+function statGroup(cells: string, caption?: string): string {
+  const cap = caption
+    ? `<div style="font-family:${FONT};font-size:8px;font-weight:bold;letter-spacing:1.3px;text-transform:uppercase;color:#B4B0C4;margin-bottom:8px">${caption}</div>`
+    : '';
+  return `<div style="margin-top:14px;border-top:1px solid rgba(34,23,122,.06);padding-top:13px">${cap}
+    <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>${cells}</tr></table>
+  </div>`;
+}
+const cellsFrom = (specs: Array<{ n: number; t: number | null; l: string }>) =>
+  specs.map((s, i) => statCell(s.n, s.t, s.l, i === 0)).join('');
+
 function personCard(r: any, esc: (s: unknown) => string): string {
   const P = STATUS_PILL[r.status] || STATUS_PILL.ORANGE;
   const m = r.metrics;
-  let cells: string;
-  if (r.role === 'SALES') {
-    cells = [
-      statCell(m.calls.value, m.calls.target, 'Calls', true),
-      statCell(m.calls_connectes?.value ?? 0, null, 'Connectés', false),
-      statCell(m.push.value, m.push.target, 'Pushs', false),
-      statCell(m.rdv_nouveaux.value, m.rdv_nouveaux.target, 'RDV pris', false),
-      statCell(m.presentations.value, m.presentations.target, 'Prés. sem.', false),
-    ].join('');
-  } else {
-    cells = [
-      statCell(m.calls?.value ?? 0, m.calls?.target ?? null, 'Calls', true),
-      statCell(m.calls_connectes?.value ?? 0, null, 'Connectés', false),
-      statCell(m.screenings.value, m.screenings.target, 'Screenings', false),
-      statCell(m.nouvelles_personnes.value, m.nouvelles_personnes.target, 'Nouvelles', false),
-      statCell(r.mouvements_pipeline, null, 'Mouvements', false),
-    ].join('');
-  }
+  const isSales = r.role === 'SALES' || r.role === 'LES_DEUX';
+  const isRecruteur = r.role === 'RECRUTEUR' || r.role === 'LES_DEUX';
+  const dual = r.role === 'LES_DEUX';
+
+  const salesCells = cellsFrom([
+    { n: m.calls?.value ?? 0, t: m.calls?.target ?? null, l: 'Calls' },
+    { n: m.calls_connectes?.value ?? 0, t: null, l: 'Connectés' },
+    { n: m.push?.value ?? 0, t: m.push?.target ?? null, l: 'Pushs' },
+    { n: m.rdv_nouveaux?.value ?? 0, t: m.rdv_nouveaux?.target ?? null, l: 'RDV pris' },
+    { n: m.presentations?.value ?? 0, t: m.presentations?.target ?? null, l: 'Prés. sem.' },
+  ]);
+  // En double casquette, le groupe recrutement ne répète pas calls/connectés (déjà dans le groupe sales).
+  const recCells = cellsFrom(dual
+    ? [
+        { n: m.screenings?.value ?? 0, t: m.screenings?.target ?? null, l: 'Screenings' },
+        { n: m.nouvelles_personnes?.value ?? 0, t: m.nouvelles_personnes?.target ?? null, l: 'Nouvelles' },
+        { n: r.mouvements_pipeline, t: null, l: 'Mouvements' },
+      ]
+    : [
+        { n: m.calls?.value ?? 0, t: m.calls?.target ?? null, l: 'Calls' },
+        { n: m.calls_connectes?.value ?? 0, t: null, l: 'Connectés' },
+        { n: m.screenings?.value ?? 0, t: m.screenings?.target ?? null, l: 'Screenings' },
+        { n: m.nouvelles_personnes?.value ?? 0, t: m.nouvelles_personnes?.target ?? null, l: 'Nouvelles' },
+        { n: r.mouvements_pipeline, t: null, l: 'Mouvements' },
+      ]);
+
+  const statsHtml = dual
+    ? statGroup(salesCells, 'Sales') + statGroup(recCells, 'Recrutement')
+    : statGroup(isSales ? salesCells : recCells);
+
   const dorm = r.mandats_dormants ? ` · ${r.mandats_dormants} dorm.` : '';
   const mandatsLbl = `${r.mandats_actifs} mandat${r.mandats_actifs > 1 ? 's' : ''} actif${r.mandats_actifs > 1 ? 's' : ''}${dorm}`;
 
   // Présentations de la semaine dépliées en dur (pas de JS possible en email).
-  const pl = (r.role === 'SALES' && m.presentations?.list) || [];
+  const pl = (isSales && m.presentations?.list) || [];
   let prez = '';
   if (pl.length) {
     const items = pl.map((p: any, i: number) => `<tr>
@@ -271,7 +297,7 @@ function personCard(r: any, esc: (s: unknown) => string): string {
         <span style="font-family:${FONT};font-size:10.5px;font-weight:bold;border-radius:99px;padding:5px 12px;background:${P.bg};color:${P.fg}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${P.dot};vertical-align:middle;margin-right:6px"></span>${STATUS_LABEL[r.status]}</span>
       </td>
     </tr></table>
-    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:15px;border-top:1px solid rgba(34,23,122,.06);padding-top:14px"><tr>${cells}</tr></table>
+    ${statsHtml}
     ${prez}
   </div>`;
 }
