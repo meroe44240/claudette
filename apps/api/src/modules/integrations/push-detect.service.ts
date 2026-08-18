@@ -231,7 +231,7 @@ async function resolveTarget(
 }
 
 // ─── Traitement d'un push ───────────────────────────
-async function processPush(msg: SentMessage, userId: string): Promise<'auto' | 'doubt' | 'skip'> {
+async function processPush(msg: SentMessage, userId: string): Promise<'auto' | 'push' | 'doubt' | 'skip'> {
   // Idempotence : déjà traité ?
   const seen = await prisma.activite.findFirst({
     where: { userId, metadata: { path: ['pushGmailMessageId'], equals: msg.id } as any },
@@ -258,17 +258,15 @@ async function processPush(msg: SentMessage, userId: string): Promise<'auto' | '
   const name = extractCandidateName(msg.attachments, msg.subject);
   const cands = name ? await findCandidats(name, target.entrepriseId) : [];
 
-  // 3) Société tout juste créée : pas encore de mandat → on notifie (tâche) + trace, pas d'auto.
+  // 3) Société tout juste créée (pas de mandat) : push opportuniste + une notif « nouvelle société ».
   if (created) {
-    const candLabel = cands.length === 1 ? `${cands[0].prenom ?? ''} ${cands[0].nom}`.trim() : name || 'candidat à préciser';
-    await createDoubtTask(userId, msg, `Push CV → ${target.nom} (nouvelle société + prospect créés) — ${candLabel}`, name, target.clientId, cands.length === 1 ? cands[0].id : undefined);
-    if (cands.length === 1) {
-      await prisma.activite.create({ data: { type: 'EMAIL', direction: 'SORTANT', entiteType: 'CANDIDAT', entiteId: cands[0].id, userId, titre: `Push CV envoyé à ${target.nom}`, contenu: msg.subject || '', source: 'GMAIL', metadata: { pushGmailMessageId: msg.id, push: true, clientId: target.clientId, entrepriseId: target.entrepriseId, attachment: msg.attachments[0] || null } } });
-    }
-    return 'doubt';
+    if (cands.length === 1) await logOpportunisticPush(userId, cands[0].id, msg, target);
+    const lbl = cands.length === 1 ? ` — ${`${cands[0].prenom ?? ''} ${cands[0].nom}`.trim()}` : '';
+    await createDoubtTask(userId, msg, `Nouvelle société + prospect créés : ${target.nom}${lbl}`, name, target.clientId, cands.length === 1 ? cands[0].id : undefined);
+    return cands.length === 1 ? 'push' : 'doubt';
   }
 
-  // 4) Société connue : identifier le candidat
+  // 4) Société connue mais candidat non identifiable → tâche (vrai doute)
   if (cands.length !== 1) {
     const why = !name ? 'candidat non identifié' : cands.length === 0 ? `candidat « ${name} » introuvable` : `${cands.length} candidats « ${name} »`;
     await createDoubtTask(userId, msg, `Push CV vers ${target.nom} — ${why}`, name, target.clientId);
@@ -276,7 +274,7 @@ async function processPush(msg: SentMessage, userId: string): Promise<'auto' | '
   }
   const candidat = cands[0];
 
-  // 4) Mandat cible : candidature existante sur un mandat de l'entreprise, sinon mandat ouvert unique
+  // 5) Mandat cible : candidature existante sur un mandat de l'entreprise, sinon mandat ouvert unique
   const existingCandidature = await prisma.candidature.findFirst({
     where: { candidatId: candidat.id, mandat: { entrepriseId: target.entrepriseId } },
     select: { id: true, stage: true, mandatId: true },
@@ -289,14 +287,38 @@ async function processPush(msg: SentMessage, userId: string): Promise<'auto' | '
     });
     if (openMandats.length === 1) mandatId = openMandats[0].id;
   }
+
+  // 6) Pas de mandat en face → push OPPORTUNISTE (envoi spéculatif), pas un doute.
   if (!mandatId) {
-    await createDoubtTask(userId, msg, `Push CV : ${candidat.prenom ?? ''} ${candidat.nom} → ${target.nom} — mandat ambigu`, name, target.clientId, candidat.id);
-    return 'doubt';
+    await logOpportunisticPush(userId, candidat.id, msg, target);
+    console.log(`[PushDetect] PUSH opportuniste: ${candidat.prenom ?? ''} ${candidat.nom} → ${target.nom} (sans mandat)`);
+    return 'push';
   }
 
-  // 5) AUTO : passer la candidature en ENVOYE_CLIENT (push)
+  // 7) AUTO : mandat en face → candidature passée ENVOYE_CLIENT
   await ensurePushed(userId, candidat.id, mandatId, existingCandidature, msg, target);
   return 'auto';
+}
+
+// Push opportuniste : envoi spéculatif d'un profil (pas de mandat) → on trace l'activité,
+// sans candidature ni changement d'étape (impossible sans mandat).
+async function logOpportunisticPush(userId: string, candidatId: string, msg: SentMessage, target: PushTarget): Promise<void> {
+  await prisma.activite.create({
+    data: {
+      type: 'EMAIL', direction: 'SORTANT', entiteType: 'CANDIDAT', entiteId: candidatId, userId,
+      titre: `Push opportuniste → ${target.nom}`, contenu: msg.subject || '', source: 'GMAIL',
+      metadata: { pushGmailMessageId: msg.id, push: true, opportuniste: true, clientId: target.clientId, entrepriseId: target.entrepriseId, attachment: msg.attachments[0] || null },
+    },
+  });
+  if (target.clientId) {
+    await prisma.activite.create({
+      data: {
+        type: 'EMAIL', direction: 'SORTANT', entiteType: 'CLIENT', entiteId: target.clientId, userId,
+        titre: `CV envoyé (push opportuniste)`, contenu: msg.subject || '', source: 'GMAIL',
+        metadata: { pushGmailMessageId: msg.id, push: true, opportuniste: true, candidatId },
+      },
+    });
+  }
 }
 
 async function ensurePushed(
@@ -367,8 +389,8 @@ async function createDoubtTask(
 }
 
 // ─── Entrée par user + globale ──────────────────────
-export async function detectPushesForUser(userId: string): Promise<{ auto: number; doubt: number }> {
-  const res = { auto: 0, doubt: 0 };
+export async function detectPushesForUser(userId: string): Promise<{ auto: number; push: number; doubt: number }> {
+  const res = { auto: 0, push: 0, doubt: 0 };
   const token = await getValidAccessToken(userId);
   if (!token) return res;
   const config = await prisma.integrationConfig.findUnique({ where: { userId_provider: { userId, provider: 'gmail' } } });
@@ -384,6 +406,7 @@ export async function detectPushesForUser(userId: string): Promise<{ auto: numbe
       try {
         const r = await processPush(m, userId);
         if (r === 'auto') res.auto++;
+        else if (r === 'push') res.push++;
         else if (r === 'doubt') res.doubt++;
       } catch (e) {
         console.error(`[PushDetect] processPush ${m.id} failed:`, e);
@@ -395,7 +418,7 @@ export async function detectPushesForUser(userId: string): Promise<{ auto: numbe
       data: { config: { ...cfg, lastPushDetectCheck: new Date().toISOString() } },
     });
   }
-  if (res.auto || res.doubt) console.log(`[PushDetect] user ${userId}: ${res.auto} auto, ${res.doubt} à confirmer`);
+  if (res.auto || res.push || res.doubt) console.log(`[PushDetect] user ${userId}: ${res.auto} auto, ${res.push} opportunistes, ${res.doubt} à confirmer`);
   return res;
 }
 
