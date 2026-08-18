@@ -44,7 +44,7 @@ const STAGE_META: Record<string, { label: string; bg: string; fg: string; dot: s
   ENTRETIEN_CLIENT: { label: 'Entr. client', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
   OFFRE: { label: 'Offre', bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
   PLACE: { label: 'Placé', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
-  REFUSE: { label: 'Perdu', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
+  REFUSE: { label: 'Archivé', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
 };
 const SEG_COLORS = ['#8E7CC3', '#8E7CC3', '#22177A', '#2A6BD8', '#E08A2B', '#C9A227', '#3B9A54'];
 const SOURCE_OPTIONS = ['LinkedIn', 'Kalent', 'List Push', 'Candidature spontanée', 'Cooptation', 'Indeed', 'Jobboard client', 'Réseau', 'Autre'];
@@ -97,7 +97,7 @@ export default function CandidatDetailPage() {
   const invalidate = () => { qc.invalidateQueries({ queryKey: ['candidat', id] }); qc.invalidateQueries({ queryKey: ['activites', 'candidat', id] }); };
 
   const advanceMut = useMutation({ mutationFn: ({ candId, stage }: { candId: string; stage: string }) => api.put(`/candidatures/${candId}`, { stage }), onSuccess: () => { invalidate(); toast('success', 'Étape mise à jour'); } });
-  const loseMut = useMutation({ mutationFn: ({ candId, motifRefus, motifRefusDetail }: { candId: string; motifRefus: string; motifRefusDetail?: string }) => api.put(`/candidatures/${candId}`, { stage: 'REFUSE', motifRefus, motifRefusDetail }), onSuccess: () => { invalidate(); setLost(null); setLostReason(''); setLostNote(''); toast('success', 'Marqué perdu'); } });
+  const loseMut = useMutation({ mutationFn: ({ candId, motifRefus, motifRefusDetail }: { candId: string; motifRefus: string; motifRefusDetail?: string }) => api.put(`/candidatures/${candId}`, { stage: 'REFUSE', motifRefus, motifRefusDetail }), onSuccess: () => { invalidate(); setLost(null); setLostReason(''); setLostNote(''); toast('success', 'Profil archivé (no-go)'); } });
   const removeMut = useMutation({ mutationFn: (candId: string) => api.delete(`/candidatures/${candId}`), onSuccess: () => { invalidate(); toast('success', 'Retiré du mandat'); } });
   const noShowMut = useMutation({ mutationFn: (candId: string) => api.put(`/candidatures/${candId}`, { presentationNoShow: true }), onSuccess: () => { invalidate(); toast('success', 'Présentation marquée no-show'); } });
   const linkMut = useMutation({ mutationFn: (mandatId: string) => api.post('/candidatures', { candidatId: id, mandatId, stage: 'SOURCING' }), onSuccess: () => { invalidate(); setLinkSel(''); toast('success', 'Relié au mandat'); } });
@@ -289,7 +289,7 @@ export default function CandidatDetailPage() {
                           {cand.stage === 'ENTRETIEN_CLIENT' && (
                             <button onClick={() => { if (confirm('Marquer cette présentation comme no-show ? (le RDV reste compté, mais pas comme présentation réalisée)')) noShowMut.mutate(cand.id); }} title="No-show : le client/candidat ne s'est pas présenté" style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: '#8A6A2E', background: '#fff', border: '1px solid rgba(201,162,39,.35)', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}>No‑show</button>
                           )}
-                          <button onClick={() => setLost({ candId: cand.id, titre: cand.mandat.titrePoste, company: cand.mandat.entreprise.nom })} style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: '#B3261E', background: '#fff', border: '1px solid rgba(176,54,31,.2)', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}>Perdu</button>
+                          <button onClick={() => setLost({ candId: cand.id, titre: cand.mandat.titrePoste, company: cand.mandat.entreprise.nom })} style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: '#B3261E', background: '#fff', border: '1px solid rgba(176,54,31,.2)', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}>No-go</button>
                         </>
                       )}
                       <button onClick={() => { if (confirm('Retirer du mandat ?')) removeMut.mutate(cand.id); }} title="Retirer" style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 10, color: '#B3261E', background: '#fff', border: '1px solid rgba(176,54,31,.18)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} /></button>
@@ -475,7 +475,7 @@ export default function CandidatDetailPage() {
           <div className="fmodal" style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 93, width: 560, maxWidth: '94vw', maxHeight: '92vh', overflowY: 'auto', background: '#fff', borderRadius: 22, boxShadow: '0 44px 96px -40px rgba(0,0,0,.55)', padding: '26px 28px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 12, background: '#F7DEDB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} color="#B3261E" strokeWidth={2.2} /></span>
-              <div><div style={{ fontWeight: 800, fontSize: 17.5, letterSpacing: '-.015em', color: '#1A1533' }}>Mandat perdu</div><div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{lost.titre} · {lost.company}</div></div>
+              <div><div style={{ fontWeight: 800, fontSize: 17.5, letterSpacing: '-.015em', color: '#1A1533' }}>No-go sur le profil</div><div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>Archivé sur {lost.titre} · {lost.company}</div></div>
             </div>
             <label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: '#8A8699', margin: '22px 0 7px' }}>Pourquoi ?</label>
             <div style={{ position: 'relative' }}>
@@ -493,7 +493,7 @@ export default function CandidatDetailPage() {
             </label>
             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
               <button onClick={() => setLost(null)} style={{ flex: 1, fontSize: 14, fontWeight: 700, background: '#F5F4EA', color: '#4A4568', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Annuler</button>
-              <button onClick={() => { if (!lostReason) { toast('error', 'Sélectionnez un motif'); return; } loseMut.mutate({ candId: lost.candId, motifRefus: lostReason, motifRefusDetail: lostNote || undefined }); }} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: '#B3261E', color: '#fff', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Marquer perdu</button>
+              <button onClick={() => { if (!lostReason) { toast('error', 'Sélectionnez un motif'); return; } loseMut.mutate({ candId: lost.candId, motifRefus: lostReason, motifRefusDetail: lostNote || undefined }); }} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: '#B3261E', color: '#fff', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Archiver le profil</button>
             </div>
           </div>
         </>
