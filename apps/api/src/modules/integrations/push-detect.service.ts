@@ -103,6 +103,7 @@ async function fetchSentPushes(accessToken: string, since: Date, self: string, m
 function extractCandidateName(attachmentNames: string[], subject: string): string {
   const clean = (s: string) => s
     .replace(/\.(pdf|docx?|odt)$/i, '')
+    .replace(/([a-zà-ÿ])([A-ZÀ-Ÿ])/g, '$1 $2') // "PatriciaPerez" → "Patricia Perez"
     .replace(/\b(cv|dossier|profil|resume|r[ée]sum[ée]|one[- ]?pager|candidature|anonymis[ée])\b/gi, ' ')
     .replace(/[_\-|]+/g, ' ')
     .replace(/\d{2,}/g, ' ')
