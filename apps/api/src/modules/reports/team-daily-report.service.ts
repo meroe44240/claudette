@@ -238,8 +238,12 @@ export async function getTeamDailyReport(reportDateOverride?: string) {
 
   const rows = [];
   for (const u of users) {
-    const role = u.fonction === 'SALES' ? 'SALES' : 'RECRUTEUR'; // LES_DEUX → traité comme RECRUTEUR (aucun actif à ce jour)
-    const t = thresholds[role] || {};
+    // Double casquette : un LES_DEUX cumule les métriques sales ET recruteur.
+    const isSales = u.fonction === 'SALES' || u.fonction === 'LES_DEUX';
+    const isRecruteur = u.fonction === 'RECRUTEUR' || u.fonction === 'LES_DEUX';
+    const role = u.fonction === 'SALES' ? 'SALES' : u.fonction === 'LES_DEUX' ? 'LES_DEUX' : 'RECRUTEUR';
+    const tS = thresholds['SALES'] || {};
+    const tR = thresholds['RECRUTEUR'] || {};
     const name = `${u.prenom ? u.prenom + ' ' : ''}${u.nom}`.trim();
     const mandatsInfo = await mandats(u.id);
     const mvts = await mouvementsPipeline(u.id, dayStart, dayEnd);
@@ -248,50 +252,43 @@ export async function getTeamDailyReport(reportDateOverride?: string) {
     const belowThreshold: string[] = []; // métriques sous le seuil
     const zeros: string[] = [];          // métriques à zéro (parmi les seuillées)
     const gaps: number[] = [];           // ratios value/target pour le tri
+    const gather = (k: string, v: number, tgt: number) => {
+      if (v <= 0) zeros.push(k);
+      if (v < tgt) belowThreshold.push(k);
+      gaps.push(tgt > 0 ? v / tgt : 1);
+    };
 
-    if (role === 'SALES') {
-      const [calls, connectes, rdv, push] = await Promise.all([
-        callsEmis(u.id, dayStart, dayEnd), callsConnectes(u.id, dayStart, dayEnd),
-        rdvNouveaux(u.id, dayStart, dayEnd), pushCount(u.id, dayStart, dayEnd),
-      ]);
+    // Calls suivis pour tout le monde (cible uniquement pour les sales).
+    const [calls, connectes, callsAvg] = await Promise.all([
+      callsEmis(u.id, dayStart, dayEnd), callsConnectes(u.id, dayStart, dayEnd), avg5d(callsEmis, u.id, biz5),
+    ]);
+    metrics.calls = { value: calls, target: isSales ? (tS.calls ?? 40) : (tR.calls ?? null), avg_5d: callsAvg };
+    metrics.calls_connectes = { value: connectes };
+    if (isSales) gather('calls', calls, metrics.calls.target);
+
+    if (isSales) {
+      const [rdv, push] = await Promise.all([rdvNouveaux(u.id, dayStart, dayEnd), pushCount(u.id, dayStart, dayEnd)]);
       const presList = await presentations(u.id, weekStart, weekEnd);
-      const [callsAvg, rdvAvg, pushAvg] = await Promise.all([
-        avg5d(callsEmis, u.id, biz5), avg5d(rdvNouveaux, u.id, biz5), avg5d(pushCount, u.id, biz5),
-      ]);
-      metrics.calls = { value: calls, target: t.calls ?? 40, avg_5d: callsAvg };
-      metrics.calls_connectes = { value: connectes };
-      metrics.rdv_nouveaux = { value: rdv, target: t.rdv_nouveaux ?? 1, avg_5d: rdvAvg };
-      metrics.push = { value: push, target: t.push ?? 1, avg_5d: pushAvg };
-      metrics.presentations = { value: presList.length, target: t.presentations ?? 3, window: 'week', days_left: daysLeft, list: presList };
-      for (const [k, v] of [['calls', calls], ['rdv_nouveaux', rdv], ['push', push], ['presentations', presList.length]] as [string, number][]) {
-        const tgt = metrics[k].target as number;
-        if (v <= 0) zeros.push(k);
-        if (v < tgt) belowThreshold.push(k);
-        gaps.push(tgt > 0 ? v / tgt : 1);
-      }
-    } else {
-      const [scr, np, calls, connectes] = await Promise.all([
-        screenings(u.id, dayStart, dayEnd), nouvellesPersonnes(u.id, dayStart, dayEnd),
-        callsEmis(u.id, dayStart, dayEnd), callsConnectes(u.id, dayStart, dayEnd),
-      ]);
-      const [scrAvg, npAvg, callsAvg] = await Promise.all([
-        avg5d(screenings, u.id, biz5), avg5d(nouvellesPersonnes, u.id, biz5), avg5d(callsEmis, u.id, biz5),
-      ]);
-      metrics.screenings = { value: scr, target: t.screenings ?? 5, avg_5d: scrAvg };
-      metrics.nouvelles_personnes = { value: np, target: t.nouvelles_personnes ?? 2, avg_5d: npAvg };
-      // Calls suivis pour les recruteurs aussi (sans cible : simple visibilité de l'activité d'appel).
-      metrics.calls = { value: calls, target: t.calls ?? null, avg_5d: callsAvg };
-      metrics.calls_connectes = { value: connectes };
-      for (const [k, v] of [['screenings', scr], ['nouvelles_personnes', np]] as [string, number][]) {
-        const tgt = metrics[k].target as number;
-        if (v <= 0) zeros.push(k);
-        if (v < tgt) belowThreshold.push(k);
-        gaps.push(tgt > 0 ? v / tgt : 1);
-      }
+      const [rdvAvg, pushAvg] = await Promise.all([avg5d(rdvNouveaux, u.id, biz5), avg5d(pushCount, u.id, biz5)]);
+      metrics.rdv_nouveaux = { value: rdv, target: tS.rdv_nouveaux ?? 1, avg_5d: rdvAvg };
+      metrics.push = { value: push, target: tS.push ?? 1, avg_5d: pushAvg };
+      metrics.presentations = { value: presList.length, target: tS.presentations ?? 3, window: 'week', days_left: daysLeft, list: presList };
+      gather('rdv_nouveaux', rdv, metrics.rdv_nouveaux.target);
+      gather('push', push, metrics.push.target);
+      gather('presentations', presList.length, metrics.presentations.target);
+    }
+
+    if (isRecruteur) {
+      const [scr, np] = await Promise.all([screenings(u.id, dayStart, dayEnd), nouvellesPersonnes(u.id, dayStart, dayEnd)]);
+      const [scrAvg, npAvg] = await Promise.all([avg5d(screenings, u.id, biz5), avg5d(nouvellesPersonnes, u.id, biz5)]);
+      metrics.screenings = { value: scr, target: tR.screenings ?? 5, avg_5d: scrAvg };
+      metrics.nouvelles_personnes = { value: np, target: tR.nouvelles_personnes ?? 2, avg_5d: npAvg };
+      gather('screenings', scr, metrics.screenings.target);
+      gather('nouvelles_personnes', np, metrics.nouvelles_personnes.target);
     }
 
     // Statut §6
-    const callsCrit = role === 'SALES' && (metrics.calls.value < 0.25 * metrics.calls.target);
+    const callsCrit = isSales && metrics.calls.target != null && (metrics.calls.value < 0.25 * metrics.calls.target);
     let status: 'RED' | 'ORANGE' | 'GREEN';
     if (zeros.length >= 2 || callsCrit) status = 'RED';
     else if (belowThreshold.length > 0) status = 'ORANGE';
