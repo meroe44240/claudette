@@ -130,6 +130,15 @@ async function runEmailAutoCreate(): Promise<void> {
   } catch (error) {
     console.error('[Cron] Error in Email Auto-Create:', error);
   }
+  // Détection des pushs CV (emails envoyés avec pièce jointe → maj candidature/client).
+  try {
+    const { detectAllPushes } = await import(
+      '../modules/integrations/push-detect.service.js'
+    );
+    await detectAllPushes();
+  } catch (error) {
+    console.error('[Cron] Error in Push Detection:', error);
+  }
 }
 
 // ─── PIPELINE AI ANALYSIS ───────────────────────────
