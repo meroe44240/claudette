@@ -90,10 +90,18 @@ async function pushCount(uid: string, s: Date, e: Date): Promise<number> {
   return new Set(rows.map((r) => r.candidatureId)).size;
 }
 
-// Screenings = candidats screenés par la personne sur la fenêtre, dédupliqués.
-// On ne se limite pas à la transition → ENTRETIEN_1 (souvent pas faite dans l'ATS) :
-// on compte aussi les RDV candidat (calendrier) et les appels candidat connectés,
-// car beaucoup de screenings se font en meeting/téléphone sans changer l'étape.
+// Date réelle d'un RDV (metadata.startTime), sinon la date de création en repli.
+const meetingWhen = (a: { createdAt: Date; metadata: unknown }): Date => {
+  const st = (a.metadata as any)?.startTime;
+  const d = st ? new Date(st) : a.createdAt;
+  return Number.isNaN(d.getTime()) ? a.createdAt : d;
+};
+const SCREEN_LOOKBACK_MS = 60 * 86400000; // un RDF tenu aujourd'hui a pu être créé il y a des semaines
+
+// Screenings = candidats effectivement screenés SUR la fenêtre (entretien tenu ce jour),
+// dédupliqués. Beaucoup se font en RDV (calendrier) ou par téléphone sans passage
+// en ENTRETIEN_1 → on unit : RDV candidat dont la date tombe dans la fenêtre,
+// transitions ENTRETIEN_1, et appels candidat connectés.
 async function screenings(uid: string, s: Date, e: Date): Promise<number> {
   const [transitions, meetings, calls] = await Promise.all([
     prisma.stageHistory.findMany({
@@ -101,8 +109,8 @@ async function screenings(uid: string, s: Date, e: Date): Promise<number> {
       select: { candidature: { select: { candidatId: true } } } as any,
     }),
     prisma.activite.findMany({
-      where: { userId: uid, type: 'MEETING', entiteType: 'CANDIDAT', createdAt: { gte: s, lt: e } },
-      select: { entiteId: true },
+      where: { userId: uid, type: 'MEETING', entiteType: 'CANDIDAT', createdAt: { gte: new Date(s.getTime() - SCREEN_LOOKBACK_MS), lt: e } },
+      select: { entiteId: true, createdAt: true, metadata: true },
     }),
     prisma.activite.findMany({
       where: { userId: uid, type: 'APPEL', entiteType: 'CANDIDAT', createdAt: { gte: s, lt: e } },
@@ -111,9 +119,24 @@ async function screenings(uid: string, s: Date, e: Date): Promise<number> {
   ]);
   const ids = new Set<string>();
   for (const t of transitions as any[]) { const cid = t.candidature?.candidatId; if (cid) ids.add(cid); }
-  for (const m of meetings) { if (m.entiteId) ids.add(m.entiteId); }
+  for (const m of meetings) { const w = meetingWhen(m); if (w >= s && w < e && m.entiteId) ids.add(m.entiteId); }
   for (const c of calls) { if (Number((c.metadata as any)?.duration ?? 0) > 30 && c.entiteId) ids.add(c.entiteId); }
   return ids.size;
+}
+
+// Entretiens programmés = RDV candidat CRÉÉS dans la fenêtre (le jour J) pour un
+// jour ULTÉRIEUR (date du RDV ≥ fin de la fenêtre). Dédup par événement.
+async function entretiensProgrammes(uid: string, s: Date, e: Date): Promise<number> {
+  const meetings = await prisma.activite.findMany({
+    where: { userId: uid, type: 'MEETING', entiteType: 'CANDIDAT', createdAt: { gte: s, lt: e } },
+    select: { entiteId: true, createdAt: true, metadata: true },
+  });
+  const seen = new Set<string>();
+  for (const m of meetings) {
+    const w = meetingWhen(m);
+    if (w >= e) seen.add((m.metadata as any)?.googleEventId || m.entiteId || String(m.createdAt.getTime()));
+  }
+  return seen.size;
 }
 
 const nouvellesPersonnes = (uid: string, s: Date, e: Date) =>
@@ -302,10 +325,13 @@ export async function getTeamDailyReport(reportDateOverride?: string) {
     }
 
     if (isRecruteur) {
-      const [scr, np] = await Promise.all([screenings(u.id, dayStart, dayEnd), nouvellesPersonnes(u.id, dayStart, dayEnd)]);
+      const [scr, np, prog] = await Promise.all([
+        screenings(u.id, dayStart, dayEnd), nouvellesPersonnes(u.id, dayStart, dayEnd), entretiensProgrammes(u.id, dayStart, dayEnd),
+      ]);
       const [scrAvg, npAvg] = await Promise.all([avg5d(screenings, u.id, biz5), avg5d(nouvellesPersonnes, u.id, biz5)]);
       metrics.screenings = { value: scr, target: tR.screenings ?? 5, avg_5d: scrAvg };
       metrics.nouvelles_personnes = { value: np, target: tR.nouvelles_personnes ?? 2, avg_5d: npAvg };
+      metrics.entretiens_programmes = { value: prog }; // sans cible : entretiens posés le jour J pour plus tard
       gather('screenings', scr, metrics.screenings.target);
       gather('nouvelles_personnes', np, metrics.nouvelles_personnes.target);
     }
