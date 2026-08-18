@@ -16,6 +16,26 @@
 
 import prisma from '../../lib/db.js';
 import { matchEmail } from './gmail.service.js';
+import { isPersonalEmail } from './allo.service.js';
+
+const deriveCompanyName = (domain: string): string => {
+  const n = domain.replace(/^www\./, '').split('.')[0];
+  return n ? n.charAt(0).toUpperCase() + n.slice(1) : domain;
+};
+// "Prénom Nom <a@b.fr>" → { prenom, nom }
+function parseContactName(raw: string, email: string): { prenom: string | null; nom: string } {
+  const disp = (raw.replace(/<[^>]+>/, '').replace(/["']/g, '').trim());
+  if (disp && /[A-Za-zÀ-ÿ]{2,}/.test(disp)) {
+    const parts = disp.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return { prenom: parts[0], nom: parts.slice(1).join(' ') };
+    return { prenom: null, nom: disp };
+  }
+  // fallback : partie locale de l'email ("prenom.nom@…")
+  const local = email.split('@')[0].replace(/[._-]+/g, ' ').trim();
+  const parts = local.split(/\s+/).filter((w) => w.length >= 2);
+  if (parts.length >= 2) return { prenom: parts[0].charAt(0).toUpperCase() + parts[0].slice(1), nom: parts.slice(1).map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ') };
+  return { prenom: null, nom: local || email };
+}
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
@@ -46,7 +66,8 @@ async function getValidAccessToken(userId: string): Promise<string | null> {
 // ─── Parsing d'un message Gmail (format=full) ───────
 interface SentMessage {
   id: string;
-  to: string[];
+  to: string[];      // emails normalisés
+  toRaw: string[];   // entrées brutes "Nom <email>"
   subject: string;
   date: Date;
   attachments: string[]; // noms de fichiers
@@ -87,8 +108,9 @@ async function fetchSentPushes(accessToken: string, since: Date, self: string, m
         // Pièces jointes hors signatures/images inline (on garde pdf/doc)
         const docs = atts.filter((f) => /\.(pdf|docx?|odt)$/i.test(f));
         if (!docs.length) return;
-        const to = (headers['to'] || '').split(',').map(emailOf).filter(Boolean);
-        out.push({ id, to, subject: headers['subject'] || '', date: headers['date'] ? new Date(headers['date']) : new Date(), attachments: docs, snippet: d.snippet || '' });
+        const toRaw = (headers['to'] || '').split(',').map((s) => s.trim()).filter(Boolean);
+        const to = toRaw.map(emailOf).filter(Boolean);
+        out.push({ id, to, toRaw, subject: headers['subject'] || '', date: headers['date'] ? new Date(headers['date']) : new Date(), attachments: docs, snippet: d.snippet || '' });
       } catch (e) {
         console.warn(`[PushDetect] fetch msg ${id} failed:`, e);
       }
@@ -161,6 +183,51 @@ async function findEntrepriseByDomain(domain: string): Promise<{ id: string; nom
 
 interface PushTarget { clientId: string | null; entrepriseId: string; nom: string }
 
+// Résout la cible d'un push : Client exact → Entreprise connue par domaine →
+// sinon CRÉE l'entreprise (depuis le domaine) + le prospect (Client statut LEAD).
+// Renvoie null si aucun destinataire pro exploitable (emails perso uniquement).
+async function resolveTarget(
+  recips: Array<{ email: string; raw: string }>, userId: string,
+): Promise<{ target: PushTarget; created: boolean } | null> {
+  // 1) Client exact
+  for (const r of recips) {
+    const m = await matchEmail(r.email);
+    if (m?.type === 'CLIENT') {
+      const c = await prisma.client.findUnique({ where: { id: m.id }, select: { id: true, nom: true, entrepriseId: true } });
+      if (c) return { target: { clientId: c.id, entrepriseId: c.entrepriseId, nom: c.nom }, created: false };
+    }
+  }
+  // 2) Entreprise connue par domaine (contact non précis)
+  for (const r of recips) {
+    const e = await findEntrepriseByDomain(r.email.split('@')[1] || '');
+    if (e) return { target: { clientId: null, entrepriseId: e.id, nom: e.nom }, created: false };
+  }
+  // 3) Société inconnue → créer Entreprise + prospect depuis le 1er destinataire pro
+  for (const r of recips) {
+    if (isPersonalEmail(r.email)) continue;
+    const domain = (r.email.split('@')[1] || '').toLowerCase().replace(/^www\./, '');
+    if (!domain || domain.split('.')[0].length < 2) continue;
+    let ent = await prisma.entreprise.findFirst({ where: { domaine: { equals: domain, mode: 'insensitive' } }, select: { id: true, nom: true } });
+    if (!ent) {
+      ent = await prisma.entreprise.create({
+        data: { nom: deriveCompanyName(domain), domaine: domain, siteWeb: `https://${domain}`, notes: 'Créée automatiquement depuis un push CV' },
+        select: { id: true, nom: true },
+      });
+    }
+    let cli = await prisma.client.findFirst({ where: { email: { equals: r.email, mode: 'insensitive' } }, select: { id: true } });
+    if (!cli) {
+      const nm = parseContactName(r.raw, r.email);
+      cli = await prisma.client.create({
+        data: { nom: nm.nom, prenom: nm.prenom ?? undefined, email: r.email, entrepriseId: ent.id, statutClient: 'LEAD', typeClient: 'OUTBOUND', createdById: userId, notes: 'Prospect créé automatiquement depuis un push CV' },
+        select: { id: true },
+      });
+      console.log(`[PushDetect] Société+prospect créés: ${ent.nom} / ${nm.prenom ?? ''} ${nm.nom} <${r.email}>`);
+    }
+    return { target: { clientId: cli.id, entrepriseId: ent.id, nom: ent.nom }, created: true };
+  }
+  return null;
+}
+
 // ─── Traitement d'un push ───────────────────────────
 async function processPush(msg: SentMessage, userId: string): Promise<'auto' | 'doubt' | 'skip'> {
   // Idempotence : déjà traité ?
@@ -173,32 +240,31 @@ async function processPush(msg: SentMessage, userId: string): Promise<'auto' | '
   const looksLikePush = msg.attachments.some((f) => CV_HINT.test(f)) || CV_HINT.test(msg.subject);
   if (!looksLikePush) return 'skip'; // pièce jointe non-CV (facture, contrat…) → pas un push
 
-  // 1) Destinataires externes (on ignore les emails internes)
-  const externals = msg.to.filter((t) => t && !t.endsWith('@humanup.io'));
-  if (!externals.length) return 'skip';
+  // 1) Destinataires externes (on ignore les emails internes), avec leur entrée brute (nom).
+  const recips = msg.to
+    .map((email, i) => ({ email, raw: msg.toRaw[i] || email }))
+    .filter((r) => r.email && !r.email.endsWith('@humanup.io'));
+  if (!recips.length) return 'skip';
 
-  // 2) Cible = Client exact, sinon Entreprise connue par domaine. Société inconnue → on ignore
-  //    (c'est de la prospection, pas un push pipeline — évite le bruit).
-  let target: PushTarget | null = null;
-  for (const to of externals) {
-    const m = await matchEmail(to);
-    if (m?.type === 'CLIENT') {
-      const c = await prisma.client.findUnique({ where: { id: m.id }, select: { id: true, nom: true, entrepriseId: true } });
-      if (c) { target = { clientId: c.id, entrepriseId: c.entrepriseId, nom: c.nom }; break; }
-    }
-  }
-  if (!target) {
-    for (const to of externals) {
-      const e = await findEntrepriseByDomain(to.split('@')[1] || '');
-      if (e) { target = { clientId: null, entrepriseId: e.id, nom: e.nom }; break; }
-    }
-  }
-  if (!target) return 'skip'; // société inconnue de l'ATS
+  // 2) Cible = Client exact, sinon Entreprise connue par domaine, sinon on CRÉE société + prospect.
+  const resolved = await resolveTarget(recips, userId);
+  if (!resolved) return 'skip'; // que des emails perso/inexploitables
+  const { target, created } = resolved;
 
   const name = extractCandidateName(msg.attachments, msg.subject);
-
-  // 3) Identifier le candidat
   const cands = name ? await findCandidats(name, target.entrepriseId) : [];
+
+  // 3) Société tout juste créée : pas encore de mandat → on notifie (tâche) + trace, pas d'auto.
+  if (created) {
+    const candLabel = cands.length === 1 ? `${cands[0].prenom ?? ''} ${cands[0].nom}`.trim() : name || 'candidat à préciser';
+    await createDoubtTask(userId, msg, `Push CV → ${target.nom} (nouvelle société + prospect créés) — ${candLabel}`, name, target.clientId, cands.length === 1 ? cands[0].id : undefined);
+    if (cands.length === 1) {
+      await prisma.activite.create({ data: { type: 'EMAIL', direction: 'SORTANT', entiteType: 'CANDIDAT', entiteId: cands[0].id, userId, titre: `Push CV envoyé à ${target.nom}`, contenu: msg.subject || '', source: 'GMAIL', metadata: { pushGmailMessageId: msg.id, push: true, clientId: target.clientId, entrepriseId: target.entrepriseId, attachment: msg.attachments[0] || null } } });
+    }
+    return 'doubt';
+  }
+
+  // 4) Société connue : identifier le candidat
   if (cands.length !== 1) {
     const why = !name ? 'candidat non identifié' : cands.length === 0 ? `candidat « ${name} » introuvable` : `${cands.length} candidats « ${name} »`;
     await createDoubtTask(userId, msg, `Push CV vers ${target.nom} — ${why}`, name, target.clientId);
