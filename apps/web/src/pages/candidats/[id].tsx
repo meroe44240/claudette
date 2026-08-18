@@ -156,7 +156,7 @@ export default function CandidatDetailPage() {
   return (
     <div>
       <style>{`
-        @keyframes fmIn{ from{ transform:translateY(14px); opacity:0; } to{ transform:none; opacity:1; } }
+        @keyframes fmIn{ from{ transform:translate(-50%,calc(-50% + 14px)); opacity:0; } to{ transform:translate(-50%,-50%); opacity:1; } }
         .fmcard:hover{ box-shadow:0 20px 40px -28px rgba(34,23,122,.4); border-color:rgba(34,23,122,.16) !important; }
         .fmcard{ transition:box-shadow .22s ease, border-color .22s ease; }
         .sec-h{ cursor:pointer; }
