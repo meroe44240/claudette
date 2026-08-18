@@ -238,17 +238,17 @@ async function processPush(msg: SentMessage, userId: string): Promise<'auto' | '
   if (seen) return 'skip';
 
   const looksLikePush = msg.attachments.some((f) => CV_HINT.test(f)) || CV_HINT.test(msg.subject);
-  if (!looksLikePush) return 'skip'; // pièce jointe non-CV (facture, contrat…) → pas un push
+  if (!looksLikePush) { console.log(`[PushDetect] skip ${msg.id}: pas un CV (PJ=${msg.attachments.join(',')} · sujet="${msg.subject}")`); return 'skip'; }
 
   // 1) Destinataires externes (on ignore les emails internes), avec leur entrée brute (nom).
   const recips = msg.to
     .map((email, i) => ({ email, raw: msg.toRaw[i] || email }))
     .filter((r) => r.email && !r.email.endsWith('@humanup.io'));
-  if (!recips.length) return 'skip';
+  if (!recips.length) { console.log(`[PushDetect] skip ${msg.id}: destinataires internes (${msg.to.join(',')})`); return 'skip'; }
 
   // 2) Cible = Client exact, sinon Entreprise connue par domaine, sinon on CRÉE société + prospect.
   const resolved = await resolveTarget(recips, userId);
-  if (!resolved) return 'skip'; // que des emails perso/inexploitables
+  if (!resolved) { console.log(`[PushDetect] skip ${msg.id}: aucun destinataire pro (${recips.map((r) => r.email).join(',')})`); return 'skip'; }
   const { target, created } = resolved;
 
   const name = extractCandidateName(msg.attachments, msg.subject);
@@ -375,6 +375,7 @@ export async function detectPushesForUser(userId: string): Promise<{ auto: numbe
 
   try {
     const msgs = await fetchSentPushes(token, since, self);
+    console.log(`[PushDetect] user ${userId}: ${msgs.length} messages candidats récupérés (since ${since.toISOString()})`);
     for (const m of msgs) {
       try {
         const r = await processPush(m, userId);
