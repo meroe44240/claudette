@@ -148,6 +148,18 @@ async function findCandidats(name: string, entrepriseId: string | null): Promise
   return filtered.length ? filtered : cands;
 }
 
+// Entreprise connue par le domaine du destinataire (sinon null = société inconnue).
+async function findEntrepriseByDomain(domain: string): Promise<{ id: string; nom: string } | null> {
+  const base = domain.replace(/^www\./, '').toLowerCase();
+  if (!base || base.split('.')[0].length < 3) return null;
+  return prisma.entreprise.findFirst({
+    where: { OR: [{ domaine: { contains: base, mode: 'insensitive' } }, { siteWeb: { contains: base, mode: 'insensitive' } }] },
+    select: { id: true, nom: true },
+  });
+}
+
+interface PushTarget { clientId: string | null; entrepriseId: string; nom: string }
+
 // ─── Traitement d'un push ───────────────────────────
 async function processPush(msg: SentMessage, userId: string): Promise<'auto' | 'doubt' | 'skip'> {
   // Idempotence : déjà traité ?
@@ -160,57 +172,59 @@ async function processPush(msg: SentMessage, userId: string): Promise<'auto' | '
   const looksLikePush = msg.attachments.some((f) => CV_HINT.test(f)) || CV_HINT.test(msg.subject);
   if (!looksLikePush) return 'skip'; // pièce jointe non-CV (facture, contrat…) → pas un push
 
-  const fileName = msg.attachments[0] || '';
+  // 1) Destinataires externes (on ignore les emails internes)
+  const externals = msg.to.filter((t) => t && !t.endsWith('@humanup.io'));
+  if (!externals.length) return 'skip';
 
-  // 1) Identifier le client parmi les destinataires
-  let client: { id: string; nom: string; prenom: string | null; entrepriseId: string } | null = null;
-  for (const to of msg.to) {
-    if (to.endsWith('@humanup.io')) continue;
+  // 2) Cible = Client exact, sinon Entreprise connue par domaine. Société inconnue → on ignore
+  //    (c'est de la prospection, pas un push pipeline — évite le bruit).
+  let target: PushTarget | null = null;
+  for (const to of externals) {
     const m = await matchEmail(to);
     if (m?.type === 'CLIENT') {
-      const c = await prisma.client.findUnique({ where: { id: m.id }, select: { id: true, nom: true, prenom: true, entrepriseId: true } });
-      if (c) { client = c; break; }
+      const c = await prisma.client.findUnique({ where: { id: m.id }, select: { id: true, nom: true, entrepriseId: true } });
+      if (c) { target = { clientId: c.id, entrepriseId: c.entrepriseId, nom: c.nom }; break; }
     }
   }
+  if (!target) {
+    for (const to of externals) {
+      const e = await findEntrepriseByDomain(to.split('@')[1] || '');
+      if (e) { target = { clientId: null, entrepriseId: e.id, nom: e.nom }; break; }
+    }
+  }
+  if (!target) return 'skip'; // société inconnue de l'ATS
 
   const name = extractCandidateName(msg.attachments, msg.subject);
 
-  // 2) Client inconnu → doute (tâche générique, non rattachée)
-  if (!client) {
-    const to = msg.to.find((t) => !t.endsWith('@humanup.io')) || msg.to[0] || 'destinataire inconnu';
-    await createDoubtTask(userId, msg, `Push CV détecté vers ${to} (client non reconnu)`, name, null);
-    return 'doubt';
-  }
-
   // 3) Identifier le candidat
-  const cands = name ? await findCandidats(name, client.entrepriseId) : [];
+  const cands = name ? await findCandidats(name, target.entrepriseId) : [];
   if (cands.length !== 1) {
     const why = !name ? 'candidat non identifié' : cands.length === 0 ? `candidat « ${name} » introuvable` : `${cands.length} candidats « ${name} »`;
-    await createDoubtTask(userId, msg, `Push CV vers ${client.nom} — ${why}`, name, client.id);
+    await createDoubtTask(userId, msg, `Push CV vers ${target.nom} — ${why}`, name, target.clientId);
     return 'doubt';
   }
   const candidat = cands[0];
 
   // 4) Mandat cible : candidature existante sur un mandat de l'entreprise, sinon mandat ouvert unique
   const existingCandidature = await prisma.candidature.findFirst({
-    where: { candidatId: candidat.id, mandat: { entrepriseId: client.entrepriseId } },
+    where: { candidatId: candidat.id, mandat: { entrepriseId: target.entrepriseId } },
     select: { id: true, stage: true, mandatId: true },
   });
   let mandatId: string | null = existingCandidature?.mandatId ?? null;
   if (!mandatId) {
     const openMandats = await prisma.mandat.findMany({
-      where: { entrepriseId: client.entrepriseId, statut: { in: ['OUVERT', 'EN_COURS'] } },
+      where: { entrepriseId: target.entrepriseId, statut: { in: ['OUVERT', 'EN_COURS'] } },
       select: { id: true },
     });
     if (openMandats.length === 1) mandatId = openMandats[0].id;
   }
   if (!mandatId) {
-    await createDoubtTask(userId, msg, `Push CV : ${candidat.prenom ?? ''} ${candidat.nom} → ${client.nom} — mandat ambigu`, name, client.id, candidat.id);
+    await createDoubtTask(userId, msg, `Push CV : ${candidat.prenom ?? ''} ${candidat.nom} → ${target.nom} — mandat ambigu`, name, target.clientId, candidat.id);
     return 'doubt';
   }
 
   // 5) AUTO : passer la candidature en ENVOYE_CLIENT (push)
-  await ensurePushed(userId, candidat.id, mandatId, existingCandidature, msg, client);
+  await ensurePushed(userId, candidat.id, mandatId, existingCandidature, msg, target);
   return 'auto';
 }
 
@@ -220,7 +234,7 @@ async function ensurePushed(
   mandatId: string,
   existing: { id: string; stage: string } | null,
   msg: SentMessage,
-  client: { id: string; nom: string },
+  target: PushTarget,
 ): Promise<void> {
   let candidatureId = existing?.id ?? null;
   const curIdx = existing ? STAGE_ORDER.indexOf(existing.stage) : -1;
@@ -243,20 +257,22 @@ async function ensurePushed(
   await prisma.activite.create({
     data: {
       type: 'EMAIL', direction: 'SORTANT', entiteType: 'CANDIDAT', entiteId: candidatId, userId,
-      titre: `Push CV envoyé à ${client.nom}`,
+      titre: `Push CV envoyé à ${target.nom}`,
       contenu: msg.subject || '', source: 'GMAIL',
-      metadata: { pushGmailMessageId: msg.id, push: true, auto: true, clientId: client.id, mandatId, attachment: msg.attachments[0] || null },
+      metadata: { pushGmailMessageId: msg.id, push: true, auto: true, clientId: target.clientId, entrepriseId: target.entrepriseId, mandatId, attachment: msg.attachments[0] || null },
     },
   });
-  // Trace côté client également.
-  await prisma.activite.create({
-    data: {
-      type: 'EMAIL', direction: 'SORTANT', entiteType: 'CLIENT', entiteId: client.id, userId,
-      titre: `CV envoyé (push)`, contenu: msg.subject || '', source: 'GMAIL',
-      metadata: { pushGmailMessageId: msg.id, push: true, candidatId, mandatId },
-    },
-  });
-  console.log(`[PushDetect] AUTO push: candidat ${candidatId} → ${client.nom} (mandat ${mandatId})`);
+  // Trace côté client si un contact client précis est identifié.
+  if (target.clientId) {
+    await prisma.activite.create({
+      data: {
+        type: 'EMAIL', direction: 'SORTANT', entiteType: 'CLIENT', entiteId: target.clientId, userId,
+        titre: `CV envoyé (push)`, contenu: msg.subject || '', source: 'GMAIL',
+        metadata: { pushGmailMessageId: msg.id, push: true, candidatId, mandatId },
+      },
+    });
+  }
+  console.log(`[PushDetect] AUTO push: candidat ${candidatId} → ${target.nom} (mandat ${mandatId})`);
 }
 
 // « Notif ATS » = tâche pour le recruteur (les notifs in-app sont retirées).
