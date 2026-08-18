@@ -90,8 +90,31 @@ async function pushCount(uid: string, s: Date, e: Date): Promise<number> {
   return new Set(rows.map((r) => r.candidatureId)).size;
 }
 
-const screenings = (uid: string, s: Date, e: Date) =>
-  prisma.stageHistory.count({ where: { changedById: uid, toStage: 'ENTRETIEN_1' as any, changedAt: { gte: s, lt: e } } });
+// Screenings = candidats screenés par la personne sur la fenêtre, dédupliqués.
+// On ne se limite pas à la transition → ENTRETIEN_1 (souvent pas faite dans l'ATS) :
+// on compte aussi les RDV candidat (calendrier) et les appels candidat connectés,
+// car beaucoup de screenings se font en meeting/téléphone sans changer l'étape.
+async function screenings(uid: string, s: Date, e: Date): Promise<number> {
+  const [transitions, meetings, calls] = await Promise.all([
+    prisma.stageHistory.findMany({
+      where: { changedById: uid, toStage: 'ENTRETIEN_1' as any, changedAt: { gte: s, lt: e } },
+      select: { candidature: { select: { candidatId: true } } } as any,
+    }),
+    prisma.activite.findMany({
+      where: { userId: uid, type: 'MEETING', entiteType: 'CANDIDAT', createdAt: { gte: s, lt: e } },
+      select: { entiteId: true },
+    }),
+    prisma.activite.findMany({
+      where: { userId: uid, type: 'APPEL', entiteType: 'CANDIDAT', createdAt: { gte: s, lt: e } },
+      select: { entiteId: true, metadata: true },
+    }),
+  ]);
+  const ids = new Set<string>();
+  for (const t of transitions as any[]) { const cid = t.candidature?.candidatId; if (cid) ids.add(cid); }
+  for (const m of meetings) { if (m.entiteId) ids.add(m.entiteId); }
+  for (const c of calls) { if (Number((c.metadata as any)?.duration ?? 0) > 30 && c.entiteId) ids.add(c.entiteId); }
+  return ids.size;
+}
 
 const nouvellesPersonnes = (uid: string, s: Date, e: Date) =>
   prisma.candidature.count({ where: { createdById: uid, createdAt: { gte: s, lt: e } } });
