@@ -75,6 +75,8 @@ interface SentMessage {
 }
 
 const CV_HINT = /\b(cv|dossier|profil|resume|candidat|r[ée]sum[ée])\b/i;
+// Docs qui ne sont PAS des CV (à exclure) : administratif / commercial.
+const NON_CV = /\b(facture|invoice|devis|contrat|contract|proforma|bon de commande|rib|kbis|attestation|bulletin|paie|avoir|acompte)\b/i;
 const emailOf = (raw: string) => (raw.match(/<([^>]+)>/)?.[1] || raw).trim().toLowerCase();
 
 function collectAttachments(part: any, out: string[]): void {
@@ -237,8 +239,10 @@ async function processPush(msg: SentMessage, userId: string): Promise<'auto' | '
   });
   if (seen) return 'skip';
 
-  const looksLikePush = msg.attachments.some((f) => CV_HINT.test(f)) || CV_HINT.test(msg.subject);
-  if (!looksLikePush) { console.log(`[PushDetect] skip ${msg.id}: pas un CV (PJ=${msg.attachments.join(',')} · sujet="${msg.subject}")`); return 'skip'; }
+  // En agence de recrutement, un doc (pdf/docx) envoyé à une société = quasi toujours un CV.
+  // On exclut seulement les docs clairement administratifs/commerciaux (facture, contrat…).
+  const isAdminDoc = msg.attachments.every((f) => NON_CV.test(f)) || NON_CV.test(msg.subject);
+  if (isAdminDoc) { console.log(`[PushDetect] skip ${msg.id}: doc admin (PJ=${msg.attachments.join(',')})`); return 'skip'; }
 
   // 1) Destinataires externes (on ignore les emails internes), avec leur entrée brute (nom).
   const recips = msg.to
