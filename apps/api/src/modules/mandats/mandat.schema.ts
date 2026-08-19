@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const createMandatSchema = z.object({
   titrePoste: z.string().min(1, 'Le titre du poste est requis'),
   type: z.enum(['CLIENT', 'VIVIER']).optional(),
+  natureContrat: z.enum(['CDI', 'CDD', 'INTERIM', 'FREELANCE']).nullable().optional(),
   entrepriseId: z.string().uuid('entrepriseId doit etre un UUID valide'),
   // Optionnel : un mandat VIVIER (sourcing sans client) n'a pas de client.
   clientId: z.string().uuid('clientId doit etre un UUID valide').nullable().optional(),
@@ -23,6 +24,7 @@ export const createMandatSchema = z.object({
 export const updateMandatSchema = z.object({
   titrePoste: z.string().min(1).optional(),
   type: z.enum(['CLIENT', 'VIVIER']).optional(),
+  natureContrat: z.enum(['CDI', 'CDD', 'INTERIM', 'FREELANCE']).nullable().optional(),
   entrepriseId: z.string().uuid().optional(),
   clientId: z.string().uuid().nullable().optional(),
   description: z.string().nullable().optional(),

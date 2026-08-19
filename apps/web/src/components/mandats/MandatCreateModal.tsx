@@ -29,10 +29,17 @@ const PRIORITES = [
   { value: 'URGENTE', label: 'Urgente' },
 ];
 
+const NATURES = [
+  { value: 'CDI', label: 'CDI' },
+  { value: 'CDD', label: 'CDD' },
+  { value: 'INTERIM', label: 'Intérim' },
+  { value: 'FREELANCE', label: 'Freelance' },
+];
+
 const empty = {
   titrePoste: '', type: 'CLIENT', entrepriseId: '', clientId: '',
   localisation: '', salaireMin: '', salaireMax: '', feePourcentage: '20',
-  priorite: 'NORMALE', description: '',
+  priorite: 'NORMALE', natureContrat: '', description: '',
 };
 
 /**
@@ -110,6 +117,7 @@ export default function MandatCreateModal({ isOpen, onClose, entrepriseId, onCre
     if (form.salaireMin) payload.salaireMin = parseInt(form.salaireMin, 10);
     if (form.salaireMax) payload.salaireMax = parseInt(form.salaireMax, 10);
     if (form.feePourcentage) payload.feePourcentage = parseFloat(form.feePourcentage);
+    if (form.natureContrat) payload.natureContrat = form.natureContrat;
     if (form.description.trim()) payload.description = form.description.trim();
     create.mutate(payload);
   };
@@ -151,8 +159,9 @@ export default function MandatCreateModal({ isOpen, onClose, entrepriseId, onCre
             <Input label={isClient ? 'Fee (%) *' : 'Fee (%)'} type="number" value={form.feePourcentage} onChange={(e) => setField('feePourcentage', e.target.value)} placeholder="20" error={errors.feePourcentage} />
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Input label="Localisation" value={form.localisation} onChange={(e) => setField('localisation', e.target.value)} placeholder="Lyon (69)" />
+            <Select label="Nature du contrat" options={NATURES} value={form.natureContrat} onChange={(v) => setField('natureContrat', v)} placeholder="—" />
             <Select label="Priorité" options={PRIORITES} value={form.priorite} onChange={(v) => setField('priorite', v)} />
           </div>
 

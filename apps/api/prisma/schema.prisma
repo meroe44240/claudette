@@ -254,6 +254,7 @@ model Mandat {
   // CLIENT = mandat classique (contrat, fee, portail, compte dans les stats).
   // VIVIER = annonce de sourcing sans client : ni contrat, ni fee, ni portail, exclu des stats.
   type             MandatType   @default(CLIENT)
+  natureContrat    String?      @map("nature_contrat") @db.VarChar(20) // CDI | CDD | INTERIM | FREELANCE
   entrepriseId     String       @db.Uuid
   entreprise       Entreprise   @relation(fields: [entrepriseId], references: [id])
   clientId         String?      @db.Uuid

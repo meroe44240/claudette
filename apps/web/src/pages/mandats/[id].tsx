@@ -89,6 +89,7 @@ interface MandatDetail {
     localisation: string | null;
   };
   type?: 'CLIENT' | 'VIVIER';
+  natureContrat?: 'CDI' | 'CDD' | 'INTERIM' | 'FREELANCE' | null;
   client: {
     id: string;
     nom: string;
@@ -112,6 +113,7 @@ interface EditForm {
   salaireMax: string;
   feePourcentage: string;
   priorite: string;
+  natureContrat: string;
   statut: string;
   notes: string;
 }
@@ -202,6 +204,15 @@ const prioriteOptions = [
   { value: 'URGENTE', label: 'Urgente' },
 ];
 
+const natureOptions = [
+  { value: '', label: '—' },
+  { value: 'CDI', label: 'CDI' },
+  { value: 'CDD', label: 'CDD' },
+  { value: 'INTERIM', label: 'Intérim' },
+  { value: 'FREELANCE', label: 'Freelance' },
+];
+const natureLabels: Record<string, string> = { CDI: 'CDI', CDD: 'CDD', INTERIM: 'Intérim', FREELANCE: 'Freelance' };
+
 const stageLabels: Record<string, string> = {
   SOURCING: 'Sourcing',
   CONTACTE: 'Contacté',
@@ -285,6 +296,7 @@ function buildEditForm(mandat: MandatDetail): EditForm {
     salaireMax: mandat.salaireMax ? String(mandat.salaireMax) : '',
     feePourcentage: mandat.feePourcentage ? String(Number(mandat.feePourcentage)) : '20',
     priorite: mandat.priorite || 'NORMALE',
+    natureContrat: mandat.natureContrat || '',
     statut: mandat.statut || 'OUVERT',
     notes: mandat.notes || '',
   };
@@ -632,6 +644,7 @@ export default function MandatDetailPage() {
     payload.salaireMax = editForm.salaireMax ? parseInt(editForm.salaireMax, 10) : null;
     if (editForm.feePourcentage) payload.feePourcentage = parseFloat(editForm.feePourcentage);
     if (editForm.priorite) payload.priorite = editForm.priorite;
+    payload.natureContrat = editForm.natureContrat || null;
     if (editForm.statut) payload.statut = editForm.statut;
     payload.notes = editForm.notes.trim() || null;
     updateMutation.mutate(payload);
@@ -990,6 +1003,7 @@ export default function MandatDetailPage() {
                   </div>
                   <Input label="Fee %" type="number" value={editForm.feePourcentage} onChange={setField('feePourcentage')} placeholder="20" />
                   <Select label="Priorité" options={prioriteOptions} value={editForm.priorite} onChange={(val) => setEditForm((prev) => (prev ? { ...prev, priorite: val } : prev))} />
+                  <Select label="Nature du contrat" options={natureOptions} value={editForm.natureContrat} onChange={(val) => setEditForm((prev) => (prev ? { ...prev, natureContrat: val } : prev))} />
                   <Select label="Statut" options={statutOptions} value={editForm.statut} onChange={(val) => setEditForm((prev) => (prev ? { ...prev, statut: val } : prev))} />
                 </div>
               ) : (
@@ -1002,6 +1016,7 @@ export default function MandatDetailPage() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '10px 20px', marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(34,23,122,0.07)' }}>
                     <div><div style={fieldLabel}>Localisation</div><div style={fieldValue}>{mandat.localisation || '—'}</div></div>
+                    <div><div style={fieldLabel}>Contrat</div><div style={fieldValue}>{mandat.natureContrat ? natureLabels[mandat.natureContrat] : '—'}</div></div>
                     <div><div style={fieldLabel}>Secteur</div><div style={fieldValue}>{mandat.entreprise.secteur || '—'}</div></div>
                     <div><div style={fieldLabel}>Ouvert le</div><div style={fieldValue}>{formatDate(mandat.dateOuverture)}</div></div>
                     <div><div style={fieldLabel}>Salaire</div><div style={fieldValue}>{salaireLabel}</div></div>
