@@ -1,5 +1,5 @@
 import prisma from '../../lib/db.js';
-import { NotFoundError } from '../../lib/errors.js';
+import { NotFoundError, ValidationError } from '../../lib/errors.js';
 import { paginatedResult, paginationToSkipTake } from '../../lib/pagination.js';
 import type { PaginationParams } from '../../lib/pagination.js';
 import type { CreateMandatInput, UpdateMandatInput, UpdateFeeInput } from './mandat.schema.js';
@@ -245,6 +245,17 @@ export async function create(data: CreateMandatInput, createdById: string) {
 export async function update(id: string, data: UpdateMandatInput) {
   const existing = await prisma.mandat.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError('Mandat', id);
+
+  // Un mandat ne peut passer « Gagné » que via un candidat PLACÉ (candidat + fee + date).
+  // Bloque le glisser-en-gagné direct (kanban) sans placement → évite les « placements
+  // fantômes » sans candidat ni fee. Le placement d'un candidat met déjà le stage à PLACE
+  // avant d'arriver ici, donc le flux normal passe.
+  if (data.statut === 'GAGNE' && existing.statut !== 'GAGNE') {
+    const placed = await prisma.candidature.count({ where: { mandatId: id, stage: 'PLACE' } });
+    if (placed === 0) {
+      throw new ValidationError('Pour gagner ce mandat, place d’abord un candidat (candidat + montant facturé + date de démarrage) depuis le pipeline.');
+    }
+  }
 
   // Determine values for fee recalculation
   const salaireMin = data.salaireMin !== undefined ? data.salaireMin : existing.salaireMin;
