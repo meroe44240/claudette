@@ -214,7 +214,7 @@ export async function create(data: CreateMandatInput, createdById: string) {
       feeMontantEstime,
       createdById,
       assignedToId: data.assignedToId ?? createdById,
-    },
+    } as any,
   });
 
   // Recalculate client typeClient after mandat creation (si client)
