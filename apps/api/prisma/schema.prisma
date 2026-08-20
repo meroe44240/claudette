@@ -556,6 +556,7 @@ model Candidature {
   updatedAt           DateTime         @updatedAt @db.Timestamptz()
 
   trameAnswers        Json?                 // réponses IA à la trame : [{ questionId, answer, source, filledAt }]
+  qualifFit           Json?  @map("qualif_fit") // fit par candidature : { <key>: { v, src, at } } (fitPoste, goNoGo, nextSteps)
 
   stageHistory        StageHistory[]
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionCandidature")

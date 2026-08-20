@@ -10,9 +10,9 @@ import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
 import NoteContent from '../../components/activity/NoteContent';
-import TrameAnswers from '../../components/mandats/TrameAnswers';
 import MentionTextarea from '../../components/activity/MentionTextarea';
 import QualificationCard from '../../components/candidats/QualificationCard';
+import CandidatureQualif from '../../components/candidats/CandidatureQualif';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Candidature {
@@ -140,7 +140,7 @@ export default function CandidatDetailPage() {
   const submitEval = () => { if (!rating) { toast('error', 'Choisissez une note'); return; } actMut.mutate({ type: 'NOTE', titre: `Évaluation ${'★'.repeat(rating)}`, contenu: comment.trim() || `Note ${rating}/5` }); setComment(''); toast('success', 'Évaluation ajoutée'); };
   const advance = (cand: Candidature) => { const i = STAGES.indexOf(cand.stage); if (i < 0 || i >= STAGES.length - 1) { toast('error', 'Déjà à la dernière étape'); return; } advanceMut.mutate({ candId: cand.id, stage: STAGES[i + 1] }); };
 
-  const railTabs: [typeof railTab, string][] = [['act', 'Activité'], ['com', 'Commentaires'], ['task', 'Tâches'], ['eval', 'Évaluation'], ['trame', 'Trame'], ['msg', 'Messages']];
+  const railTabs: [typeof railTab, string][] = [['act', 'Activité'], ['com', 'Commentaires'], ['task', 'Tâches'], ['eval', 'Évaluation'], ['trame', 'Qualification'], ['msg', 'Messages']];
   const actions: { label: string; Icon: typeof Ban; color: string; run: () => void }[] = [
     { label: 'Rejeter', Icon: Ban, color: '#F3A6A0', run: () => { if (firstCand) setLost({ candId: firstCand.id, titre: firstCand.mandat.titrePoste, company: firstCand.mandat.entreprise.nom }); else toast('error', 'Aucun mandat'); } },
     { label: 'Étape suivante', Icon: ArrowRight, color: '#E6E9AF', run: () => { if (firstCand) advance(firstCand); else toast('error', 'Aucun mandat'); } },
@@ -476,8 +476,8 @@ export default function CandidatDetailPage() {
               </>
             )}
             {railTab === 'trame' && (firstCand
-              ? <TrameAnswers candidatureId={firstCand.id} mandatId={firstCand.mandat.id} />
-              : <div style={{ fontSize: 12.5, color: '#8A8699', lineHeight: 1.6 }}>Ce candidat n'est rattaché à aucun mandat — la trame de qualification est définie par mandat.</div>)}
+              ? <CandidatureQualif candidatureId={firstCand.id} mandatId={firstCand.mandat.id} mandatLabel={firstCand.mandat.titrePoste} />
+              : <div style={{ fontSize: 12.5, color: '#8A8699', lineHeight: 1.6 }}>Ce candidat n'est rattaché à aucun mandat — le fit et la trame se définissent par mandat.</div>)}
             {railTab === 'msg' && <MessagesTab candidat={c} />}
           </div>
         </aside>
