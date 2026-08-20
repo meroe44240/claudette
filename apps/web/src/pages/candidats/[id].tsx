@@ -231,11 +231,6 @@ export default function CandidatDetailPage() {
             </div>
           )}
 
-          {/* QUALIFICATION — socle standard, rempli depuis les meetings */}
-          <div style={{ marginTop: 22 }}>
-            <QualificationCard candidatId={c.id} />
-          </div>
-
           {/* DÉTAILS */}
           <div style={{ marginTop: 32 }}>
             <div onClick={() => setDetOpen(o => !o)} className="sec-h" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -265,6 +260,11 @@ export default function CandidatDetailPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* QUALIFICATION — socle standard, rempli depuis les meetings */}
+          <div style={{ marginTop: 26 }}>
+            <QualificationCard candidatId={c.id} />
           </div>
 
           {/* MANDATS */}
