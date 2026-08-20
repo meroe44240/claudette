@@ -30,4 +30,28 @@ export default async function qualificationRouter(fastify: FastifyInstance) {
     preHandler: [authenticate],
     handler: (request) => service.fillFromTranscripts((request.params as { candidatId: string }).candidatId, request.userId),
   });
+
+  // ── Fit par candidature ──
+  fastify.get('/fit-fields', { schema: { tags: ['Qualification'] }, preHandler: [authenticate], handler: () => service.getFitFields() });
+
+  fastify.get('/candidature/:candidatureId', {
+    schema: { tags: ['Qualification'], params: { type: 'object', required: ['candidatureId'], properties: { candidatureId: { type: 'string', format: 'uuid' } } } },
+    preHandler: [authenticate],
+    handler: (request) => service.getFit((request.params as { candidatureId: string }).candidatureId),
+  });
+
+  fastify.put('/candidature/:candidatureId', {
+    schema: { tags: ['Qualification'], params: { type: 'object', required: ['candidatureId'], properties: { candidatureId: { type: 'string', format: 'uuid' } } } },
+    preHandler: [authenticate],
+    handler: (request) => service.updateFit(
+      (request.params as { candidatureId: string }).candidatureId,
+      z.record(z.string(), z.string().nullable()).parse(request.body),
+    ),
+  });
+
+  fastify.post('/fit-fill/:candidatureId', {
+    schema: { tags: ['Qualification'], params: { type: 'object', required: ['candidatureId'], properties: { candidatureId: { type: 'string', format: 'uuid' } } } },
+    preHandler: [authenticate],
+    handler: (request) => service.fillFit((request.params as { candidatureId: string }).candidatureId, request.userId),
+  });
 }

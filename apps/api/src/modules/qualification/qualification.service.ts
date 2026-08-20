@@ -29,7 +29,16 @@ export const QUALIF_FIELDS: QualifField[] = [
 ];
 const AI_FIELDS = QUALIF_FIELDS.filter((f) => f.ai);
 
+// Fit par candidature (adéquation profil × CE mandat).
+export const FIT_FIELDS: QualifField[] = [
+  { key: 'fitPoste', label: 'Fit sur le poste', hint: 'adéquation profil / mandat', ai: true, long: true },
+  { key: 'goNoGo', label: 'Go / No-go', hint: 'GO · À creuser · NO-GO', ai: false },
+  { key: 'nextSteps', label: 'Next steps', hint: 'prochaines actions', ai: true, long: true },
+];
+const FIT_AI_FIELDS = FIT_FIELDS.filter((f) => f.ai);
+
 export function getFields() { return QUALIF_FIELDS; }
+export function getFitFields() { return FIT_FIELDS; }
 
 export async function getQualification(candidatId: string): Promise<Qualification> {
   const c = (await prisma.candidat.findUnique({ where: { id: candidatId }, select: { qualification: true } as any })) as any;
@@ -108,4 +117,76 @@ Retourne UNIQUEMENT ce JSON, sans texte autour :
   }
   await prisma.candidat.update({ where: { id: candidatId }, data: { qualification: next as any } as any });
   return { qualification: next, filled, transcriptsUsed: acts.length };
+}
+
+// ── Fit par candidature ─────────────────────────────
+export async function getFit(candidatureId: string): Promise<Qualification> {
+  const c = (await prisma.candidature.findUnique({ where: { id: candidatureId }, select: { qualifFit: true } as any })) as any;
+  if (!c) throw new NotFoundError('Candidature', candidatureId);
+  return (c.qualifFit ?? {}) as Qualification;
+}
+
+export async function updateFit(candidatureId: string, patch: Record<string, string | null>): Promise<Qualification> {
+  const current = await getFit(candidatureId);
+  const now = new Date().toISOString();
+  const next: Qualification = { ...current };
+  for (const [key, val] of Object.entries(patch)) {
+    if (!FIT_FIELDS.some((f) => f.key === key)) continue;
+    const v = (val ?? '').toString().trim();
+    if (v) next[key] = { v, src: 'manuel', at: now };
+    else delete next[key];
+  }
+  await prisma.candidature.update({ where: { id: candidatureId }, data: { qualifFit: next as any } as any });
+  return next;
+}
+
+/** Remplit le fit (fitPoste, nextSteps) depuis les transcripts du candidat, dans le contexte du mandat. */
+export async function fillFit(candidatureId: string, userId: string) {
+  const cand = await prisma.candidature.findUnique({
+    where: { id: candidatureId },
+    include: { mandat: { select: { titrePoste: true, entreprise: { select: { nom: true } } } }, candidat: { select: { id: true, nom: true, prenom: true } } },
+  });
+  if (!cand) throw new NotFoundError('Candidature', candidatureId);
+
+  const acts = await prisma.activite.findMany({
+    where: { entiteType: 'CANDIDAT', entiteId: cand.candidat.id, type: { in: ['APPEL', 'TRANSCRIPT', 'MEETING'] } },
+    orderBy: { createdAt: 'desc' }, take: 20,
+    select: { type: true, contenu: true, metadata: true, createdAt: true },
+  });
+  const transcripts = acts
+    .map((a) => { const meta = (a.metadata ?? {}) as Record<string, unknown>; const txt = (meta.transcript as string) || a.contenu || ''; return txt ? `[${a.type}]\n${txt}` : ''; })
+    .filter(Boolean).join('\n\n---\n\n');
+  if (!transcripts.trim()) throw new ValidationError('Aucun transcript trouvé pour ce candidat.');
+
+  const poste = `${cand.mandat.titrePoste}${cand.mandat.entreprise?.nom ? ' — ' + cand.mandat.entreprise.nom : ''}`;
+  const userPrompt = `Poste visé : ${poste}
+Candidat : ${[cand.candidat.prenom, cand.candidat.nom].filter(Boolean).join(' ').trim()}
+
+TRANSCRIPTIONS :
+${transcripts.slice(0, 20000)}
+
+Évalue, uniquement depuis les transcriptions (null si non abordé) :
+- fitPoste : en quoi le profil colle (ou non) à CE poste précis ; nuance les écarts.
+- nextSteps : prochaines actions convenues.
+
+Retourne UNIQUEMENT ce JSON : { "fields": { "fitPoste": "<...ou null>", "nextSteps": "<...ou null>" } }`;
+
+  const response = await callClaude({ feature: 'qualif_fit', systemPrompt: FILL_SYSTEM, userPrompt, maxTokens: 1024, temperature: 0, userId });
+  const raw = (response as any).content ?? (response as any).rawText ?? '';
+  let parsed: { fields?: Record<string, string | null> };
+  try { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; }
+  catch { const m = String(raw).match(/\{[\s\S]*\}/); parsed = m ? JSON.parse(m[0]) : { fields: {} }; }
+  const extracted = parsed.fields ?? {};
+
+  const current = await getFit(candidatureId);
+  const now = new Date().toISOString();
+  const next: Qualification = { ...current };
+  let filled = 0;
+  for (const f of FIT_AI_FIELDS) {
+    if (current[f.key]?.src === 'manuel') continue;
+    const val = (extracted[f.key] ?? '').toString().trim();
+    if (val && val.toLowerCase() !== 'null') { next[f.key] = { v: val, src: 'ia', at: now }; filled++; }
+  }
+  await prisma.candidature.update({ where: { id: candidatureId }, data: { qualifFit: next as any } as any });
+  return { fit: next, filled, transcriptsUsed: acts.length };
 }

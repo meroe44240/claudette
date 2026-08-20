@@ -10,7 +10,7 @@ const NAVY = '#22177A';
 const LIME = '#E6E9AF';
 
 /** Trame de qualification remplie pour une candidature (réponses IA depuis transcripts). */
-export default function TrameAnswers({ candidatureId, mandatId }: { candidatureId: string; mandatId: string }) {
+export default function TrameAnswers({ candidatureId, mandatId, hideFill }: { candidatureId: string; mandatId: string; hideFill?: boolean }) {
   const qc = useQueryClient();
   const { data: trame } = useQuery({ queryKey: ['trame', mandatId], queryFn: () => api.get<{ trame: Q[] }>(`/trames/mandat/${mandatId}`) });
   const { data: ans } = useQuery({ queryKey: ['trame-answers', candidatureId], queryFn: () => api.get<{ trameAnswers: Answer[] }>(`/trames/answers/${candidatureId}`) });
@@ -35,9 +35,11 @@ export default function TrameAnswers({ candidatureId, mandatId }: { candidatureI
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ fontSize: 12, color: '#6E6A85' }}>{filledCount}/{questions.length} réponse(s) remplie(s) depuis les transcripts.</div>
-        <button onClick={() => fill.mutate()} disabled={fill.isPending} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 800, color: LIME, background: NAVY, border: 'none', borderRadius: 10, padding: '8px 15px', cursor: fill.isPending ? 'wait' : 'pointer', opacity: fill.isPending ? 0.6 : 1 }}>
-          <Sparkles size={14} />{fill.isPending ? 'Analyse des transcripts…' : 'Remplir depuis les transcripts (IA)'}
-        </button>
+        {!hideFill && (
+          <button onClick={() => fill.mutate()} disabled={fill.isPending} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 800, color: LIME, background: NAVY, border: 'none', borderRadius: 10, padding: '8px 15px', cursor: fill.isPending ? 'wait' : 'pointer', opacity: fill.isPending ? 0.6 : 1 }}>
+            <Sparkles size={14} />{fill.isPending ? 'Analyse des transcripts…' : 'Remplir depuis les transcripts (IA)'}
+          </button>
+        )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
