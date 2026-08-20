@@ -12,6 +12,7 @@ import { toast } from '../../components/ui/Toast';
 import NoteContent from '../../components/activity/NoteContent';
 import TrameAnswers from '../../components/mandats/TrameAnswers';
 import MentionTextarea from '../../components/activity/MentionTextarea';
+import QualificationCard from '../../components/candidats/QualificationCard';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Candidature {
@@ -231,6 +232,11 @@ export default function CandidatDetailPage() {
               ))}
             </div>
           )}
+
+          {/* QUALIFICATION — socle standard, rempli depuis les meetings */}
+          <div style={{ marginTop: 22 }}>
+            <QualificationCard candidatId={c.id} />
+          </div>
 
           {/* DÉTAILS */}
           <div style={{ marginTop: 32 }}>
