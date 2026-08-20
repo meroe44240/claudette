@@ -61,6 +61,27 @@ export async function updateQualification(candidatId: string, patch: Record<stri
   return next;
 }
 
+// Agrège les échanges exploitables du candidat : appels/transcripts/meetings + notes LONGUES
+// (les debriefs sont souvent saisis en NOTE ; on ignore les commentaires courts).
+async function gatherTranscripts(candidatId: string): Promise<{ text: string; count: number }> {
+  const acts = await prisma.activite.findMany({
+    where: { entiteType: 'CANDIDAT', entiteId: candidatId, type: { in: ['APPEL', 'TRANSCRIPT', 'MEETING', 'NOTE'] } },
+    orderBy: { createdAt: 'desc' }, take: 25,
+    select: { type: true, contenu: true, metadata: true, createdAt: true },
+  });
+  const parts: string[] = [];
+  let count = 0;
+  for (const a of acts) {
+    const meta = (a.metadata ?? {}) as Record<string, unknown>;
+    const txt = (meta.transcript as string) || a.contenu || '';
+    if (!txt) continue;
+    if (a.type === 'NOTE' && txt.length < 400) continue;
+    parts.push(`[${a.type} · ${new Date(a.createdAt).toLocaleDateString('fr-FR')}]\n${txt}`);
+    count++;
+  }
+  return { text: parts.join('\n\n---\n\n'), count };
+}
+
 const FILL_SYSTEM = `Tu es un assistant recruteur. À partir des transcriptions d'appels et d'entretiens fournies, tu remplis une fiche de qualification standardisée sur LE CANDIDAT. Pour chaque champ, réponds UNIQUEMENT avec ce qui est dit ou fortement impliqué par les transcriptions. Si un champ n'est pas couvert, mets null. Sois factuel et concis (une phrase ou une liste courte). Conserve les CHIFFRES (montants, quotas, ARR, pourcentages, durées de cycle) tels quels. Réponds en français.`;
 
 /** Remplit les champs IA du socle depuis les transcripts du candidat. Préserve les champs `manuel`. */
@@ -68,21 +89,8 @@ export async function fillFromTranscripts(candidatId: string, userId: string) {
   const cand = await prisma.candidat.findUnique({ where: { id: candidatId }, select: { id: true, nom: true, prenom: true } });
   if (!cand) throw new NotFoundError('Candidat', candidatId);
 
-  const acts = await prisma.activite.findMany({
-    where: { entiteType: 'CANDIDAT', entiteId: candidatId, type: { in: ['APPEL', 'TRANSCRIPT', 'MEETING'] } },
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-    select: { type: true, contenu: true, metadata: true, createdAt: true },
-  });
-  const transcripts = acts
-    .map((a) => {
-      const meta = (a.metadata ?? {}) as Record<string, unknown>;
-      const txt = (meta.transcript as string) || a.contenu || '';
-      return txt ? `[${a.type} · ${new Date(a.createdAt).toLocaleDateString('fr-FR')}]\n${txt}` : '';
-    })
-    .filter(Boolean)
-    .join('\n\n---\n\n');
-  if (!transcripts.trim()) throw new ValidationError('Aucun transcript (appel ou entretien) trouvé pour ce candidat.');
+  const { text: transcripts, count } = await gatherTranscripts(candidatId);
+  if (!transcripts.trim()) throw new ValidationError('Aucun échange exploitable (appel, entretien ou debrief) trouvé pour ce candidat.');
 
   const userPrompt = `Candidat : ${[cand.prenom, cand.nom].filter(Boolean).join(' ').trim()}
 
@@ -116,7 +124,7 @@ Retourne UNIQUEMENT ce JSON, sans texte autour :
     if (val && val.toLowerCase() !== 'null') { next[f.key] = { v: val, src: 'ia', at: now }; filled++; }
   }
   await prisma.candidat.update({ where: { id: candidatId }, data: { qualification: next as any } as any });
-  return { qualification: next, filled, transcriptsUsed: acts.length };
+  return { qualification: next, filled, transcriptsUsed: count };
 }
 
 // ── Fit par candidature ─────────────────────────────
@@ -148,15 +156,8 @@ export async function fillFit(candidatureId: string, userId: string) {
   });
   if (!cand) throw new NotFoundError('Candidature', candidatureId);
 
-  const acts = await prisma.activite.findMany({
-    where: { entiteType: 'CANDIDAT', entiteId: cand.candidat.id, type: { in: ['APPEL', 'TRANSCRIPT', 'MEETING'] } },
-    orderBy: { createdAt: 'desc' }, take: 20,
-    select: { type: true, contenu: true, metadata: true, createdAt: true },
-  });
-  const transcripts = acts
-    .map((a) => { const meta = (a.metadata ?? {}) as Record<string, unknown>; const txt = (meta.transcript as string) || a.contenu || ''; return txt ? `[${a.type}]\n${txt}` : ''; })
-    .filter(Boolean).join('\n\n---\n\n');
-  if (!transcripts.trim()) throw new ValidationError('Aucun transcript trouvé pour ce candidat.');
+  const { text: transcripts, count } = await gatherTranscripts(cand.candidat.id);
+  if (!transcripts.trim()) throw new ValidationError('Aucun échange exploitable trouvé pour ce candidat.');
 
   const poste = `${cand.mandat.titrePoste}${cand.mandat.entreprise?.nom ? ' — ' + cand.mandat.entreprise.nom : ''}`;
   const userPrompt = `Poste visé : ${poste}
@@ -188,5 +189,5 @@ Retourne UNIQUEMENT ce JSON : { "fields": { "fitPoste": "<...ou null>", "nextSte
     if (val && val.toLowerCase() !== 'null') { next[f.key] = { v: val, src: 'ia', at: now }; filled++; }
   }
   await prisma.candidature.update({ where: { id: candidatureId }, data: { qualifFit: next as any } as any });
-  return { fit: next, filled, transcriptsUsed: acts.length };
+  return { fit: next, filled, transcriptsUsed: count };
 }
