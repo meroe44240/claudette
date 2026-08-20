@@ -152,14 +152,12 @@ export default function CandidatDetailPage() {
 
   const pretentions = c.salaireSouhaite ? `${c.salaireSouhaite.toLocaleString('fr-FR')} €` : null;
   const posteActuelLabel = c.posteActuel ? `${c.posteActuel}${c.entrepriseActuelle ? ` · ${c.entrepriseActuelle}` : ''}` : (c.entrepriseActuelle || null);
+  // Détails = contact pur. Les faits (prétentions, dispo, poste, localisation) sont dans
+  // le bandeau FACTS ci-dessus et éditables via « Modifier les infos » — on ne les répète pas ici.
   const details: { label: string; Icon: typeof Mail; value: string | null; href?: string; select?: boolean }[] = [
-    { label: 'Prétentions', Icon: Euro, value: pretentions },
-    { label: 'Disponibilité', Icon: Clock, value: c.disponibilite },
-    { label: 'Poste actuel', Icon: Briefcase, value: posteActuelLabel },
     { label: 'E-mail', Icon: Mail, value: c.email, href: c.email ? `mailto:${c.email}` : undefined },
     { label: 'Téléphone', Icon: Phone, value: c.telephone, href: c.telephone ? `tel:${c.telephone}` : undefined },
     { label: 'LinkedIn', Icon: Linkedin, value: c.linkedinUrl, href: c.linkedinUrl ?? undefined },
-    { label: 'Localisation', Icon: MapPin, value: c.localisation },
     { label: 'Source du profil', Icon: FileText, value: c.source, select: true },
   ];
 

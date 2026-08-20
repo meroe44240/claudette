@@ -14,16 +14,16 @@ export interface QualifField { key: string; label: string; hint: string; ai: boo
 export interface QualifValue { v: string; src: 'ia' | 'manuel'; at: string }
 export type Qualification = Record<string, QualifValue>;
 
+// Socle QUALITATIF (debrief) uniquement. Les faits structurés — prétentions, disponibilité,
+// localisation, poste actuel — vivent dans le bandeau/les détails du candidat, PAS ici (anti-répétition).
+// Les attentes de package/rému sont capturées dans « ce qu'il veut / ne veut pas ».
 export const QUALIF_FIELDS: QualifField[] = [
-  { key: 'package', label: 'Package', hint: 'fixe / OTE / structure', ai: true },
-  { key: 'experience', label: 'Expérience', hint: 'années + domaines', ai: true },
+  { key: 'experience', label: 'Expérience', hint: 'années + domaines clés', ai: true },
   { key: 'performance', label: 'Performance & réalisations', hint: 'chiffres : quota, ARR, résultats', ai: true, long: true },
   { key: 'marche', label: 'Marché / séniorité', hint: 'segment, taille de deals, cycles', ai: true },
-  { key: 'disponibilite', label: 'Disponibilité', hint: 'préavis / date', ai: true },
-  { key: 'localisation', label: 'Localisation / mobilité', hint: 'ville, remote, mobilité', ai: true },
   { key: 'recherche', label: 'Ce qu’il recherche', hint: 'poste / mission visés', ai: true, long: true },
-  { key: 'veut', label: 'Ce qu’il veut', hint: 'ses must-have', ai: true },
-  { key: 'neVeutPas', label: 'Ce qu’il ne veut pas', hint: 'deal-breakers', ai: true },
+  { key: 'veut', label: 'Ce qu’il veut', hint: 'must-have, attentes de package/structure', ai: true, long: true },
+  { key: 'neVeutPas', label: 'Ce qu’il ne veut pas', hint: 'deal-breakers (rému, scope, marché…)', ai: true, long: true },
   { key: 'vigilance', label: 'Points de vigilance', hint: 'red flags à surveiller', ai: true, long: true },
   { key: 'feedbackRecruteur', label: 'Feedback recruteur', hint: 'ton avis post-entretien (manuel)', ai: false, long: true },
 ];
