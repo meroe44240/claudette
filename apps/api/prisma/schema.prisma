@@ -207,6 +207,8 @@ model Candidat {
   aiIdealFor          String?   @db.Text
   aiAnonymizedProfile Json?     // { titre, summary, bulletPoints }
   aiParsedAt          DateTime? @db.Timestamptz()
+  // Carte de qualification (socle standard) : { <fieldKey>: { v: string, src: 'ia'|'manuel', at: iso } }
+  qualification       Json?     @map("qualification")
   createdById        String?   @db.Uuid
   createdBy          User?     @relation("CandidatCreatedBy", fields: [createdById], references: [id])
   assignedToId       String?   @db.Uuid
