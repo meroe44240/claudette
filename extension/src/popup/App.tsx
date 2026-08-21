@@ -167,7 +167,13 @@ export function App() {
   return (
     <div>
       <header className="header">
-        <h1>HumanUp ATS</h1>
+        <div className="brand">
+          <img className="brand-mark" src="icons/logo-mark-cream-128.png" alt="" />
+          <div className="brand-text">
+            <span className="brand-word">HUMANUP</span>
+            <span className="brand-sub">Recruitment Agency</span>
+          </div>
+        </div>
         <div className="header-actions">
           <button className="btn-logout" onClick={handleLogout}>
             D&eacute;connexion
@@ -232,9 +238,16 @@ function LoginView({ onSuccess }: { onSuccess: () => void }) {
   return (
     <div>
       <header className="header">
-        <h1>HumanUp ATS</h1>
+        <div className="brand">
+          <img className="brand-mark" src="icons/logo-mark-cream-128.png" alt="" />
+          <div className="brand-text">
+            <span className="brand-word">HUMANUP</span>
+            <span className="brand-sub">Recruitment Agency</span>
+          </div>
+        </div>
       </header>
       <form className="login-form" onSubmit={handleSubmit}>
+        <img className="login-mark" src="icons/logo-mark-navy-128.png" alt="HumanUp" />
         <h2>Connexion</h2>
         <p>
           Connectez-vous pour ajouter des candidats et entreprises depuis

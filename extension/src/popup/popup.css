@@ -62,25 +62,69 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  background: var(--primary-gradient);
+  background: var(--primary);
   color: white;
   position: relative;
 }
 
+/* Filet lime (identité de marque) */
 .header::after {
   content: '';
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.15);
+  height: 3px;
+  background: #E6E9AF;
 }
 
 .header h1 {
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.3px;
+}
+
+/* Lockup de marque : mark R + wordmark */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 26px;
+  height: 26px;
+  display: block;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.brand-word {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #E6E9AF;
+}
+
+.brand-sub {
+  font-size: 6.5px;
+  font-weight: 700;
+  letter-spacing: 2.6px;
+  text-transform: uppercase;
+  color: rgba(230, 233, 175, 0.55);
+  margin-top: 4px;
+}
+
+/* Mark navy au-dessus du formulaire de connexion */
+.login-mark {
+  width: 44px;
+  height: 44px;
+  display: block;
+  margin: 4px auto 14px;
 }
 
 .header-actions {
@@ -228,8 +272,8 @@ body {
 }
 
 .btn-primary {
-  background: var(--primary-gradient);
-  color: white;
+  background: var(--primary);
+  color: #E6E9AF;
   box-shadow: var(--shadow-btn);
 }
 
