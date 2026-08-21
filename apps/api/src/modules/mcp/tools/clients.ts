@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { wrapTool } from '../mcp.tools.js';
 import * as clientService from '../../clients/client.service.js';
+import { resolvePersonPhoto } from '../../../lib/photo.js';
 
 export function registerClientTools(server: McpServer) {
   server.tool(
@@ -86,6 +87,8 @@ export function registerClientTools(server: McpServer) {
       telephone: z.string().optional().describe('Telephone'),
       titre: z.string().optional().describe('Titre/poste du contact'),
       entrepriseId: z.string().optional().describe("UUID de l'entreprise"),
+      linkedinUrl: z.string().optional().describe('URL du profil LinkedIn'),
+      photo_url: z.string().optional().describe('URL de la photo du contact (ex. photo LinkedIn). Si absente, cherchee via Gravatar quand un email est connu.'),
       roleContact: z.string().optional().describe('Role : HIRING_MANAGER, DRH, PROCUREMENT, CEO, AUTRE'),
       statutClient: z.string().optional().describe('Statut : LEAD, PREMIER_CONTACT, BESOIN_QUALIFIE, etc.'),
     },
@@ -97,9 +100,10 @@ export function registerClientTools(server: McpServer) {
         const dup = await clientService.checkDuplicate(args.email as string);
         if (dup.exists && dup.match) return { warning: 'Doublon detecte', existing: { id: dup.match.id, name: `${dup.match.prenom} ${dup.match.nom}` } };
       }
-      // Map 'titre' → 'poste' (Prisma field name)
-      const { titre, ...rest } = args as any;
-      const createData = { ...rest, poste: titre };
+      // Map 'titre' → 'poste' (Prisma field name) ; résout la photo (URL fournie ou Gravatar)
+      const { titre, photo_url, ...rest } = args as any;
+      const photoUrl = await resolvePersonPhoto({ photoUrl: photo_url, email: args.email as string });
+      const createData = { ...rest, poste: titre, photoUrl: photoUrl ?? undefined };
       const client = await clientService.create(createData, user.userId);
       return { success: true, client_id: client.id, message: `Client ${args.prenom || ''} ${args.nom} cree` };
     }),

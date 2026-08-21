@@ -18,7 +18,7 @@ interface Mandat {
 }
 interface ClientDetail {
   id: string; nom: string; prenom: string | null; email: string | null; telephone: string | null;
-  poste: string | null; roleContact: string | null; linkedinUrl: string | null;
+  poste: string | null; roleContact: string | null; linkedinUrl: string | null; photoUrl: string | null;
   statutClient: string; typeClient: string | null; notes: string | null;
   entreprise: { id: string; nom: string; secteur: string | null; localisation: string | null; logoUrl: string | null; siteWeb: string | null } | null;
   mandats: Mandat[];
@@ -140,7 +140,9 @@ export default function ClientDetailPage() {
         <div>
           {/* IDENTITY */}
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 22 }}>
-            <span style={{ flexShrink: 0, width: 96, height: 96, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 32, boxShadow: '0 16px 36px -18px rgba(34,23,122,.6)' }}>{initials(c.prenom, c.nom)}</span>
+            {c.photoUrl
+              ? <img src={c.photoUrl} alt="" style={{ flexShrink: 0, width: 96, height: 96, borderRadius: '50%', objectFit: 'cover', background: '#F2F3D8', boxShadow: '0 16px 36px -18px rgba(34,23,122,.6)' }} />
+              : <span style={{ flexShrink: 0, width: 96, height: 96, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 32, boxShadow: '0 16px 36px -18px rgba(34,23,122,.6)' }}>{initials(c.prenom, c.nom)}</span>}
             <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 31, letterSpacing: '-.035em', color: '#1A1533' }}>{fullName}</h1>

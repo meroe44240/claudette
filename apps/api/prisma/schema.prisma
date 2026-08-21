@@ -130,6 +130,7 @@ model Client {
   poste        String?      @db.VarChar(255)
   roleContact  RoleContact?
   linkedinUrl  String?      @db.VarChar(500)
+  photoUrl     String?      @db.VarChar(1000)
   entrepriseId String       @db.Uuid
   entreprise   Entreprise   @relation(fields: [entrepriseId], references: [id])
   statutClient StatutClient @default(LEAD)

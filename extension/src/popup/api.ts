@@ -136,6 +136,7 @@ export interface CreateClientPayload {
   telephone?: string;
   poste?: string;
   linkedinUrl?: string;
+  photoUrl?: string;
   entrepriseId: string;
   notes?: string;
 }

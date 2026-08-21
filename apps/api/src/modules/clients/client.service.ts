@@ -313,7 +313,7 @@ export async function create(data: CreateClientInput, createdById: string) {
       ...data,
       createdById,
       assignedToId: data.assignedToId ?? createdById,
-    },
+    } as any,
     include: {
       entreprise: { select: { id: true, nom: true } },
     },

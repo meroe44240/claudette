@@ -454,6 +454,7 @@ function ProfileView({ data }: { data: PersonData }) {
         telephone: telephone.trim() || undefined,
         poste: poste.trim() || undefined,
         linkedinUrl: data.linkedinUrl,
+        photoUrl: data.photoUrl || undefined,
         entrepriseId: selectedEntrepriseId,
         notes: notes.trim() || undefined,
       };

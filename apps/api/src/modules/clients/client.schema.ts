@@ -10,6 +10,7 @@ export const createClientSchema = z.object({
     .enum(['HIRING_MANAGER', 'DRH', 'PROCUREMENT', 'CEO', 'AUTRE'])
     .optional(),
   linkedinUrl: z.string().optional(),
+  photoUrl: z.string().optional().nullable(),
   entrepriseId: z.string().uuid('entrepriseId doit etre un UUID valide'),
   statutClient: z
     .enum([
