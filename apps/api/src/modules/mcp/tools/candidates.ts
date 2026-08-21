@@ -4,6 +4,7 @@ import { wrapTool } from '../mcp.tools.js';
 import * as candidatService from '../../candidats/candidat.service.js';
 import * as candidatureService from '../../candidatures/candidature.service.js';
 import prisma from '../../../lib/db.js';
+import { resolvePersonPhoto } from '../../../lib/photo.js';
 
 export function registerCandidateTools(server: McpServer) {
   // ─── search_candidates ────────────────────────────────
@@ -123,6 +124,8 @@ export function registerCandidateTools(server: McpServer) {
       posteActuel: z.string().optional().describe('Poste actuel'),
       entrepriseActuelle: z.string().optional().describe('Entreprise actuelle'),
       localisation: z.string().optional().describe('Ville'),
+      linkedin_url: z.string().optional().describe('URL du profil LinkedIn'),
+      photo_url: z.string().optional().describe('URL de la photo de la personne (ex. photo LinkedIn). Si absente, la photo est cherchee via Gravatar quand un email est connu.'),
       salaire: z.string().optional().describe('Salaire souhaite (ex: 55000)'),
       source: z.string().optional().describe('Source : linkedin, referral, jobboard, mcp_claude'),
       tags: z.array(z.string()).optional().describe('Tags/competences'),
@@ -160,6 +163,7 @@ export function registerCandidateTools(server: McpServer) {
 
       // Map 'salaire' → 'salaireSouhaite' (Int in Prisma)
       const salaireParsed = args.salaire ? parseInt(String(args.salaire).replace(/[^\d]/g, ''), 10) || undefined : undefined;
+      const photoUrl = await resolvePersonPhoto({ photoUrl: args.photo_url as string, email: args.email as string });
       const candidate = await candidatService.create({
         nom: args.nom as string,
         prenom: args.prenom as string,
@@ -168,6 +172,8 @@ export function registerCandidateTools(server: McpServer) {
         posteActuel: args.posteActuel as string,
         entrepriseActuelle: args.entrepriseActuelle as string,
         localisation: args.localisation as string,
+        linkedinUrl: args.linkedin_url as string,
+        photoUrl: photoUrl ?? undefined,
         salaireSouhaite: salaireParsed,
         source: (args.source as string) || 'mcp_claude',
         tags: args.tags as string[],
