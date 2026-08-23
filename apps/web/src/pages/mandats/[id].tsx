@@ -508,13 +508,13 @@ export default function MandatDetailPage() {
   const [lastGrantedPwd, setLastGrantedPwd] = useState<{ email: string; pwd: string } | null>(null);
 
   const grantAccessMutation = useMutation({
-    mutationFn: (p: { email: string; password: string }) =>
-      api.post('/portal/access', { mandatId: id, clientId: mandat?.client?.id, email: p.email, password: p.password }),
+    mutationFn: (p: { email: string; password: string; sendInvite: boolean; contactName?: string }) =>
+      api.post('/portal/access', { mandatId: id, clientId: mandat?.client?.id, email: p.email, password: p.password, sendInvite: p.sendInvite, contactName: p.contactName }),
     onSuccess: (_res, p) => {
       queryClient.invalidateQueries({ queryKey: ['portal-accesses', id] });
       setLastGrantedPwd({ email: p.email, pwd: p.password });
       setCEmail('');
-      toast('success', `Accès portail créé pour ${p.email}`);
+      toast('success', p.sendInvite ? `Accès créé — invitation envoyée à ${p.email}` : `Accès portail créé pour ${p.email}`);
     },
     onError: (e: any) => toast('error', e?.message || "Impossible de créer l'accès"),
   });
@@ -531,7 +531,7 @@ export default function MandatDetailPage() {
   const submitGrant = () => {
     const email = cEmail.trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('error', 'Email invalide'); return; }
-    grantAccessMutation.mutate({ email, password: genPwd() });
+    grantAccessMutation.mutate({ email, password: genPwd(), sendInvite: inviteMail, contactName: cName.trim() || undefined });
   };
 
   // Init team once mandat is loaded
@@ -781,11 +781,11 @@ export default function MandatDetailPage() {
     `Bonjour ${(cName.trim().split(/\s+/).slice(-1)[0] || '[Nom]')},\n\n`
     + `Comme convenu, voici votre espace de suivi pour le recrutement du poste de ${mandat.titrePoste}.\n\n`
     + 'Vous y consultez les profils que nous vous présentons, et vous nous dites en un clic si vous souhaitez les rencontrer.\n\n'
-    + 'Accès : humanup.io/portail\n'
+    + `Accès : ats.propium.co/portail/login?m=${id}\n`
     + `Identifiant : ${(cEmail.trim() || '[email]')}\n`
-    + 'Mot de passe : sera généré à la création\n\n'
-    + 'Deux profils vous attendent déjà.\n\n'
-    + 'Bien à vous,\nMeroe Nguimbi — HumanUp';
+    + 'Mot de passe : généré et inclus automatiquement dans l’email envoyé\n\n'
+    + 'Les profils présentés vous attendent dans votre espace.\n\n'
+    + 'Bien à vous,\nL’équipe HumanUp';
 
   // ─── Publish preview derived ──────────────────────
   const jMissionList = jForm ? jForm.jMissions.split('\n').map((x) => x.trim()).filter(Boolean).map((t, i) => ({ n: String(i + 1).padStart(2, '0'), t })) : [];
