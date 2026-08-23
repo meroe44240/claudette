@@ -316,7 +316,7 @@ function htmlReport(rep: any): string {
         <td style="padding:24px 28px 22px">
           <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
             <td style="vertical-align:middle">
-              <span style="display:inline-block;width:28px;height:28px;background:#E6E9AF;border-radius:8px;text-align:center;line-height:28px;font-family:${FONT};font-weight:bold;font-size:16px;color:#22177A;vertical-align:middle">H</span>
+              <img src="https://ats.propium.co/brand/logo-mark-cream.png" width="28" height="28" alt="" style="display:inline-block;vertical-align:middle;border:0" />
               <span style="display:inline-block;vertical-align:middle;margin-left:11px">
                 <span style="font-family:${FONT};font-size:15px;font-weight:bold;letter-spacing:.5px;color:#E6E9AF">HUMANUP</span>
                 <span style="display:block;font-family:${FONT};font-size:7px;font-weight:bold;letter-spacing:2.5px;text-transform:uppercase;color:rgba(230,233,175,.5);margin-top:3px">Recruitment Agency</span>

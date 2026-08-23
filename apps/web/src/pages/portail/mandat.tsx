@@ -86,6 +86,7 @@ export default function PortalMandatPage() {
       {/* TOP BAR */}
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 28px', background: '#22177A' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+          <img src="/brand/logo-mark-cream.png" alt="" style={{ width: 26, height: 26 }} />
           <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 18, letterSpacing: '.01em', color: '#E6E9AF' }}>HUMANUP</span>
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: 'rgba(230,233,175,.55)' }}>Portail client</span>
         </div>

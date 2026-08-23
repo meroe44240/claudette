@@ -67,6 +67,7 @@ export default function PortalLoginPage() {
           <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(230,233,175,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(230,233,175,.045) 1px,transparent 1px)', backgroundSize: '46px 46px' }} />
           <div aria-hidden className="pl-fade" style={{ position: 'absolute', top: -190, right: -130, width: 520, height: 520, borderRadius: '50%', background: 'radial-gradient(circle, rgba(230,233,175,.16), transparent 68%)' }} />
           <div className="pl-rise" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 11 }}>
+            <img src="/brand/logo-mark-cream.png" alt="" style={{ width: 32, height: 32 }} />
             <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, letterSpacing: '.01em', color: '#E6E9AF' }}>HUMANUP</span>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.2em', textTransform: 'uppercase', color: 'rgba(230,233,175,.55)' }}>Portail client</span>
           </div>
@@ -89,6 +90,7 @@ export default function PortalLoginPage() {
           <div aria-hidden style={{ position: 'absolute', top: 0, right: 0, width: 520, height: 420, background: 'radial-gradient(ellipse at top right, rgba(230,233,175,.4), transparent 62%)', pointerEvents: 'none' }} />
           <form onSubmit={handleSubmit} className="pl-rise" style={{ position: 'relative', width: '100%', maxWidth: 400 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 30 }}>
+              <img src="/brand/logo-mark-navy.png" alt="" style={{ width: 30, height: 30 }} />
               <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, letterSpacing: '.01em', color: '#22177A' }}>HUMANUP</span>
             </div>
             <h2 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 28, letterSpacing: '-.02em', color: '#1A1533' }}>Connexion</h2>
