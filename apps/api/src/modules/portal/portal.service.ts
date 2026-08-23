@@ -104,7 +104,7 @@ async function sendInviteEmail(p: { email: string; password: string; mandatId: s
   const html = `<div style="background:#ECECE4;padding:24px 12px;font-family:${F}">
     <div style="max-width:560px;margin:0 auto;background:#FCFCF5;border-radius:18px;overflow:hidden;box-shadow:0 26px 64px -38px rgba(20,16,58,.5)">
       <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#22177A"><tr><td style="padding:22px 26px">
-        <span style="display:inline-block;width:26px;height:26px;background:#E6E9AF;border-radius:7px;text-align:center;line-height:26px;font-weight:bold;font-size:15px;color:#22177A;vertical-align:middle">H</span>
+        <img src="${PORTAL_BASE}/brand/logo-mark-cream.png" width="28" height="28" alt="" style="display:inline-block;vertical-align:middle;border:0" />
         <span style="font-family:${F};font-size:15px;font-weight:bold;letter-spacing:.5px;color:#E6E9AF;margin-left:10px;vertical-align:middle">HUMANUP</span>
       </td></tr></table>
       <div style="height:3px;background:#E6E9AF;font-size:0;line-height:0">&nbsp;</div>
