@@ -173,6 +173,8 @@ export default async function portalRouter(fastify: FastifyInstance) {
         clientId: z.string().uuid(),
         email: z.string().email(),
         password: z.string().min(6),
+        sendInvite: z.boolean().optional(),
+        contactName: z.string().optional(),
       }).parse(request.body);
       const created = await portalService.createAccess(input);
       reply.code(201);
