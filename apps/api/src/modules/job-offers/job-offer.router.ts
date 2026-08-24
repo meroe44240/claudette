@@ -6,6 +6,9 @@ import * as service from './job-offer.service.js';
 const offerSchema = z.object({
   titre: z.string().min(1),
   description: z.string().min(1),
+  descriptionSociete: z.string().nullable().optional(),
+  missions: z.string().nullable().optional(),
+  packageInfo: z.string().nullable().optional(),
   localisation: z.string().nullable().optional(),
   contractType: z.string().nullable().optional(),
   remote: z.string().nullable().optional(),

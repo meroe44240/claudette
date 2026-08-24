@@ -11,13 +11,15 @@ interface JobOffer {
   localisation: string | null;
   contractType: string | null; remote: string | null; salaireMin: number | null; salaireMax: number | null;
   secteur: string | null; entrepriseNom: string | null; tags: string[]; published: boolean; createdAt: string;
+  mandatId: string | null;
 }
+interface MandatOpt { id: string; titrePoste: string; entreprise: { nom: string } | null; }
 type Form = Omit<JobOffer, 'id' | 'slug' | 'createdAt'> & { id?: string };
 
 const CONTRACTS = ['CDI', 'CDD', 'FREELANCE', 'ALTERNANCE', 'STAGE'];
 const REMOTES = [{ v: 'ONSITE', l: 'Sur site' }, { v: 'HYBRID', l: 'Hybride' }, { v: 'REMOTE', l: 'Full remote' }];
 
-function empty(): Form { return { titre: '', description: '', descriptionSociete: '', missions: '', packageInfo: '', localisation: '', contractType: 'CDI', remote: 'HYBRID', salaireMin: null, salaireMax: null, secteur: '', entrepriseNom: '', tags: [], published: false }; }
+function empty(): Form { return { titre: '', description: '', descriptionSociete: '', missions: '', packageInfo: '', localisation: '', contractType: 'CDI', remote: 'HYBRID', salaireMin: null, salaireMax: null, secteur: '', entrepriseNom: '', tags: [], published: false, mandatId: null }; }
 function salaire(min: number | null, max: number | null) { if (min && max) return `${(min / 1000).toFixed(0)}–${(max / 1000).toFixed(0)}k€`; if (min) return `≥ ${(min / 1000).toFixed(0)}k€`; if (max) return `≤ ${(max / 1000).toFixed(0)}k€`; return null; }
 
 export default function OffresPage() {
@@ -27,6 +29,8 @@ export default function OffresPage() {
   const [copied, setCopied] = useState(false);
 
   const { data: offers } = useQuery({ queryKey: ['job-offers'], queryFn: () => api.get<JobOffer[]>('/job-offers') });
+  const { data: mandatsData } = useQuery({ queryKey: ['mandats', 'forOffres'], queryFn: () => api.get<{ data: MandatOpt[] }>('/mandats?perPage=200&scope=all'), staleTime: 5 * 60 * 1000 });
+  const mandats = mandatsData?.data ?? [];
   const publicUrl = `${window.location.origin.replace(':5173', ':3001')}/api/v1/public/job-offers`;
 
   const inv = () => qc.invalidateQueries({ queryKey: ['job-offers'] });
@@ -98,12 +102,12 @@ export default function OffresPage() {
       </div>
 
       {/* MODAL */}
-      {modal && <OfferModal form={modal} onClose={() => setModal(null)} onSave={f => saveMut.mutate(f)} saving={saveMut.isPending} />}
+      {modal && <OfferModal form={modal} mandats={mandats} onClose={() => setModal(null)} onSave={f => saveMut.mutate(f)} saving={saveMut.isPending} />}
     </div>
   );
 }
 
-function OfferModal({ form, onClose, onSave, saving }: { form: Form; onClose: () => void; onSave: (f: Form) => void; saving: boolean }) {
+function OfferModal({ form, mandats, onClose, onSave, saving }: { form: Form; mandats: MandatOpt[]; onClose: () => void; onSave: (f: Form) => void; saving: boolean }) {
   const [f, setF] = useState<Form>(form);
   const [tagInput, setTagInput] = useState('');
   const set = (k: keyof Form, v: any) => setF(p => ({ ...p, [k]: v }));
@@ -122,6 +126,14 @@ function OfferModal({ form, onClose, onSave, saving }: { form: Form; onClose: ()
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 }}>
           <div><label style={lbl}>Intitulé du poste *</label><input className="st-in" value={f.titre} onChange={e => set('titre', e.target.value)} style={inStyle} placeholder="Account Executive SaaS" /></div>
           <div><label style={lbl}>Accroche (résumé court) *</label><textarea className="st-in" value={f.description} onChange={e => set('description', e.target.value)} style={{ ...inStyle, minHeight: 62, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder="Une ou deux phrases qui donnent envie de lire la suite…" /></div>
+          <div>
+            <label style={lbl}>Mandat lié</label>
+            <select value={f.mandatId ?? ''} onChange={e => set('mandatId', e.target.value || null)} style={{ ...inStyle, cursor: 'pointer' }}>
+              <option value="">Aucun — offre indépendante</option>
+              {mandats.map(m => <option key={m.id} value={m.id}>{m.titrePoste}{m.entreprise?.nom ? ` — ${m.entreprise.nom}` : ''}</option>)}
+            </select>
+            <div style={{ fontSize: 11.5, color: '#8A8699', marginTop: 5 }}>Les candidatures reçues via le job board alimenteront directement le pipeline de ce mandat.</div>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div><label style={lbl}>Entreprise (public)</label><input className="st-in" value={f.entrepriseNom ?? ''} onChange={e => set('entrepriseNom', e.target.value)} style={inStyle} placeholder="ou vide = confidentiel" /></div>
             <div><label style={lbl}>Localisation</label><input className="st-in" value={f.localisation ?? ''} onChange={e => set('localisation', e.target.value)} style={inStyle} placeholder="Paris (75)" /></div>
