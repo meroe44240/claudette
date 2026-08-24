@@ -1050,7 +1050,10 @@ model JobOffer {
   id            String   @id @default(uuid()) @db.Uuid
   slug          String   @unique @db.VarChar(255)
   titre         String   @db.VarChar(255)
-  description   String   @db.Text
+  description   String   @db.Text                         // accroche / résumé court (optionnel côté UI)
+  descriptionSociete String? @db.Text @map("description_societe")
+  missions      String?  @db.Text
+  packageInfo   String?  @db.Text @map("package_info")
   localisation  String?  @db.VarChar(255)
   contractType  String?  @db.VarChar(50)   // CDI, CDD, FREELANCE, STAGE, ALTERNANCE
   remote        String?  @db.VarChar(50)   // ONSITE, HYBRID, REMOTE

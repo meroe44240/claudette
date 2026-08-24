@@ -6,7 +6,9 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
 
 interface JobOffer {
-  id: string; slug: string; titre: string; description: string; localisation: string | null;
+  id: string; slug: string; titre: string; description: string;
+  descriptionSociete: string | null; missions: string | null; packageInfo: string | null;
+  localisation: string | null;
   contractType: string | null; remote: string | null; salaireMin: number | null; salaireMax: number | null;
   secteur: string | null; entrepriseNom: string | null; tags: string[]; published: boolean; createdAt: string;
 }
@@ -15,7 +17,7 @@ type Form = Omit<JobOffer, 'id' | 'slug' | 'createdAt'> & { id?: string };
 const CONTRACTS = ['CDI', 'CDD', 'FREELANCE', 'ALTERNANCE', 'STAGE'];
 const REMOTES = [{ v: 'ONSITE', l: 'Sur site' }, { v: 'HYBRID', l: 'Hybride' }, { v: 'REMOTE', l: 'Full remote' }];
 
-function empty(): Form { return { titre: '', description: '', localisation: '', contractType: 'CDI', remote: 'HYBRID', salaireMin: null, salaireMax: null, secteur: '', entrepriseNom: '', tags: [], published: false }; }
+function empty(): Form { return { titre: '', description: '', descriptionSociete: '', missions: '', packageInfo: '', localisation: '', contractType: 'CDI', remote: 'HYBRID', salaireMin: null, salaireMax: null, secteur: '', entrepriseNom: '', tags: [], published: false }; }
 function salaire(min: number | null, max: number | null) { if (min && max) return `${(min / 1000).toFixed(0)}–${(max / 1000).toFixed(0)}k€`; if (min) return `≥ ${(min / 1000).toFixed(0)}k€`; if (max) return `≤ ${(max / 1000).toFixed(0)}k€`; return null; }
 
 export default function OffresPage() {
@@ -119,7 +121,7 @@ function OfferModal({ form, onClose, onSave, saving }: { form: Form; onClose: ()
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 }}>
           <div><label style={lbl}>Intitulé du poste *</label><input className="st-in" value={f.titre} onChange={e => set('titre', e.target.value)} style={inStyle} placeholder="Account Executive SaaS" /></div>
-          <div><label style={lbl}>Description *</label><textarea className="st-in" value={f.description} onChange={e => set('description', e.target.value)} style={{ ...inStyle, minHeight: 100, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder="Missions, profil recherché…" /></div>
+          <div><label style={lbl}>Accroche (résumé court) *</label><textarea className="st-in" value={f.description} onChange={e => set('description', e.target.value)} style={{ ...inStyle, minHeight: 62, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder="Une ou deux phrases qui donnent envie de lire la suite…" /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div><label style={lbl}>Entreprise (public)</label><input className="st-in" value={f.entrepriseNom ?? ''} onChange={e => set('entrepriseNom', e.target.value)} style={inStyle} placeholder="ou vide = confidentiel" /></div>
             <div><label style={lbl}>Localisation</label><input className="st-in" value={f.localisation ?? ''} onChange={e => set('localisation', e.target.value)} style={inStyle} placeholder="Paris (75)" /></div>
@@ -129,6 +131,9 @@ function OfferModal({ form, onClose, onSave, saving }: { form: Form; onClose: ()
             <div><label style={lbl}>Salaire max (€/an)</label><input className="st-in" value={f.salaireMax ?? ''} onChange={e => set('salaireMax', num(e.target.value))} style={inStyle} placeholder="60000" /></div>
             <div style={{ gridColumn: '1 / -1' }}><label style={lbl}>Secteur</label><input className="st-in" value={f.secteur ?? ''} onChange={e => set('secteur', e.target.value)} style={inStyle} placeholder="SaaS / Tech" /></div>
           </div>
+          <div><label style={lbl}>Description de la société</label><textarea className="st-in" value={f.descriptionSociete ?? ''} onChange={e => set('descriptionSociete', e.target.value)} style={{ ...inStyle, minHeight: 84, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder="Qui est l'entreprise, son marché, sa taille, sa culture, sa mission…" /></div>
+          <div><label style={lbl}>Missions</label><textarea className="st-in" value={f.missions ?? ''} onChange={e => set('missions', e.target.value)} style={{ ...inStyle, minHeight: 100, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={'Les responsabilités du poste. Une mission par ligne :\n• Prospecter et qualifier…\n• Piloter le cycle de vente…'} /></div>
+          <div><label style={lbl}>Package</label><textarea className="st-in" value={f.packageInfo ?? ''} onChange={e => set('packageInfo', e.target.value)} style={{ ...inStyle, minHeight: 84, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={'Rémunération, variable, avantages, BSPCE, télétravail, matériel…\n(le salaire chiffré ci-dessus s\'affiche aussi automatiquement)'} /></div>
           <div>
             <label style={lbl}>Compétences / tags</label>
             <div style={{ display: 'flex', gap: 8 }}>
