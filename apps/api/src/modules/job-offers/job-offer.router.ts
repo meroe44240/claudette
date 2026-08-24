@@ -18,7 +18,7 @@ const offerSchema = z.object({
   entrepriseNom: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
   published: z.boolean().optional(),
-  mandatId: z.string().uuid().nullable().optional(),
+  mandatId: z.string().min(1).nullable().optional(), // FK + colonne @db.Uuid valident le format (les seeds ont des UUID non-v4 que z.uuid() rejette)
 });
 
 // ── Routeur ATS (authentifié) : /api/v1/job-offers ──
