@@ -248,22 +248,33 @@ async function computeSlots(userId: string, settings: any): Promise<string[]> {
 }
 
 // ── Page publique + création ────────────────────────
+// Type effectif d'un RDV : le kind explicite, sinon dérivé de la fonction du host.
+// Sales / admin → Discovery call ; Recruteur → Qualification.
+function effectiveKind(kind: string | null | undefined, fonction?: string | null): string {
+  if (kind && kind !== 'GENERIC') return kind;
+  return fonction === 'RECRUTEUR' ? 'QUALIFICATION' : 'DISCOVERY';
+}
+
 export async function getPublicPage(slug: string) {
   const settings = await prisma.bookingSettings.findUnique({ where: { slug } });
   if (!settings || !settings.isActive) throw new NotFoundError('Page de réservation', slug);
-  const user = await prisma.user.findUnique({ where: { id: settings.userId }, select: { prenom: true, nom: true, avatarUrl: true } });
+  const user = await prisma.user.findUnique({ where: { id: settings.userId }, select: { prenom: true, nom: true, avatarUrl: true, avatarData: true, fonction: true } as any }) as any;
   const slots = await computeSlots(settings.userId, settings);
   const mandatId = (settings as any).mandatId as string | null;
   const mandat = mandatId
     ? await prisma.mandat.findUnique({ where: { id: mandatId }, select: { id: true, titrePoste: true, entreprise: { select: { nom: true } } } })
     : null;
+  const kind = effectiveKind((settings as any).kind, user?.fonction);
   return {
     slug: settings.slug,
-    kind: (settings as any).kind ?? 'GENERIC',
+    kind,
     title: settings.title,
     durationMin: settings.durationMin,
     timezone: settings.timezone,
-    host: { name: `${user?.prenom ? user.prenom + ' ' : ''}${user?.nom ?? ''}`.trim() || 'HumanUp', avatarUrl: user?.avatarUrl ?? null },
+    host: {
+      name: `${user?.prenom ? user.prenom + ' ' : ''}${user?.nom ?? ''}`.trim() || 'HumanUp',
+      avatarUrl: user?.avatarUrl ?? user?.avatarData ?? null,
+    },
     mandat: mandat ? { id: mandat.id, titrePoste: mandat.titrePoste, entreprise: mandat.entreprise?.nom ?? null } : null,
     slots,
   };
@@ -277,8 +288,10 @@ export async function createBooking(slug: string, data: {
   if (!settings || !settings.isActive) throw new NotFoundError('Page de réservation', slug);
   if (!data.name?.trim() || !data.email?.trim()) throw new ValidationError('Nom et email requis');
 
+  // Type effectif (dérivé de la fonction du host si non défini explicitement).
+  const hostUser = await prisma.user.findUnique({ where: { id: settings.userId }, select: { fonction: true } as any }) as any;
+  const kind = effectiveKind((settings as any).kind, hostUser?.fonction);
   // Un Discovery call (client) exige un email PRO — les adresses perso sont refusées.
-  const kind = (settings as any).kind ?? 'GENERIC';
   if (kind === 'DISCOVERY' && isPersonalEmail(data.email.trim())) {
     throw new ValidationError('Merci d’utiliser votre email professionnel (une adresse gmail/générique ne permet pas de réserver).');
   }
@@ -399,7 +412,7 @@ export async function createBooking(slug: string, data: {
   }
 
   // Qualification liée à un mandat + candidat identifié → rattache le candidat au mandat
-  const qualMandatId = (settings as any).kind === 'QUALIFICATION' ? ((settings as any).mandatId as string | null) : null;
+  const qualMandatId = kind === 'QUALIFICATION' ? ((settings as any).mandatId as string | null) : null;
   if (qualMandatId && candidat?.id) {
     try {
       const already = await prisma.candidature.findFirst({ where: { mandatId: qualMandatId, candidatId: candidat.id }, select: { id: true } });
