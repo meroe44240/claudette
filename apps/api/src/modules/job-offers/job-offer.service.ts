@@ -21,6 +21,9 @@ async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
 export interface JobOfferInput {
   titre: string;
   description: string;
+  descriptionSociete?: string | null;
+  missions?: string | null;
+  packageInfo?: string | null;
   localisation?: string | null;
   contractType?: string | null;
   remote?: string | null;
@@ -45,6 +48,9 @@ export async function create(data: JobOfferInput, userId?: string) {
       slug,
       titre: data.titre,
       description: data.description,
+      descriptionSociete: data.descriptionSociete ?? null,
+      missions: data.missions ?? null,
+      packageInfo: data.packageInfo ?? null,
       localisation: data.localisation ?? null,
       contractType: data.contractType ?? null,
       remote: data.remote ?? null,
@@ -70,6 +76,9 @@ export async function update(id: string, data: JobOfferInput) {
       slug,
       titre: data.titre ?? existing.titre,
       description: data.description ?? existing.description,
+      descriptionSociete: data.descriptionSociete !== undefined ? data.descriptionSociete : (existing as any).descriptionSociete,
+      missions: data.missions !== undefined ? data.missions : (existing as any).missions,
+      packageInfo: data.packageInfo !== undefined ? data.packageInfo : (existing as any).packageInfo,
       localisation: data.localisation ?? existing.localisation,
       contractType: data.contractType ?? existing.contractType,
       remote: data.remote ?? existing.remote,
@@ -103,7 +112,8 @@ export async function listPublic() {
     where: { published: true },
     orderBy: { createdAt: 'desc' },
     select: {
-      slug: true, titre: true, description: true, localisation: true, contractType: true,
+      slug: true, titre: true, description: true, descriptionSociete: true, missions: true, packageInfo: true,
+      localisation: true, contractType: true,
       remote: true, salaireMin: true, salaireMax: true, secteur: true, entrepriseNom: true,
       tags: true, createdAt: true,
     },
@@ -115,7 +125,8 @@ export async function getPublicBySlug(slug: string) {
   const offer = await prisma.jobOffer.findUnique({
     where: { slug },
     select: {
-      slug: true, titre: true, description: true, localisation: true, contractType: true,
+      slug: true, titre: true, description: true, descriptionSociete: true, missions: true, packageInfo: true,
+      localisation: true, contractType: true,
       remote: true, salaireMin: true, salaireMax: true, secteur: true, entrepriseNom: true,
       tags: true, published: true, createdAt: true,
     },
