@@ -135,6 +135,7 @@ export default function BookPage() {
   const kind = page?.kind ?? 'GENERIC';
   const isPro = kind === 'DISCOVERY';
   const isCand = kind === 'QUALIFICATION';
+  const typeLabel = kind === 'DISCOVERY' ? 'Discovery call' : kind === 'QUALIFICATION' ? 'Qualification' : (page?.title ?? '');
   const emailDomain = f.email.split('@')[1]?.toLowerCase().trim();
   const emailIsPersonal = !!emailDomain && PERSONAL_DOMAINS.has(emailDomain);
   const emailProValid = !isPro || (!!emailDomain && !emailIsPersonal);
@@ -183,10 +184,16 @@ export default function BookPage() {
           <div style={{ background: '#22177A', color: '#fff', padding: '30px 28px', position: 'relative', overflow: 'hidden' }}>
             <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(230,233,175,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(230,233,175,.05) 1px,transparent 1px)', backgroundSize: '38px 38px' }} />
             <div style={{ position: 'relative' }}>
-              <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 17, letterSpacing: '.01em', color: '#E6E9AF' }}>HUMANUP</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 30 }}>
-                <span style={{ width: 56, height: 56, borderRadius: '50%', background: '#E6E9AF', color: '#22177A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 16, overflow: 'hidden', flexShrink: 0 }}>{page.host.avatarUrl ? <img src={page.host.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials(page.host.name)}</span>
-                <div><div style={{ fontSize: 12.5, color: 'rgba(230,233,175,.7)' }}>{page.host.name}</div><div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, marginTop: 2 }}>{page.title}</div></div>
+              {/* Logo en grand */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+                <img src="/brand/logo-mark-cream.png" alt="" style={{ width: 38, height: 38 }} />
+                <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, letterSpacing: '.01em', color: '#E6E9AF' }}>HUMANUP</span>
+              </div>
+              {/* Photo de la personne + type de call */}
+              <div style={{ marginTop: 34 }}>
+                <span style={{ width: 88, height: 88, borderRadius: '50%', background: '#E6E9AF', color: '#22177A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 26, overflow: 'hidden', flexShrink: 0, boxShadow: '0 14px 30px -14px rgba(0,0,0,.5)', border: '3px solid rgba(230,233,175,.25)' }}>{page.host.avatarUrl ? <img src={page.host.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials(page.host.name)}</span>
+                <div style={{ fontSize: 13, color: 'rgba(230,233,175,.75)', marginTop: 16 }}>{page.host.name}</div>
+                <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 23, letterSpacing: '-.01em', marginTop: 3 }}>{typeLabel}</div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 26, fontSize: 13.5, color: 'rgba(230,233,175,.9)' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}><Clock size={15} color="#E6E9AF" />{page.durationMin} {t.minutes}</span>
