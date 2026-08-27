@@ -58,11 +58,15 @@ interface MandatSpa {
 
 interface StructureKpis { caStructure: number; mandatsActifs: number; candidatsEnProcess: number; pipeStructure: number }
 
+interface ObjectifGauge { ca: number; cible: number | null; pct: number | null }
+interface ObjectifData { periode: string; perso: ObjectifGauge; agence: ObjectifGauge }
+
 interface SpaData {
   bandeau: BandeauData;
   kpis: KpisData;
   structureKpis: StructureKpis | null;
   mandats: MandatSpa[];
+  objectif?: ObjectifData;
 }
 
 interface CalendarEvent {
@@ -358,6 +362,42 @@ export default function DashboardPage() {
             </div>
           ))}
       </div>
+
+      {/* OBJECTIF FINANCIER (trimestre) */}
+      {spaData?.objectif && (
+        <div className="rise" style={{ marginTop: 16, background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 16, padding: '20px 24px', boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9A96AE' }}>Objectif financier</span>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', borderRadius: 999, padding: '3px 11px' }}>{spaData.objectif.periode}</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 26, marginTop: 12 }}>
+            {([
+              { label: 'Mon CA', g: spaData.objectif.perso },
+              { label: 'CA agence', g: spaData.objectif.agence },
+            ] as const).map(({ label, g }) => {
+              const pct = g.pct;
+              const reached = pct !== null && pct >= 100;
+              const barW = pct === null ? 0 : Math.min(pct, 100);
+              const eur = (n: number) => n.toLocaleString('fr-FR') + ' €';
+              return (
+                <div key={label}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: '#4A4568' }}>{label}</span>
+                    <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 14, color: pct === null ? '#C4C1D0' : reached ? '#2C6B3F' : '#22177A' }}>{pct === null ? 'objectif à définir' : `${pct}%`}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
+                    <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 26, letterSpacing: '-0.035em', color: '#22177A', lineHeight: 1 }}>{eur(g.ca)}</span>
+                    {g.cible !== null && <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 13, color: '#C4C1D0', letterSpacing: '-0.02em' }}>/ {eur(g.cible)}</span>}
+                  </div>
+                  <div style={{ height: 8, borderRadius: 999, background: 'rgba(34,23,122,.07)', marginTop: 12, overflow: 'hidden' }}>
+                    <div className="bar-fill" style={{ width: `${barW}%`, height: '100%', borderRadius: 999, background: reached ? '#2C6B3F' : '#22177A' }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* MON ACTIVITÉ */}
       {kpis && (

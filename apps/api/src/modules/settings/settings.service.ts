@@ -19,10 +19,17 @@ const userSelect = {
 } as any;
 
 export async function listUsers() {
-  return prisma.user.findMany({
+  const users = await prisma.user.findMany({
     select: userSelect,
     orderBy: { createdAt: 'desc' },
   });
+  // Objectif CA trimestriel (RecruiterObjective) rattaché à chaque user.
+  const objs = await prisma.recruiterObjective.findMany({
+    where: { period: 'quarterly', metric: 'ca' },
+    select: { userId: true, target: true },
+  });
+  const objMap = new Map(objs.map((o) => [o.userId, o.target]));
+  return users.map((u: any) => ({ ...u, objectifCaTrimestre: objMap.get(u.id) ?? null }));
 }
 
 export interface TeamMember {
@@ -90,6 +97,7 @@ export async function updateUser(
     avatarUrl?: string;
     avatarData?: string;
     password?: string;
+    objectifCaTrimestre?: number | null;
   },
 ) {
   const existing = await prisma.user.findUnique({ where: { id } });
@@ -111,11 +119,36 @@ export async function updateUser(
     updateData.mustChangePassword = false;
   }
 
-  return prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id },
     data: updateData,
     select: userSelect,
   });
+
+  // Objectif CA trimestriel (RecruiterObjective metric=ca, period=quarterly)
+  let objectifCaTrimestre: number | null = null;
+  if (data.objectifCaTrimestre !== undefined) {
+    if (data.objectifCaTrimestre === null || data.objectifCaTrimestre <= 0) {
+      await prisma.recruiterObjective.deleteMany({
+        where: { userId: id, period: 'quarterly', metric: 'ca' },
+      });
+    } else {
+      await prisma.recruiterObjective.upsert({
+        where: { userId_period_metric: { userId: id, period: 'quarterly', metric: 'ca' } },
+        create: { userId: id, period: 'quarterly', metric: 'ca', target: data.objectifCaTrimestre },
+        update: { target: data.objectifCaTrimestre },
+      });
+      objectifCaTrimestre = data.objectifCaTrimestre;
+    }
+  } else {
+    const o = await prisma.recruiterObjective.findFirst({
+      where: { userId: id, period: 'quarterly', metric: 'ca' },
+      select: { target: true },
+    });
+    objectifCaTrimestre = o?.target ?? null;
+  }
+
+  return { ...(updated as any), objectifCaTrimestre };
 }
 
 export async function deleteUser(id: string) {
@@ -151,6 +184,7 @@ export async function getGeneralSettings(userId: string) {
     currency: settings.currency || 'EUR',
     timezone: settings.timezone || 'Europe/Paris',
     language: settings.language || 'fr',
+    objectifCaAgenceTrimestre: typeof settings.objectifCaAgenceTrimestre === 'number' ? settings.objectifCaAgenceTrimestre : null,
   };
 }
 
@@ -159,6 +193,7 @@ export async function updateGeneralSettings(userId: string, data: {
   currency?: string;
   timezone?: string;
   language?: string;
+  objectifCaAgenceTrimestre?: number | null;
 }) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new NotFoundError('User', userId);
@@ -174,6 +209,7 @@ export async function updateGeneralSettings(userId: string, data: {
     ...(data.currency !== undefined && { currency: data.currency }),
     ...(data.timezone !== undefined && { timezone: data.timezone }),
     ...(data.language !== undefined && { language: data.language }),
+    ...(data.objectifCaAgenceTrimestre !== undefined && { objectifCaAgenceTrimestre: data.objectifCaAgenceTrimestre }),
   };
 
   await prisma.integrationConfig.upsert({
@@ -194,5 +230,6 @@ export async function updateGeneralSettings(userId: string, data: {
     currency: settings.currency || 'EUR',
     timezone: settings.timezone || 'Europe/Paris',
     language: settings.language || 'fr',
+    objectifCaAgenceTrimestre: typeof settings.objectifCaAgenceTrimestre === 'number' ? settings.objectifCaAgenceTrimestre : null,
   };
 }

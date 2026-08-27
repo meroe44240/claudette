@@ -26,6 +26,7 @@ interface User {
   role: 'ADMIN' | 'RECRUTEUR';
   fonction: Fonction;
   excludeFromTeamStats: boolean;
+  objectifCaTrimestre: number | null;
   lastLoginAt: string | null;
   createdAt: string;
 }
@@ -45,6 +46,7 @@ interface UpdateUserPayload {
   fonction?: Fonction;
   excludeFromTeamStats?: boolean;
   password?: string;
+  objectifCaTrimestre?: number | null;
 }
 
 const roleOptions = [
@@ -105,6 +107,7 @@ export default function SettingsPage() {
   const [currency, setCurrency] = useState('EUR');
   const [timezone, setTimezone] = useState('Europe/Paris');
   const [language, setLanguage] = useState('fr');
+  const [objectifAgence, setObjectifAgence] = useState<string>('');
 
   // AI config state
   const [aiProvider, setAiProvider] = useState<'openai' | 'anthropic' | 'gemini'>('openai');
@@ -215,7 +218,7 @@ export default function SettingsPage() {
   // General settings query
   const { data: generalSettings } = useQuery({
     queryKey: ['settings', 'general'],
-    queryFn: () => api.get<{ companyName: string; currency: string; timezone: string; language: string }>('/settings/general'),
+    queryFn: () => api.get<{ companyName: string; currency: string; timezone: string; language: string; objectifCaAgenceTrimestre: number | null }>('/settings/general'),
     enabled: activeSection === 'general',
   });
 
@@ -225,6 +228,7 @@ export default function SettingsPage() {
       setCurrency(generalSettings.currency || 'EUR');
       setTimezone(generalSettings.timezone || 'Europe/Paris');
       setLanguage(generalSettings.language || 'fr');
+      setObjectifAgence(generalSettings.objectifCaAgenceTrimestre != null ? String(generalSettings.objectifCaAgenceTrimestre) : '');
     }
   }, [generalSettings]);
 
@@ -453,6 +457,27 @@ export default function SettingsPage() {
       ),
     },
     {
+      key: 'objectifCaTrimestre',
+      header: 'Objectif CA / trim. (€)',
+      render: (u: User) => (
+        <input
+          type="number"
+          min={0}
+          step={1000}
+          defaultValue={u.objectifCaTrimestre ?? ''}
+          placeholder="—"
+          onBlur={(e) => {
+            const raw = e.target.value.trim();
+            const val = raw === '' ? null : Math.max(0, parseInt(raw, 10) || 0);
+            if (val !== (u.objectifCaTrimestre ?? null)) {
+              updateUserMutation.mutate({ id: u.id, patch: { objectifCaTrimestre: val } });
+            }
+          }}
+          className="w-28 rounded-lg border border-[rgba(34,23,122,0.14)] bg-white px-2 py-1 text-xs text-neutral-700 focus:border-[#22177A] focus:outline-none"
+        />
+      ),
+    },
+    {
       key: 'lastLoginAt',
       header: 'Dernière connexion',
       render: (u: User) => (
@@ -593,9 +618,19 @@ export default function SettingsPage() {
                   value={language}
                   onChange={setLanguage}
                 />
+                <div>
+                  <Input
+                    label="Objectif de CA agence — par trimestre (€)"
+                    type="number"
+                    placeholder="ex. 200000"
+                    value={objectifAgence}
+                    onChange={(e) => setObjectifAgence(e.target.value)}
+                  />
+                  <p className="mt-1.5 text-[12px] text-neutral-500">Sert à la jauge « CA agence » du dashboard. Laissé vide = somme des objectifs individuels.</p>
+                </div>
                 <div className="flex justify-end pt-2">
                   <Button
-                    onClick={() => saveGeneralMutation.mutate({ companyName, currency, timezone, language })}
+                    onClick={() => saveGeneralMutation.mutate({ companyName, currency, timezone, language, objectifCaAgenceTrimestre: objectifAgence.trim() === '' ? null : Math.max(0, parseInt(objectifAgence, 10) || 0) })}
                     loading={saveGeneralMutation.isPending}
                   >
                     Enregistrer

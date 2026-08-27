@@ -27,6 +27,8 @@ const updateUserSchema = z.object({
   avatarData: z.string().max(3_000_000).optional(),
   // Reinitialisation du mot de passe par un admin (optionnel).
   password: z.string().min(8, 'Minimum 8 caractères').optional(),
+  // Objectif de CA trimestriel (€) de la personne. null/0 = pas d'objectif.
+  objectifCaTrimestre: z.number().int().min(0).nullable().optional(),
 });
 
 // Auto-édition de son propre profil (téléphone + photo) — tout utilisateur authentifié.
@@ -146,6 +148,7 @@ export default async function settingsRouter(fastify: FastifyInstance) {
         currency: z.string().optional(),
         timezone: z.string().optional(),
         language: z.string().optional(),
+        objectifCaAgenceTrimestre: z.number().int().min(0).nullable().optional(),
       }).parse(request.body);
       return settingsService.updateGeneralSettings(request.userId, input);
     },
