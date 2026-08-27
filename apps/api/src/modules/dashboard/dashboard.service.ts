@@ -1,4 +1,5 @@
 import prisma from '../../lib/db.js';
+import { getObjectifFinancier } from '../stats/ca-objectif.helper.js';
 
 export async function getActiviteStats(dateFrom?: Date, dateTo?: Date, userId?: string) {
   const where: any = {};
@@ -1139,5 +1140,6 @@ export async function getSpaData(
     weeklyActivity,
     calendarDots,
     revenueByMonth,
+    objectif: await getObjectifFinancier(userId),
   };
 }

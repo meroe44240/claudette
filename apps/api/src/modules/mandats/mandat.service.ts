@@ -264,6 +264,13 @@ export async function update(id: string, data: UpdateMandatInput) {
 
   const updateData: any = { ...data };
 
+  // Poser la date de clôture au passage vers un statut fermé (rattachement du
+  // CA au trimestre). On n'écrase pas une date déjà posée.
+  const CLOSED_STATUTS = ['GAGNE', 'PERDU', 'CLOTURE', 'ANNULE'];
+  if (data.statut && CLOSED_STATUTS.includes(data.statut) && !(existing as any).dateCloture) {
+    updateData.dateCloture = new Date();
+  }
+
   // Recalculate feeMontantEstime if salary or fee% changes
   if (data.salaireMin !== undefined || data.salaireMax !== undefined || data.feePourcentage !== undefined) {
     const estimated = calculateFeeMontantEstime(salaireMin, salaireMax, feePourcentage);
