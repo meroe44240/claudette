@@ -93,24 +93,33 @@ export async function agencyQuarterlyCaObjective(): Promise<number | null> {
 const pct = (ca: number, cible: number | null): number | null =>
   cible && cible > 0 ? Math.round((ca / cible) * 100) : null;
 
+export interface ObjectifGauge {
+  ca: number;
+  cible: number | null;
+  pct: number | null;
+}
 export interface ObjectifBlock {
   periode: string;
-  perso: { ca: number; cible: number | null; pct: number | null };
-  agence: { ca: number; cible: number | null; pct: number | null };
+  perso: ObjectifGauge;
+  // La jauge agence (CA total de l'agence) n'est exposée qu'aux admins.
+  agence: ObjectifGauge | null;
 }
 
-/** Bloc « objectif financier » (perso + agence) pour le trimestre en cours. */
+/** Bloc « objectif financier » pour le trimestre en cours.
+ *  perso = pour tout le monde ; agence = admins uniquement. */
 export async function getObjectifFinancier(userId: string): Promise<ObjectifBlock> {
   const quarter = currentQuarter();
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  const isAdmin = user?.role === 'ADMIN';
   const [caPerso, ciblePerso, caAgence, cibleAgence] = await Promise.all([
     wonCa(quarter, userId),
     userQuarterlyCaObjective(userId),
-    wonCa(quarter),
-    agencyQuarterlyCaObjective(),
+    isAdmin ? wonCa(quarter) : Promise.resolve(0),
+    isAdmin ? agencyQuarterlyCaObjective() : Promise.resolve(null),
   ]);
   return {
     periode: quarter.label,
     perso: { ca: caPerso, cible: ciblePerso, pct: pct(caPerso, ciblePerso) },
-    agence: { ca: caAgence, cible: cibleAgence, pct: pct(caAgence, cibleAgence) },
+    agence: isAdmin ? { ca: caAgence, cible: cibleAgence, pct: pct(caAgence, cibleAgence) } : null,
   };
 }
