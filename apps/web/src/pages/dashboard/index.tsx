@@ -59,7 +59,7 @@ interface MandatSpa {
 interface StructureKpis { caStructure: number; mandatsActifs: number; candidatsEnProcess: number; pipeStructure: number }
 
 interface ObjectifGauge { ca: number; cible: number | null; pct: number | null }
-interface ObjectifData { periode: string; perso: ObjectifGauge; agence: ObjectifGauge }
+interface ObjectifData { periode: string; perso: ObjectifGauge; agence: ObjectifGauge | null }
 
 interface SpaData {
   bandeau: BandeauData;
@@ -370,11 +370,11 @@ export default function DashboardPage() {
             <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9A96AE' }}>Objectif financier</span>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', borderRadius: 999, padding: '3px 11px' }}>{spaData.objectif.periode}</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 26, marginTop: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: spaData.objectif.agence ? '1fr 1fr' : '1fr', gap: 26, marginTop: 12 }}>
             {([
               { label: 'Mon CA', g: spaData.objectif.perso },
-              { label: 'CA agence', g: spaData.objectif.agence },
-            ] as const).map(({ label, g }) => {
+              ...(spaData.objectif.agence ? [{ label: 'CA agence', g: spaData.objectif.agence }] : []),
+            ]).map(({ label, g }) => {
               const pct = g.pct;
               const reached = pct !== null && pct >= 100;
               const barW = pct === null ? 0 : Math.min(pct, 100);
