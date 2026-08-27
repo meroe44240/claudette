@@ -38,8 +38,8 @@ interface StatsData {
   revenueByMonth: { month: string; facture: number; encaisse: number }[];
 }
 interface LbEntry {
-  userId: string; nom: string; prenom: string | null;
-  stats: { placements: number; revenue: number; calls: number; emails: number; meetings: number; activeCandidatures: number };
+  userId: string; nom: string; prenom: string | null; fonction?: string;
+  stats: { placements: number; revenue: number; presentations: number; calls: number; emails: number; meetings: number; activeCandidatures: number };
   rank: number;
 }
 
@@ -55,6 +55,9 @@ export default function AnalyticsPage() {
   const [period, setPeriod] = useState<Period>('month');
   const [isAdmin, setIsAdmin] = useState<boolean>(!!realAdmin);
   const [who, setWho] = useState<string>(user?.id || '');
+  const [view, setView] = useState<'overview' | 'ranking'>('overview');
+  type SortKey = 'revenue' | 'placements' | 'presentations' | 'meetings' | 'calls' | 'activeCandidatures';
+  const [sortKey, setSortKey] = useState<SortKey>('revenue');
 
   const scope = isAdmin ? (who || user?.id || '') : (user?.id || '');
   const { data: statsResp } = useQuery({
@@ -65,8 +68,27 @@ export default function AnalyticsPage() {
   const { data: lbResp } = useQuery({
     queryKey: ['analytics-lb', period],
     queryFn: () => api.get<{ leaderboard: LbEntry[] }>(`/stats/leaderboard?period=${period}`),
-    enabled: isAdmin,
+    enabled: !!realAdmin,
   });
+
+  // Classement trié (client-side) sur la stat choisie.
+  const ranking = useMemo(() => {
+    const lb = lbResp?.leaderboard || [];
+    return [...lb]
+      .sort((a, b) => (b.stats[sortKey] as number) - (a.stats[sortKey] as number))
+      .map((e, i) => ({ ...e, pos: i + 1 }));
+  }, [lbResp, sortKey]);
+  const rankCols: { key: SortKey; label: string; ca?: boolean }[] = [
+    { key: 'calls', label: 'Calls' },
+    { key: 'meetings', label: 'RDV' },
+    { key: 'presentations', label: 'Présent.' },
+    { key: 'placements', label: 'Placés' },
+    { key: 'activeCandidatures', label: 'Actifs' },
+    { key: 'revenue', label: 'CA', ca: true },
+  ];
+  const RANK_GRID = 'minmax(46px,.42fr) minmax(150px,1.5fr) repeat(5,minmax(62px,.58fr)) minmax(96px,.84fr)';
+  const medal = (p: number) => (p === 1 ? '🥇' : p === 2 ? '🥈' : p === 3 ? '🥉' : null);
+  const sortLabel = rankCols.find((c) => c.key === sortKey)?.label ?? 'CA';
 
   const people = (lbResp?.leaderboard || []).map((e) => ({ id: e.userId, name: `${e.prenom || ''} ${e.nom}`.trim() }));
   const periodLabel = period === 'week' ? 'cette semaine' : period === 'quarter' ? 'ce trimestre' : 'ce mois';
@@ -185,12 +207,19 @@ export default function AnalyticsPage() {
           <div style={{ fontSize: 13, color: MUTED, marginTop: 5 }}>{v.subtitle}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {realAdmin && (
+            <div style={{ display: 'flex', gap: 4, background: '#EFEFE6', borderRadius: 11, padding: 4 }}>
+              {([['overview', "Vue d'ensemble"], ['ranking', 'Classement']] as ['overview' | 'ranking', string][]).map(([k, label]) => (
+                <button key={k} onClick={() => setView(k)} style={segBtn(view === k)}>{label}</button>
+              ))}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 4, background: '#EFEFE6', borderRadius: 11, padding: 4 }}>
             {([['week', 'Semaine'], ['month', 'Mois'], ['quarter', 'Trimestre']] as [Period, string][]).map(([k, label]) => (
               <button key={k} onClick={() => setPeriod(k)} style={segBtn(period === k)}>{label}</button>
             ))}
           </div>
-          {realAdmin && (
+          {realAdmin && view === 'overview' && (
             <div style={{ display: 'flex', gap: 4, background: '#EFEFE6', borderRadius: 11, padding: 4 }}>
               {([['admin', 'Admin'], ['rec', 'Recruteur']] as ['admin' | 'rec', string][]).map(([k, label]) => (
                 <button
@@ -204,7 +233,7 @@ export default function AnalyticsPage() {
               ))}
             </div>
           )}
-          {isAdmin && people.length > 0 && (
+          {isAdmin && view === 'overview' && people.length > 0 && (
             <div style={{ position: 'relative' }}>
               <select
                 value={who}
@@ -223,7 +252,64 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {/* CLASSEMENT DE L'ÉQUIPE — admin only */}
+      {view === 'ranking' && (
+        <div className="ana-rise" style={{ marginTop: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: INK }}>Classement de l'équipe</span>
+            <span style={{ fontSize: 12, color: MUTED }}>trié par {sortLabel} · {periodLabel}</span>
+          </div>
+          <div className="ana-scroll" style={{ background: '#fff', border: CARD_BORDER, borderRadius: 16, overflowX: 'auto', boxShadow: CARD_SHADOW }}>
+            {/* header */}
+            <div style={{ display: 'grid', gridTemplateColumns: RANK_GRID, gap: 12, padding: '12px 20px', borderBottom: '1.5px solid rgba(34,23,122,.1)', background: '#FCFCF5', fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: FAINT, minWidth: 720 }}>
+              <span style={{ textAlign: 'center' }}>#</span>
+              <span>Personne</span>
+              {rankCols.map((c) => (
+                <button
+                  key={c.key}
+                  onClick={() => setSortKey(c.key)}
+                  style={{ textAlign: c.ca ? 'right' : 'center', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: sortKey === c.key ? NAVY : FAINT, display: 'flex', justifyContent: c.ca ? 'flex-end' : 'center', alignItems: 'center', gap: 3 }}
+                >
+                  {c.label}{sortKey === c.key ? ' ▾' : ''}
+                </button>
+              ))}
+            </div>
+            {ranking.length === 0 && (
+              <div style={{ padding: '28px 20px', textAlign: 'center', fontSize: 13, color: MUTED }}>Aucune donnée sur la période.</div>
+            )}
+            {ranking.map((r) => {
+              const name = `${r.prenom || ''} ${r.nom}`.trim();
+              const isMe = r.userId === user?.id;
+              const av = AV[(r.pos - 1) % AV.length];
+              const m = medal(r.pos);
+              return (
+                <div key={r.userId} className="ana-row" style={{ display: 'grid', gridTemplateColumns: RANK_GRID, gap: 12, alignItems: 'center', padding: '13px 20px', borderBottom: '1px solid rgba(34,23,122,.05)', minWidth: 720, background: isMe ? '#F2F3D8' : 'transparent' }}>
+                  <span style={{ textAlign: 'center', fontFamily: ARCHIVO, fontSize: m ? 17 : 13.5, color: r.pos <= 3 ? NAVY : FAINT }}>{m || r.pos}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+                    <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: '50%', background: av[0], color: av[1], display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MANROPE, fontWeight: 800, fontSize: 11 }}>{initials(name)}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 800, color: INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}{isMe && <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 800, color: NAVY, background: '#E6E9AF', borderRadius: 999, padding: '2px 7px' }}>VOUS</span>}</div>
+                      <div style={{ fontSize: 11, color: FAINT }}>{r.fonction === 'SALES' ? 'Sales' : r.fonction === 'LES_DEUX' ? 'Sales + Recruteur' : 'Recruteur'}</div>
+                    </div>
+                  </div>
+                  {rankCols.map((c) => {
+                    const val = r.stats[c.key] as number;
+                    const txt = c.ca ? fmt(val) + ' €' : String(val);
+                    const active = sortKey === c.key;
+                    return (
+                      <span key={c.key} style={{ textAlign: c.ca ? 'right' : 'center', fontFamily: MANROPE, fontWeight: 800, fontSize: 13.5, color: c.ca ? NAVY : active ? NAVY : '#4A4568' }}>{txt}</span>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+          <p style={{ fontSize: 12, color: FAINT, marginTop: 10 }}>Clique une colonne pour trier le classement. Le CA correspond au CA « gagné » (mandats gagnés) sur la période.</p>
+        </div>
+      )}
+
       {/* KPI GRID */}
+      {view === 'overview' && (<>
       <div className="ana-scroll" style={{ overflowX: 'auto', marginTop: 20, paddingBottom: 4 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(0,1fr))', gap: 13, minWidth: 1270 }}>
           {v.kpis.map((k, i) => (
@@ -339,6 +425,7 @@ export default function AnalyticsPage() {
           </div>
         </div>
       </div>
+      </>)}
     </div>
   );
 }
