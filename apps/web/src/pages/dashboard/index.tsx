@@ -224,7 +224,10 @@ export default function DashboardPage() {
       { label: 'Nouveaux mandats', raw: kpis.nouveauxMandats, display: <AnimatedCounter value={kpis.nouveauxMandats} />, target: TARGETS.mandats, targetLabel: String(TARGETS.mandats), period: rangeWord, Icon: Building2, iconBg: '#F2F3D8', bar: '#2A6BD8', pctColor: '#9A96AE' },
       { label: 'Présentations', raw: kpis.presentationsMois, display: <AnimatedCounter value={kpis.presentationsMois} />, target: TARGETS.presentations, targetLabel: String(TARGETS.presentations), period: 'ce mois', Icon: Users, iconBg: '#F2F3D8', bar: '#3B9A54', pctColor: '#9A96AE' },
       { label: 'CA mois', raw: kpis.caMois.value, display: <AnimatedCounter value={kpis.caMois.value} formatFn={formatCurrency} />, target: TARGETS.ca, targetLabel: formatCurrency(TARGETS.ca), period: 'ce mois', Icon: DollarSign, iconBg: '#E6E9AF', bar: '#22177A', pctColor: '#9A96AE' },
-    ].map(k => ({ ...k, pct: k.target > 0 ? Math.min(100, Math.round((k.raw / k.target) * 100)) : 0 }));
+    ].map(k => {
+      const p = k.target > 0 ? Math.round((k.raw / k.target) * 100) : 0;
+      return { ...k, pct: p, pctBar: Math.min(100, p) };
+    });
   }, [kpis, rangeIdx]);
 
   // Bande "Mon activité" (chiffres perso)
@@ -353,11 +356,11 @@ export default function DashboardPage() {
                 <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 14, color: '#C4C1D0', letterSpacing: '-0.02em' }}>/ {k.targetLabel}</span>
               </div>
               <div style={{ height: 6, borderRadius: 999, background: 'rgba(34,23,122,.07)', marginTop: 14, overflow: 'hidden' }}>
-                <div className="bar-fill" style={{ width: `${k.pct}%`, height: '100%', borderRadius: 999, background: k.bar }} />
+                <div className="bar-fill" style={{ width: `${k.pctBar}%`, height: '100%', borderRadius: 999, background: k.pct >= 100 ? '#2C6B3F' : k.bar }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
                 <span style={{ fontSize: 11.5, color: '#9A96AE' }}>{k.period}</span>
-                <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 11.5, color: k.pctColor }}>{k.pct}%</span>
+                <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 11.5, color: k.pct >= 100 ? '#2C6B3F' : k.pctColor }}>{k.pct}%</span>
               </div>
             </div>
           ))}
