@@ -379,11 +379,17 @@ export default function DashboardPage() {
               const reached = pct !== null && pct >= 100;
               const barW = pct === null ? 0 : Math.min(pct, 100);
               const eur = (n: number) => n.toLocaleString('fr-FR') + ' €';
+              const overage = reached && g.cible !== null ? g.ca - g.cible : 0;
+              const remaining = pct !== null && !reached && g.cible !== null ? g.cible - g.ca : 0;
               return (
                 <div key={label}>
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
                     <span style={{ fontSize: 12.5, fontWeight: 700, color: '#4A4568' }}>{label}</span>
-                    <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 14, color: pct === null ? '#C4C1D0' : reached ? '#2C6B3F' : '#22177A' }}>{pct === null ? 'objectif à définir' : `${pct}%`}</span>
+                    {pct === null
+                      ? <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 14, color: '#C4C1D0' }}>objectif à définir</span>
+                      : reached
+                        ? <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 12.5, color: '#2C6B3F', background: '#EAF3EC', borderRadius: 999, padding: '3px 10px' }}>{pct}% de l'objectif</span>
+                        : <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 14, color: '#22177A' }}>{pct}%</span>}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
                     <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 26, letterSpacing: '-0.035em', color: '#22177A', lineHeight: 1 }}>{eur(g.ca)}</span>
@@ -392,6 +398,11 @@ export default function DashboardPage() {
                   <div style={{ height: 8, borderRadius: 999, background: 'rgba(34,23,122,.07)', marginTop: 12, overflow: 'hidden' }}>
                     <div className="bar-fill" style={{ width: `${barW}%`, height: '100%', borderRadius: 999, background: reached ? '#2C6B3F' : '#22177A' }} />
                   </div>
+                  {reached
+                    ? <div style={{ fontSize: 11.5, fontWeight: 700, color: '#2C6B3F', marginTop: 8 }}>🎯 Objectif dépassé — +{eur(overage)}</div>
+                    : pct !== null
+                      ? <div style={{ fontSize: 11.5, color: '#9A96AE', marginTop: 8 }}>Reste {eur(remaining)} pour l'objectif</div>
+                      : null}
                 </div>
               );
             })}
