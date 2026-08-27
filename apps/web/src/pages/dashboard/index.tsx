@@ -360,7 +360,7 @@ export default function DashboardPage() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
                 <span style={{ fontSize: 11.5, color: '#9A96AE' }}>{k.period}</span>
-                <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 11.5, color: k.pct >= 100 ? '#2C6B3F' : k.pctColor }}>{k.pct}%</span>
+                <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 11.5, color: k.pct >= 100 ? '#2C6B3F' : k.pctColor }}>{k.pct > 100 ? '+' : ''}{k.pct}%</span>
               </div>
             </div>
           ))}
