@@ -127,7 +127,7 @@ export default function MandatsPage() {
       const p = new URLSearchParams();
       // PAS de scope=all : on laisse l'API appliquer le perimetre par role.
       p.set('page', String(page)); p.set('perPage', '20');
-      if (isAdmin && who !== 'all') p.set('userId', who);
+      if (who !== 'all') p.set('userId', who);
       if (debSearch) p.set('search', debSearch);
       if (filters.statut?.length) p.set('statut', filters.statut.join(','));
       if (filters.priorite?.length) p.set('priorite', filters.priorite.join(','));
@@ -166,6 +166,18 @@ export default function MandatsPage() {
           <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Mandats</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {!isAdmin && user && (
+            <div style={{ display: 'flex', background: '#fff', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 11, overflow: 'hidden' }}>
+              {([{ label: 'Tous', v: 'all' }, { label: 'Mes mandats', v: user.id }]).map(t => {
+                const on = who === t.v;
+                return (
+                  <button key={t.label} onClick={() => { setWho(t.v); setPage(1); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: on ? '#E6E9AF' : '#4A4568', background: on ? '#22177A' : '#fff', border: 'none', padding: '9px 15px', cursor: 'pointer' }}>
+                    {t.v !== 'all' && <Users size={13} color={on ? '#E6E9AF' : '#8A8699'} />}{t.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {isAdmin && (
             <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
               <Users size={14} color="#8A8699" style={{ position: 'absolute', left: 11, pointerEvents: 'none' }} />
