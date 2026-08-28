@@ -25,6 +25,12 @@ export interface JobOfferInput {
   missions?: string | null;
   packageInfo?: string | null;
   localisation?: string | null;
+  titreEn?: string | null;
+  descriptionEn?: string | null;
+  descriptionSocieteEn?: string | null;
+  missionsEn?: string | null;
+  packageInfoEn?: string | null;
+  localisationEn?: string | null;
   contractType?: string | null;
   remote?: string | null;
   salaireMin?: number | null;
@@ -52,6 +58,12 @@ export async function create(data: JobOfferInput, userId?: string) {
       missions: data.missions ?? null,
       packageInfo: data.packageInfo ?? null,
       localisation: data.localisation ?? null,
+      titreEn: data.titreEn ?? null,
+      descriptionEn: data.descriptionEn ?? null,
+      descriptionSocieteEn: data.descriptionSocieteEn ?? null,
+      missionsEn: data.missionsEn ?? null,
+      packageInfoEn: data.packageInfoEn ?? null,
+      localisationEn: data.localisationEn ?? null,
       contractType: data.contractType ?? null,
       remote: data.remote ?? null,
       salaireMin: data.salaireMin ?? null,
@@ -80,6 +92,12 @@ export async function update(id: string, data: JobOfferInput) {
       missions: data.missions !== undefined ? data.missions : (existing as any).missions,
       packageInfo: data.packageInfo !== undefined ? data.packageInfo : (existing as any).packageInfo,
       localisation: data.localisation ?? existing.localisation,
+      titreEn: data.titreEn !== undefined ? data.titreEn : (existing as any).titreEn,
+      descriptionEn: data.descriptionEn !== undefined ? data.descriptionEn : (existing as any).descriptionEn,
+      descriptionSocieteEn: data.descriptionSocieteEn !== undefined ? data.descriptionSocieteEn : (existing as any).descriptionSocieteEn,
+      missionsEn: data.missionsEn !== undefined ? data.missionsEn : (existing as any).missionsEn,
+      packageInfoEn: data.packageInfoEn !== undefined ? data.packageInfoEn : (existing as any).packageInfoEn,
+      localisationEn: data.localisationEn !== undefined ? data.localisationEn : (existing as any).localisationEn,
       contractType: data.contractType ?? existing.contractType,
       remote: data.remote ?? existing.remote,
       salaireMin: data.salaireMin ?? existing.salaireMin,
@@ -113,6 +131,7 @@ export async function listPublic() {
     orderBy: { createdAt: 'desc' },
     select: {
       slug: true, titre: true, description: true, descriptionSociete: true, missions: true, packageInfo: true,
+      titreEn: true, descriptionEn: true, descriptionSocieteEn: true, missionsEn: true, packageInfoEn: true, localisationEn: true,
       localisation: true, contractType: true,
       remote: true, salaireMin: true, salaireMax: true, secteur: true, entrepriseNom: true,
       tags: true, createdAt: true,
@@ -126,6 +145,7 @@ export async function getPublicBySlug(slug: string) {
     where: { slug },
     select: {
       slug: true, titre: true, description: true, descriptionSociete: true, missions: true, packageInfo: true,
+      titreEn: true, descriptionEn: true, descriptionSocieteEn: true, missionsEn: true, packageInfoEn: true, localisationEn: true,
       localisation: true, contractType: true,
       remote: true, salaireMin: true, salaireMax: true, secteur: true, entrepriseNom: true,
       tags: true, published: true, createdAt: true,

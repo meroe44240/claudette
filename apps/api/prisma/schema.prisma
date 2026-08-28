@@ -1055,6 +1055,13 @@ model JobOffer {
   missions      String?  @db.Text
   packageInfo   String?  @db.Text @map("package_info")
   localisation  String?  @db.VarChar(255)
+  // ── Versions anglaises (job board bilingue FR/EN) ──
+  titreEn            String? @db.VarChar(255) @map("titre_en")
+  descriptionEn      String? @db.Text         @map("description_en")
+  descriptionSocieteEn String? @db.Text       @map("description_societe_en")
+  missionsEn         String? @db.Text         @map("missions_en")
+  packageInfoEn      String? @db.Text         @map("package_info_en")
+  localisationEn     String? @db.VarChar(255) @map("localisation_en")
   contractType  String?  @db.VarChar(50)   // CDI, CDD, FREELANCE, STAGE, ALTERNANCE
   remote        String?  @db.VarChar(50)   // ONSITE, HYBRID, REMOTE
   salaireMin    Int?
