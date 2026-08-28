@@ -9,6 +9,8 @@ interface JobOffer {
   id: string; slug: string; titre: string; description: string;
   descriptionSociete: string | null; missions: string | null; packageInfo: string | null;
   localisation: string | null;
+  titreEn: string | null; descriptionEn: string | null; descriptionSocieteEn: string | null;
+  missionsEn: string | null; packageInfoEn: string | null; localisationEn: string | null;
   contractType: string | null; remote: string | null; salaireMin: number | null; salaireMax: number | null;
   secteur: string | null; entrepriseNom: string | null; tags: string[]; published: boolean; createdAt: string;
   mandatId: string | null;
@@ -19,7 +21,7 @@ type Form = Omit<JobOffer, 'id' | 'slug' | 'createdAt'> & { id?: string };
 const CONTRACTS = ['CDI', 'CDD', 'FREELANCE', 'ALTERNANCE', 'STAGE'];
 const REMOTES = [{ v: 'ONSITE', l: 'Sur site' }, { v: 'HYBRID', l: 'Hybride' }, { v: 'REMOTE', l: 'Full remote' }];
 
-function empty(): Form { return { titre: '', description: '', descriptionSociete: '', missions: '', packageInfo: '', localisation: '', contractType: 'CDI', remote: 'HYBRID', salaireMin: null, salaireMax: null, secteur: '', entrepriseNom: '', tags: [], published: false, mandatId: null }; }
+function empty(): Form { return { titre: '', description: '', descriptionSociete: '', missions: '', packageInfo: '', localisation: '', titreEn: '', descriptionEn: '', descriptionSocieteEn: '', missionsEn: '', packageInfoEn: '', localisationEn: '', contractType: 'CDI', remote: 'HYBRID', salaireMin: null, salaireMax: null, secteur: '', entrepriseNom: '', tags: [], published: false, mandatId: null }; }
 function salaire(min: number | null, max: number | null) { if (min && max) return `${(min / 1000).toFixed(0)}–${(max / 1000).toFixed(0)}k€`; if (min) return `≥ ${(min / 1000).toFixed(0)}k€`; if (max) return `≤ ${(max / 1000).toFixed(0)}k€`; return null; }
 
 export default function OffresPage() {
@@ -110,10 +112,15 @@ export default function OffresPage() {
 function OfferModal({ form, mandats, onClose, onSave, saving }: { form: Form; mandats: MandatOpt[]; onClose: () => void; onSave: (f: Form) => void; saving: boolean }) {
   const [f, setF] = useState<Form>(form);
   const [tagInput, setTagInput] = useState('');
+  const [lang, setLang] = useState<'fr' | 'en'>('fr');
   const set = (k: keyof Form, v: any) => setF(p => ({ ...p, [k]: v }));
   const inStyle: React.CSSProperties = { width: '100%', fontSize: 13.5, padding: '10px 12px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', color: '#1A1533', outline: 'none' };
   const lbl: React.CSSProperties = { display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.09em', textTransform: 'uppercase', color: '#6E6A85', marginBottom: 6 };
   const num = (v: string) => v === '' ? null : parseInt(v, 10);
+  // Champs traduisibles : en mode EN, on édite la clé suffixée « En ».
+  const lk = (base: string) => (lang === 'en' ? base + 'En' : base) as keyof Form;
+  const tv = (base: string) => (f[lk(base)] as string | null) ?? '';
+  const tset = (base: string, v: string) => set(lk(base), v);
 
   return (
     <>
@@ -123,9 +130,15 @@ function OfferModal({ form, mandats, onClose, onSave, saving }: { form: Form; ma
           <div style={{ fontWeight: 800, fontSize: 18, color: '#1A1533' }}>{f.id ? 'Modifier l\'offre' : 'Nouvelle offre'}</div>
           <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid rgba(34,23,122,.14)', background: '#fff', color: '#22177A', cursor: 'pointer' }}>✕</button>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 }}>
-          <div><label style={lbl}>Intitulé du poste *</label><input className="st-in" value={f.titre} onChange={e => set('titre', e.target.value)} style={inStyle} placeholder="Account Executive SaaS" /></div>
-          <div><label style={lbl}>Accroche (résumé court) *</label><textarea className="st-in" value={f.description} onChange={e => set('description', e.target.value)} style={{ ...inStyle, minHeight: 62, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder="Une ou deux phrases qui donnent envie de lire la suite…" /></div>
+        <div style={{ display: 'inline-flex', gap: 3, background: '#EFEFE6', borderRadius: 10, padding: 3, marginTop: 14 }}>
+          {([['fr', 'Français'], ['en', 'English']] as ['fr' | 'en', string][]).map(([k, label]) => (
+            <button key={k} onClick={() => setLang(k)} style={{ fontSize: 12.5, fontWeight: 700, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: lang === k ? '#fff' : 'transparent', color: lang === k ? '#22177A' : '#8A8699', boxShadow: lang === k ? '0 3px 8px -6px rgba(34,23,122,.6)' : 'none' }}>{label}</button>
+          ))}
+        </div>
+        <div style={{ fontSize: 11.5, color: '#8A8699', marginTop: 6 }}>{lang === 'fr' ? 'Contenu affiché sur /fr. Les champs communs (contrat, salaire, tags…) sont partagés.' : 'Contenu affiché sur /en. Laissé vide → la version française est utilisée.'}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
+          <div><label style={lbl}>Intitulé du poste{lang === 'fr' ? ' *' : ' (EN)'}</label><input className="st-in" value={tv('titre')} onChange={e => tset('titre', e.target.value)} style={inStyle} placeholder={lang === 'fr' ? 'Account Executive SaaS' : 'Account Executive SaaS (English title)'} /></div>
+          <div><label style={lbl}>Accroche (résumé court){lang === 'fr' ? ' *' : ' (EN)'}</label><textarea className="st-in" value={tv('description')} onChange={e => tset('description', e.target.value)} style={{ ...inStyle, minHeight: 62, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={lang === 'fr' ? 'Une ou deux phrases qui donnent envie de lire la suite…' : 'One or two lines that make people want to read on…'} /></div>
           <div>
             <label style={lbl}>Mandat lié</label>
             <select value={f.mandatId ?? ''} onChange={e => set('mandatId', e.target.value || null)} style={{ ...inStyle, cursor: 'pointer' }}>
@@ -136,16 +149,16 @@ function OfferModal({ form, mandats, onClose, onSave, saving }: { form: Form; ma
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div><label style={lbl}>Entreprise (public)</label><input className="st-in" value={f.entrepriseNom ?? ''} onChange={e => set('entrepriseNom', e.target.value)} style={inStyle} placeholder="ou vide = confidentiel" /></div>
-            <div><label style={lbl}>Localisation</label><input className="st-in" value={f.localisation ?? ''} onChange={e => set('localisation', e.target.value)} style={inStyle} placeholder="Paris (75)" /></div>
+            <div><label style={lbl}>Localisation{lang === 'en' ? ' (EN)' : ''}</label><input className="st-in" value={tv('localisation')} onChange={e => tset('localisation', e.target.value)} style={inStyle} placeholder={lang === 'fr' ? 'Paris (75)' : 'Paris, France'} /></div>
             <div><label style={lbl}>Contrat</label><select value={f.contractType ?? ''} onChange={e => set('contractType', e.target.value)} style={{ ...inStyle, cursor: 'pointer' }}>{CONTRACTS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
             <div><label style={lbl}>Télétravail</label><select value={f.remote ?? ''} onChange={e => set('remote', e.target.value)} style={{ ...inStyle, cursor: 'pointer' }}>{REMOTES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}</select></div>
             <div><label style={lbl}>Salaire min (€/an)</label><input className="st-in" value={f.salaireMin ?? ''} onChange={e => set('salaireMin', num(e.target.value))} style={inStyle} placeholder="45000" /></div>
             <div><label style={lbl}>Salaire max (€/an)</label><input className="st-in" value={f.salaireMax ?? ''} onChange={e => set('salaireMax', num(e.target.value))} style={inStyle} placeholder="60000" /></div>
             <div style={{ gridColumn: '1 / -1' }}><label style={lbl}>Secteur</label><input className="st-in" value={f.secteur ?? ''} onChange={e => set('secteur', e.target.value)} style={inStyle} placeholder="SaaS / Tech" /></div>
           </div>
-          <div><label style={lbl}>Description de la société</label><textarea className="st-in" value={f.descriptionSociete ?? ''} onChange={e => set('descriptionSociete', e.target.value)} style={{ ...inStyle, minHeight: 84, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder="Qui est l'entreprise, son marché, sa taille, sa culture, sa mission…" /></div>
-          <div><label style={lbl}>Missions</label><textarea className="st-in" value={f.missions ?? ''} onChange={e => set('missions', e.target.value)} style={{ ...inStyle, minHeight: 100, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={'Les responsabilités du poste. Une mission par ligne :\n• Prospecter et qualifier…\n• Piloter le cycle de vente…'} /></div>
-          <div><label style={lbl}>Package</label><textarea className="st-in" value={f.packageInfo ?? ''} onChange={e => set('packageInfo', e.target.value)} style={{ ...inStyle, minHeight: 84, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={'Rémunération, variable, avantages, BSPCE, télétravail, matériel…\n(le salaire chiffré ci-dessus s\'affiche aussi automatiquement)'} /></div>
+          <div><label style={lbl}>Description de la société{lang === 'en' ? ' (EN)' : ''}</label><textarea className="st-in" value={tv('descriptionSociete')} onChange={e => tset('descriptionSociete', e.target.value)} style={{ ...inStyle, minHeight: 84, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={lang === 'fr' ? "Qui est l'entreprise, son marché, sa taille, sa culture, sa mission…" : 'Who the company is, its market, size, culture, mission…'} /></div>
+          <div><label style={lbl}>Missions{lang === 'en' ? ' (EN)' : ''}</label><textarea className="st-in" value={tv('missions')} onChange={e => tset('missions', e.target.value)} style={{ ...inStyle, minHeight: 100, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={lang === 'fr' ? 'Les responsabilités du poste. Une mission par ligne :\n• Prospecter et qualifier…\n• Piloter le cycle de vente…' : 'The role responsibilities. One per line:\n• Prospect and qualify…\n• Own the sales cycle…'} /></div>
+          <div><label style={lbl}>Package{lang === 'en' ? ' (EN)' : ''}</label><textarea className="st-in" value={tv('packageInfo')} onChange={e => tset('packageInfo', e.target.value)} style={{ ...inStyle, minHeight: 84, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={lang === 'fr' ? "Rémunération, variable, avantages, BSPCE, télétravail, matériel…" : 'Compensation, variable, benefits, equity, remote, equipment…'} /></div>
           <div>
             <label style={lbl}>Compétences / tags</label>
             <div style={{ display: 'flex', gap: 8 }}>
