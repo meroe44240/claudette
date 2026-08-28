@@ -35,6 +35,7 @@ export interface JobOfferInput {
   remote?: string | null;
   salaireMin?: number | null;
   salaireMax?: number | null;
+  currency?: string | null;
   secteur?: string | null;
   entrepriseNom?: string | null;
   tags?: string[];
@@ -68,6 +69,7 @@ export async function create(data: JobOfferInput, userId?: string) {
       remote: data.remote ?? null,
       salaireMin: data.salaireMin ?? null,
       salaireMax: data.salaireMax ?? null,
+      currency: data.currency ?? "EUR",
       secteur: data.secteur ?? null,
       entrepriseNom: data.entrepriseNom ?? null,
       tags: data.tags ?? [],
@@ -102,6 +104,7 @@ export async function update(id: string, data: JobOfferInput) {
       remote: data.remote ?? existing.remote,
       salaireMin: data.salaireMin ?? existing.salaireMin,
       salaireMax: data.salaireMax ?? existing.salaireMax,
+      currency: data.currency ?? existing.currency,
       secteur: data.secteur ?? existing.secteur,
       entrepriseNom: data.entrepriseNom ?? existing.entrepriseNom,
       tags: data.tags ?? existing.tags,
@@ -133,7 +136,7 @@ export async function listPublic() {
       slug: true, titre: true, description: true, descriptionSociete: true, missions: true, packageInfo: true,
       titreEn: true, descriptionEn: true, descriptionSocieteEn: true, missionsEn: true, packageInfoEn: true, localisationEn: true,
       localisation: true, contractType: true,
-      remote: true, salaireMin: true, salaireMax: true, secteur: true, entrepriseNom: true,
+      remote: true, salaireMin: true, salaireMax: true, currency: true, secteur: true, entrepriseNom: true,
       tags: true, createdAt: true,
     },
   });
@@ -147,7 +150,7 @@ export async function getPublicBySlug(slug: string) {
       slug: true, titre: true, description: true, descriptionSociete: true, missions: true, packageInfo: true,
       titreEn: true, descriptionEn: true, descriptionSocieteEn: true, missionsEn: true, packageInfoEn: true, localisationEn: true,
       localisation: true, contractType: true,
-      remote: true, salaireMin: true, salaireMax: true, secteur: true, entrepriseNom: true,
+      remote: true, salaireMin: true, salaireMax: true, currency: true, secteur: true, entrepriseNom: true,
       tags: true, published: true, createdAt: true,
     },
   });

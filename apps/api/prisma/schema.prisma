@@ -1066,6 +1066,7 @@ model JobOffer {
   remote        String?  @db.VarChar(50)   // ONSITE, HYBRID, REMOTE
   salaireMin    Int?
   salaireMax    Int?
+  currency      String?  @default("EUR") @db.VarChar(3)  // EUR | GBP | USD (devise du salaire)
   secteur       String?  @db.VarChar(100)
   entrepriseNom String?  @db.VarChar(255)  // affiché publiquement, ou null = confidentiel
   tags          String[] @default([])
