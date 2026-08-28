@@ -20,6 +20,7 @@ const offerSchema = z.object({
   remote: z.string().nullable().optional(),
   salaireMin: z.number().int().nullable().optional(),
   salaireMax: z.number().int().nullable().optional(),
+  currency: z.enum(['EUR','GBP','USD']).nullable().optional(),
   secteur: z.string().nullable().optional(),
   entrepriseNom: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
