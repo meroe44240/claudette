@@ -15,19 +15,21 @@ export default async function confirmationRouter(fastify: FastifyInstance) {
 }
 
 // ── Public (aucune auth) : /api/v1/public/confirmation ──
+// Le token (JWT ~125 car.) passe en query/body, pas dans le path : find-my-way
+// plafonne les params de path à 100 car. (maxParamLength) → 404 silencieux sinon.
 export async function confirmationPublicRouter(fastify: FastifyInstance) {
-  fastify.get('/:token', {
-    schema: { tags: ['Public'], params: { type: 'object', required: ['token'], properties: { token: { type: 'string' } } } },
+  fastify.get('/', {
+    schema: { tags: ['Public'] },
     handler: async (request) => {
-      const { token } = request.params as { token: string };
-      return service.getContext(token);
+      const { token } = request.query as { token?: string };
+      return service.getContext(String(token || ''));
     },
   });
-  fastify.post('/:token', {
-    schema: { tags: ['Public'], params: { type: 'object', required: ['token'], properties: { token: { type: 'string' } } } },
+  fastify.post('/', {
+    schema: { tags: ['Public'] },
     handler: async (request) => {
-      const { token } = request.params as { token: string };
-      return service.confirm(token);
+      const { token } = (request.body ?? {}) as { token?: string };
+      return service.confirm(String(token || ''));
     },
   });
 }

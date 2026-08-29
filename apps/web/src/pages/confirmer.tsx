@@ -22,7 +22,7 @@ export default function ConfirmerPage() {
     if (!token) { setState('invalid'); return; }
     (async () => {
       try {
-        const res = await fetch(`/api/v1/public/confirmation/${encodeURIComponent(token)}`);
+        const res = await fetch(`/api/v1/public/confirmation?token=${encodeURIComponent(token)}`);
         if (!res.ok) throw new Error('invalid');
         const data = (await res.json()) as Ctx;
         setCtx(data);
@@ -35,7 +35,7 @@ export default function ConfirmerPage() {
     if (!accepted) return;
     setState('sending');
     try {
-      const res = await fetch(`/api/v1/public/confirmation/${encodeURIComponent(token)}`, { method: 'POST' });
+      const res = await fetch('/api/v1/public/confirmation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
       if (!res.ok) throw new Error('fail');
       setState('done');
     } catch { setState('ready'); }
