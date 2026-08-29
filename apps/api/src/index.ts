@@ -49,6 +49,7 @@ import sourcingRouter from './modules/sourcing/sourcing.router.js';
 import leadRouter from './modules/leads/lead.router.js';
 import jobOfferRouter, { jobOfferPublicRouter } from './modules/job-offers/job-offer.router.js';
 import bookingRouter, { bookingPublicRouter } from './modules/booking/booking.router.js';
+import confirmationRouter, { confirmationPublicRouter } from './modules/confirmation/confirmation.router.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 
@@ -183,6 +184,9 @@ async function buildApp() {
   await app.register(bookingRouter, { prefix: '/api/v1/booking' });
   // Pages de réservation publiques (remplace Calendly) — aucune auth.
   await app.register(bookingPublicRouter, { prefix: '/api/v1/public/booking' });
+  // Confirmation candidat (intérêt + consentement transfert CV)
+  await app.register(confirmationRouter, { prefix: '/api/v1/confirmation' });
+  await app.register(confirmationPublicRouter, { prefix: '/api/v1/public/confirmation' });
 
   return app;
 }

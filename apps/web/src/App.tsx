@@ -17,6 +17,8 @@ const DocsMcpPage = lazy(() => import('./pages/docs/mcp'));
 // Portail client (public, hors MainLayout)
 const PortalLoginPage = lazy(() => import('./pages/portail/login'));
 const PortalMandatPage = lazy(() => import('./pages/portail/mandat'));
+// Confirmation candidat (public)
+const ConfirmerPage = lazy(() => import('./pages/confirmer'));
 
 // Protected pages
 const DashboardPage = lazy(() => import('./pages/dashboard/index'));
@@ -82,6 +84,7 @@ export default function App() {
         <Route path="/book/:slug" element={<BookPage />} />
         <Route path="/portail/login" element={<PortalLoginPage />} />
         <Route path="/portail/mandat/:mandatId" element={<PortalMandatPage />} />
+        <Route path="/confirmer" element={<ConfirmerPage />} />
         <Route
           element={
             <ProtectedRoute>

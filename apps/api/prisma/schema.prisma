@@ -201,6 +201,9 @@ model Candidat {
   notes              String?   @db.Text
   consentementRgpd   Boolean   @default(false)
   consentementDate   DateTime? @db.Timestamptz()
+  // Consentement général de transfert du CV aux clients (confirmé par le candidat)
+  cvConsent          Boolean   @default(false) @map("cv_consent")
+  cvConsentDate      DateTime? @db.Timestamptz() @map("cv_consent_date")
   // AI-generated fields
   aiPitchShort        String?   @db.VarChar(500)
   aiPitchLong         String?   @db.Text
@@ -551,6 +554,9 @@ model Candidature {
   sourcePlacement     String?          @db.VarChar(255)
   motifRefus          MotifRefus?
   motifRefusDetail    String?          @db.Text
+  // Intérêt confirmé par le candidat pour ce poste (via l'email de confirmation)
+  interetConfirme     Boolean          @default(false) @map("interet_confirme")
+  interetConfirmeDate DateTime?        @db.Timestamptz() @map("interet_confirme_date")
   createdById         String?          @db.Uuid
   createdBy           User?            @relation("CandidatureCreatedBy", fields: [createdById], references: [id])
   createdAt           DateTime         @default(now()) @db.Timestamptz()
