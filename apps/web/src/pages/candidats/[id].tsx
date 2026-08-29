@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ArrowRight, ChevronDown, Plus, Star, Mail, Phone, Linkedin, MapPin,
   Trash2, X, FileText, Upload, Download, Calendar, Send, MessageSquare,
-  CheckSquare, Ban, Clock, Building2, Euro, Briefcase,
+  CheckSquare, Ban, Clock, Building2, Euro, Briefcase, MailCheck, ShieldCheck,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
@@ -18,7 +18,7 @@ import CandidatureQualif from '../../components/candidats/CandidatureQualif';
 interface Candidature {
   id: string; stage: string;
   mandat: { id: string; titrePoste: string; slug: string | null; entreprise: { id: string; nom: string }; statut: string };
-  createdAt: string;
+  createdAt: string; interetConfirme?: boolean;
 }
 interface Experience { id: string; titre: string; entreprise: string; anneeDebut: number; anneeFin: number | null; highlights: string[]; source: string }
 interface CandidatDetail {
@@ -27,6 +27,7 @@ interface CandidatDetail {
   posteActuel: string | null; entrepriseActuelle: string | null; localisation: string | null;
   salaireSouhaite: number | null; disponibilite: string | null; source: string | null;
   tags: string[]; aiPitchLong: string | null; aiPitchShort: string | null;
+  cvConsent?: boolean; cvConsentDate?: string | null;
   candidatures: Candidature[]; experiences: Experience[];
 }
 interface Activite {
@@ -112,6 +113,7 @@ export default function CandidatDetailPage() {
   const noShowMut = useMutation({ mutationFn: (candId: string) => api.put(`/candidatures/${candId}`, { presentationNoShow: true }), onSuccess: () => { invalidate(); toast('success', 'Présentation marquée no-show'); } });
   const linkMut = useMutation({ mutationFn: (mandatId: string) => api.post('/candidatures', { candidatId: id, mandatId, stage: 'SOURCING' }), onSuccess: () => { invalidate(); setLinkSel(''); toast('success', 'Relié au mandat'); } });
   const sourceMut = useMutation({ mutationFn: (source: string) => api.put(`/candidats/${id}`, { source }), onSuccess: () => { invalidate(); toast('success', 'Source mise à jour'); } });
+  const confirmMut = useMutation({ mutationFn: () => api.post<{ sentTo: string }>(`/confirmation/request/${id}`), onSuccess: (r) => toast('success', `Email de confirmation envoyé à ${r?.sentTo || 'le candidat'}`), onError: (e: any) => toast('error', e?.message || "Échec de l'envoi (le candidat a-t-il un email ?)") });
   const actMut = useMutation({ mutationFn: (body: Record<string, unknown>) => api.post('/activites', { entiteType: 'CANDIDAT', entiteId: id, ...body }), onSuccess: () => { invalidate(); } });
   const toggleTaskMut = useMutation({ mutationFn: ({ actId, done }: { actId: string; done: boolean }) => api.put(`/activites/${actId}`, { tacheCompleted: done }), onSuccess: () => invalidate() });
 
@@ -209,8 +211,14 @@ export default function CandidatDetailPage() {
                 </div>
                 <button onClick={() => setRailTab('eval')} style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 14px', cursor: 'pointer' }}>Ajouter une évaluation</button>
                 <button onClick={() => setEditOpen(true)} style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 14px', cursor: 'pointer' }}>Modifier les infos</button>
+                <button onClick={() => confirmMut.mutate()} disabled={!c.email || confirmMut.isPending} title={c.email ? 'Envoyer un email de confirmation (intérêt + transfert CV)' : "Le candidat n'a pas d'email"} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: c.email ? '#22177A' : '#B8B4C2', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 14px', cursor: c.email && !confirmMut.isPending ? 'pointer' : 'default' }}><MailCheck size={14} />{confirmMut.isPending ? 'Envoi…' : 'Demander la confirmation'}</button>
                 <button onClick={() => setPlanOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 9, padding: '9px 15px', cursor: 'pointer' }}><Plus size={14} strokeWidth={2.2} />Prévoir une action</button>
               </div>
+              {c.cvConsent && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 12, fontSize: 12.5, fontWeight: 700, color: '#2C6B3F', background: '#EAF3EC', border: '1px solid rgba(44,107,63,.2)', borderRadius: 999, padding: '5px 12px' }}>
+                  <ShieldCheck size={14} />Consentement transfert CV{c.cvConsentDate ? ` · ${new Date(c.cvConsentDate).toLocaleDateString('fr-FR')}` : ''}
+                </div>
+              )}
             </div>
           </div>
 
@@ -285,7 +293,7 @@ export default function CandidatDetailPage() {
                       <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 11, background: '#F2F3D8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Building2 size={17} color="#22177A" /></span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <a onClick={() => navigate(`/mandats/${cand.mandat.id}`)} style={{ fontSize: 14.5, fontWeight: 800, color: '#1A1533', cursor: 'pointer' }}>{cand.mandat.titrePoste}</a>
-                        <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{cand.mandat.entreprise.nom} · relié {relTime(cand.createdAt)}</div>
+                        <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{cand.mandat.entreprise.nom} · relié {relTime(cand.createdAt)}{cand.interetConfirme ? <span style={{ color: '#2C6B3F', fontWeight: 700 }}> · intérêt confirmé ✓</span> : null}</div>
                       </div>
                       <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11.5, fontWeight: 800, color: st.fg, background: st.bg, borderRadius: 999, padding: '5px 12px' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: st.dot }} />{st.label}</span>
                     </div>
