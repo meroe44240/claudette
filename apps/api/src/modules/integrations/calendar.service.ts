@@ -670,6 +670,25 @@ export async function createEvent(userId: string, data: CalendarEventData, sendN
 }
 
 /**
+ * Supprime un événement du calendrier principal (best-effort).
+ * Notifie les invités (sendUpdates=all) — utilisé à l'annulation d'un RDV.
+ */
+export async function deleteEvent(userId: string, eventId: string): Promise<boolean> {
+  try {
+    const accessToken = await getValidAccessToken(userId);
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    // 200/204 = supprimé ; 404/410 = déjà absent → on considère OK.
+    return res.ok || res.status === 404 || res.status === 410;
+  } catch (e) {
+    console.warn('[Calendar] deleteEvent échoué', (e as Error).message);
+    return false;
+  }
+}
+
+/**
  * Free/busy : renvoie les intervalles occupés du calendrier principal entre deux dates.
  * Best-effort — renvoie [] si le calendrier n'est pas connecté ou en cas d'erreur.
  */

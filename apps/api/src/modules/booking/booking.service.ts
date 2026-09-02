@@ -1,9 +1,24 @@
 import prisma from '../../lib/db.js';
 import { NotFoundError, ValidationError } from '../../lib/errors.js';
-import { createEvent, getBusyTimes } from '../integrations/calendar.service.js';
+import { createEvent, getBusyTimes, deleteEvent } from '../integrations/calendar.service.js';
 import { sendRawEmail } from '../integrations/gmail.service.js';
 import * as leadService from '../leads/lead.service.js';
 import { isPersonalEmail } from '../integrations/allo.service.js';
+import { SignJWT, jwtVerify } from 'jose';
+
+const BASE = process.env.PORTAL_BASE_URL || 'https://ats.propium.co';
+const bookingSecret = new TextEncoder().encode(process.env.JWT_ACCESS_SECRET || 'dev-access-secret');
+
+async function signCancelToken(bookingId: string): Promise<string> {
+  return new SignJWT({ bid: bookingId, type: 'booking-cancel' })
+    .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('60d').sign(bookingSecret);
+}
+async function verifyCancelToken(token: string): Promise<string> {
+  const { payload } = await jwtVerify(token, bookingSecret);
+  const p = payload as unknown as { bid: string; type: string };
+  if (p.type !== 'booking-cancel') throw new ValidationError('Lien invalide.');
+  return p.bid;
+}
 
 interface AvailabilityWindow { day: number; start: string; end: string } // day 0=dim..6=sam, "HH:MM"
 
@@ -23,17 +38,12 @@ function dateLines(d: Date): { l1: string; l2: string } {
 
 interface ClientEmailData {
   name: string; dateL1: string; dateL2: string; durationMin: number; meetLink: string | null;
-  hostName: string; hostTitle: string; hostPhone: string | null; hostEmail: string; hostPhotoUrl: string | null; note?: string | null;
+  hostName: string; hostTitle: string; hostPhone: string | null; hostEmail: string; hostPhotoUrl: string | null;
+  rescheduleUrl: string; cancelUrl: string;
 }
 function clientBookingEmail(o: ClientEmailData): string {
-  const reschedule = `mailto:${o.hostEmail}?subject=${encodeURIComponent('Décaler mon rendez-vous')}`;
-  const cancel = `mailto:${o.hostEmail}?subject=${encodeURIComponent('Annuler mon rendez-vous')}`;
-  const noteLines = String(o.note || '').split('\n').filter(Boolean);
-  const noteRows = noteLines.map((l, i) => {
-    const idx = l.indexOf(':'); const k = idx > 0 ? l.slice(0, idx).trim() : 'Info'; const v = idx > 0 ? l.slice(idx + 1).trim() : l;
-    const bb = i < noteLines.length - 1 ? 'border-bottom:1px solid #eceaf4' : '';
-    return `<tr><td style="width:88px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:1.2px;text-transform:uppercase;color:#6E6A85;padding:8px 0;${bb}">${escHtml(k)}</td><td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#1A1533;padding:8px 0;${bb}">${escHtml(v)}</td></tr>`;
-  }).join('');
+  const reschedule = o.rescheduleUrl;
+  const cancel = o.cancelUrl;
   const photo = o.hostPhotoUrl ? `<img src="${escHtml(o.hostPhotoUrl)}" width="38" height="38" alt="" style="width:38px;height:38px;border-radius:50%;display:inline-block;vertical-align:middle">` : '';
   return `<div style="background:#EDEDF2;padding:24px 10px;font-family:Arial,Helvetica,sans-serif">
 <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;max-width:600px;margin:0 auto;background:#FCFCF5;border-radius:18px;overflow:hidden">
@@ -66,7 +76,7 @@ function clientBookingEmail(o: ClientEmailData): string {
  <tr><td style="padding:22px 32px 0">
   ${o.meetLink ? `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse"><tr><td style="background:#E6E9AF;border-radius:11px"><a href="${escHtml(o.meetLink)}" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;letter-spacing:.2px;color:#22177A;text-decoration:none;padding:16px 32px">Rejoindre le Google Meet</a></td></tr></table>` : ''}
   <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-top:12px"><tr>
-   <td style="padding-right:8px"><a href="${reschedule}" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;font-weight:bold;color:#22177A;text-decoration:none;border:1px solid #9a95c1;border-radius:11px;padding:10px 16px">Décaler le rendez-vous</a></td>
+   <td style="padding-right:8px"><a href="${reschedule}" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;font-weight:bold;color:#22177A;text-decoration:none;border:1px solid #9a95c1;border-radius:11px;padding:10px 16px">Reprogrammer le rendez-vous</a></td>
    <td><a href="${cancel}" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;font-weight:bold;color:#4A4568;text-decoration:none;border:1px solid #9a95c1;border-radius:11px;padding:10px 16px">Annuler</a></td>
   </tr></table>
   <p style="font-family:Arial,Helvetica,sans-serif;font-size:11.5px;color:#4A4568;padding-top:12px">Le lien est aussi dans l'invitation agenda que vous venez de recevoir.</p>
@@ -78,12 +88,6 @@ function clientBookingEmail(o: ClientEmailData): string {
    <p style="font-family:Arial,Helvetica,sans-serif;font-size:13.5px;line-height:1.65;color:#4A4568;padding-top:10px">Sans engagement. Si un autre acteur est plus adapté, on vous le dit. À la fin, vous repartez avec une lecture claire de votre marché.</p>
   </div>
  </td></tr>
- ${noteRows ? `<tr><td style="padding:26px 32px 0">
-  <div style="border-top:1px solid #dcdaea;padding-top:18px">
-   <div style="display:inline-block;background:#E6E9AF;border-radius:999px;padding:5px 12px;font-family:Arial,Helvetica,sans-serif;font-size:9.5px;font-weight:bold;letter-spacing:2.2px;text-transform:uppercase;color:#22177A">Ce qu'on a noté</div>
-   <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;margin-top:6px">${noteRows}</table>
-  </div>
- </td></tr>` : ''}
  <tr><td style="padding:28px 0 0">
   <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;background:#22177A">
    <tr><td style="padding:24px 32px 20px;border-top:3px solid #E6E9AF">
@@ -320,14 +324,56 @@ export async function createBooking(slug: string, data: {
   // Rattache à un candidat existant si l'email matche
   const candidat = await prisma.candidat.findFirst({ where: { email: { equals: data.email.trim(), mode: 'insensitive' } }, select: { id: true } });
 
-  // Crée l'événement Google Calendar (invitation auto au candidat) + lien Meet
   const host = await prisma.user.findUnique({ where: { id: settings.userId }, select: { prenom: true, nom: true, email: true, telephone: true, avatarUrl: true } as any }) as any;
+  const contactName = `${host?.prenom ? host.prenom + ' ' : ''}${host?.nom ?? ''}`.trim() || 'HumanUp';
+
+  // On crée d'abord la résa pour disposer de son id (lien d'annulation).
+  const booking = await prisma.booking.create({
+    data: {
+      userId: settings.userId,
+      slotStart: start, slotEnd: end,
+      inviteeName: data.name.trim(), inviteeEmail: data.email.trim(),
+      inviteeNote: intakeNote,
+      candidatId: candidat?.id ?? null,
+    },
+  });
+
+  // Liens client (reprogrammer / annuler)
+  const rescheduleUrl = `${BASE}/book/${slug}`;
+  const cancelUrl = `${BASE}/annuler-rdv?token=${encodeURIComponent(await signCancelToken(booking.id))}`;
+
+  // Titre + description rédigés POUR le client (pas de fiche d'intake interne).
+  const summary = kind === 'QUALIFICATION'
+    ? `Échange · HumanUp${data.poste ? ` · ${data.poste}` : ''}`
+    : `Échange recrutement · HumanUp${data.societe ? ` & ${data.societe}` : ''}`;
+  const intro = kind === 'QUALIFICATION'
+    ? (data.poste
+        ? `Merci d'avoir réservé cet échange pour le poste de ${data.poste}. On fera le point sur votre parcours, vos attentes et la suite du process.`
+        : `Merci d'avoir réservé cet échange avec HumanUp. On fera le point sur votre parcours, vos attentes et la suite du process.`)
+    : `Merci d'avoir réservé cet échange avec HumanUp. On fera le point sur votre besoin de recrutement (le poste, le contexte, vos priorités) et sur la façon dont on peut vous aider, concrètement et vite.`;
+  const description = `Bonjour ${firstNameOf(data.name)},
+
+${intro}
+
+Votre contact chez HumanUp, ${contactName}.
+Le lien Google Meet est dans cette invitation.
+
+Reprogrammer le rendez-vous
+${rescheduleUrl}
+
+Annuler
+${cancelUrl}
+
+À très vite,
+L'équipe HumanUp`;
+
+  // Crée l'événement Google Calendar (invitation auto au client) + lien Meet
   let meetLink: string | null = null;
   let googleEventId: string | null = null;
   try {
     const ev: any = await createEvent(settings.userId, {
-      summary: `${settings.title} — ${data.name}`,
-      description: `Réservé via la page de réservation HumanUp.${data.note ? `\n\nMessage : ${data.note}` : ''}`,
+      summary,
+      description,
       startTime: start.toISOString(),
       endTime: end.toISOString(),
       attendees: [data.email.trim()],
@@ -337,21 +383,11 @@ export async function createBooking(slug: string, data: {
     });
     meetLink = ev?.meetLink ?? null;
     googleEventId = ev?.googleEventId ?? null;
+    await prisma.booking.update({ where: { id: booking.id }, data: { meetLink, googleEventId } });
   } catch (e) {
-    // Le calendrier peut ne pas être connecté — on enregistre quand même la résa.
+    // Le calendrier peut ne pas être connecté — on garde quand même la résa.
     console.warn('[Booking] createEvent a échoué (calendrier non connecté ?)', (e as Error).message);
   }
-
-  const booking = await prisma.booking.create({
-    data: {
-      userId: settings.userId,
-      slotStart: start, slotEnd: end,
-      inviteeName: data.name.trim(), inviteeEmail: data.email.trim(),
-      inviteeNote: intakeNote,
-      meetLink, googleEventId,
-      candidatId: candidat?.id ?? null,
-    },
-  });
 
   // Emails de confirmation (envoyés depuis le Gmail connecté du recruteur — best-effort).
   const hostName = `${host?.prenom ? host.prenom + ' ' : ''}${host?.nom ?? ''}`.trim() || 'HumanUp';
@@ -366,7 +402,8 @@ export async function createBooking(slug: string, data: {
       body: `Bonjour ${firstNameOf(data.name)},\n\nVotre échange avec HumanUp est confirmé : ${dateL1} ${dateL2}.${meetLink ? `\nLien Google Meet : ${meetLink}` : ''}\n\nÀ très vite,\n${hostName}`,
       htmlBody: clientBookingEmail({
         name: data.name, dateL1, dateL2, durationMin: settings.durationMin, meetLink,
-        hostName, hostTitle: 'International Recruiter', hostPhone: host?.telephone ?? null, hostEmail: host?.email ?? 'meroe@humanup.io', hostPhotoUrl, note: recapNote,
+        hostName, hostTitle: 'International Recruiter', hostPhone: host?.telephone ?? null, hostEmail: host?.email ?? 'meroe@humanup.io', hostPhotoUrl,
+        rescheduleUrl, cancelUrl,
       }),
     });
   } catch (e) { console.warn('[Booking] email client échoué', (e as Error).message); }
@@ -434,6 +471,38 @@ export async function createBooking(slug: string, data: {
       ? 'Réservation confirmée. Vous recevez une invitation par email avec le lien Google Meet.'
       : 'Réservation confirmée. Vous recevez une confirmation par email.',
   };
+}
+
+// ── Annulation par le client (lien public tokenisé) ──
+export async function getCancelContext(token: string) {
+  const bid = await verifyCancelToken(token);
+  const b = await prisma.booking.findUnique({ where: { id: bid }, select: { status: true, slotStart: true, inviteeName: true } });
+  if (!b) throw new NotFoundError('Rendez-vous', bid);
+  const { l1, l2 } = dateLines(b.slotStart);
+  return { prenom: firstNameOf(b.inviteeName), date: `${l1} ${l2}`, alreadyCancelled: b.status === 'CANCELLED' };
+}
+
+export async function cancelBooking(token: string) {
+  const bid = await verifyCancelToken(token);
+  const b = await prisma.booking.findUnique({ where: { id: bid } });
+  if (!b) throw new NotFoundError('Rendez-vous', bid);
+  if (b.status !== 'CANCELLED') {
+    await prisma.booking.update({ where: { id: bid }, data: { status: 'CANCELLED' } });
+    if (b.googleEventId) await deleteEvent(b.userId, b.googleEventId);
+    // Notifie le recruteur (best-effort)
+    const host = await prisma.user.findUnique({ where: { id: b.userId }, select: { email: true } });
+    if (host?.email) {
+      const { l1, l2 } = dateLines(b.slotStart);
+      try {
+        await sendRawEmail(b.userId, {
+          to: host.email,
+          subject: `RDV annulé · ${b.inviteeName}`,
+          body: `${b.inviteeName} (${b.inviteeEmail}) a annulé le rendez-vous du ${l1} ${l2}.`,
+        });
+      } catch { /* noop */ }
+    }
+  }
+  return { ok: true };
 }
 
 // ── ATS : mes réservations ──────────────────────────

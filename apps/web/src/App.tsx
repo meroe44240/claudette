@@ -19,6 +19,8 @@ const PortalLoginPage = lazy(() => import('./pages/portail/login'));
 const PortalMandatPage = lazy(() => import('./pages/portail/mandat'));
 // Confirmation candidat (public)
 const ConfirmerPage = lazy(() => import('./pages/confirmer'));
+// Annulation de RDV (public)
+const AnnulerRdvPage = lazy(() => import('./pages/annuler-rdv'));
 
 // Protected pages
 const DashboardPage = lazy(() => import('./pages/dashboard/index'));
@@ -85,6 +87,7 @@ export default function App() {
         <Route path="/portail/login" element={<PortalLoginPage />} />
         <Route path="/portail/mandat/:mandatId" element={<PortalMandatPage />} />
         <Route path="/confirmer" element={<ConfirmerPage />} />
+        <Route path="/annuler-rdv" element={<AnnulerRdvPage />} />
         <Route
           element={
             <ProtectedRoute>
