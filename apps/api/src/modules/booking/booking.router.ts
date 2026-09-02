@@ -52,6 +52,15 @@ export default async function bookingRouter(fastify: FastifyInstance) {
 
 // ── PUBLIC (aucune auth) : /api/v1/public/booking ──
 export async function bookingPublicRouter(fastify: FastifyInstance) {
+  // Annulation par le client (token en query/body — routes statiques prioritaires sur /:slug)
+  fastify.get('/cancel', {
+    schema: { tags: ['Public'] },
+    handler: (request) => service.getCancelContext(String((request.query as { token?: string }).token || '')),
+  });
+  fastify.post('/cancel', {
+    schema: { tags: ['Public'] },
+    handler: (request) => service.cancelBooking(String(((request.body ?? {}) as { token?: string }).token || '')),
+  });
   fastify.get('/:slug', {
     schema: { tags: ['Public'], params: { type: 'object', required: ['slug'], properties: { slug: { type: 'string' } } } },
     handler: (request) => service.getPublicPage((request.params as { slug: string }).slug),
