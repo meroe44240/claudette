@@ -1,5 +1,7 @@
 # Workflow — Market Mapping quotidien Humanup.io
 
+> **Prompt à jour : voir `docs/market-mapping-prompt.md` (v2, 2026-09-03).** Ce document décrit la mécanique et le run historique du 03/09. La v2 change l'équipe : départ de Marie, Valentin reprend Finance + Hospitality, arrivée de Louis (Sales SaaS), ajout d'un CSV Sales général pour Méroë, 7 agents au lieu de 5, pièces jointes fiabilisées.
+
 Tâche planifiée Claude Code (lundi–vendredi, le matin). Produit chaque jour 3 fichiers CSV de prospection (un par vertical), un XLSX consolidé et un rapport de synthèse, puis commit + push + envoi Gmail/Slack.
 
 - **Recruteurs** : Marie Le Ret (Finance, marie@humanup.io), Valentin Murcia (Hospitality, valentin@humanup.io), Alexis (Industrie, alexis@humanup.io)
