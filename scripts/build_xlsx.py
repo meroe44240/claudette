@@ -87,12 +87,9 @@ def main(date):
         synth.append(list(row))
     synth.append([])
 
-    report = os.path.join(out_dir, f"rapport_synthese_{date}.md")
-    if os.path.exists(report):
-        synth.append(["Rapport de synthese"])
-        with open(report, encoding="utf-8") as fh:
-            for line in fh:
-                synth.append([line.rstrip("\n")])
+    # The full report ships as rapport_synthese_{date}.md and in the mail body; embedding it
+    # here only inflated the workbook past what an inline mail attachment can carry.
+    synth.append([f"Rapport de synthese complet : outputs/rapport_synthese_{date}.md"])
 
     for cell in synth[3]:
         cell.fill = HEADER_FILL
