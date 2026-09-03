@@ -1,7 +1,7 @@
 # Prompt de la routine planifiée — Market Mapping Humanup.io (v2)
 
 > À coller tel quel dans la configuration de la routine claude.ai (lundi–vendredi, le matin).
-> Version 2 du 2026-09-03 : départ de Marie, Valentin reprend Finance, arrivée de Louis (Sales SaaS), ajout du CSV Sales général pour Méroë, pièces jointes fiabilisées.
+> Version 2.1 du 2026-09-03 : départ de Marie, Valentin reprend Finance, arrivée de Louis (Sales SaaS), ajout du CSV Sales général pour Méroë. Correctif anti-saturation (« autocompact thrashing ») : les sous-agents ne renvoient que des résumés, et l'encodage + envoi des pièces jointes est délégué à des sous-agents pour que le base64 ne touche jamais le contexte principal.
 > Tout ce qui suit la ligne de séparation est le prompt lui-même.
 
 ---
@@ -47,6 +47,14 @@ Lance les 7 agents en une seule fois, en parallèle. Chaque sous-agent reçoit s
 Après les 3 agents Finance : merge A+B+C en `outputs/finance_{date}.csv` (Python csv, même header, même format).
 
 Après les 2 agents Sales : dédoublonne `sales_{date}.csv` contre `sales_saas_{date}.csv` sur la colonne `entreprise` (les entreprises présentes chez Louis sont retirées du fichier de Méroë). Si le fichier de Méroë passe sous 40 lignes, le livrer tel quel et le signaler dans le rapport.
+
+### RÈGLE ANTI-SATURATION (impérative)
+Le contexte de l'agent principal a saturé et fait échouer un run passé (« autocompact thrashing »). Pour l'éviter, garder l'agent principal LÉGER : les gros volumes (lignes CSV, résultats de recherche, base64) restent dans les sous-agents, jamais dans le contexte principal.
+
+1. **Chaque sous-agent écrit son CSV sur disque lui-même** (via Python) et ne renvoie à l'agent principal qu'un **résumé court** : nombre de lignes, nombre d'entreprises uniques, nombre de contacts sourcés, et les 3 signaux les plus forts (une ligne chacun). **Jamais les 40 lignes complètes dans sa réponse.**
+2. **L'agent principal ne lit jamais un CSV en entier dans son contexte.** Pour le merge Finance et le dédoublonnage Sales, il lance un traitement Python (Bash) qui lit/écrit les fichiers sur disque et n'affiche que des compteurs — il ne « cat » pas les fichiers.
+3. **L'agent principal ne manipule jamais de base64.** L'encodage et l'envoi des pièces jointes sont entièrement délégués à des sous-agents (voir Étape 6).
+4. Si un affichage de commande dépasse quelques lignes, le rediriger vers un fichier plutôt que de l'imprimer.
 
 ## Règles communes à toutes les verticales
 
@@ -195,25 +203,27 @@ git commit -m "market mapping $(date +%Y-%m-%d)"
 git push -u origin HEAD:main
 ```
 
-## Étape 6 — Envoi email (Gmail) : les CSV partent EN PIÈCE JOINTE
+## Étape 6 — Envoi email (Gmail) : les CSV partent EN PIÈCE JOINTE, via sous-agents
 
 Chaque destinataire reçoit son ou ses CSV en pièce jointe, jamais seulement un lien.
 
-### Procédure obligatoire pour chaque pièce jointe
-La sortie d'une commande Bash trop longue est tronquée et sauvegardée dans un fichier : ne jamais envoyer une pièce jointe à partir d'un aperçu. Pour chaque fichier :
-1. `base64 -w 0 outputs/{fichier} | fold -w 400 > {scratchpad}/{fichier}.b64` (le scratchpad est le répertoire temporaire de session)
-2. Lire ce fichier avec l'outil Read, par pages si nécessaire (un fichier de 40 lignes fait environ 80 à 90 lignes de 400 caractères), jusqu'à la dernière ligne
-3. Réécrire le base64 complet dans `{scratchpad}/{fichier}.send.b64` avec l'outil Write
-4. Vérifier : `tr -d '\n' < {fichier}.send.b64 | base64 -d | cmp - outputs/{fichier}` doit être silencieux (identique). Si ce n'est pas identique, recommencer à l'étape 2. Ne jamais envoyer sans cette vérification.
-5. Appeler `mcp__gmail__send_message` avec `attachments: [{content: <base64 sans retours à la ligne>, filename, mimeType}]`
+**Le base64 des pièces jointes ne doit JAMAIS entrer dans le contexte de l'agent principal** (c'est ce qui a fait saturer et échouer un run). L'agent principal ne fait donc PAS l'encodage ni l'appel Gmail lui-même : il **délègue chaque email à un sous-agent Task dédié**. Le pavé base64 vit et meurt dans le contexte du sous-agent, qui est jeté ensuite ; l'agent principal ne reçoit qu'un « OK, message id=… » de quelques mots.
 
-### Envois
-- **Valentin** : un email, deux pièces jointes (`finance_{date}.csv` + `hospitality_{date}.csv`), corps = résumé des deux verticales (volumes, contacts sourcés, top 3 signaux chacune)
-- **Alexis** : `industrie_{date}.csv`, corps = résumé + points à valider (effectif groupe)
-- **Louis** : `sales_saas_{date}.csv`, corps = résumé + liste des levées/opérations PE du jour
-- **Méroë** : `sales_{date}.csv` + `humanup_market_mapping_{date}.xlsx` en pièces jointes, corps = le rapport de synthèse complet (contenu du .md)
+Lancer les 4 sous-agents d'envoi en parallèle (un par destinataire). Donner à chacun : les chemins de fichiers à joindre, l'adresse email, l'objet, et le corps du message (texte fourni par l'agent principal — court, il ne contient pas de base64).
 
+### Instructions données à chaque sous-agent d'envoi
+Tu envoies un email avec pièce(s) jointe(s) via Gmail. Pour CHAQUE fichier à joindre :
+1. Encoder sans retours à la ligne : `base64 -w 0 <chemin>` (rediriger vers un fichier `.b64` du scratchpad, ne pas l'imprimer en entier).
+2. Vérifier l'intégrité : `base64 -w 0 <chemin> | base64 -d | cmp - <chemin>` doit être silencieux.
+3. Récupérer ce base64 et appeler `mcp__gmail__send_message` avec `attachments: [{content: <base64 sans \n>, filename, mimeType}]`.
+Ne renvoyer à l'appelant que le `id` du message et un mot de statut. Ne jamais recopier le base64 dans ta réponse.
 Mime types : `text/csv` pour les CSV, `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` pour le XLSX.
+
+### Les 4 envois
+- **Valentin** (valentin@humanup.io) : deux pièces jointes `finance_{date}.csv` + `hospitality_{date}.csv`, corps = résumé des deux verticales (volumes, contacts sourcés, top 3 signaux chacune)
+- **Alexis** (alexis@humanup.io) : `industrie_{date}.csv`, corps = résumé + points à valider (effectif groupe)
+- **Louis** (louis@humanup.io) : `sales_saas_{date}.csv`, corps = résumé + liste des levées/opérations PE du jour
+- **Méroë** (meroe@humanup.io) : `sales_{date}.csv` + `humanup_market_mapping_{date}.xlsx`, corps = le rapport de synthèse complet (contenu du .md, que le sous-agent lit depuis le fichier)
 
 ## Étape 7 — Slack
 
