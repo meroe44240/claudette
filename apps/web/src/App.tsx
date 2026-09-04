@@ -30,6 +30,7 @@ const OutilsPage = lazy(() => import('./pages/outils/index'));
 const OffresPage = lazy(() => import('./pages/offres/index'));
 const BookingSettingsPage = lazy(() => import('./pages/booking/index'));
 const BookPage = lazy(() => import('./pages/book/index'));
+const CalendrierLinkedinPage = lazy(() => import('./pages/calendrier-linkedin/index'));
 const ListPushPage = lazy(() => import('./pages/list-push/index'));
 const SettingsPage = lazy(() => import('./pages/settings/index'));
 const CandidatsPage = lazy(() => import('./pages/candidats/index'));
@@ -103,6 +104,7 @@ export default function App() {
           <Route path="outils" element={<OutilsPage />} />
           <Route path="offres" element={<OffresPage />} />
           <Route path="booking" element={<BookingSettingsPage />} />
+          <Route path="calendrier-linkedin" element={<CalendrierLinkedinPage />} />
           <Route path="list-push" element={<ListPushPage />} />
           <Route path="candidats" element={<CandidatsPage />} />
           <Route path="candidats/new" element={<CandidatNewPage />} />
