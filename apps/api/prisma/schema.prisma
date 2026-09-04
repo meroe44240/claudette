@@ -55,6 +55,8 @@ model User {
   mcpActionLogs        McpActionLog[]          @relation("McpActionLogUser")
   recruiterObjectives  RecruiterObjective[]    @relation("RecruiterObjectiveUser")
   aiPendingValidations AiPendingValidation[]   @relation("AiPendingValidationUser")
+  postsLinkedin        PostLinkedin[]          @relation("PostLinkedinAuteur")
+  postLinkedinComments PostLinkedinComment[]   @relation("PostLinkedinCommentAuteur")
 
   @@map("users")
 }
@@ -1122,4 +1124,39 @@ model Booking {
 
   @@index([userId, slotStart])
   @@map("bookings")
+}
+
+// ─── CALENDRIER EDITORIAL LINKEDIN ───────────────────
+// Les recruteurs deposent leurs posts LinkedIn sur un calendrier ;
+// statut evolutif (idee -> a valider -> valide -> publie) + fil de
+// discussion (commentaires) visible par toute l'equipe.
+model PostLinkedin {
+  id        String   @id @default(uuid()) @db.Uuid
+  auteurId  String   @map("auteur_id") @db.Uuid
+  auteur    User     @relation("PostLinkedinAuteur", fields: [auteurId], references: [id])
+  datePost  DateTime @map("date_post") @db.Timestamptz() // date sur le calendrier
+  texte     String   @default("") @db.Text
+  imageUrl  String?  @map("image_url") @db.VarChar(500)
+  statut    String   @default("IDEE") @db.VarChar(20) // IDEE | A_VALIDER | VALIDE | PUBLIE
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  commentaires PostLinkedinComment[]
+
+  @@index([datePost])
+  @@index([auteurId])
+  @@map("post_linkedin")
+}
+
+model PostLinkedinComment {
+  id        String       @id @default(uuid()) @db.Uuid
+  postId    String       @map("post_id") @db.Uuid
+  post      PostLinkedin @relation(fields: [postId], references: [id], onDelete: Cascade)
+  auteurId  String       @map("auteur_id") @db.Uuid
+  auteur    User         @relation("PostLinkedinCommentAuteur", fields: [auteurId], references: [id])
+  texte     String       @db.Text
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([postId])
+  @@map("post_linkedin_comment")
 }
