@@ -122,7 +122,7 @@ export default function BookingSettingsPage() {
                 <option value="">— Aucun (qualification générale) —</option>
                 {mandats.map(m => <option key={m.id} value={m.id}>{m.titrePoste}{m.entreprise?.nom ? ` · ${m.entreprise.nom}` : ''}</option>)}
               </select>
-              <div style={{ fontSize: 11, color: '#9A96AE', marginTop: 6 }}>Si un mandat est choisi, le candidat qui réserve est automatiquement rattaché à ce mandat (étape Contacté).</div>
+              <div style={{ fontSize: 11, color: '#9A96AE', marginTop: 6 }}>Si un mandat est choisi, le candidat qui réserve est automatiquement rattaché à ce mandat (étape Qualification).</div>
             </div>
           )}
 

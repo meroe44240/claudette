@@ -215,25 +215,29 @@ const natureLabels: Record<string, string> = { CDI: 'CDI', CDD: 'CDD', INTERIM: 
 
 const stageLabels: Record<string, string> = {
   SOURCING: 'Sourcing',
-  CONTACTE: 'Contacté',
-  ENTRETIEN_1: 'Entretien 1',
-  ENTRETIEN_CLIENT: 'Entretien Client',
+  CONTACTE: 'Qualification',
+  ENTRETIEN_1: 'Entretien interne',
+  ENVOYE_CLIENT: 'Envoi client',
+  ENTRETIEN_CLIENT: 'Entretien client',
+  PROCESS: 'Process',
   OFFRE: 'Offre',
-  PLACE: 'Placé',
-  REFUSE: 'Refusé',
+  PLACE: 'Gagné',
+  REFUSE: 'Perdu',
 };
 
 const stageColors: Record<string, string> = {
   SOURCING: '#8E7CC3',
   CONTACTE: '#3B6FE0',
   ENTRETIEN_1: '#22177A',
+  ENVOYE_CLIENT: '#2A6BD8',
   ENTRETIEN_CLIENT: '#E08A2B',
+  PROCESS: '#D9A441',
   OFFRE: '#C9A227',
   PLACE: '#3B9A54',
   REFUSE: '#B3261E',
 };
 
-const pipelineOrder = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE'];
+const pipelineOrder = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE'];
 
 const PIPE_AV: [string, string][] = [['#22177A', '#E6E9AF'], ['#E6E9AF', '#22177A'], ['#8E7CC3', '#fff']];
 

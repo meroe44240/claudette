@@ -22,6 +22,7 @@ interface MandatPipeline {
     ENTRETIEN_1: number;
     ENVOYE_CLIENT: number;
     ENTRETIEN_CLIENT: number;
+    PROCESS: number;
     OFFRE: number;
     PLACE: number;
     REFUSE: number;
@@ -333,6 +334,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
             ENTRETIEN_1: 0,
             ENVOYE_CLIENT: 0,
             ENTRETIEN_CLIENT: 0,
+            PROCESS: 0,
             OFFRE: 0,
             PLACE: 0,
             REFUSE: 0,
@@ -507,9 +509,11 @@ async function gatherDailyData(): Promise<DailyReportData> {
 // Map stage enum to short French label
 const STAGE_LABELS: Record<string, string> = {
   SOURCING: 'sourcing',
-  CONTACTE: 'contacté',
-  ENTRETIEN_1: 'entretien',
-  ENTRETIEN_CLIENT: 'client',
+  CONTACTE: 'qualification',
+  ENTRETIEN_1: 'entretien interne',
+  ENVOYE_CLIENT: 'envoi client',
+  ENTRETIEN_CLIENT: 'entretien client',
+  PROCESS: 'process',
   OFFRE: 'offre',
 };
 

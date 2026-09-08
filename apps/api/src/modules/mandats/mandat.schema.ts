@@ -40,7 +40,7 @@ export const updateMandatSchema = z.object({
   salesId: z.string().uuid().nullable().optional(),
   recruteurId: z.string().uuid().nullable().optional(),
   visibleStages: z
-    .array(z.enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE']))
+    .array(z.enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE', 'REFUSE']))
     .optional(),
   transcript: z.string().nullable().optional(),
   ficheDePoste: z.string().nullable().optional(),

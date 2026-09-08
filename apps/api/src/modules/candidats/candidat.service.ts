@@ -164,7 +164,7 @@ export async function list(
 
   // Position active = candidature la plus avancée (hors REFUSE) ; sinon vivier.
   const STAGE_RANK: Record<string, number> = {
-    SOURCING: 0, CONTACTE: 1, ENTRETIEN_1: 2, ENVOYE_CLIENT: 3, ENTRETIEN_CLIENT: 4, OFFRE: 5, PLACE: 6,
+    SOURCING: 0, CONTACTE: 1, ENTRETIEN_1: 2, ENVOYE_CLIENT: 3, ENTRETIEN_CLIENT: 4, PROCESS: 5, OFFRE: 6, PLACE: 7,
   };
 
   const enriched = data.map((c) => {

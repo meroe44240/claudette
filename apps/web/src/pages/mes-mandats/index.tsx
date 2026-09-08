@@ -17,6 +17,7 @@ type Stage =
   | 'ENTRETIEN_1'
   | 'ENVOYE_CLIENT'
   | 'ENTRETIEN_CLIENT'
+  | 'PROCESS'
   | 'OFFRE'
   | 'PLACE'
   | 'REFUSE';
@@ -45,13 +46,14 @@ interface MandatMine {
 
 const STAGE_LABEL: Record<Stage, string> = {
   SOURCING: 'Sourcing',
-  CONTACTE: 'Contactés',
-  ENTRETIEN_1: 'Entr. recruteur',
-  ENVOYE_CLIENT: 'Envoyés client',
+  CONTACTE: 'Qualification',
+  ENTRETIEN_1: 'Entr. interne',
+  ENVOYE_CLIENT: 'Envoi client',
   ENTRETIEN_CLIENT: 'Entr. client',
-  OFFRE: 'Offres',
-  PLACE: 'Placés',
-  REFUSE: 'Refusés',
+  PROCESS: 'Process',
+  OFFRE: 'Offre',
+  PLACE: 'Gagné',
+  REFUSE: 'Perdu',
 };
 
 const ACTIVE_STAGES: Stage[] = [
@@ -60,6 +62,7 @@ const ACTIVE_STAGES: Stage[] = [
   'ENTRETIEN_1',
   'ENVOYE_CLIENT',
   'ENTRETIEN_CLIENT',
+  'PROCESS',
   'OFFRE',
 ];
 

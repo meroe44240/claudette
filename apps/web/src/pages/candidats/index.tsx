@@ -38,12 +38,13 @@ interface PaginatedResponse {
 // ─── STAGE META ─────────────────────────────────────
 const STAGE_META: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
   SOURCING: { label: 'Sourcing', bg: 'rgba(34,23,122,.07)', fg: '#22177A', dot: '#8E7CC3' },
-  CONTACTE: { label: 'Contacté', bg: 'rgba(34,23,122,.07)', fg: '#22177A', dot: '#8E7CC3' },
-  ENTRETIEN_1: { label: 'Entr. 1', bg: 'rgba(34,23,122,.09)', fg: '#22177A', dot: '#22177A' },
-  ENVOYE_CLIENT: { label: 'Envoyé', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  CONTACTE: { label: 'Qualification', bg: 'rgba(34,23,122,.07)', fg: '#22177A', dot: '#8E7CC3' },
+  ENTRETIEN_1: { label: 'Entr. interne', bg: 'rgba(34,23,122,.09)', fg: '#22177A', dot: '#22177A' },
+  ENVOYE_CLIENT: { label: 'Envoi client', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
   ENTRETIEN_CLIENT: { label: 'Entr. client', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
+  PROCESS: { label: 'Process', bg: '#FDF3D3', fg: '#8A6A2E', dot: '#D9A441' },
   OFFRE: { label: 'Offre', bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
-  PLACE: { label: 'Placé', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  PLACE: { label: 'Gagné', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
 };
 const VIVIER = { label: 'Vivier', fg: '#8A8699', dot: '#C4C1D0' };
 

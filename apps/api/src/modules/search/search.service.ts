@@ -11,12 +11,14 @@ interface SearchResult {
 
 const STAGE_LABELS: Record<string, string> = {
   SOURCING: 'Sourcing',
-  CONTACTE: 'Contacté',
-  ENTRETIEN_1: 'Entretien 1',
-  ENTRETIEN_CLIENT: 'Entretien Client',
+  CONTACTE: 'Qualification',
+  ENTRETIEN_1: 'Entretien interne',
+  ENVOYE_CLIENT: 'Envoi client',
+  ENTRETIEN_CLIENT: 'Entretien client',
+  PROCESS: 'Process',
   OFFRE: 'Offre',
-  PLACE: 'Placé',
-  REFUSE: 'Refusé',
+  PLACE: 'Gagné',
+  REFUSE: 'Perdu',
 };
 
 const STATUT_LABELS: Record<string, string> = {

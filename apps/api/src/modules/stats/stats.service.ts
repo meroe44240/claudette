@@ -9,6 +9,7 @@ const STAGE_ORDER = [
   'CONTACTE',
   'ENTRETIEN_1',
   'ENTRETIEN_CLIENT',
+  'PROCESS',
   'OFFRE',
   'PLACE',
 ] as const;

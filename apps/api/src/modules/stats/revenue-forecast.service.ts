@@ -40,6 +40,7 @@ export async function getRevenueForecast(months = 6): Promise<{ forecast: Foreca
   const avgFee = 15000; // Default average fee per placement in EUR
   const stageWeights: Record<string, number> = {
     OFFRE: 0.8,
+    PROCESS: 0.65,
     ENTRETIEN_CLIENT: 0.5,
     ENTRETIEN_1: 0.15,
     CONTACTE: 0.05,

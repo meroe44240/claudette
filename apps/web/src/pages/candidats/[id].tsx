@@ -37,18 +37,19 @@ interface Activite {
 }
 
 // ─── STAGES ─────────────────────────────────────────
-const STAGES = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE'];
+const STAGES = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE'];
 const STAGE_META: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
   SOURCING: { label: 'Sourcing', bg: 'rgba(34,23,122,.07)', fg: '#22177A', dot: '#8E7CC3' },
-  CONTACTE: { label: 'Contacté', bg: 'rgba(34,23,122,.07)', fg: '#22177A', dot: '#8E7CC3' },
-  ENTRETIEN_1: { label: 'Entretien', bg: 'rgba(34,23,122,.09)', fg: '#22177A', dot: '#22177A' },
-  ENVOYE_CLIENT: { label: 'Envoyé client', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  CONTACTE: { label: 'Qualification', bg: 'rgba(34,23,122,.07)', fg: '#22177A', dot: '#8E7CC3' },
+  ENTRETIEN_1: { label: 'Entretien interne', bg: 'rgba(34,23,122,.09)', fg: '#22177A', dot: '#22177A' },
+  ENVOYE_CLIENT: { label: 'Envoi client', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
   ENTRETIEN_CLIENT: { label: 'Entr. client', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
+  PROCESS: { label: 'Process', bg: '#FDF3D3', fg: '#8A6A2E', dot: '#D9A441' },
   OFFRE: { label: 'Offre', bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
-  PLACE: { label: 'Placé', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
-  REFUSE: { label: 'Archivé', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
+  PLACE: { label: 'Gagné', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  REFUSE: { label: 'Perdu', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
 };
-const SEG_COLORS = ['#8E7CC3', '#8E7CC3', '#22177A', '#2A6BD8', '#E08A2B', '#C9A227', '#3B9A54'];
+const SEG_COLORS = ['#8E7CC3', '#8E7CC3', '#22177A', '#2A6BD8', '#E08A2B', '#D9A441', '#C9A227', '#3B9A54'];
 const SOURCE_OPTIONS = ['LinkedIn', 'Kalent', 'List Push', 'Candidature spontanée', 'Cooptation', 'Indeed', 'Jobboard client', 'Réseau', 'Autre'];
 // value = enum backend (motifRefus), label = affichage
 const LOST_REASONS: { value: string; label: string }[] = [

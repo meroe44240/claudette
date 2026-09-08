@@ -656,11 +656,13 @@ function ProfileView({ data }: { data: PersonData }) {
                   onChange={(e) => setSelectedStage(e.target.value)}
                 >
                   <option value="SOURCING">Sourcing</option>
-                  <option value="CONTACTE">Contact{'\u00e9'}</option>
-                  <option value="ENTRETIEN_1">Entretien 1</option>
-                  <option value="ENTRETIEN_CLIENT">Entretien Client</option>
+                  <option value="CONTACTE">Qualification</option>
+                  <option value="ENTRETIEN_1">Entretien interne</option>
+                  <option value="ENVOYE_CLIENT">Envoi client</option>
+                  <option value="ENTRETIEN_CLIENT">Entretien client</option>
+                  <option value="PROCESS">Process</option>
                   <option value="OFFRE">Offre</option>
-                  <option value="PLACE">Plac{'\u00e9'}</option>
+                  <option value="PLACE">Gagn{'\u00e9'}</option>
                 </select>
               </div>
             )}

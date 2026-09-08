@@ -82,22 +82,24 @@ const TARGETS = { appels: 40, rdv: 2, mandats: 2, presentations: 4, ca: 20000 };
 // 7 étapes du pipeline (ordre + libellé court + couleur pastille), calées sur la maquette.
 const STAGES = [
   { key: 'SOURCING', label: 'Sourcing', dot: '#8E7CC3' },
-  { key: 'CONTACTE', label: 'Contacté', dot: '#8E7CC3' },
-  { key: 'ENTRETIEN_1', label: 'Entr. 1', dot: '#22177A' },
-  { key: 'ENVOYE_CLIENT', label: 'Envoyé', dot: '#2A6BD8' },
+  { key: 'CONTACTE', label: 'Qualification', dot: '#8E7CC3' },
+  { key: 'ENTRETIEN_1', label: 'Entr. interne', dot: '#22177A' },
+  { key: 'ENVOYE_CLIENT', label: 'Envoi client', dot: '#2A6BD8' },
   { key: 'ENTRETIEN_CLIENT', label: 'Entr. client', dot: '#E08A2B' },
+  { key: 'PROCESS', label: 'Process', dot: '#D9A441' },
   { key: 'OFFRE', label: 'Offre', dot: '#C9A227' },
-  { key: 'PLACE', label: 'Placé', dot: '#3B9A54' },
+  { key: 'PLACE', label: 'Gagné', dot: '#3B9A54' },
 ];
 
 const STATUT_MAP: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
   SOURCING: { label: 'Sourcing', bg: '#F3F0FA', fg: '#5B4B9E', dot: '#8E7CC3' },
-  CONTACTE: { label: 'Contacté', bg: '#F3F0FA', fg: '#5B4B9E', dot: '#8E7CC3' },
-  ENTRETIEN_1: { label: 'Entretiens', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
-  ENVOYE_CLIENT: { label: 'Envoyé client', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  CONTACTE: { label: 'Qualification', bg: '#F3F0FA', fg: '#5B4B9E', dot: '#8E7CC3' },
+  ENTRETIEN_1: { label: 'Entretien interne', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  ENVOYE_CLIENT: { label: 'Envoi client', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
   ENTRETIEN_CLIENT: { label: 'Entr. client', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
+  PROCESS: { label: 'Process', bg: '#FDF3D3', fg: '#8A6A2E', dot: '#D9A441' },
   OFFRE: { label: 'Offre', bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
-  PLACE: { label: 'Placé', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  PLACE: { label: 'Gagné', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
 };
 
 // Palette d'avatars (fond / encre)

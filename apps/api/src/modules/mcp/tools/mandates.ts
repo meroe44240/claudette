@@ -235,7 +235,7 @@ export function registerMandateTools(server: McpServer) {
       "Demande TOUJOURS ces valeurs au recruteur/sales avant d'appeler l'outil, puis rappelle avec tous les params. Tu DOIS demander confirmation.",
     {
       candidature_id: z.string().describe('UUID de la candidature'),
-      new_stage: z.string().describe('Nouvelle etape : SOURCING, CONTACTE, ENTRETIEN_1, ENVOYE_CLIENT, ENTRETIEN_CLIENT, OFFRE, PLACE, REFUSE'),
+      new_stage: z.string().describe('Nouvelle etape : SOURCING, CONTACTE, ENTRETIEN_1, ENVOYE_CLIENT, ENTRETIEN_CLIENT, PROCESS, OFFRE, PLACE, REFUSE'),
       motif_refus: z.string().optional().describe('OBLIGATOIRE si REFUSE : SALAIRE, PROFIL_PAS_ALIGNE, CANDIDAT_DECLINE, CLIENT_REFUSE, TIMING, POSTE_POURVU, AUTRE'),
       motif_refus_detail: z.string().optional().describe('Optionnel si REFUSE : detail libre du motif.'),
       date_entretien_client: z.string().optional().describe('OBLIGATOIRE si ENTRETIEN_CLIENT : date + heure de l\'entretien avec le client (ISO 8601, ex 2026-08-05T14:30:00). Ecrit dateEntretienClient.'),

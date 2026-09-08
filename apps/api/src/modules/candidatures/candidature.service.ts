@@ -422,9 +422,9 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
 
     // Log activity for stage change (audit trail)
     const stageLabels: Record<string, string> = {
-      SOURCING: 'Sourcing', CONTACTE: 'Contacté', ENTRETIEN_1: 'Entretien 1',
-      ENVOYE_CLIENT: 'Envoyé client', ENTRETIEN_CLIENT: 'Entretien Client',
-      SHORTLIST: 'Shortlist', OFFRE: 'Offre', PLACE: 'Placé', REFUSE: 'Refusé',
+      SOURCING: 'Sourcing', CONTACTE: 'Qualification', ENTRETIEN_1: 'Entretien interne',
+      ENVOYE_CLIENT: 'Envoi client', ENTRETIEN_CLIENT: 'Entretien client',
+      PROCESS: 'Process', SHORTLIST: 'Shortlist', OFFRE: 'Offre', PLACE: 'Gagné', REFUSE: 'Perdu',
     };
     await prisma.activite.create({
       data: {
