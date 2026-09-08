@@ -60,6 +60,7 @@ const STAGE_PROBABILITY: Record<string, number> = {
   CONTACTE: 0.20,
   ENTRETIEN_1: 0.40,
   ENTRETIEN_CLIENT: 0.60,
+  PROCESS: 0.70,
   OFFRE: 0.80,
   PLACE: 1.0,
 };

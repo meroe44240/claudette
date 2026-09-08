@@ -17,8 +17,8 @@ interface RecruteurDashboard { mandats: MandatRecruteur[] }
 interface TachesResponse { meta: { total: number } }
 
 const STAGE_LABELS: Record<string, string> = {
-  SOURCING: 'Sourcing', CONTACTE: 'Contacté', ENTRETIEN_1: 'Entretien 1', ENVOYE_CLIENT: 'Envoyé client',
-  ENTRETIEN_CLIENT: 'Entretien client', OFFRE: 'Offre', PLACE: 'Placé', REFUSE: 'Refusé',
+  SOURCING: 'Sourcing', CONTACTE: 'Qualification', ENTRETIEN_1: 'Entretien interne', ENVOYE_CLIENT: 'Envoi client',
+  ENTRETIEN_CLIENT: 'Entretien client', PROCESS: 'Process', OFFRE: 'Offre', PLACE: 'Gagné', REFUSE: 'Perdu',
 };
 const STAGE_PILL: Record<string, { bg: string; fg: string }> = {
   SOURCING: { bg: '#F6F4FB', fg: '#6B5CA5' },

@@ -32,6 +32,7 @@ const ACTIVE_STAGES: Stage[] = [
   'ENTRETIEN_1',
   'ENVOYE_CLIENT',
   'ENTRETIEN_CLIENT',
+  'PROCESS',
   'OFFRE',
 ];
 

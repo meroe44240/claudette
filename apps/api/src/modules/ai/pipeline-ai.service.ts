@@ -52,7 +52,9 @@ const PIPELINE_STAGES = [
   'SOURCING',
   'CONTACTE',
   'ENTRETIEN_1',
+  'ENVOYE_CLIENT',
   'ENTRETIEN_CLIENT',
+  'PROCESS',
   'OFFRE',
   'PLACE',
 ] as const;
@@ -78,12 +80,14 @@ function isForwardMove(currentStage: string, suggestedStage: string): boolean {
 function getStageFrenchLabel(stage: string): string {
   const labels: Record<string, string> = {
     SOURCING: 'Sourcing',
-    CONTACTE: 'Contacte',
-    ENTRETIEN_1: 'Entretien 1',
-    ENTRETIEN_CLIENT: 'Entretien Client',
+    CONTACTE: 'Qualification',
+    ENTRETIEN_1: 'Entretien interne',
+    ENVOYE_CLIENT: 'Envoi client',
+    ENTRETIEN_CLIENT: 'Entretien client',
+    PROCESS: 'Process',
     OFFRE: 'Offre',
-    PLACE: 'Place',
-    REFUSE: 'Refuse',
+    PLACE: 'Gagné',
+    REFUSE: 'Perdu',
   };
   return labels[stage] || stage;
 }
@@ -97,11 +101,13 @@ Ton role : analyser l'activite recente des candidatures et suggerer des mouvemen
 
 Etapes du pipeline (dans l'ordre) :
 1. SOURCING - Candidat identifie
-2. CONTACTE - Premier contact effectue
-3. ENTRETIEN_1 - Entretien recruteur realise
-4. ENTRETIEN_CLIENT - Entretien avec le client
-5. OFFRE - Offre en cours
-6. PLACE - Candidat place (final)
+2. CONTACTE - Qualification (premier contact / screening)
+3. ENTRETIEN_1 - Entretien interne (chez nous)
+4. ENVOYE_CLIENT - Profil envoye au client
+5. ENTRETIEN_CLIENT - Entretien avec le client
+6. PROCESS - Process en cours chez le client
+7. OFFRE - Offre en cours
+8. PLACE - Candidat place / gagne (final)
 
 Regles STRICTES :
 - Tu ne peux suggerer QUE des mouvements vers l'AVANT (ex: SOURCING -> CONTACTE, pas ENTRETIEN_1 -> SOURCING)

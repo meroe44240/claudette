@@ -18,13 +18,14 @@ import { LOGO_MARK_ON_NAVY_DATA_URI } from '../../lib/brand-assets.js';
 
 const STAGE_LABEL: Record<Stage, string> = {
   SOURCING: 'Sourcing',
-  CONTACTE: 'Contactes',
-  ENTRETIEN_1: 'Entr. recruteur',
-  ENVOYE_CLIENT: 'Envoyes client',
+  CONTACTE: 'Qualification',
+  ENTRETIEN_1: 'Entr. interne',
+  ENVOYE_CLIENT: 'Envoi client',
   ENTRETIEN_CLIENT: 'Entr. client',
-  OFFRE: 'Offres',
-  PLACE: 'Places',
-  REFUSE: 'Refuses',
+  PROCESS: 'Process',
+  OFFRE: 'Offre',
+  PLACE: 'Gagné',
+  REFUSE: 'Perdu',
 };
 
 function escapeHtml(s: string): string {

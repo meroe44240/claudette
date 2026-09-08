@@ -43,6 +43,7 @@ type StageCandidature =
   | 'ENTRETIEN_1'
   | 'ENVOYE_CLIENT'
   | 'ENTRETIEN_CLIENT'
+  | 'PROCESS'
   | 'OFFRE'
   | 'PLACE'
   | 'REFUSE';
@@ -107,6 +108,7 @@ const STAGES: StageCandidature[] = [
   'ENTRETIEN_1',
   'ENVOYE_CLIENT',
   'ENTRETIEN_CLIENT',
+  'PROCESS',
   'OFFRE',
   'PLACE',
   'REFUSE',
@@ -114,12 +116,13 @@ const STAGES: StageCandidature[] = [
 
 const STAGE_LABELS: Record<StageCandidature, string> = {
   SOURCING: 'Sourcing',
-  CONTACTE: 'Contacté',
-  ENTRETIEN_1: 'Entretien RH',
-  ENVOYE_CLIENT: 'Envoyé client',
+  CONTACTE: 'Qualification',
+  ENTRETIEN_1: 'Entretien interne',
+  ENVOYE_CLIENT: 'Envoi client',
   ENTRETIEN_CLIENT: 'Entretien client',
+  PROCESS: 'Process',
   OFFRE: 'Offre',
-  PLACE: 'Placé',
+  PLACE: 'Gagné',
   REFUSE: 'Perdu',
 };
 
@@ -129,6 +132,7 @@ const STAGE_COLORS: Record<StageCandidature, string> = {
   ENTRETIEN_1: '#E0E7FF',
   ENVOYE_CLIENT: '#FED7AA',
   ENTRETIEN_CLIENT: '#FEF3C7',
+  PROCESS: '#FDE68A',
   OFFRE: '#D1FAE5',
   PLACE: '#16A34A',
   REFUSE: '#FEE2E2',
@@ -146,10 +150,11 @@ const MOTIF_REFUS_OPTIONS: { value: MotifRefus; label: string }[] = [
 
 // ── Stage → suggested follow-up task ──
 const STAGE_TASK_SUGGESTIONS: Partial<Record<StageCandidature, { titre: string; days: number }>> = {
-  CONTACTE: { titre: 'Contacter le candidat', days: 1 },
-  ENTRETIEN_1: { titre: "Planifier l'entretien 1", days: 3 },
+  CONTACTE: { titre: 'Qualifier le candidat', days: 1 },
+  ENTRETIEN_1: { titre: "Planifier l'entretien interne", days: 3 },
   ENVOYE_CLIENT: { titre: 'Relancer le client pour avoir un retour', days: 5 },
   ENTRETIEN_CLIENT: { titre: "Planifier l'entretien client", days: 3 },
+  PROCESS: { titre: 'Suivre le process client', days: 5 },
   OFFRE: { titre: "Préparer et envoyer l'offre", days: 2 },
   PLACE: { titre: 'Finaliser le placement et onboarding', days: 5 },
 };
@@ -1340,7 +1345,7 @@ export default function MandatKanbanPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
-            <strong>{selectedIds.size} candidat{selectedIds.size > 1 ? 's' : ''}</strong> passera{selectedIds.size > 1 ? 'ont' : ''} en <span className="font-semibold text-neutral-800">Envoyé client</span>. Le client sera notifié par un email agrégé.
+            <strong>{selectedIds.size} candidat{selectedIds.size > 1 ? 's' : ''}</strong> passera{selectedIds.size > 1 ? 'ont' : ''} en <span className="font-semibold text-neutral-800">Envoi client</span>. Le client sera notifié par un email agrégé.
           </p>
           <div className="rounded-xl border border-neutral-100 p-3">
             <label className="flex cursor-pointer items-start gap-2">

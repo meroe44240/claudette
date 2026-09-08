@@ -15,6 +15,7 @@ export type Stage =
   | 'ENTRETIEN_1'
   | 'ENVOYE_CLIENT'
   | 'ENTRETIEN_CLIENT'
+  | 'PROCESS'
   | 'OFFRE'
   | 'PLACE'
   | 'REFUSE';

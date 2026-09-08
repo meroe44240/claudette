@@ -312,12 +312,14 @@ export async function getMandatReport(mandatId: string): Promise<MandatReportDat
 
 const STAGE_LABELS: Record<string, string> = {
   SOURCING: 'Sourcing',
-  CONTACTE: 'Contacte',
-  ENTRETIEN_1: 'Entretien 1',
-  ENTRETIEN_CLIENT: 'Entretien Client',
+  CONTACTE: 'Qualification',
+  ENTRETIEN_1: 'Entretien interne',
+  ENVOYE_CLIENT: 'Envoi client',
+  ENTRETIEN_CLIENT: 'Entretien client',
+  PROCESS: 'Process',
   OFFRE: 'Offre',
-  PLACE: 'Place',
-  REFUSE: 'Refuse',
+  PLACE: 'Gagné',
+  REFUSE: 'Perdu',
 };
 
 const STATUT_LABELS: Record<string, string> = {
@@ -578,12 +580,14 @@ export function generateMandatReportHtml(data: MandatReportData): string {
     year: 'numeric',
   });
 
-  const stageOrder = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE'];
+  const stageOrder = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE', 'REFUSE'];
   const stageColors: Record<string, string> = {
     SOURCING: '#93C5FD',
     CONTACTE: '#6EE7B7',
     ENTRETIEN_1: '#FCD34D',
+    ENVOYE_CLIENT: '#5EEAD4',
     ENTRETIEN_CLIENT: '#FDBA74',
+    PROCESS: '#FBBF24',
     OFFRE: '#C4B5FD',
     PLACE: '#34D399',
     REFUSE: '#FCA5A5',

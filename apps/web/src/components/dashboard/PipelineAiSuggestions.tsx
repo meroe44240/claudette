@@ -42,13 +42,14 @@ interface PipelineSuggestion {
 
 const STAGE_OPTIONS = [
   { value: 'SOURCING', label: 'Sourcing' },
-  { value: 'CONTACTE', label: 'Contacté' },
-  { value: 'ENTRETIEN_1', label: 'Entretien 1' },
-  { value: 'ENVOYE_CLIENT', label: 'Envoyé client' },
-  { value: 'ENTRETIEN_CLIENT', label: 'Entretien Client' },
+  { value: 'CONTACTE', label: 'Qualification' },
+  { value: 'ENTRETIEN_1', label: 'Entretien interne' },
+  { value: 'ENVOYE_CLIENT', label: 'Envoi client' },
+  { value: 'ENTRETIEN_CLIENT', label: 'Entretien client' },
+  { value: 'PROCESS', label: 'Process' },
   { value: 'OFFRE', label: 'Offre' },
-  { value: 'PLACE', label: 'Placé' },
-  { value: 'REFUSE', label: 'Refusé' },
+  { value: 'PLACE', label: 'Gagné' },
+  { value: 'REFUSE', label: 'Perdu' },
 ];
 
 // ─── COMPONENT ──────────────────────────────────────

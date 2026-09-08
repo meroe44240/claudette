@@ -130,7 +130,7 @@ export function registerCandidateTools(server: McpServer) {
       source: z.string().optional().describe('Source : linkedin, referral, jobboard, mcp_claude'),
       tags: z.array(z.string()).optional().describe('Tags/competences'),
       mandate_id: z.string().optional().describe('Ajouter directement a un mandat (optionnel)'),
-      stage: z.string().optional().describe('Etape initiale si mandate_id fourni : SOURCING, CONTACTE, ENTRETIEN_1, ENTRETIEN_CLIENT, OFFRE. Defaut: SOURCING'),
+      stage: z.string().optional().describe('Etape initiale si mandate_id fourni : SOURCING, CONTACTE, ENTRETIEN_1, ENVOYE_CLIENT, ENTRETIEN_CLIENT, PROCESS, OFFRE. Defaut: SOURCING'),
     },
     wrapTool('create_candidate', async (args, user) => {
       // Check duplicates by email

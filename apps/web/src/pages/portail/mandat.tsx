@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { LogOut, X, Check, MessageSquare, Users } from 'lucide-react';
 
-type Stage = 'SOURCING' | 'CONTACTE' | 'ENTRETIEN_1' | 'ENVOYE_CLIENT' | 'ENTRETIEN_CLIENT' | 'OFFRE' | 'PLACE' | 'REFUSE';
+type Stage = 'SOURCING' | 'CONTACTE' | 'ENTRETIEN_1' | 'ENVOYE_CLIENT' | 'ENTRETIEN_CLIENT' | 'PROCESS' | 'OFFRE' | 'PLACE' | 'REFUSE';
 type Decision = 'RENCONTRER' | 'A_DISCUTER' | 'ECARTER';
 
 interface Candidature {
@@ -23,15 +23,15 @@ interface KanbanResponse {
 
 const STAGE_LABELS: Record<Stage, string> = {
   SOURCING: 'Sourcing', CONTACTE: 'Contactés', ENTRETIEN_1: 'Entretien recruteur', ENVOYE_CLIENT: 'Nouveaux profils',
-  ENTRETIEN_CLIENT: 'Entretien avec vous', OFFRE: 'Offre', PLACE: 'Placé', REFUSE: 'Écartés',
+  ENTRETIEN_CLIENT: 'Entretien avec vous', PROCESS: 'En process', OFFRE: 'Offre', PLACE: 'Placé', REFUSE: 'Écartés',
 };
 const STAGE_ACCENT: Record<Stage, string> = {
   SOURCING: '#8E7CC3', CONTACTE: '#8E7CC3', ENTRETIEN_1: '#22177A', ENVOYE_CLIENT: '#2A6BD8',
-  ENTRETIEN_CLIENT: '#E08A2B', OFFRE: '#C9A227', PLACE: '#3B9A54', REFUSE: '#B3261E',
+  ENTRETIEN_CLIENT: '#E08A2B', PROCESS: '#D9A441', OFFRE: '#C9A227', PLACE: '#3B9A54', REFUSE: '#B3261E',
 };
 const STAGE_BG: Record<Stage, string> = {
   SOURCING: '#F6F4FB', CONTACTE: '#F6F4FB', ENTRETIEN_1: 'rgba(34,23,122,.05)', ENVOYE_CLIENT: '#F2F3D8',
-  ENTRETIEN_CLIENT: '#FBF7F0', OFFRE: '#FBFAEC', PLACE: '#EFF6F0', REFUSE: '#FBF1EF',
+  ENTRETIEN_CLIENT: '#FBF7F0', PROCESS: '#FDF7E3', OFFRE: '#FBFAEC', PLACE: '#EFF6F0', REFUSE: '#FBF1EF',
 };
 const DECISION_LABEL: Record<Decision, string> = { RENCONTRER: 'À rencontrer', A_DISCUTER: 'À discuter', ECARTER: 'Écarté' };
 const DECISION_TONE: Record<Decision, { bg: string; fg: string }> = {

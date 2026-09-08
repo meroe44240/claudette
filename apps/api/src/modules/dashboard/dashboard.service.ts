@@ -705,11 +705,12 @@ const STAGE_PROBABILITY: Record<string, number> = {
   CONTACTE: 0.20,
   ENTRETIEN_1: 0.40,
   ENTRETIEN_CLIENT: 0.60,
+  PROCESS: 0.70,
   OFFRE: 0.80,
   PLACE: 1.0,
 };
 
-const STAGE_ORDER = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE'];
+const STAGE_ORDER = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE'];
 
 function highestStageAmong(stages: string[]): string {
   let best = -1;
