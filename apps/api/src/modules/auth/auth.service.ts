@@ -15,6 +15,8 @@ export async function login(input: LoginInput) {
   const valid = await verifyPassword(input.password, user.passwordHash);
   if (!valid) throw new UnauthorizedError('Email ou mot de passe incorrect');
 
+  if (user.status === 'ARCHIVED') throw new UnauthorizedError('Compte désactivé. Contactez votre administrateur.');
+
   await prisma.user.update({
     where: { id: user.id },
     data: { lastLoginAt: new Date() },
@@ -45,6 +47,7 @@ export async function refreshTokens(refreshToken: string) {
     const payload = await verifyRefreshToken(refreshToken);
     const user = await prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user) throw new UnauthorizedError('Utilisateur introuvable');
+    if (user.status === 'ARCHIVED') throw new UnauthorizedError('Compte désactivé');
 
     const tokenPayload = { sub: user.id, email: user.email, role: user.role };
     const newAccessToken = await generateAccessToken(tokenPayload);
