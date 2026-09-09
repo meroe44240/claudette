@@ -9,6 +9,7 @@ import { Link } from 'react-router';
 import {
   Search, Sparkles, SlidersHorizontal, Linkedin, MapPin, Building2, Plus, Check,
   Loader2, Mail, Phone, ExternalLink, Users, AlertCircle, Briefcase,
+  GraduationCap, Languages, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
@@ -17,11 +18,15 @@ import { toast } from '../../components/ui/Toast';
 // ── Types ──────────────────────────────────────────
 interface Mandat { id: string; titrePoste: string; entreprise?: { nom: string } | null }
 interface Org { name?: string; logoUrl?: string }
+interface Experience { organizationName?: string; title?: string; startDate?: string; endDate?: string | null; isCurrent?: boolean; organization?: Org }
+interface Education { schoolName?: string; degrees?: string[]; majors?: string[]; startDate?: string; endDate?: string }
+interface Lang { name?: string; proficiency?: string }
 interface Talent {
   id: string; firstname?: string; lastname?: string;
   city?: string; country?: string; state?: string;
-  jobTitle?: string; headline?: string; photoUrl?: string; linkedinUrl?: string;
+  jobTitle?: string; headline?: string; summary?: string; photoUrl?: string; linkedinUrl?: string;
   currentOrganization?: Org; skills?: string[];
+  experiences?: Experience[]; educations?: Education[]; languages?: Lang[];
 }
 interface SearchResult {
   configured?: boolean; error?: string;
@@ -46,6 +51,14 @@ const splitList = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolea
 const talentName = (t: Talent) => `${t.firstname || ''} ${t.lastname || ''}`.trim() || 'Profil';
 const talentLoc = (t: Talent) => [t.city, t.state, t.country].filter(Boolean).join(', ');
 const initials = (t: Talent) => `${(t.firstname || '')[0] || ''}${(t.lastname || '')[0] || ''}`.toUpperCase() || '?';
+const yr = (d?: string | null) => (d ? new Date(d).getFullYear() : null);
+const period = (e: Experience) => {
+  const s = yr(e.startDate);
+  const end = e.isCurrent ? "aujourd'hui" : (yr(e.endDate) ?? '');
+  if (!s && !end) return '';
+  return `${s ?? ''}${s || end ? ' – ' : ''}${end}`;
+};
+const eduLine = (e: Education) => [e.schoolName, [...(e.degrees || []), ...(e.majors || [])].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
 
 // ═══════════════════════════════════════════════════
 export default function SourcingKalentPage() {
@@ -68,6 +81,9 @@ export default function SourcingKalentPage() {
   });
   const mandats = mandatsResp?.data ?? [];
   const project = mandats.find((m) => m.id === projectId) || null;
+  const isVivier = projectId === '__VIVIER__';
+  const hasChosen = projectId !== '';          // un projet OU le vivier a été choisi
+  const hasMandat = !!projectId && !isVivier;  // un vrai mandat
 
   // Recherche
   const [prompt, setPrompt] = useState('');
@@ -92,6 +108,8 @@ export default function SourcingKalentPage() {
 
   const [addStates, setAddStates] = useState<Record<string, AddState>>({});
   const [enrichStates, setEnrichStates] = useState<Record<string, EnrichState>>({});
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) => setExpandedIds((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const buildFilters = (): KFilter[] => {
     const out: KFilter[] = [];
@@ -160,7 +178,7 @@ export default function SourcingKalentPage() {
       const res = await api.post<{ created: boolean; alreadyInMandat: boolean; duplicate: boolean }>(
         '/sourcing/kalent/add',
         {
-          mandatId: projectId || null,
+          mandatId: hasMandat ? projectId : null,
           candidat: {
             nom: t.lastname || t.firstname || 'Inconnu',
             prenom: t.lastname ? t.firstname : undefined,
@@ -178,8 +196,8 @@ export default function SourcingKalentPage() {
       setAddStates((p) => ({ ...p, [t.id]: { status } }));
       toast('success',
         res.alreadyInMandat ? 'Déjà dans ce mandat'
-          : res.duplicate ? (projectId ? 'Candidat existant → ajouté au mandat' : 'Déjà dans l\'ATS')
-            : (projectId ? 'Ajouté au mandat' : 'Ajouté à l\'ATS'));
+          : res.duplicate ? (hasMandat ? 'Candidat existant → ajouté au mandat' : 'Déjà dans l\'ATS')
+            : (hasMandat ? 'Ajouté au mandat' : 'Ajouté au vivier'));
     } catch (e) {
       setAddStates((p) => ({ ...p, [t.id]: { status: 'idle' } }));
       toast('error', e instanceof Error ? e.message : 'Erreur');
@@ -216,7 +234,10 @@ export default function SourcingKalentPage() {
 
   const notConfigured = config && !config.configured;
 
-  const addLabel = useMemo(() => (projectId ? 'Ajouter au mandat' : 'Ajouter au vivier'), [projectId]);
+  const addLabel = useMemo(
+    () => (!hasChosen ? 'Choisis un projet' : hasMandat ? 'Ajouter au mandat' : 'Ajouter au vivier'),
+    [hasChosen, hasMandat],
+  );
 
   return (
     <div className="p-4 md:p-6 lg:p-8" style={{ fontFamily: "'Manrope', sans-serif" }}>
@@ -250,12 +271,13 @@ export default function SourcingKalentPage() {
           value={projectId}
           onChange={(e) => setProjectId(e.target.value)}
           className="flex-1 min-w-[240px] rounded-xl border px-3 py-2.5 text-[14px]"
-          style={{ borderColor: 'rgba(34,23,122,.16)', background: '#FCFCF5', color: '#1A1533' }}
+          style={{ borderColor: hasChosen ? 'rgba(34,23,122,.16)' : '#E5A93B', background: '#FCFCF5', color: hasChosen ? '#1A1533' : '#9A6B12' }}
         >
-          <option value="">Vivier (sans mandat)</option>
+          <option value="">— Choisis un mandat pour sourcer —</option>
           {mandats.map((m) => (
             <option key={m.id} value={m.id}>{m.titrePoste}{m.entreprise?.nom ? ` — ${m.entreprise.nom}` : ''}</option>
           ))}
+          <option value="__VIVIER__">Vivier (sans mandat)</option>
         </select>
         {project && (
           <Link to={`/mandats/${project.id}/kanban`} className="text-[13px] font-semibold inline-flex items-center gap-1.5" style={{ color: BRAND }}>
@@ -344,6 +366,10 @@ export default function SourcingKalentPage() {
         {talents.map((t) => {
           const add = addStates[t.id]?.status ?? 'idle';
           const en = enrichStates[t.id];
+          const expanded = expandedIds.has(t.id);
+          const exps = t.experiences || [];
+          const edus = t.educations || [];
+          const langs = t.languages || [];
           return (
             <div key={t.id} className="rounded-2xl p-4 flex gap-3.5" style={{ background: '#fff', border: '1px solid rgba(34,23,122,.1)' }}>
               {t.photoUrl ? (
@@ -365,12 +391,65 @@ export default function SourcingKalentPage() {
                   {t.currentOrganization?.name && <span className="inline-flex items-center gap-1"><Building2 size={12} />{t.currentOrganization.name}</span>}
                   {talentLoc(t) && <span className="inline-flex items-center gap-1"><MapPin size={12} />{talentLoc(t)}</span>}
                 </div>
+                {/* Résumé */}
+                {t.summary && (
+                  <p className="mt-2 text-[12.5px] leading-relaxed" style={{ color: '#6E6A85', display: '-webkit-box', WebkitLineClamp: expanded ? 'unset' : 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{t.summary}</p>
+                )}
+
+                {/* Parcours */}
+                {exps.length > 0 && (
+                  <div className="mt-2.5">
+                    <div className="text-[10.5px] font-bold uppercase mb-1" style={{ color: '#9A96AE', letterSpacing: '.08em' }}>Parcours</div>
+                    <div className="flex flex-col gap-1">
+                      {(expanded ? exps.slice(0, 6) : exps.slice(0, 1)).map((e, i) => (
+                        <div key={i} className="flex items-start gap-1.5 text-[12.5px]" style={{ color: '#4A4568' }}>
+                          <Briefcase size={12} style={{ marginTop: 2, flexShrink: 0, color: '#B4B0C2' }} />
+                          <span><strong style={{ color: '#1A1533', fontWeight: 600 }}>{e.title || '—'}</strong>{(e.organizationName || e.organization?.name) ? ` · ${e.organizationName || e.organization?.name}` : ''}{period(e) ? ` · ${period(e)}` : ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Formation */}
+                {edus.length > 0 && (
+                  <div className="mt-2">
+                    <div className="text-[10.5px] font-bold uppercase mb-1" style={{ color: '#9A96AE', letterSpacing: '.08em' }}>Formation</div>
+                    <div className="flex flex-col gap-1">
+                      {(expanded ? edus.slice(0, 4) : edus.slice(0, 1)).map((e, i) => (
+                        <div key={i} className="flex items-start gap-1.5 text-[12.5px]" style={{ color: '#4A4568' }}>
+                          <GraduationCap size={12} style={{ marginTop: 2, flexShrink: 0, color: '#B4B0C2' }} />
+                          <span>{eduLine(e) || '—'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Langues */}
+                {langs.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[12px]" style={{ color: '#6E6A85' }}>
+                    <Languages size={12} style={{ color: '#B4B0C2' }} />
+                    {langs.slice(0, expanded ? 20 : 4).map((l, i, arr) => (
+                      <span key={i}>{l.name}{l.proficiency ? ` (${l.proficiency})` : ''}{i < arr.length - 1 ? ',' : ''}</span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Compétences */}
                 {t.skills && t.skills.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {t.skills.slice(0, 5).map((s, i) => (
+                    {t.skills.slice(0, expanded ? 30 : 6).map((s, i) => (
                       <span key={i} className="rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ background: '#F1F0F5', color: '#6E6A85' }}>{s}</span>
                     ))}
                   </div>
+                )}
+
+                {/* Voir plus / moins */}
+                {(exps.length > 1 || edus.length > 1 || (t.skills?.length ?? 0) > 6 || (t.summary?.length ?? 0) > 160) && (
+                  <button onClick={() => toggleExpand(t.id)} className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold" style={{ color: BRAND }}>
+                    {expanded ? <>Voir moins <ChevronUp size={13} /></> : <>Voir plus <ChevronDown size={13} /></>}
+                  </button>
                 )}
 
                 {/* Contact enrichi */}
@@ -385,20 +464,23 @@ export default function SourcingKalentPage() {
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => addTalent(t)}
-                    disabled={add === 'loading' || add === 'created' || add === 'inmandat'}
+                    disabled={add === 'loading' || add === 'created' || add === 'inmandat' || !hasChosen}
+                    title={!hasChosen ? 'Choisis d\'abord un projet en haut' : undefined}
                     className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-bold"
                     style={
-                      add === 'created' || add === 'inmandat'
-                        ? { background: '#E7F6EE', color: '#1F7A50' }
-                        : add === 'exists'
-                          ? { background: '#ECEAF8', color: BRAND }
-                          : { background: BRAND, color: LIME }
+                      !hasChosen && add === 'idle'
+                        ? { background: '#F1F0F5', color: '#9A96AE', cursor: 'not-allowed' }
+                        : add === 'created' || add === 'inmandat'
+                          ? { background: '#E7F6EE', color: '#1F7A50' }
+                          : add === 'exists'
+                            ? { background: '#ECEAF8', color: BRAND }
+                            : { background: BRAND, color: LIME }
                     }
                   >
                     {add === 'loading' ? <Loader2 size={13} className="animate-spin" />
                       : add === 'created' || add === 'inmandat' ? <Check size={13} />
                         : <Plus size={13} />}
-                    {add === 'created' ? (projectId ? 'Ajouté au mandat' : 'Ajouté')
+                    {add === 'created' ? (hasMandat ? 'Ajouté au mandat' : 'Ajouté au vivier')
                       : add === 'inmandat' ? 'Déjà dans le mandat'
                         : add === 'exists' ? 'Existant (relié)'
                           : addLabel}
