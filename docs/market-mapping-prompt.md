@@ -4,6 +4,7 @@
 >
 > **Version 3 du 2026-09-09** — arrêt d'Industrie et d'Hospitality, recentrage sur Finance + Sales.
 > Nouvelle répartition : Valentin → Finance, Alexis → Sales général, Méroë → Sales SaaS.
+> Louis sort de la boucle de diffusion : plus aucun envoi pour lui.
 > Le corps des emails passe en **format « brèves journalistiques »** : le commercial doit comprendre
 > en lisant l'email où il y a du mouvement sur son marché, sans ouvrir le CSV.
 > Ajout d'un budget WebSearch explicite (le run du 2026-09-09 est tombé à 4 % de sourcing nominatif
@@ -23,7 +24,8 @@ Produire chaque matin (lundi-vendredi) 3 fichiers CSV de prospection pour l'équ
 - **Méroë Nguimbi** (meroe@humanup.io) — Sales dans le SaaS et les sociétés en portefeuille de fonds (levées, plans de recrutement, opérations PE) + rapport de synthèse + XLSX consolidé
 
 Verticales arrêtées, ne plus produire : **Industrie** et **Hospitality / Restauration**.
-Marie Le Ret ne fait plus partie de l'équipe : ne rien lui envoyer.
+**Ne rien envoyer à Marie Le Ret ni à Louis** : ils ne font plus partie de la boucle de diffusion.
+Les trois destinataires ci-dessus sont les seuls.
 
 # Date du jour
 Utilise `date +%Y-%m-%d` en Bash pour récupérer la date. Tous les fichiers utilisent ce format.
