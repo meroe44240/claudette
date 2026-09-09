@@ -1,6 +1,11 @@
 # Workflow — Market Mapping quotidien Humanup.io
 
-> **Prompt à jour : voir `docs/market-mapping-prompt.md` (v2, 2026-09-03).** Ce document décrit la mécanique et le run historique du 03/09. La v2 change l'équipe : départ de Marie, Valentin reprend Finance + Hospitality, arrivée de Louis (Sales SaaS), ajout d'un CSV Sales général pour Méroë, 7 agents au lieu de 5, pièces jointes fiabilisées.
+> ⚠️ **Document historique — décrit le run du 03/09 et l'équipe de l'époque (Marie, Hospitality, Industrie).
+> Le prompt à jour est `docs/market-mapping-prompt.md` (v3, 2026-09-09)** et il diverge nettement de ce qui suit :
+> Industrie et Hospitality sont arrêtées, il reste 3 verticales — Valentin → Finance, Alexis → Sales général,
+> Méroë → Sales SaaS — soit 5 agents de sourcing, et le corps des emails passe en brèves journalistiques.
+> Ne pas se servir de ce document comme spécification : il n'est conservé que pour l'historique et les
+> enseignements techniques (limite de taille des pièces jointes, anti-saturation du contexte).
 
 Tâche planifiée Claude Code (lundi–vendredi, le matin). Produit chaque jour 3 fichiers CSV de prospection (un par vertical), un XLSX consolidé et un rapport de synthèse, puis commit + push + envoi Gmail/Slack.
 
