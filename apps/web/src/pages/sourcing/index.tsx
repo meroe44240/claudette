@@ -36,6 +36,11 @@ interface EnrichState { loading: boolean; done: boolean; emails: string[]; phone
 const BRAND = '#22177A';
 const LIME = '#E6E9AF';
 
+// ── Valeurs acceptées Kalent (listes fermées) ─────
+const YEARS_BANDS = ['0-1', '1-3', '3-5', '5-10', '10-15', '15-20', '20-30', '30-100'];
+const SIZE_BANDS = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5001-10000', '10001+'];
+const DEGREE_OPTS = [{ v: 'bachelors', l: 'Licence' }, { v: 'masters', l: 'Master' }, { v: 'doctorates', l: 'Doctorat' }];
+
 // ── Helpers ────────────────────────────────────────
 const splitList = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
 const talentName = (t: Talent) => `${t.firstname || ''} ${t.lastname || ''}`.trim() || 'Profil';
@@ -70,7 +75,12 @@ export default function SourcingKalentPage() {
   const [f, setF] = useState({
     jobTitle: '', location: '', radius: '30', skills: '', companies: '',
     excludedCompanies: '', seniority: '', industries: '', languages: '', keywords: '',
+    schools: '', certifications: '', graduationYear: '',
   });
+  const [yearsExp, setYearsExp] = useState<string[]>([]);
+  const [companySize, setCompanySize] = useState<string[]>([]);
+  const [degrees, setDegrees] = useState<string[]>([]);
+  const [durationInJob, setDurationInJob] = useState<string[]>([]);
 
   const [talents, setTalents] = useState<Talent[]>([]);
   const [estimation, setEstimation] = useState<number | null>(null);
@@ -94,6 +104,13 @@ export default function SourcingKalentPage() {
     splitList(f.industries).forEach((v) => out.push({ filterType: 'COMPANY_INDUSTRY', value: v }));
     splitList(f.languages).forEach((v) => out.push({ filterType: 'LANGUAGE', value: v }));
     if (f.keywords.trim()) out.push({ filterType: 'KEYWORD', value: f.keywords.trim() });
+    yearsExp.forEach((v) => out.push({ filterType: 'YEARS_OF_EXPERIENCE', value: v, isRequired: false }));
+    companySize.forEach((v) => out.push({ filterType: 'COMPANY_SIZE', value: v, isRequired: false }));
+    degrees.forEach((v) => out.push({ filterType: 'EDUCATION_DEGREE', value: v, isRequired: false }));
+    durationInJob.forEach((v) => out.push({ filterType: 'DURATION_IN_JOB', value: v, isRequired: false }));
+    splitList(f.schools).forEach((v) => out.push({ filterType: 'EDUCATION_SCHOOL_NAME', value: v }));
+    splitList(f.certifications).forEach((v) => out.push({ filterType: 'CERTIFICATION_NAME', value: v }));
+    if (f.graduationYear.trim()) out.push({ filterType: 'GRADUATION_YEAR', value: f.graduationYear.trim() });
     return out;
   };
 
@@ -292,6 +309,13 @@ export default function SourcingKalentPage() {
             <Field label="Secteur (,)"><input value={f.industries} onChange={(e) => setF({ ...f, industries: e.target.value })} placeholder="Logiciel, SaaS" style={inp} /></Field>
             <Field label="Langues (,)"><input value={f.languages} onChange={(e) => setF({ ...f, languages: e.target.value })} placeholder="Français, Anglais" style={inp} /></Field>
             <Field label="Mots-clés"><input value={f.keywords} onChange={(e) => setF({ ...f, keywords: e.target.value })} style={inp} /></Field>
+            <div className="md:col-span-2"><Field label="Années d'expérience"><Chips options={YEARS_BANDS.map((b) => ({ v: b, l: `${b} ans` }))} value={yearsExp} onChange={setYearsExp} /></Field></div>
+            <div className="md:col-span-2"><Field label="Ancienneté dans le poste actuel"><Chips options={YEARS_BANDS.map((b) => ({ v: b, l: `${b} ans` }))} value={durationInJob} onChange={setDurationInJob} /></Field></div>
+            <div className="md:col-span-2"><Field label="Taille d'entreprise (effectif)"><Chips options={SIZE_BANDS.map((b) => ({ v: b, l: b }))} value={companySize} onChange={setCompanySize} /></Field></div>
+            <div className="md:col-span-2"><Field label="Diplôme"><Chips options={DEGREE_OPTS} value={degrees} onChange={setDegrees} /></Field></div>
+            <Field label="École / université (,)"><input value={f.schools} onChange={(e) => setF({ ...f, schools: e.target.value })} placeholder="HEC, Polytechnique" style={inp} /></Field>
+            <Field label="Année de diplôme"><input value={f.graduationYear} onChange={(e) => setF({ ...f, graduationYear: e.target.value })} placeholder="2018" style={inp} /></Field>
+            <div className="md:col-span-2"><Field label="Certifications (,)"><input value={f.certifications} onChange={(e) => setF({ ...f, certifications: e.target.value })} placeholder="AWS Certified, PMP" style={inp} /></Field></div>
             <div className="md:col-span-2 flex justify-end">
               <button onClick={searchByFilters} disabled={loading} className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13.5px] font-bold" style={{ background: BRAND, color: LIME }}>
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Rechercher avec ces filtres
@@ -417,6 +441,28 @@ const inp: React.CSSProperties = {
   width: '100%', fontSize: 13.5, padding: '9px 11px', borderRadius: 10,
   border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none', color: '#1A1533',
 };
+function Chips({ options, value, onChange }: { options: { v: string; l: string }[]; value: string[]; onChange: (v: string[]) => void }) {
+  const toggle = (v: string) => onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v]);
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((o) => {
+        const on = value.includes(o.v);
+        return (
+          <button
+            key={o.v}
+            type="button"
+            onClick={() => toggle(o.v)}
+            style={{
+              fontSize: 12, fontWeight: 600, padding: '5px 11px', borderRadius: 999, cursor: 'pointer',
+              border: `1.5px solid ${on ? '#22177A' : 'rgba(34,23,122,.16)'}`,
+              background: on ? '#22177A' : '#fff', color: on ? '#E6E9AF' : '#4A4568',
+            }}
+          >{o.l}</button>
+        );
+      })}
+    </div>
+  );
+}
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={{ display: 'block' }}>
