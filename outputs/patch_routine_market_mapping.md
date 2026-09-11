@@ -91,6 +91,46 @@ encoder les 2 CSV en un seul appel (base64 cumulé de 70 364 caractères) et a d
 > dans son schéma) et part silencieusement sans le fichier, sans lever d'erreur. Constaté le 11/09 : un
 > message parasite sans PJ était arrivé dans le fil avant que l'envoi correct soit refait.
 
+### 8 bis. Corruption silencieuse du base64 — le risque le plus grave de la routine
+
+L'outil Gmail n'accepte pas de chemin de fichier : **tout base64 transite obligatoirement par la sortie
+du modèle**. Une chaîne de 20 000 à 40 000 caractères n'est pas recopiée mécaniquement, elle est
+régénérée — et la connaissance du modèle fuit dans la copie.
+
+Deux modes d'échec distincts, observés le 11/09 :
+
+| Mode | Symptôme | Détectable ? |
+|---|---|---|
+| **Troncature** | `Base64 decoding failed` | Oui — l'appel échoue bruyamment |
+| **Substitution sémantique** | *aucune erreur* | **Non, sans contrôle explicite** |
+
+Le second est le dangereux. Sur `sales_2026-09-10.csv`, le modèle a ré-accentué `Finimetal` → `Finimétal`
+en recopiant. Le `é` fait 2 octets en UTF-8 : l'alignement base64 se décale sur tout le reste et du padding
+`=` apparaît. Le résultat est du **base64 parfaitement valide qui décode vers un fichier faux**. Aucune
+erreur levée, pièce jointe corrompue livrée au client. L'incident s'est reproduit deux fois de suite, sur
+une occurrence différente du mot à chaque essai.
+
+⚠️ **Ne jamais diagnostiquer une « limite de taille » de l'outil Gmail.** Le 11/09, des pièces jointes de
+34 328, 38 916 et 40 608 caractères sont passées sans problème, alors qu'une de 20 204 échouait. La taille
+n'est pas le facteur.
+
+⚠️ **Ne jamais « réessayer à l'identique » sur un échec d'envoi** sans avoir vérifié la chaîne : si la cause
+est une substitution, le nouvel essai repart avec le même biais.
+
+**Ajouter aux instructions du sous-agent d'envoi — contrôle obligatoire avant CHAQUE appel Gmail :**
+
+> 1. `base64 -w 0 <fichier> > ref.b64`, puis relever `wc -c < ref.b64` et `md5sum ref.b64`.
+> 2. Écris la chaîne que tu t'apprêtes à envoyer dans un fichier `envoi.b64`.
+> 3. `cmp ref.b64 envoi.b64` — **doit être silencieux**. Un contrôle « à l'œil » de la fin de chaîne ne
+>    suffit pas : le 11/09 une fin a été mal relue et l'envoi corrompu est parti quand même.
+> 4. Seulement si `cmp` passe, appelle l'outil Gmail avec le contenu de `envoi.b64`.
+> 5. En cas d'échec, refais l'étape 2 et re-contrôle — ne réémets jamais sans repasser par `cmp`.
+
+**Limite connue, à accepter :** le contenu réellement délivré n'est pas vérifiable. `get_message` ne renvoie
+que les métadonnées de la pièce jointe (nom, id, mimeType), il n'existe aucun outil de téléchargement, et
+`sizeEstimate` est trop grossier pour révéler un écart de quelques octets. Le contrôle `cmp` porte donc sur
+ce qui est émis, jamais sur ce qui est reçu.
+
 ---
 ---
 
