@@ -80,11 +80,16 @@ encoder les 2 CSV en un seul appel (base64 cumulé de 70 364 caractères) et a d
 
 **Ajouter aux instructions du sous-agent d'envoi :**
 
-> Si le base64 cumulé des pièces jointes dépasse ~50 000 caractères, envoie un premier message avec le
+> Si le base64 cumulé des pièces jointes dépasse ~45 000 caractères, envoie un premier message avec le
 > corps complet et la première pièce jointe, puis un second message **en réponse dans le même fil** avec
 > la seconde. Vérifie l'intégrité (`base64 -d | cmp`) de chaque fichier avant envoi, **et le SHA256 après
 > envoi pour les binaires (XLSX)** : le 11/09, un premier essai avait tronqué le base64 du XLSX sans
 > aucune erreur visible — seule la vérification post-envoi l'a détecté.
+>
+> **Pour le message de suite, utilise `mcp__Gmail__send_message` avec `replyThreadId`, JAMAIS
+> `mcp__Gmail__reply`** : l'outil `reply` n'accepte aucune pièce jointe (aucun paramètre `attachments`
+> dans son schéma) et part silencieusement sans le fichier, sans lever d'erreur. Constaté le 11/09 : un
+> message parasite sans PJ était arrivé dans le fil avant que l'envoi correct soit refait.
 
 ---
 ---
