@@ -52,6 +52,7 @@ import jobOfferRouter, { jobOfferPublicRouter } from './modules/job-offers/job-o
 import bookingRouter, { bookingPublicRouter } from './modules/booking/booking.router.js';
 import postLinkedinRouter from './modules/post-linkedin/post-linkedin.router.js';
 import confirmationRouter, { confirmationPublicRouter } from './modules/confirmation/confirmation.router.js';
+import { briefPublicRouter } from './modules/brief/brief.router.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 
@@ -191,6 +192,7 @@ async function buildApp() {
   // Confirmation candidat (intérêt + consentement transfert CV)
   await app.register(confirmationRouter, { prefix: '/api/v1/confirmation' });
   await app.register(confirmationPublicRouter, { prefix: '/api/v1/public/confirmation' });
+  await app.register(briefPublicRouter, { prefix: '/api/v1/public/brief' });
 
   return app;
 }
