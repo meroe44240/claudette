@@ -112,6 +112,33 @@ Méroë.
 au lieu de 14 + 6) ou séquencer les verticales en deux vagues, pour que le budget disponible
 corresponde au besoin réel.
 
+## Incident n°2 — pièce jointe XLSX corrompue (boîte mail de Méroë)
+
+**Ce qui s'est passé.** L'envoi de l'email à Méroë a produit **6 emails** au lieu d'un seul.
+Le fichier XLSX (20 Ko, soit ~27 Ko une fois encodé en base64) est arrivé corrompu à chaque
+tentative, et l'agent d'envoi a enchaîné les correctifs jusqu'à abandonner la pièce jointe.
+
+**Cause racine.** L'API Gmail exige que le contenu de la pièce jointe soit passé comme une chaîne
+base64 dans l'appel. Cette chaîne doit donc être *écrite* par le modèle, caractère par caractère.
+Sur ~27 Ko, la recopie n'est pas fiable : un seul caractère erroné suffit à casser un XLSX, qui est
+une archive compressée. Les CSV, eux, passent sans problème (fichiers plus petits, et un caractère
+faux y resterait localisé au lieu de détruire le fichier entier).
+
+**Ce qui est valide dans la boîte de Méroë.** Le **premier** email
+(« Market mapping 2026-09-15 — RUN DÉGRADÉ ») est le bon : il contient le rapport de synthèse
+complet dans le corps et la pièce jointe `sales_2026-09-15.csv` intacte.
+Les emails « CORRECTIF » 1 à 6 sont à supprimer : aucun ne contient de XLSX exploitable.
+
+**Les 3 autres destinataires ne sont pas affectés.** Valentin (2 CSV), Alexis (1 CSV) et Louis
+(1 CSV) ont reçu un email unique et propre, pièces jointes conformes.
+
+**Correctif recommandé.** Ne plus envoyer le XLSX en pièce jointe par ce canal. Deux options :
+soit le récupérer depuis le dépôt git (il y est, commité et poussé), soit le déposer sur un
+partage de fichiers et n'envoyer que le lien. Une règle « pièces jointes binaires interdites,
+CSV uniquement » devrait être ajoutée au prompt de la tâche planifiée.
+Prévoir aussi un garde-fou : un agent d'envoi ne doit jamais réessayer plus d'une fois — ici les
+relances successives ont produit 5 emails inutiles.
+
 ## Fichiers produits
 
 | Fichier | Lignes |
