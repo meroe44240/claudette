@@ -91,6 +91,8 @@ for name in (f"finance_{DATE}.csv", f"hospitality_{DATE}.csv", f"industrie_{DATE
     bad_cols = sum(1 for r in rows if len(r) != 11 or None in r.values())
     filled = sum(1 for r in rows
                  if (r.get("email") or "").strip() or (r.get("telephone") or "").strip())
-    print(f"{name}: {len(rows)} lignes | BOM={raw[:3] == b'\xef\xbb\xbf'} | "
-          f"CRLF={raw.count(b'\r\n') > 0} | colonnes_KO={bad_cols} | "
+    has_bom = raw[:3] == b"\xef\xbb\xbf"
+    has_crlf = raw.count(b"\r\n") > 0
+    print(f"{name}: {len(rows)} lignes | BOM={has_bom} | "
+          f"CRLF={has_crlf} | colonnes_KO={bad_cols} | "
           f"email/tel_non_vides={filled} | sources={sourced(rows)}")
