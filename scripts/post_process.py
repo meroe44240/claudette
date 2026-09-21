@@ -49,6 +49,24 @@ for tag in ("a", "b", "c"):
 if missing:
     print("MANQUANT: " + ", ".join(missing))
 
+# Two parts can surface the same opportunity independently (same company, same
+# target contact). Keep one row per (entreprise, poste), preferring a sourced name.
+_by_key, _dropped = {}, []
+for r in parts:
+    key = ((r.get("entreprise") or "").strip().lower(),
+           (r.get("poste") or "").strip().lower())
+    prev = _by_key.get(key)
+    if prev is None:
+        _by_key[key] = r
+    else:
+        _dropped.append((r.get("entreprise") or "").strip())
+        if not (prev.get("nom") or "").strip() and (r.get("nom") or "").strip():
+            _by_key[key] = r
+if _dropped:
+    parts = list(_by_key.values())
+    print(f"DEDUP_INTRA_FINANCE: {len(_dropped)} lignes retirees "
+          f"({', '.join(sorted(set(_dropped)))})")
+
 fin_path = os.path.join(OUT, f"finance_{DATE}.csv")
 if parts:
     write_rows(fin_path, parts)
