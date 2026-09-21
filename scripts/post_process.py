@@ -49,12 +49,19 @@ for tag in ("a", "b", "c"):
 if missing:
     print("MANQUANT: " + ", ".join(missing))
 
-# Two parts can surface the same opportunity independently (same company, same
-# target contact). Keep one row per (entreprise, poste), preferring a sourced name.
+# Two parts can surface the same opportunity independently. The job title wording
+# varies between them (DAF vs CFO), so key on the contact slot instead and keep one
+# row per (entreprise, JOB|NEWS, slot), preferring the row with a sourced name.
+def _slot_key(r):
+    tags = [t.strip() for t in (r.get("tags") or "").split(",")]
+    kind = "NEWS" if "NEWS" in tags else "JOB"
+    slot = "CONTACT_1" if "CONTACT_1" in tags else "CONTACT_2"
+    return ((r.get("entreprise") or "").strip().lower(), kind, slot)
+
+
 _by_key, _dropped = {}, []
 for r in parts:
-    key = ((r.get("entreprise") or "").strip().lower(),
-           (r.get("poste") or "").strip().lower())
+    key = _slot_key(r)
     prev = _by_key.get(key)
     if prev is None:
         _by_key[key] = r
