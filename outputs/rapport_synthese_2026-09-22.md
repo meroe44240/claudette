@@ -158,6 +158,32 @@ mais date de publication invérifiable.
 5. **Consolider `main`** : la branche `main` du dépôt est restée au 2026-09-16 et accuse
    10 commits de retard (les runs des 17, 18 et 22 septembre vivent sur leurs branches
    quotidiennes respectives).
+6. **Corriger la chaîne d'envoi des pièces jointes** — voir ci-dessous, c'est le second
+   incident en deux runs.
+
+## 8. Incident d'envoi des pièces jointes (récurrent)
+
+L'outil Gmail disponible n'accepte les pièces jointes qu'en **base64 inline** : il n'existe
+aucun paramètre prenant un chemin de fichier. Le base64 doit donc être **retranscrit par un
+modèle** au moment de l'appel, et cette retranscription est **lossy**.
+
+Deux corruptions ont été **constatées et prouvées** aujourd'hui, pas seulement redoutées :
+- XLSX (41 588 caractères) — divergence au caractère 771 et copie tronquée de 10 689 octets.
+- ZIP finance (7 140 caractères seulement) — fragments du ZIP hospitality épissés dans le ZIP
+  finance. **Un premier email corrompu est parti chez Valentin avant correction** ; il a reçu
+  ensuite un second email vérifié qui fait foi.
+
+La vérification `base64 -w 0 fichier | base64 -d | cmp - fichier` **ne protège pas** de ce
+risque : elle valide la chaîne sur disque, pas la chaîne émise par le modèle dans l'appel.
+
+Contournement appliqué aujourd'hui : **zipper les CSV** (finance 28 Ko → 5,4 Ko, soit
+7 140 caractères base64 au lieu de 37 324) puis vérifier l'envoi en relisant le MIME RAW du
+message expédié et en comparant le sha256 de la pièce jointe reçue.
+
+**Correctif durable recommandé** : fournir des identifiants OAuth Gmail ou SMTP à
+l'environnement, et envoyer via un script Python qui attache les fichiers **par chemin**
+(MIME côté serveur). Le base64 ne transiterait alors jamais par un modèle et le problème
+disparaîtrait définitivement.
 
 ---
 
