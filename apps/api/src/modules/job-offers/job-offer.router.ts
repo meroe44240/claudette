@@ -40,7 +40,7 @@ export default async function jobOfferRouter(fastify: FastifyInstance) {
   fastify.put('/:id', {
     schema: { tags: ['JobOffers'], params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } } },
     preHandler: [authenticate],
-    handler: async (request) => { const { id } = request.params as { id: string }; const input = offerSchema.partial({ titre: true, description: true }).parse(request.body); return service.update(id, input as service.JobOfferInput); },
+    handler: async (request) => { const { id } = request.params as { id: string }; const input = offerSchema.partial({ titre: true, description: true }).parse(request.body); return service.update(id, input as service.JobOfferInput, request.userId); },
   });
 
   fastify.patch('/:id/publish', {

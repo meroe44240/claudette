@@ -1,6 +1,7 @@
 import prisma from '../../lib/db.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { notifyJobBoardApplication } from '../slack/slack.service.js';
+import { callClaude } from '../../services/claudeAI.js';
 
 function slugify(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -43,6 +44,61 @@ export interface JobOfferInput {
   mandatId?: string | null;
 }
 
+// ── Traduction auto FR → EN (job board bilingue) ─────────────────
+// Les champs « …En » sont saisis à la main dans l'ATS ; quand ils sont vides,
+// la landing /en retombe sur le français. On complète donc automatiquement
+// les champs EN manquants par IA (sans jamais écraser une saisie manuelle).
+const TRANSLATABLE = ['titre', 'description', 'descriptionSociete', 'missions', 'packageInfo', 'localisation'] as const;
+type TranslatableField = typeof TRANSLATABLE[number];
+const enKey = (f: TranslatableField) => `${f}En` as const;
+
+function missingEnFields(o: Record<string, any>): TranslatableField[] {
+  return TRANSLATABLE.filter((f) => (o[f] ?? '').toString().trim() && !(o[enKey(f)] ?? '').toString().trim());
+}
+
+const translating = new Set<string>();
+
+export async function translateMissingEn(offerId: string, userId?: string | null): Promise<void> {
+  if (translating.has(offerId)) return;
+  translating.add(offerId);
+  try {
+    const offer = await prisma.jobOffer.findUnique({ where: { id: offerId } });
+    if (!offer) return;
+    const fields = missingEnFields(offer);
+    if (fields.length === 0) return;
+
+    const source = Object.fromEntries(fields.map((f) => [f, (offer as any)[f]]));
+    const response = await callClaude({
+      feature: 'job_offer_translation',
+      systemPrompt:
+        "Tu traduis des offres d'emploi du français vers l'anglais pour un job board de cabinet de recrutement. " +
+        "Ton professionnel et naturel (anglais international). Conserve la mise en forme (retours à la ligne, puces, emojis), " +
+        "les noms propres, noms d'entreprises, montants et acronymes. Pour une localisation, donne l'équivalent anglais " +
+        "(ex : « Paris (75) » → « Paris, France », « Télétravail » → « Remote »). " +
+        'Réponds UNIQUEMENT avec un objet JSON ayant exactement les mêmes clés que l\'entrée, valeurs traduites.',
+      userPrompt: JSON.stringify(source, null, 2),
+      userId: userId ?? offer.createdById ?? '00000000-0000-0000-0000-000000000000',
+      maxTokens: 4000,
+      temperature: 0,
+    });
+
+    const out = response.content && typeof response.content === 'object' ? response.content : {};
+    // Relecture pour ne pas écraser une saisie manuelle faite pendant la traduction.
+    const fresh = await prisma.jobOffer.findUnique({ where: { id: offerId } });
+    if (!fresh) return;
+    const data: Record<string, string> = {};
+    for (const f of fields) {
+      const v = out[f];
+      if (typeof v === 'string' && v.trim() && !((fresh as any)[enKey(f)] ?? '').toString().trim()) data[enKey(f)] = v.trim();
+    }
+    if (Object.keys(data).length > 0) await prisma.jobOffer.update({ where: { id: offerId }, data });
+  } catch (err) {
+    console.error('[job-offers] Traduction EN échouée pour', offerId, err);
+  } finally {
+    translating.delete(offerId);
+  }
+}
+
 // ── ATS (interne) ───────────────────────────────
 export async function list() {
   return prisma.jobOffer.findMany({ orderBy: { createdAt: 'desc' } });
@@ -50,7 +106,7 @@ export async function list() {
 
 export async function create(data: JobOfferInput, userId?: string) {
   const slug = await uniqueSlug(data.titre);
-  return prisma.jobOffer.create({
+  const offer = await prisma.jobOffer.create({
     data: {
       slug,
       titre: data.titre,
@@ -78,13 +134,15 @@ export async function create(data: JobOfferInput, userId?: string) {
       createdById: userId ?? null,
     },
   });
+  void translateMissingEn(offer.id, userId);
+  return offer;
 }
 
-export async function update(id: string, data: JobOfferInput) {
+export async function update(id: string, data: JobOfferInput, userId?: string) {
   const existing = await prisma.jobOffer.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError('Offre', id);
   const slug = data.titre && data.titre !== existing.titre ? await uniqueSlug(data.titre, id) : existing.slug;
-  return prisma.jobOffer.update({
+  const offer = await prisma.jobOffer.update({
     where: { id },
     data: {
       slug,
@@ -112,6 +170,8 @@ export async function update(id: string, data: JobOfferInput) {
       mandatId: data.mandatId ?? existing.mandatId,
     },
   });
+  void translateMissingEn(offer.id, userId);
+  return offer;
 }
 
 export async function setPublished(id: string, published: boolean) {
@@ -133,6 +193,7 @@ export async function listPublic() {
     where: { published: true },
     orderBy: { createdAt: 'desc' },
     select: {
+      id: true, createdById: true,
       slug: true, titre: true, description: true, descriptionSociete: true, missions: true, packageInfo: true,
       titreEn: true, descriptionEn: true, descriptionSocieteEn: true, missionsEn: true, packageInfoEn: true, localisationEn: true,
       localisation: true, contractType: true,
@@ -140,7 +201,11 @@ export async function listPublic() {
       tags: true, createdAt: true,
     },
   });
-  return { count: rows.length, offers: rows };
+  // Rattrapage des offres publiées sans version EN (en tâche de fond, la
+  // réponse n'attend pas : l'EN apparaît au chargement suivant).
+  for (const r of rows) if (missingEnFields(r).length > 0) void translateMissingEn(r.id, r.createdById);
+  const offers = rows.map(({ id: _id, createdById: _c, ...o }) => o);
+  return { count: offers.length, offers };
 }
 
 export async function getPublicBySlug(slug: string) {
