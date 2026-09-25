@@ -130,3 +130,31 @@ renvoient que des pages agrégées sans employeur nommé ; les pages carrière, 
 | `outputs/humanup_market_mapping_2026-09-25.xlsx` | Méroë Nguimbi | 6 onglets |
 
 Format : UTF-8 BOM, séparateur `;`, CRLF, 11 colonnes — import Propium direct.
+
+## 9. Statut d'envoi des emails
+
+| Destinataire | Pièces jointes | Statut |
+|---|---|---|
+| Valentin Murcia | finance + hospitality | ✅ Livré — en **2 messages** dans le même fil (limite d'émission), le 2e rectifie le 1er |
+| Alexis | industrie | ✅ Livré en un message |
+| Louis | sales_saas | ✅ Livré — 1er envoi rejeté par Gmail (base64 corrompu), renvoyé après vérification octet par octet |
+| Méroë Nguimbi | sales + XLSX | ⚠️ **Partiel** — CSV et rapport livrés, **XLSX non joint** |
+
+**Le XLSX n'a pas pu être envoyé en pièce jointe.** Il est commité et récupérable par
+`git pull` puis `outputs/humanup_market_mapping_2026-09-25.xlsx`. Un message de rectification a été
+envoyé dans le fil pour l'indiquer.
+
+**Cause racine — à corriger avant le prochain run.** Le connecteur Gmail exige le base64 de la pièce jointe
+**dans le texte de l'appel d'outil**, donc les octets transitent par la sortie du modèle. Deux limites en
+découlent : au-delà d'environ 30 000 caractères de base64 (~22 Ko de fichier), l'émission dépasse le budget
+de sortie ou se dégrade en fin de chaîne ; et une dégradation peut produire du base64 **valide mais faux**,
+qui décoderait sans erreur et livrerait un fichier silencieusement corrompu. Sur ce run, Gmail a rejeté
+deux tentatives — c'est un garde-fou heureux, pas une garantie.
+
+Deux parades, par ordre de préférence :
+1. Faire passer la pièce jointe par un chemin où les octets ne transitent jamais par le texte du modèle
+   (envoi côté serveur à partir d'un chemin de fichier).
+2. À défaut, garder le motif **brouillon → vérification du MIME stocké par `cmp` → envoi par `draftId`**,
+   qui est le seul moyen actuel de garantir que les octets partis sont les bons. À noter : `get_draft`
+   ne renseigne pas les champs `attachments` / `attachmentIds` — il faut inspecter le MIME brut
+   (`messageFormat: RAW`) pour vérifier réellement la pièce jointe.
