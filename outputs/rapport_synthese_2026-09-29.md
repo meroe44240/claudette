@@ -198,3 +198,67 @@ la télécom B2B, les ENR et l'agroalimentaire — ce qui a évité tout chevauc
 | `outputs/rapport_synthese_2026-09-29.md` | Méroë Nguimbi |
 
 Fichiers intermédiaires Finance conservés : `_fin_a_`, `_fin_b_`, `_fin_c_2026-09-29.csv`.
+
+---
+
+## 10. Statut de diffusion (ajouté en fin de run)
+
+**Slack :** résumé envoyé en DM à Méroë. `#market-mapping` n'existe toujours pas dans le workspace.
+
+**Emails envoyés :**
+
+| Destinataire | Contenu | Statut |
+|---|---|---|
+| valentin@humanup.io | `finance_2026-09-29.csv` (CSV brut) | envoyé |
+| valentin@humanup.io | `hospitality_2026-09-29.csv` (CSV brut) | envoyé |
+| alexis@humanup.io | `industrie_2026-09-29.csv` | envoyé |
+| louis@humanup.io | `sales_saas_2026-09-29.csv` | envoyé |
+| meroe@humanup.io | rapport de synthèse intégral + `sales_2026-09-29.csv` | envoyé |
+| meroe@humanup.io | XLSX partie 1/3 (Synthèse + Valentin) | envoyé |
+| meroe@humanup.io | XLSX parties 2/3 et 3/3 | **non envoyées** — voir ci-dessous |
+| meroe@humanup.io | email de clarification fermant la boucle | envoyé |
+
+### Limite technique rencontrée sur les pièces jointes
+
+L'outil Gmail disponible n'accepte les pièces jointes qu'en **base64 inline dans l'appel d'outil
+lui-même** : il n'existe aucun paramètre permettant de lui passer un chemin de fichier. Les octets du
+fichier doivent donc transiter par la sortie du modèle, ce qui pose deux problèmes :
+
+1. **Corruption silencieuse possible.** Une dérive de recopie qui reste du base64 valide produit un
+   fichier accepté par l'API mais corrompu à l'arrivée — un classeur qui s'ouvre avec des cellules
+   fausses ressemblant à de vraies données. Ce n'est pas un échec visible.
+2. **Ce n'est pas une limite de taille.** Une pièce jointe de 29 772 caractères est passée, une de
+   23 048 caractères a échoué : la fidélité de recopie est stochastique, un succès ne prédit rien.
+
+Deux incidents concrets survenus pendant ce run, tous deux détectés avant livraison :
+- un CSV Finance silencieusement tronqué (environ deux tiers des lignes) — le message a été mis à la
+  corbeille et le fichier renvoyé intact ;
+- deux erreurs de transcription dans le base64 du CSV Sales — corrigées avant envoi après comparaison
+  octet par octet.
+
+Les parties 2 et 3 du XLSX n'ont volontairement **pas** été renvoyées : un classeur corrompu est pire
+qu'un classeur absent. Un email de clarification a été envoyé à Méroë pour qu'elle n'attende pas ces
+deux pièces jointes et utilise le classeur complet du repo.
+
+### Vérification d'intégrité : impossible via l'API
+
+Une vérification des 6 pièces jointes envoyées a été tentée. Le serveur MCP Gmail **n'expose pas la
+taille par part MIME** (`body.size` absent en PLAIN_TEXT, FULL_CONTENT et MINIMAL ; seuls `filename`,
+`id`, `mimeType` et `partId` sont renvoyés) et il n'existe pas d'outil de téléchargement de pièce
+jointe. Les 6 messages existent et les 6 noms de fichier sont corrects, mais **la conformité octet par
+octet des pièces jointes reste indéterminée**. Un calcul indirect à partir de `sizeEstimate` suggère
+une anomalie d'environ 1 ko sur la partie 1 du XLSX — indice, pas preuve.
+
+**En conséquence : le repo est la référence.** Avant tout import Propium, prendre les fichiers depuis
+`outputs/` sur la branche `claude/practical-meitner-nmxvvp` (`git pull`) plutôt que les pièces jointes
+reçues par email. Si un CSV reçu par email refuse de s'importer ou affiche des caractères étranges,
+c'est la première cause à suspecter. Cet avertissement a été transmis à Méroë par email.
+
+### Correctifs à prévoir pour les prochains runs
+
+1. **Quota de recherche web** — relever `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION` et/ou séquencer les
+   agents de sourcing au lieu de lancer les 7 en parallèle. C'est la cause du sourcing nominatif à 10 %.
+2. **Envoi des pièces jointes** — autoriser un envoi par script qui lit le fichier sur disque et
+   l'encode en mémoire, sans que les octets passent par le modèle. C'est le seul moyen fiable de joindre
+   des fichiers de cette taille, et cela supprime d'un coup le risque de corruption et le besoin de
+   découper le XLSX.
