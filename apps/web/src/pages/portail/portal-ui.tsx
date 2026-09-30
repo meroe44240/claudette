@@ -75,6 +75,14 @@ export function useIsMobile(max = 760) {
   return m;
 }
 
+// Logo de l'entreprise, sinon première lettre du texte.
+export function CompanyLogo({ logo, text, size }: { logo?: string | null; text: string; size: number }) {
+  const [broken, setBroken] = useState(false);
+  const box: React.CSSProperties = { flexShrink: 0, width: size, height: size, borderRadius: Math.round(size * 0.26), overflow: 'hidden', background: '#fff', border: `1px solid ${LINE}` };
+  if (logo && !broken) return <img src={logo} alt="" onError={() => setBroken(true)} style={{ ...box, objectFit: 'contain', display: 'block', padding: Math.round(size * 0.12) }} />;
+  return <span aria-hidden style={{ ...box, color: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: DISPLAY, fontSize: Math.round(size * 0.4) }}>{text.trim()[0]?.toUpperCase()}</span>;
+}
+
 // Photo (candidat ou membre HumanUp), sinon initiales.
 export function PersonAvatar({ name, photo, size, radius = '50%', bg = BRAND, fg = CREAM }: { name: string; photo?: string | null; size: number; radius?: number | string; bg?: string; fg?: string }) {
   const [broken, setBroken] = useState(false);

@@ -255,7 +255,7 @@ export async function getKanban(mandatId: string, portalAccessId?: string) {
       id: true,
       titrePoste: true,
       visibleStages: true,
-      entreprise: { select: { nom: true } },
+      entreprise: { select: { nom: true, logoUrl: true } },
       client: { select: { nom: true, prenom: true } },
       recruteur: { select: { id: true, nom: true, prenom: true, avatarUrl: true } },
       assignedTo: { select: { id: true, nom: true, prenom: true, avatarUrl: true } },
@@ -879,6 +879,7 @@ async function accessibleMandats(scope: PortalScope) {
     },
     select: {
       id: true, titrePoste: true, localisation: true, statut: true, createdAt: true, salaryRange: true, visibleStages: true,
+      entreprise: { select: { nom: true, logoUrl: true } },
       recruteur: { select: { id: true, nom: true, prenom: true, avatarUrl: true } },
       assignedTo: { select: { id: true, nom: true, prenom: true, avatarUrl: true } },
       sales: { select: { id: true, nom: true, prenom: true, avatarUrl: true } },

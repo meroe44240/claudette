@@ -8,7 +8,7 @@ import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, use
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { X, Check, MessageSquare, AtSign, Banknote, CalendarClock, ArrowRight, UserPlus, MessageCircle, Lock, BellRing, BadgeCheck, ChevronDown } from 'lucide-react';
 import { portalStore } from './portal-store';
-import { PortalTopBar, lastMandat, SHARED_CSS } from './portal-ui';
+import { PortalTopBar, lastMandat, SHARED_CSS, CompanyLogo } from './portal-ui';
 
 type Stage = 'SOURCING' | 'CONTACTE' | 'ENTRETIEN_1' | 'ENVOYE_CLIENT' | 'ENTRETIEN_CLIENT' | 'PROCESS' | 'OFFRE' | 'PLACE' | 'REFUSE';
 type Decision = 'RENCONTRER' | 'A_DISCUTER' | 'ECARTER';
@@ -26,7 +26,7 @@ interface Candidature {
   hireAnnounced?: boolean;
 }
 interface KanbanResponse {
-  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string }; client: { nom: string; prenom: string | null }; consultant: { nom: string; prenom: string | null; avatarUrl?: string | null } | null; commercial: { nom: string; prenom: string | null; avatarUrl?: string | null } | null };
+  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string; logoUrl?: string | null }; client: { nom: string; prenom: string | null }; consultant: { nom: string; prenom: string | null; avatarUrl?: string | null } | null; commercial: { nom: string; prenom: string | null; avatarUrl?: string | null } | null };
   stages: Col[];
   byStage: Record<Col, Candidature[]>;
 }
@@ -327,7 +327,7 @@ export default function PortalMandatPage() {
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, padding: isMobile ? '20px 16px 4px' : '28px 34px 6px' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: FS.base, color: FAINT, fontWeight: 600 }}>{data.mandat.entreprise.nom}</div>
-          <OfferSwitcher current={data.mandat.id} title={data.mandat.titrePoste} compact={isMobile} />
+          <OfferSwitcher current={data.mandat.id} title={data.mandat.titrePoste} logo={data.mandat.entreprise.logoUrl} company={data.mandat.entreprise.nom} compact={isMobile} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: '9px 14px' }}>
@@ -970,7 +970,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
 }
 
 // ─── Titre de l'offre + changement d'offre ───
-function OfferSwitcher({ current, title, compact }: { current: string; title: string; compact?: boolean }) {
+function OfferSwitcher({ current, title, logo, company, compact }: { current: string; title: string; logo?: string | null; company: string; compact?: boolean }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [offres, setOffres] = useState<Array<{ id: string; titrePoste: string; statut: string; toReview: number }> | null>(null);
@@ -982,7 +982,7 @@ function OfferSwitcher({ current, title, compact }: { current: string; title: st
     <div style={{ position: 'relative', marginTop: 6 }}>
       <button className="pm-chip" onClick={() => setOpen((v) => !v)} aria-haspopup="listbox" aria-expanded={open}
         style={{ display: 'flex', alignItems: 'center', gap: 12, maxWidth: '100%', background: 'transparent', border: '1px solid transparent', borderRadius: 12, padding: '4px 8px 4px 4px', marginLeft: -4, cursor: 'pointer', color: INK, textAlign: 'left' }}>
-        <span aria-hidden style={{ flexShrink: 0, width: compact ? 34 : 40, height: compact ? 34 : 40, borderRadius: 10, background: '#fff', border: `1px solid ${LINE}`, color: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: DISPLAY, fontSize: FS.lg }}>{title.trim()[0]?.toUpperCase()}</span>
+        <CompanyLogo logo={logo} text={company || title} size={compact ? 34 : 40} />
         <h1 style={{ fontFamily: DISPLAY, fontSize: compact ? 20 : 26, lineHeight: 1.15, letterSpacing: '-.025em', minWidth: 0 }}>{title}</h1>
         <ChevronDown size={18} aria-hidden style={{ flexShrink: 0, color: MUTED, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .15s ease' }} />
       </button>

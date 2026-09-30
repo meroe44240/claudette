@@ -9,12 +9,13 @@ import { MapPin, BellRing } from 'lucide-react';
 import { portalStore } from './portal-store';
 import {
   BG, BRAND, COL_ACCENT, COL_LABELS, COL_ORDER, CREAM, DISPLAY, FAINT, FONT, FS, INK, LABEL, LINE, MUTED, SHARED_CSS,
-  PersonAvatar, PortalTopBar, portalFetch, relTime, useIsMobile, type Col,
+  CompanyLogo, PersonAvatar, PortalTopBar, portalFetch, relTime, useIsMobile, type Col,
 } from './portal-ui';
 
 interface Person { nom: string; prenom: string | null; avatarUrl?: string | null }
 interface Offre {
   id: string; titrePoste: string; localisation: string | null; statut: string; createdAt: string; salaryRange: string | null;
+  entreprise: { nom: string; logoUrl: string | null } | null;
   consultant: Person | null; commercial: Person | null;
   total: number; toReview: number; byColumn: Partial<Record<Col, number>>; lastActivity: string | null;
 }
@@ -81,7 +82,7 @@ function OfferCard({ o, muted }: { o: Offre; muted?: boolean }) {
   return (
     <Link to={`/portail/mandat/${o.id}`} className="pm-offer" style={{ display: 'block', textDecoration: 'none', color: INK, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, padding: '16px 18px', opacity: muted ? 0.8 : 1 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14 }}>
-        <span aria-hidden style={{ flexShrink: 0, width: 40, height: 40, borderRadius: 11, background: '#F2F3D8', color: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: DISPLAY, fontSize: FS.lg }}>{o.titrePoste.trim()[0]?.toUpperCase()}</span>
+        <CompanyLogo logo={o.entreprise?.logoUrl} text={o.entreprise?.nom || o.titrePoste} size={44} />
         <div style={{ minWidth: 0, flex: '1 1 260px' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: FS.lg, fontWeight: 800 }}>{o.titrePoste}</span>
