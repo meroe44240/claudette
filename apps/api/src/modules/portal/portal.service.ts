@@ -215,8 +215,9 @@ export async function getKanban(mandatId: string, portalAccessId?: string) {
       visibleStages: true,
       entreprise: { select: { nom: true } },
       client: { select: { nom: true, prenom: true } },
-      recruteur: { select: { nom: true, prenom: true } },
-      assignedTo: { select: { nom: true, prenom: true } },
+      recruteur: { select: { id: true, nom: true, prenom: true } },
+      assignedTo: { select: { id: true, nom: true, prenom: true } },
+      sales: { select: { id: true, nom: true, prenom: true } },
     },
   });
   if (!mandat) throw new NotFoundError('Mandat', mandatId);
@@ -291,18 +292,28 @@ export async function getKanban(mandatId: string, portalAccessId?: string) {
   for (const s of stages) byStage[s] = [];
   for (const c of candidatures) {
     const { stageHistory, createdAt, ...rest } = c;
-    if (byStage[c.stage]) byStage[c.stage].push({ ...rest, seen: seen.has(c.id), stageSince: stageHistory[0]?.changedAt ?? createdAt, hireAnnounced: hired.has(c.id) });
+    if (byStage[c.stage]) byStage[c.stage].push({ ...rest, seen: seen.has(c.id), stageSince: stageHistory[0]?.changedAt ?? createdAt, hireAnnounced: hired.has(c.id) && c.stage !== 'PLACE' });
   }
 
-  const { recruteur, assignedTo, ...mandatPublic } = mandat;
-  const consultant = recruteur ?? assignedTo;
+  const { recruteur, assignedTo, sales, ...mandatPublic } = mandat;
 
   return {
-    mandat: { ...mandatPublic, consultant: consultant ? { nom: consultant.nom, prenom: consultant.prenom } : null },
+    mandat: { ...mandatPublic, ...humanupContacts({ recruteur, sales, assignedTo }) },
     stages,
     byStage,
   };
 }
+
+// Interlocuteurs HumanUp affichés au client : consultant (recruteur) et commercial
+// (sales, sinon le responsable du mandat s'il n'est pas déjà le consultant).
+type Person = { id: string; nom: string; prenom: string | null } | null;
+function humanupContacts(m: { recruteur: Person; sales: Person; assignedTo: Person }) {
+  const consultant = m.recruteur ?? m.assignedTo;
+  const commercial = m.sales ?? (m.assignedTo && m.assignedTo.id !== consultant?.id ? m.assignedTo : null);
+  const pub = (u: Person) => (u ? { nom: u.nom, prenom: u.prenom } : null);
+  return { consultant: pub(consultant), commercial: commercial && commercial.id !== consultant?.id ? pub(commercial) : null };
+}
+const fullNameOf = (u: { nom: string; prenom: string | null } | null) => (u ? `${u.prenom ? u.prenom + ' ' : ''}${u.nom}`.trim() : null);
 
 // Candidatures dont l'embauche a été annoncée par le client et pas encore validée.
 async function openHireTasks(mandatId: string): Promise<string[]> {
@@ -344,11 +355,14 @@ export async function resetPassword(mandatId: string, emailRaw: string) {
 export async function publicMandatInfo(mandatId: string) {
   const m = await prisma.mandat.findUnique({
     where: { id: mandatId },
-    select: { titrePoste: true, entreprise: { select: { nom: true } }, recruteur: { select: { prenom: true, nom: true } }, assignedTo: { select: { prenom: true, nom: true } } },
+    select: {
+      titrePoste: true, entreprise: { select: { nom: true } },
+      recruteur: { select: { id: true, prenom: true, nom: true } }, assignedTo: { select: { id: true, prenom: true, nom: true } }, sales: { select: { id: true, prenom: true, nom: true } },
+    },
   });
   if (!m) throw new NotFoundError('Mandat', mandatId);
-  const u = m.recruteur ?? m.assignedTo;
-  return { titrePoste: m.titrePoste, entreprise: m.entreprise?.nom ?? null, consultant: u ? `${u.prenom ? u.prenom + ' ' : ''}${u.nom}`.trim() : null };
+  const { consultant, commercial } = humanupContacts(m);
+  return { titrePoste: m.titrePoste, entreprise: m.entreprise?.nom ?? null, consultant: fullNameOf(consultant), commercial: fullNameOf(commercial) };
 }
 
 export async function recordDecision(
@@ -546,8 +560,8 @@ export async function getMentionables(mandatId: string) {
   type U = { id: string; nom: string; prenom: string | null; email: string; status: string } | null;
   const internal: Array<{ id: string; name: string; email: string; role: string }> = [];
   const roles: Array<[U, string]> = [
-    [mandat.recruteur, 'Recruteur'], [mandat.sales, 'Sales'], [mandat.sourceur, 'Sourcing'],
-    [mandat.assignedTo, 'HumanUp'], [mandat.createdBy, 'HumanUp'],
+    [mandat.recruteur, 'Consultant'], [mandat.sales, 'Commercial'], [mandat.sourceur, 'Sourcing'],
+    [mandat.assignedTo, !mandat.recruteur ? 'Consultant' : mandat.sales ? 'HumanUp' : 'Commercial'], [mandat.createdBy, 'HumanUp'],
   ];
   for (const [u, role] of roles) {
     if (!u || u.status === 'ARCHIVED' || internal.some((i) => i.id === u.id)) continue;

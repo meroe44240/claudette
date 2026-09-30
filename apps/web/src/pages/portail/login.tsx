@@ -9,7 +9,7 @@ import { Eye, EyeOff, Check, AlertCircle, Lock, ArrowLeft, MailCheck } from 'luc
 import { portalStore, hasValidSession } from './portal-store';
 
 interface LoginResponse { token: string; access: { id: string; mandatId: string; email: string } }
-interface PublicInfo { titrePoste: string; entreprise: string | null; consultant: string | null }
+interface PublicInfo { titrePoste: string; entreprise: string | null; consultant: string | null; commercial: string | null }
 
 export default function PortalLoginPage() {
   const navigate = useNavigate();
@@ -117,7 +117,8 @@ export default function PortalLoginPage() {
               <div style={{ marginBottom: 18, background: '#fff', border: '1px solid rgba(26,21,51,.09)', borderRadius: 14, padding: '12px 14px' }}>
                 <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: '#6E6A85' }}>Recrutement{info.entreprise ? ` · ${info.entreprise}` : ''}</div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#1A1533', marginTop: 3 }}>{info.titrePoste}</div>
-                {info.consultant && <div style={{ fontSize: 13, color: '#5C5875', marginTop: 3 }}>Votre consultant : <strong style={{ color: '#1A1533' }}>{info.consultant}</strong></div>}
+                {info.consultant && <div style={{ fontSize: 13, color: '#5C5875', marginTop: 3 }}>Consultant : <strong style={{ color: '#1A1533' }}>{info.consultant}</strong></div>}
+                {info.commercial && <div style={{ fontSize: 13, color: '#5C5875', marginTop: 2 }}>Commercial : <strong style={{ color: '#1A1533' }}>{info.commercial}</strong></div>}
               </div>
             )}
             <h2 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 28, letterSpacing: '-.02em', color: '#1A1533' }}>{mode === 'login' ? 'Connexion' : 'Mot de passe oublié'}</h2>

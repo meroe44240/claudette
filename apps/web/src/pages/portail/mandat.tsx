@@ -22,7 +22,7 @@ interface Candidature {
   hireAnnounced?: boolean;
 }
 interface KanbanResponse {
-  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string }; client: { nom: string; prenom: string | null }; consultant: { nom: string; prenom: string | null } | null };
+  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string }; client: { nom: string; prenom: string | null }; consultant: { nom: string; prenom: string | null } | null; commercial: { nom: string; prenom: string | null } | null };
   stages: Stage[];
   byStage: Record<Stage, Candidature[]>;
 }
@@ -260,6 +260,8 @@ export default function PortalMandatPage() {
 
   const consultant = data.mandat.consultant;
   const rep = consultant ? `${consultant.prenom ? consultant.prenom + ' ' : ''}${consultant.nom}`.trim() : '';
+  const com = data.mandat.commercial;
+  const commercial = com ? `${com.prenom ? com.prenom + ' ' : ''}${com.nom}`.trim() : '';
   const cards = allCards();
   const enCours = cards.filter((c) => c.stage !== 'REFUSE' && c.stage !== 'PLACE').length;
   const toReview = cards.filter(needsReview);
@@ -311,13 +313,17 @@ export default function PortalMandatPage() {
             <div style={LABEL}>En cours</div>
             <div style={{ fontFamily: DISPLAY, fontSize: FS.xl, marginTop: 2 }}>{enCours}</div>
           </div>
-          {rep && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: '9px 14px' }}>
-              <span aria-hidden style={{ width: 34, height: 34, borderRadius: '50%', background: BRAND, color: CREAM, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: DISPLAY, fontSize: FS.sm }}>{initialsOf(rep)}</span>
-              <div>
-                <div style={LABEL}>Votre consultant</div>
-                <div style={{ fontSize: FS.md, fontWeight: 800, marginTop: 2 }}>{rep}</div>
-              </div>
+          {(rep || commercial) && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: '9px 14px' }}>
+              {([[rep, 'Votre consultant', BRAND, CREAM], [commercial, 'Votre commercial', '#F2F3D8', BRAND]] as const).filter(([n]) => n).map(([n, label, bg, fg]) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span aria-hidden style={{ width: 34, height: 34, borderRadius: '50%', background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: DISPLAY, fontSize: FS.sm }}>{initialsOf(n)}</span>
+                  <div>
+                    <div style={LABEL}>{label}</div>
+                    <div style={{ fontSize: FS.md, fontWeight: 800, marginTop: 2 }}>{n}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
