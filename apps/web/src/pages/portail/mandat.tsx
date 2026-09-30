@@ -12,26 +12,27 @@ type Decision = 'RENCONTRER' | 'A_DISCUTER' | 'ECARTER';
 
 interface Candidature {
   id: string; stage: Stage; dateEntretienClient: string | null;
-  candidat: { id: string; nom: string; prenom: string | null; posteActuel: string | null; entrepriseActuelle: string | null; aiPitchShort: string | null; aiAnonymizedProfile: any };
+  candidat: { id: string; nom: string; prenom: string | null; posteActuel: string | null; entrepriseActuelle: string | null; photoUrl: string | null; aiPitchShort: string | null; aiAnonymizedProfile: any };
   portalDecisions: Array<{ decision: Decision; createdAt: string }>;
 }
 interface KanbanResponse {
-  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string }; client: { nom: string; prenom: string | null } };
+  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string }; client: { nom: string; prenom: string | null }; consultant: { nom: string; prenom: string | null } | null };
   stages: Stage[];
   byStage: Record<Stage, Candidature[]>;
 }
 
+// Libellés côté client : Screening / Case / Culture Fit / Offre / Engagé / Perdu.
 const STAGE_LABELS: Record<Stage, string> = {
-  SOURCING: 'Sourcing', CONTACTE: 'Contactés', ENTRETIEN_1: 'Entretien recruteur', ENVOYE_CLIENT: 'Nouveaux profils',
-  ENTRETIEN_CLIENT: 'Entretien avec vous', PROCESS: 'En process', OFFRE: 'Offre', PLACE: 'Placé', REFUSE: 'Écartés',
+  SOURCING: 'Sourcing', CONTACTE: 'Contactés', ENTRETIEN_1: 'Entretien recruteur', ENVOYE_CLIENT: 'Screening',
+  ENTRETIEN_CLIENT: 'Case', PROCESS: 'Culture Fit', OFFRE: 'Offre', PLACE: 'Engagé', REFUSE: 'Perdu',
 };
 const STAGE_ACCENT: Record<Stage, string> = {
   SOURCING: '#8E7CC3', CONTACTE: '#8E7CC3', ENTRETIEN_1: '#22177A', ENVOYE_CLIENT: '#2A6BD8',
-  ENTRETIEN_CLIENT: '#E08A2B', PROCESS: '#D9A441', OFFRE: '#C9A227', PLACE: '#3B9A54', REFUSE: '#B3261E',
+  ENTRETIEN_CLIENT: '#E08A2B', PROCESS: '#7A5BD1', OFFRE: '#C9A227', PLACE: '#3B9A54', REFUSE: '#B3261E',
 };
 const STAGE_BG: Record<Stage, string> = {
   SOURCING: '#F6F4FB', CONTACTE: '#F6F4FB', ENTRETIEN_1: 'rgba(34,23,122,.05)', ENVOYE_CLIENT: '#F2F3D8',
-  ENTRETIEN_CLIENT: '#FBF7F0', PROCESS: '#FDF7E3', OFFRE: '#FBFAEC', PLACE: '#EFF6F0', REFUSE: '#FBF1EF',
+  ENTRETIEN_CLIENT: '#FBF7F0', PROCESS: '#F5F2FC', OFFRE: '#FBFAEC', PLACE: '#EFF6F0', REFUSE: '#FBF1EF',
 };
 const DECISION_LABEL: Record<Decision, string> = { RENCONTRER: 'À rencontrer', A_DISCUTER: 'À discuter', ECARTER: 'Écarté' };
 const DECISION_TONE: Record<Decision, { bg: string; fg: string }> = {
@@ -44,6 +45,16 @@ function portalFetch(path: string, init?: RequestInit) {
 }
 function fullName(c: Candidature) { return `${c.candidat.prenom || ''} ${c.candidat.nom}`.trim() || '(profil)'; }
 function initials(c: Candidature) { return `${(c.candidat.prenom?.[0] ?? '')}${c.candidat.nom?.[0] ?? ''}`.toUpperCase() || '?'; }
+
+// Photo du candidat si dispo, sinon initiales.
+function Avatar({ c, size, radius, bg, fg, fontSize }: { c: Candidature; size: number; radius: number | string; bg: string; fg: string; fontSize: number }) {
+  const [broken, setBroken] = useState(false);
+  const box: React.CSSProperties = { flexShrink: 0, width: size, height: size, borderRadius: radius, overflow: 'hidden' };
+  if (c.candidat.photoUrl && !broken) {
+    return <img src={c.candidat.photoUrl} alt="" onError={() => setBroken(true)} style={{ ...box, objectFit: 'cover', display: 'block' }} />;
+  }
+  return <span style={{ ...box, background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize }}>{initials(c)}</span>;
+}
 
 export default function PortalMandatPage() {
   const { mandatId } = useParams<{ mandatId: string }>();
@@ -72,7 +83,9 @@ export default function PortalMandatPage() {
 
   if (loading || !data) return <div style={{ background: '#F4F4EA', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9A96AE', fontFamily: "'Manrope',sans-serif" }}>Chargement…</div>;
 
-  const rep = `${data.mandat.client.prenom ? data.mandat.client.prenom + ' ' : ''}${data.mandat.client.nom}`.trim();
+  // Le message part vers le consultant HumanUp du mandat (pas vers le client lui-même).
+  const consultant = data.mandat.consultant;
+  const rep = consultant ? `${consultant.prenom ? consultant.prenom + ' ' : ''}${consultant.nom}`.trim() : '';
 
   return (
     <div style={{ background: '#F4F4EA', minHeight: '100vh', fontFamily: "'Manrope',sans-serif", display: 'flex', flexDirection: 'column' }}>
@@ -106,7 +119,7 @@ export default function PortalMandatPage() {
           {data.stages.map(stage => {
             const items = data.byStage[stage] ?? [];
             return (
-              <div key={stage} style={{ flex: '0 0 300px', background: STAGE_BG[stage], border: '1px solid rgba(34,23,122,.07)', borderRadius: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div key={stage} style={{ flex: '1 0 215px', maxWidth: 320, background: STAGE_BG[stage], border: '1px solid rgba(34,23,122,.07)', borderRadius: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <div style={{ height: 4, background: STAGE_ACCENT[stage] }} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '14px 15px 10px' }}>
                   <span style={{ width: 9, height: 9, borderRadius: 3, background: STAGE_ACCENT[stage] }} />
@@ -120,7 +133,7 @@ export default function PortalMandatPage() {
                     return (
                       <div key={c.id} className="pm-card" onClick={() => { setSelected(c); void portalFetch(`/candidatures/${c.id}/view`, { method: 'POST' }); }} style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 13, padding: 14, boxShadow: '0 1px 2px rgba(34,23,122,.05)', cursor: 'pointer' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ flexShrink: 0, width: 36, height: 36, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 12 }}>{initials(c)}</span>
+                          <Avatar c={c} size={36} radius="50%" bg="#22177A" fg="#E6E9AF" fontSize={12} />
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName(c)}</div>
                             {(c.candidat.posteActuel || c.candidat.entrepriseActuelle) && <div style={{ fontSize: 12, color: '#8A8699', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(' · ')}</div>}
@@ -171,6 +184,9 @@ function ProfileDrawer({ candidature: c, repName, onClose, onDecision, onComment
   const last = c.portalDecisions[0]?.decision;
   const profile = c.candidat.aiAnonymizedProfile;
   const bullets: string[] = Array.isArray(profile?.bulletPoints) ? profile.bulletPoints : Array.isArray(profile?.highlights) ? profile.highlights : [];
+  // Debrief structuré (optionnel) : infos clés + sections titrées.
+  const infos: Array<{ label: string; value: string }> = Array.isArray(profile?.infos) ? profile.infos : [];
+  const sections: Array<{ title: string; items: string[] }> = Array.isArray(profile?.sections) ? profile.sections : [];
 
   const decide = async (d: Decision) => {
     if (d === 'ECARTER' && !reason.trim()) { return; }
@@ -196,7 +212,7 @@ function ProfileDrawer({ candidature: c, repName, onClose, onDecision, onComment
             <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(230,233,175,.25)', background: 'transparent', color: '#E6E9AF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} strokeWidth={2.4} /></button>
           </div>
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 13, marginTop: 16 }}>
-            <span style={{ flexShrink: 0, width: 54, height: 54, borderRadius: 16, background: '#E6E9AF', color: '#22177A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 18 }}>{initials(c)}</span>
+            <Avatar c={c} size={54} radius={16} bg="#E6E9AF" fg="#22177A" fontSize={18} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 800, fontSize: 18, color: '#fff' }}>{fullName(c)}</div>
               {(c.candidat.posteActuel || c.candidat.entrepriseActuelle) && <div style={{ fontSize: 12.5, color: '#E6E9AF', fontWeight: 600, marginTop: 3 }}>{[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(' · ')}</div>}
@@ -212,9 +228,22 @@ function ProfileDrawer({ candidature: c, repName, onClose, onDecision, onComment
               <p style={{ fontSize: 13.5, lineHeight: 1.6, color: '#4A4568', marginTop: 9 }}>{c.candidat.aiPitchShort}</p>
             </>
           )}
+          {infos.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginTop: 18 }}>
+              {infos.map((it, i) => (
+                <div key={i} style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 11, padding: '9px 11px' }}>
+                  <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9A96AE' }}>{it.label}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1A1533', marginTop: 3, lineHeight: 1.4 }}>{it.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {bullets.length > 0 && (sections.length > 0 || infos.length > 0) && (
+            <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE', marginTop: 22 }}>Adéquation au poste</div>
+          )}
           {bullets.length > 0 && (
-            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {bullets.slice(0, 6).map((b, i) => (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {bullets.slice(0, 8).map((b, i) => (
                 <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
                   <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: 6, background: '#F2F3D8', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}><Check size={11} color="#22177A" strokeWidth={2.6} /></span>
                   <span style={{ fontSize: 13, lineHeight: 1.5, color: '#4A4568' }}>{b}</span>
@@ -222,9 +251,18 @@ function ProfileDrawer({ candidature: c, repName, onClose, onDecision, onComment
               ))}
             </div>
           )}
-          {!c.candidat.aiPitchShort && bullets.length === 0 && <p style={{ fontSize: 13.5, color: '#8A8699' }}>Le dossier détaillé sera disponible sous peu.</p>}
+          {sections.map((sec, i) => (
+            <div key={i} style={{ marginTop: 22 }}>
+              <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>{sec.title}</div>
+              <ul style={{ margin: '9px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {sec.items.map((it, j) => <li key={j} style={{ fontSize: 13, lineHeight: 1.55, color: '#4A4568' }}>{it}</li>)}
+              </ul>
+            </div>
+          ))}
+          {!c.candidat.aiPitchShort && bullets.length === 0 && sections.length === 0 && <p style={{ fontSize: 13.5, color: '#8A8699' }}>Le dossier détaillé sera disponible sous peu.</p>}
 
-          {/* DECISION */}
+          {/* DECISION — inutile une fois le process terminé (Engagé / Perdu) */}
+          {c.stage !== 'PLACE' && c.stage !== 'REFUSE' && (<>
           <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE', marginTop: 24 }}>Votre avis</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginTop: 10 }}>
             <button className="pm-dec" disabled={busy} onClick={() => decide('RENCONTRER')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', borderRadius: 12, border: '1.5px solid rgba(59,154,84,.28)', background: '#EAF3EC', color: '#2C6B3F', cursor: 'pointer', fontWeight: 800, fontSize: 12 }}><Check size={17} />Rencontrer</button>
@@ -232,6 +270,7 @@ function ProfileDrawer({ candidature: c, repName, onClose, onDecision, onComment
             <button className="pm-dec" disabled={busy || !reason.trim()} onClick={() => decide('ECARTER')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', borderRadius: 12, border: '1.5px solid rgba(176,54,31,.28)', background: '#F9ECE9', color: '#B0361F', cursor: reason.trim() ? 'pointer' : 'default', fontWeight: 800, fontSize: 12, opacity: reason.trim() ? 1 : 0.55 }}><X size={17} />Écarter</button>
           </div>
           <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Motif (obligatoire pour écarter)…" style={{ width: '100%', marginTop: 10, fontSize: 13, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#fff', outline: 'none' }} />
+          </>)}
 
           {/* COMMENT */}
           <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE', marginTop: 24 }}>Un message pour {repName || 'votre consultant'} ?</div>
