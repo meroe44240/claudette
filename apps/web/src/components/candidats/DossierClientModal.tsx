@@ -19,6 +19,7 @@ interface Dossier {
 interface Prefill { localisation?: string | null; disponibilite?: string | null; salaireSouhaite?: number | null; anneesExperience?: number | null }
 
 const BRAND = '#22177A', CREAM = '#E6E9AF', INK = '#1A1533', TEXT = '#4A4568', MUTED = '#8A8699', LINE = 'rgba(34,23,122,.12)';
+const SYNTHESE_MAX = 500; // colonne candidats.ai_pitch_short en VarChar(500)
 const PREVIEW_LABEL: React.CSSProperties = { fontSize: 10.5, fontWeight: 800, letterSpacing: '.09em', textTransform: 'uppercase', color: MUTED };
 const input: React.CSSProperties = { width: '100%', fontFamily: "'Manrope',sans-serif", fontSize: 13.5, padding: '9px 11px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.16)', background: '#FCFCF5', color: INK, outline: 'none' };
 const iconBtn: React.CSSProperties = { flexShrink: 0, width: 30, height: 30, borderRadius: 8, border: '1px solid rgba(34,23,122,.14)', background: '#fff', color: MUTED, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
@@ -149,7 +150,8 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
               </Block>
 
               <Block title="Synthèse">
-                <textarea value={synthese} onChange={(e) => setSynthese(e.target.value)} rows={6} placeholder="Qui est le candidat, ce qu'il a fait, pourquoi il colle au poste" style={{ ...input, resize: 'vertical', lineHeight: 1.55 }} />
+                <textarea value={synthese} onChange={(e) => setSynthese(e.target.value)} maxLength={SYNTHESE_MAX} rows={6} placeholder="Qui est le candidat, ce qu'il a fait, pourquoi il colle au poste" style={{ ...input, resize: 'vertical', lineHeight: 1.55 }} />
+                <div style={{ fontSize: 12, color: synthese.length >= SYNTHESE_MAX ? '#B5552B' : MUTED, marginTop: 5, textAlign: 'right' }}>{synthese.length} / {SYNTHESE_MAX}</div>
               </Block>
 
               <Block title="Cartes d'infos" right={infos.length === 0 ? <button onClick={prefillInfos} style={addBtn}>Pré-remplir depuis la fiche</button> : undefined}>
