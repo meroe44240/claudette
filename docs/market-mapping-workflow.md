@@ -211,7 +211,23 @@ Total : 110 lignes, ~53 entreprises, 11 contacts sourcés (10 %).
 
 1. **Budget WebSearch (200 requêtes / agent)** épuisé avant le sourcing nominatif. Finance A n'a livré que 4 lignes. → Remonter `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION` ou passer Finance A en deux agents (Compta / CdG).
 2. **Proxy réseau** : APEC, Indeed, LinkedIn, Hellowork, Pappers, Societe.com, Welcome to the Jungle, Cadremploi, France Travail inaccessibles via WebFetch. Les agents travaillent sur les snippets WebSearch uniquement, d'où beaucoup de `NC` et d'effectifs non confirmés. → Autoriser ces domaines dans la politique réseau de l'environnement.
-3. **Pièces jointes Gmail** : un CSV de 20 Ko devient ~30 Ko en base64, ce qui dépasse ce qu'un appel d'outil peut porter en une fois. Le XLSX n'a pas pu être attaché, et le CSV Hospitality est parti tronqué (seules les premières lignes). Les fichiers complets sont sur `main`. → Envoyer un lien GitHub vers `outputs/` plutôt que des pièces jointes, ou passer par Drive.
+3. **Pièces jointes Gmail — RÉSOLU pour les CSV (run 2026-09-30)** : `mcp__Gmail__send_message` n'accepte la pièce jointe que via `attachments[].content`, une chaîne base64 **inline dans l'appel d'outil**. Il n'existe aucun paramètre de chemin de fichier. La contrainte n'est donc pas la limite Gmail de 25 Mo, mais le budget de tokens de sortie du modèle : le base64 coûte ~1,53 token/caractère, donc un CSV de 26 Ko (34 900 caractères de base64) réclame ~53 000 tokens de sortie en un seul appel. C'est ce qui a fait partir un CSV tronqué lors d'un run précédent.
+
+   **Solution retenue : zipper chaque CSV** (`zip -9 -j`). Le CSV se compresse d'un facteur ~5-6, ce qui ramène le base64 sous 8 000 caractères (~12 000 tokens), largement émettable en un appel. Mesures du run 2026-09-30 :
+
+   | Fichier | CSV brut | base64 brut | base64 du ZIP |
+   |---|---|---|---|
+   | finance | 30,2 Ko | 40 280 car. | **7 668 car.** |
+   | hospitality | 23,5 Ko | 31 272 car. | **4 956 car.** |
+   | industrie | 25,8 Ko | 34 336 car. | **6 076 car.** |
+   | sales_saas | 17,0 Ko | 22 696 car. | **4 344 car.** |
+   | sales | 26,2 Ko | 34 912 car. | **5 056 car.** |
+
+   Procédure : `zip -9 -q -j <dest>.zip <csv>` puis `unzip -tqq <dest>.zip` pour vérifier, `mimeType: "application/zip"`. Prévenir le destinataire qu'il doit dézipper avant l'import Propium (le CSV à l'intérieur garde son format : UTF-8 BOM, séparateur `;`).
+
+   **Le XLSX reste NON attachable** : un XLSX est déjà une archive zip, le recompresser ne gagne rien (42,9 Ko → 57 236 caractères de base64 brut, 55 260 une fois re-zippé, soit ~85 000 tokens). → Le livrer par `git pull` et le signaler explicitement dans le corps de l'email.
+
+   **Ne jamais découper un base64 en chunks** pour contourner la limite : le résultat est un fichier corrompu que le destinataire ne détecte qu'à l'ouverture. Instruire explicitement les sous-agents d'envoi de signaler l'échec plutôt que de tronquer ou découper.
 4. **Slack** : le channel `#market-mapping` n'existe pas dans le workspace. → Le créer, ou garder le DM.
 5. **Git** : la session démarre en HEAD détaché. Le push doit se faire avec `git push -u origin HEAD:main`, pas `git push origin main`.
 6. **Hook Stop** : le hook "untracked files" se déclenche pendant que les agents tournent. Inoffensif, mais il faut attendre la fin des 5 agents avant de committer.

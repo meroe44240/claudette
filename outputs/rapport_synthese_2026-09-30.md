@@ -23,7 +23,9 @@ Deux causes cumulées, identiques sur les 7 sous-agents :
 
 Conséquence opérationnelle : les fichiers sont exploitables comme **cartographie d'opportunités** (entreprise + poste + signal + lien), mais l'enrichissement contact reste à faire — via FullEnrich à l'import Propium, ou par une passe de sourcing manuelle. L'agent Sales général a montré la voie : 6 de ses 8 contacts nominatifs ont été obtenus via FullEnrich/Propium (~2,5 crédits).
 
-Conséquence qualité : la **fraîcheur « 7 derniers jours » n'est pas confirmée** pour la majorité des annonces. Les dates non vérifiables sont notées `Date: NC` en clair dans la colonne `notes`, sans extrapolation. De même, l'effectif est `NC` pour la grande majorité des entreprises (non vérifiable sans Pappers) : le plafond des 2000 salariés a donc été appliqué par exclusion des employeurs connus comme dépassant le seuil, pas par vérification systématique.
+Conséquence qualité : la **fraîcheur « 7 derniers jours » n'est pas confirmée** pour la majorité des annonces. Attention à la lecture de la colonne `notes` : le champ `Date:` porte la date de mapping (2026-09-30) conformément au format d'import, **pas la date de publication de l'annonce**. L'incertitude sur la date de publication est signalée en clair dans le texte du champ `notes`, sur 100 % des lignes des 5 fichiers (mentions « non confirmée », « non vérifiable », « estimée » ou `NC`). Sur le fichier Finance, 14 lignes portent en plus un `Date: NC` explicite. Aucune date n'a été extrapolée.
+
+De même, l'effectif est `NC` pour la grande majorité des entreprises (non vérifiable sans Pappers) : le plafond des 2000 salariés a donc été appliqué par exclusion des employeurs connus comme dépassant le seuil, pas par vérification systématique.
 
 ## Top régions / villes / secteurs
 
@@ -104,7 +106,7 @@ Trois signaux forts mais **hors fenêtre 7 jours** (18-22 septembre, datés et v
 ## Actions recommandées
 
 1. **Enrichir avant d'appeler** : lancer FullEnrich à l'import Propium sur les 169 lignes `CONTACT_NON_SOURCE`, en commençant par les 7 signaux prioritaires ci-dessus.
-2. **Revalider les dates** : la fraîcheur 7 jours n'est pas garantie. Vérifier la date de publication avant d'attaquer une annonce, surtout sur Finance A/B/C et Hospitality.
+2. **Revalider les dates** : la fraîcheur 7 jours n'est pas garantie. Le champ `Date:` des notes est la date de mapping, pas celle de l'annonce — vérifier la date de publication via le lien avant d'attaquer, surtout sur Finance et Hospitality.
 3. **Sortir Tessan et Groupe Okwind** du pipe.
 4. **Rattraper les 3 signaux hors fenêtre** (PAREF Gestion, Stoïk, BIO-UV Group) : ils sont datés et vérifiables.
 5. **Relancer une passe de récurrences dans 3-4 jours** sur les 16 entreprises non testées.
