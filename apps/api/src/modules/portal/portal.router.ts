@@ -116,12 +116,69 @@ export default async function portalRouter(fastify: FastifyInstance) {
     preHandler: [portalAuthenticate],
     handler: async (request) => {
       const { id } = request.params as { id: string };
-      const input = z.object({ content: z.string().min(1).max(4000) }).parse(request.body);
+      const input = z.object({
+        content: z.string().min(1).max(4000),
+        mentions: z.array(z.discriminatedUnion('kind', [
+          z.object({ kind: z.literal('internal'), id: z.string().uuid() }),
+          z.object({ kind: z.literal('external'), email: z.string().email(), name: z.string().max(200).optional() }),
+        ])).max(10).optional(),
+      }).parse(request.body);
       return portalService.recordComment({
         portalAccessId: request.portal!.portalAccessId,
         mandatId: request.portal!.mandatId,
         candidatureId: id,
         content: input.content,
+        mentions: input.mentions,
+      });
+    },
+  });
+
+  // GET /portal/candidatures/:id/comments — fil de commentaires du candidat
+  fastify.get('/candidatures/:id/comments', {
+    schema: {
+      description: 'Fil de commentaires client sur un candidat',
+      tags: ['Portal'],
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+    },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      return portalService.listComments(request.portal!.mandatId, id);
+    },
+  });
+
+  // GET /portal/mentionables — personnes que le client peut mentionner (@)
+  fastify.get('/mentionables', {
+    schema: { description: 'Équipe HumanUp du mandat + contacts côté client', tags: ['Portal'] },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => {
+      const { internal, external } = await portalService.getMentionables(request.portal!.mandatId);
+      // Pas d'emails de l'équipe HumanUp exposés au client.
+      return { internal: internal.map(({ id, name, role }) => ({ id, name, role })), external };
+    },
+  });
+
+  // POST /portal/candidatures/:id/move — le client déplace une carte
+  fastify.post('/candidatures/:id/move', {
+    schema: {
+      description: 'Déplacement d\'une carte par le client (Engagé = signalé au consultant)',
+      tags: ['Portal'],
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+    },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      const input = z.object({
+        stage: z.enum(['ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE', 'REFUSE']),
+        reason: z.string().max(2000).optional(),
+        dateEntretienClient: z.string().datetime({ offset: true }).optional(),
+        interlocuteurClient: z.string().max(255).optional(),
+      }).parse(request.body);
+      return portalService.moveCandidature({
+        portalAccessId: request.portal!.portalAccessId,
+        mandatId: request.portal!.mandatId,
+        candidatureId: id,
+        ...input,
       });
     },
   });

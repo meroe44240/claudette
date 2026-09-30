@@ -10,7 +10,8 @@ import prisma from '../../lib/db.js';
 import { hashPassword, verifyPassword } from '../../lib/password.js';
 import { SignJWT, jwtVerify } from 'jose';
 import { NotFoundError, ValidationError, ForbiddenError } from '../../lib/errors.js';
-import { sendEmail } from '../../lib/mailer.js';
+import { sendEmail, renderBrandedEmail } from '../../lib/mailer.js';
+import * as candidatureService from '../candidatures/candidature.service.js';
 
 const PORTAL_BASE = process.env.PORTAL_BASE_URL || 'https://ats.propium.co';
 import type {
@@ -22,6 +23,9 @@ import type {
 // Étapes montrables au client, dans l'ordre du portail :
 // Screening / Case / Culture Fit / Offre / Engagé / Perdu.
 const PORTAL_STAGE_ORDER: StageCandidature[] = ['ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE', 'REFUSE'];
+const PORTAL_STAGE_LABEL: Record<string, string> = {
+  ENVOYE_CLIENT: 'Screening', ENTRETIEN_CLIENT: 'Case', PROCESS: 'Culture Fit', OFFRE: 'Offre', PLACE: 'Engagé', REFUSE: 'Perdu',
+};
 
 const portalSecret = new TextEncoder().encode(
   process.env.JWT_ACCESS_SECRET || 'dev-access-secret',
@@ -253,6 +257,7 @@ export async function getKanban(mandatId: string) {
           prenom: true,
           posteActuel: true,
           entrepriseActuelle: true,
+          salaireSouhaite: true,
           photoUrl: true,
           aiPitchShort: true,
           aiAnonymizedProfile: true,
@@ -315,24 +320,53 @@ export async function recordDecision(
   return { ok: true };
 }
 
+// Mention dans un commentaire : quelqu'un de l'équipe HumanUp (userId) ou
+// une personne externe (email), côté client en général.
+export type PortalMention =
+  | { kind: 'internal'; id: string }
+  | { kind: 'external'; email: string; name?: string };
+
 export async function recordComment(
-  data: { portalAccessId: string; mandatId: string; candidatureId?: string; content: string },
+  data: { portalAccessId: string; mandatId: string; candidatureId?: string; content: string; mentions?: PortalMention[] },
 ) {
   const content = data.content.trim();
   if (!content) throw new ValidationError('Le commentaire ne peut pas être vide');
+  let candidat: { id: string; prenom: string | null; nom: string } | null = null;
   if (data.candidatureId) {
-    const c = await prisma.candidature.findUnique({ where: { id: data.candidatureId } });
+    const c = await prisma.candidature.findUnique({
+      where: { id: data.candidatureId },
+      select: { mandatId: true, candidat: { select: { id: true, prenom: true, nom: true } } },
+    });
     if (!c || c.mandatId !== data.mandatId) throw new NotFoundError('Candidature', data.candidatureId);
+    candidat = c.candidat;
   }
 
-  await prisma.$transaction([
+  // On ne garde que les mentions internes de l'équipe du mandat, et des emails valides.
+  const { internal } = await getMentionables(data.mandatId);
+  const byId = new Map(internal.map((u) => [u.id, u]));
+  const resolved: Array<{ kind: 'internal' | 'external'; id?: string; email: string; name: string }> = [];
+  for (const m of (data.mentions ?? []).slice(0, 10)) {
+    if (m.kind === 'internal') {
+      const u = byId.get(m.id);
+      if (u && !resolved.some((r) => r.id === u.id)) resolved.push({ kind: 'internal', id: u.id, email: u.email, name: u.name });
+    } else {
+      const email = m.email.toLowerCase().trim();
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !resolved.some((r) => r.email === email)) {
+        resolved.push({ kind: 'external', email, name: (m.name || '').trim() || email });
+      }
+    }
+  }
+
+  const [comment] = await prisma.$transaction([
     prisma.portalComment.create({
       data: {
         portalAccessId: data.portalAccessId,
         mandatId: data.mandatId,
         candidatureId: data.candidatureId ?? null,
         content,
+        mentions: resolved,
       },
+      select: { id: true },
     }),
     prisma.portalEvent.create({
       data: {
@@ -340,12 +374,211 @@ export async function recordComment(
         mandatId: data.mandatId,
         candidatureId: data.candidatureId ?? null,
         type: 'COMMENT' as PortalEventType,
-        payload: { preview: content.slice(0, 120) },
+        payload: { preview: content.slice(0, 120), mentions: resolved.map((r) => r.name) },
       },
     }),
   ]);
 
-  return { ok: true };
+  if (resolved.length > 0) {
+    void notifyMentions({ mandatId: data.mandatId, portalAccessId: data.portalAccessId, candidat, content, mentions: resolved })
+      .catch((e) => console.error('[Portal] notif mentions échouée', e));
+  }
+
+  return { ok: true, id: comment.id };
+}
+
+function esc(s: string) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function notifyMentions(p: {
+  mandatId: string; portalAccessId: string;
+  candidat: { id: string; prenom: string | null; nom: string } | null;
+  content: string;
+  mentions: Array<{ kind: 'internal' | 'external'; email: string; name: string }>;
+}) {
+  const [mandat, access] = await Promise.all([
+    prisma.mandat.findUnique({ where: { id: p.mandatId }, select: { titrePoste: true, entreprise: { select: { nom: true } } } }),
+    prisma.portalAccess.findUnique({ where: { id: p.portalAccessId }, select: { email: true, client: { select: { nom: true, prenom: true, email: true } } } }),
+  ]);
+  const auteur = access ? portalAuthorName(access) : 'Votre client';
+  const candidatNom = p.candidat ? `${p.candidat.prenom ?? ''} ${p.candidat.nom}`.trim() : null;
+  const sujet = `${auteur} vous a mentionné${candidatNom ? ` — ${candidatNom}` : ''} · ${mandat?.titrePoste ?? ''}`;
+  const quote = `<p style="border-left:3px solid #E6E9AF;padding-left:12px;margin:16px 0;color:#4a4568;">${esc(p.content).replace(/\n/g, '<br>')}</p>`;
+  for (const m of p.mentions) {
+    const internal = m.kind === 'internal';
+    const href = internal && p.candidat
+      ? `${PORTAL_BASE}/candidats/${p.candidat.id}`
+      : `${PORTAL_BASE}/portail/login?m=${p.mandatId}`;
+    const body = `<p>Bonjour ${esc(m.name.split(/\s+/)[0] || '')},</p>
+      <p><strong>${esc(auteur)}</strong> vous a mentionné dans un commentaire sur le recrutement <strong>${esc(mandat?.titrePoste ?? '')}</strong>${mandat?.entreprise?.nom ? ` (${esc(mandat.entreprise.nom)})` : ''}${candidatNom ? `, à propos de <strong>${esc(candidatNom)}</strong>` : ''} :</p>${quote}`;
+    try {
+      await sendEmail(m.email, sujet, renderBrandedEmail({
+        title: 'Nouvelle mention',
+        bodyHtml: body,
+        cta: { label: internal ? 'Ouvrir la fiche candidat' : 'Ouvrir l’espace de suivi', href },
+        signature: 'L’équipe HumanUp',
+      }));
+    } catch (e) {
+      console.error(`[Portal] email mention ${m.email} échoué`, e);
+    }
+  }
+}
+
+function portalAuthorName(a: { email: string; client: { nom: string; prenom: string | null; email: string | null } | null }) {
+  if (a.client && a.client.email?.toLowerCase() === a.email.toLowerCase()) {
+    return `${a.client.prenom ? a.client.prenom + ' ' : ''}${a.client.nom}`.trim();
+  }
+  return a.email;
+}
+
+// Fil de commentaires d'un candidat (tous les accès portail du mandat).
+export async function listComments(mandatId: string, candidatureId: string) {
+  const rows = await prisma.portalComment.findMany({
+    where: { mandatId, candidatureId },
+    select: {
+      id: true, content: true, createdAt: true, mentions: true,
+      portalAccess: { select: { email: true, client: { select: { nom: true, prenom: true, email: true } } } },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    content: r.content,
+    createdAt: r.createdAt,
+    mentions: r.mentions,
+    author: portalAuthorName(r.portalAccess),
+  }));
+}
+
+// Personnes mentionnables : l'équipe HumanUp du mandat + les contacts connus côté client.
+export async function getMentionables(mandatId: string) {
+  const userSel = { select: { id: true, nom: true, prenom: true, email: true, status: true } } as const;
+  const mandat = await prisma.mandat.findUnique({
+    where: { id: mandatId },
+    select: {
+      entrepriseId: true,
+      recruteur: userSel, sales: userSel, sourceur: userSel, assignedTo: userSel, createdBy: userSel,
+      portalAccesses: { where: { revokedAt: null }, select: { email: true, client: { select: { nom: true, prenom: true, email: true } } } },
+    },
+  });
+  if (!mandat) throw new NotFoundError('Mandat', mandatId);
+
+  type U = { id: string; nom: string; prenom: string | null; email: string; status: string } | null;
+  const internal: Array<{ id: string; name: string; email: string; role: string }> = [];
+  const roles: Array<[U, string]> = [
+    [mandat.recruteur, 'Recruteur'], [mandat.sales, 'Sales'], [mandat.sourceur, 'Sourcing'],
+    [mandat.assignedTo, 'HumanUp'], [mandat.createdBy, 'HumanUp'],
+  ];
+  for (const [u, role] of roles) {
+    if (!u || u.status === 'ARCHIVED' || internal.some((i) => i.id === u.id)) continue;
+    internal.push({ id: u.id, name: `${u.prenom ? u.prenom + ' ' : ''}${u.nom}`.trim(), email: u.email, role });
+  }
+
+  const external: Array<{ email: string; name: string }> = [];
+  const pushExt = (email: string | null | undefined, name: string) => {
+    const e = (email || '').toLowerCase().trim();
+    if (!e || external.some((x) => x.email === e)) return;
+    external.push({ email: e, name: name || e });
+  };
+  const contacts = await prisma.client.findMany({
+    where: { entrepriseId: mandat.entrepriseId, email: { not: null } },
+    select: { nom: true, prenom: true, email: true },
+    take: 50,
+  });
+  for (const c of contacts) pushExt(c.email, `${c.prenom ? c.prenom + ' ' : ''}${c.nom}`.trim());
+  for (const a of mandat.portalAccesses) pushExt(a.email, portalAuthorName(a));
+
+  return { internal, external };
+}
+
+// ─── Déplacement d'une carte par le client ─────────────────────
+
+export async function moveCandidature(data: {
+  portalAccessId: string; mandatId: string; candidatureId: string; stage: StageCandidature;
+  reason?: string; dateEntretienClient?: string; interlocuteurClient?: string;
+}) {
+  const existing = await prisma.candidature.findUnique({
+    where: { id: data.candidatureId },
+    select: { id: true, mandatId: true, stage: true, candidat: { select: { id: true, prenom: true, nom: true } } },
+  });
+  if (!existing || existing.mandatId !== data.mandatId) throw new NotFoundError('Candidature', data.candidatureId);
+  if (!PORTAL_STAGE_ORDER.includes(data.stage) || !PORTAL_STAGE_ORDER.includes(existing.stage)) {
+    throw new ForbiddenError('Déplacement non autorisé');
+  }
+  if (existing.stage === data.stage) return { ok: true, pending: false };
+
+  const [mandat, access] = await Promise.all([
+    prisma.mandat.findUnique({
+      where: { id: data.mandatId },
+      select: {
+        titrePoste: true, recruteurId: true, assignedToId: true, createdById: true,
+        recruteur: { select: { email: true, prenom: true } }, assignedTo: { select: { email: true, prenom: true } },
+      },
+    }),
+    prisma.portalAccess.findUnique({ where: { id: data.portalAccessId }, select: { email: true, client: { select: { nom: true, prenom: true, email: true } } } }),
+  ]);
+  if (!mandat) throw new NotFoundError('Mandat', data.mandatId);
+  // Mouvement attribué au consultant du mandat (stats, agenda) et tracé comme venant du client.
+  const actorId = mandat.recruteurId ?? mandat.assignedToId ?? mandat.createdById ?? null;
+  const consultant = mandat.recruteur ?? mandat.assignedTo;
+  const auteur = access ? portalAuthorName(access) : 'Le client';
+  const candidatNom = `${existing.candidat.prenom ?? ''} ${existing.candidat.nom}`.trim();
+  const from = PORTAL_STAGE_LABEL[existing.stage];
+  const to = PORTAL_STAGE_LABEL[data.stage];
+
+  // Engagé = close won : l'ATS exige facture + date de démarrage. Le client
+  // signale l'embauche, le consultant la valide (la carte ne bouge pas).
+  const pending = data.stage === 'PLACE';
+  if (!pending) {
+    await candidatureService.update(existing.id, {
+      stage: data.stage,
+      ...(data.stage === 'REFUSE' ? { motifRefus: 'CLIENT_REFUSE', motifRefusDetail: data.reason?.trim() || undefined } : {}),
+      ...(data.stage === 'ENTRETIEN_CLIENT' ? { dateEntretienClient: data.dateEntretienClient, interlocuteurClient: data.interlocuteurClient?.trim() } : {}),
+    } as any, actorId as string);
+  }
+
+  await prisma.$transaction([
+    prisma.portalEvent.create({
+      data: {
+        portalAccessId: data.portalAccessId, mandatId: data.mandatId, candidatureId: existing.id,
+        type: 'MOVE' as PortalEventType,
+        payload: { from: existing.stage, to: data.stage, pending, reason: data.reason ?? null },
+      },
+    }),
+    prisma.activite.create({
+      data: {
+        type: pending ? 'TACHE' : 'NOTE',
+        ...(pending ? { isTache: true, tacheCompleted: false, tacheDueDate: new Date() } : {}),
+        titre: pending
+          ? `Le client annonce l'embauche de ${candidatNom} : passer en Gagné (facture + date de démarrage)`
+          : `Portail client : ${auteur} a déplacé ${candidatNom} de « ${from} » vers « ${to} »`,
+        contenu: data.reason?.trim() || null,
+        entiteType: 'CANDIDAT', entiteId: existing.candidat.id,
+        userId: actorId,
+        source: 'SYSTEME',
+        metadata: { portal: true, candidatureId: existing.id, mandatId: data.mandatId, from: existing.stage, to: data.stage },
+      },
+    }),
+  ]);
+
+  if (consultant?.email) {
+    const sujet = pending
+      ? `${auteur} annonce l'embauche de ${candidatNom} · ${mandat.titrePoste}`
+      : `${auteur} a déplacé ${candidatNom} vers « ${to} » · ${mandat.titrePoste}`;
+    const body = `<p>Bonjour ${esc(consultant.prenom ?? '')},</p>
+      <p>Sur le portail client, <strong>${esc(auteur)}</strong> a déplacé <strong>${esc(candidatNom)}</strong> de « ${from} » vers « ${to} ».</p>
+      ${pending ? '<p>Passe la candidature en <strong>Gagné</strong> dans l’ATS (montant de la facture + date de démarrage) pour valider l’embauche.</p>' : ''}
+      ${data.reason?.trim() ? `<p style="border-left:3px solid #E6E9AF;padding-left:12px;color:#4a4568;">${esc(data.reason.trim())}</p>` : ''}`;
+    void sendEmail(consultant.email, sujet, renderBrandedEmail({
+      title: pending ? 'Embauche annoncée' : 'Mouvement client',
+      bodyHtml: body,
+      cta: { label: 'Ouvrir la fiche candidat', href: `${PORTAL_BASE}/candidats/${existing.candidat.id}` },
+      signature: 'Propium',
+    })).catch((e) => console.error('[Portal] email mouvement échoué', e));
+  }
+
+  return { ok: true, pending };
 }
 
 export async function recordViewProfile(

@@ -451,6 +451,8 @@ model PortalComment {
   candidature    Candidature? @relation("PortalCommentCandidature", fields: [candidatureId], references: [id], onDelete: SetNull)
   mandatId       String       @db.Uuid
   content        String       @db.Text
+  // Personnes mentionnées : [{ kind: internal|external, id?, email, name }]
+  mentions       Json         @default("[]")
   createdAt      DateTime     @default(now()) @db.Timestamptz()
 
   @@index([candidatureId])
