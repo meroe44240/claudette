@@ -5,6 +5,7 @@ import * as candidatService from '../../candidats/candidat.service.js';
 import * as candidatureService from '../../candidatures/candidature.service.js';
 import prisma from '../../../lib/db.js';
 import { resolvePersonPhoto } from '../../../lib/photo.js';
+import * as dossierService from '../../candidats/dossier.service.js';
 
 export function registerCandidateTools(server: McpServer) {
   // ─── search_candidates ────────────────────────────────
@@ -189,6 +190,76 @@ export function registerCandidateTools(server: McpServer) {
       }
 
       return { success: true, candidate_id: candidate.id, message: `Candidat ${args.prenom || ''} ${args.nom} cree` };
+    }),
+  );
+
+  // ─── get_candidate_dossier ────────────────────────────
+  server.tool(
+    'get_candidate_dossier',
+    "Lit le dossier client d'un candidat : ce que le client voit sur le portail (photo, synthese, cartes d'infos, adequation au poste, sections comme Parcours). Utiliser avant de le modifier.",
+    {
+      candidate_id: z.string().describe('UUID du candidat'),
+    },
+    wrapTool('get_candidate_dossier', async (args) => {
+      const d = await dossierService.getDossier(args.candidate_id as string);
+      return {
+        candidate_id: d.candidatId,
+        name: `${d.prenom || ''} ${d.nom}`.trim(),
+        header: [d.posteActuel, d.entrepriseActuelle].filter(Boolean).join(' · '),
+        photo_url: d.photoUrl,
+        synthese: d.synthese,
+        infos: d.infos,
+        adequation: d.adequation,
+        sections: d.sections,
+        protected: d.manuel,
+        updated_at: d.modifieLe,
+      };
+    }),
+  );
+
+  // ─── update_candidate_dossier ─────────────────────────
+  server.tool(
+    'update_candidate_dossier',
+    "[CONFIRMATION REQUISE] Met a jour le dossier client d'un candidat (visible par le client sur le portail). Chaque champ fourni REMPLACE entierement l'existant ; les champs omis ne changent pas. Lire d'abord avec get_candidate_dossier. Ne jamais y mettre d'infos sensibles (sante, situation perso, enveloppe interne, coordonnees). Tu DOIS montrer le dossier final au recruteur et obtenir sa confirmation avant d'appeler.",
+    {
+      candidate_id: z.string().describe('UUID du candidat'),
+      synthese: z.string().optional().describe('Paragraphe de synthese (4-6 lignes)'),
+      infos: z.array(z.object({ label: z.string(), value: z.string() })).optional()
+        .describe("Cartes d'infos, ex. [{label:'Localisation', value:'Lyon'}, {label:'Disponibilite', value:'Preavis ~3 mois'}, {label:'Experience', value:'8+ ans'}, {label:'Pretentions', value:'70-75 K€ package'}]"),
+      adequation: z.array(z.string()).optional().describe("Points d'adequation au poste (8 max affiches)"),
+      sections: z.array(z.object({ title: z.string(), items: z.array(z.string()) })).optional()
+        .describe('Sections titrees, ex. [{title:"Parcours",items:["Depuis 03.2026 : ... · Agicap"]}]'),
+      photo_url: z.string().optional().describe("URL http(s) d'une photo (JPG/PNG/WebP) : elle est telechargee et hebergee par l'ATS. Chaine vide pour retirer la photo."),
+      protect: z.boolean().optional().default(true).describe("Proteger le dossier : un nouveau CV importe ne l'ecrasera pas (defaut true)"),
+    },
+    wrapTool('update_candidate_dossier', async (args) => {
+      const id = args.candidate_id as string;
+      if (args.photo_url !== undefined) {
+        const url = String(args.photo_url).trim();
+        if (url) await dossierService.setPhotoFromUrl(id, url);
+        else await dossierService.removePhoto(id);
+      }
+      const hasContent = ['synthese', 'infos', 'adequation', 'sections'].some((k) => args[k] !== undefined);
+      const d = hasContent || args.protect !== undefined
+        ? await dossierService.updateDossier(id, {
+            synthese: args.synthese as string | undefined,
+            infos: args.infos as any,
+            adequation: args.adequation as string[] | undefined,
+            sections: args.sections as any,
+            manuel: args.protect as boolean | undefined,
+          })
+        : await dossierService.getDossier(id);
+      return {
+        success: true,
+        candidate_id: d.candidatId,
+        photo_url: d.photoUrl,
+        synthese: d.synthese,
+        infos: d.infos,
+        adequation: d.adequation,
+        sections: d.sections,
+        protected: d.manuel,
+        message: 'Dossier client mis a jour (visible sur le portail)',
+      };
     }),
   );
 

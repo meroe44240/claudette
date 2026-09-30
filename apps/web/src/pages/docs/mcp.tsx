@@ -25,6 +25,8 @@ const TOOLS = [
       { name: 'suggest_candidates_for_mandate', desc: 'Suggestions pour un mandat', level: 'free' },
       { name: 'create_candidate', desc: 'Creer un candidat', level: 'confirm' },
       { name: 'update_candidate', desc: 'Modifier un candidat', level: 'confirm' },
+      { name: 'get_candidate_dossier', desc: 'Lire le dossier client (portail)', level: 'free' },
+      { name: 'update_candidate_dossier', desc: 'Modifier le dossier client (portail)', level: 'confirm' },
       { name: 'delete_candidate', desc: 'Supprimer un candidat', level: 'confirm' },
     ],
   },
