@@ -17,6 +17,8 @@ const DocsMcpPage = lazy(() => import('./pages/docs/mcp'));
 // Portail client (public, hors MainLayout)
 const PortalLoginPage = lazy(() => import('./pages/portail/login'));
 const PortalMandatPage = lazy(() => import('./pages/portail/mandat'));
+const PortalOffresPage = lazy(() => import('./pages/portail/offres'));
+const PortalCandidatsPage = lazy(() => import('./pages/portail/candidats'));
 // Confirmation candidat (public)
 const ConfirmerPage = lazy(() => import('./pages/confirmer'));
 // Annulation de RDV (public)
@@ -88,6 +90,9 @@ export default function App() {
         <Route path="/book/:slug" element={<BookPage />} />
         <Route path="/portail/login" element={<PortalLoginPage />} />
         <Route path="/portail/mandat/:mandatId" element={<PortalMandatPage />} />
+        <Route path="/portail/offres" element={<PortalOffresPage />} />
+        <Route path="/portail/candidats" element={<PortalCandidatsPage />} />
+        <Route path="/portail" element={<Navigate to="/portail/offres" replace />} />
         <Route path="/confirmer" element={<ConfirmerPage />} />
         <Route path="/annuler-rdv" element={<AnnulerRdvPage />} />
         <Route

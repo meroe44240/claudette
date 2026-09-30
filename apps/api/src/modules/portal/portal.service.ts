@@ -58,9 +58,10 @@ const portalSecret = new TextEncoder().encode(
 
 export interface PortalJwtPayload {
   sub: string;         // portalAccessId
-  mandatId: string;
+  mandatId: string;    // offre d'entrée
   clientId: string;
   email: string;
+  entrepriseId?: string;
   type: 'portal';
 }
 
@@ -86,7 +87,7 @@ export async function createAccess(
 ) {
   const mandat = await prisma.mandat.findUnique({
     where: { id: data.mandatId },
-    select: { id: true, titrePoste: true, visibleStages: true },
+    select: { id: true, titrePoste: true, visibleStages: true, entrepriseId: true },
   });
   if (!mandat) throw new NotFoundError('Mandat', data.mandatId);
   const client = await prisma.client.findUnique({ where: { id: data.clientId } });
@@ -100,11 +101,17 @@ export async function createAccess(
     throw new ValidationError('Un accès actif existe déjà pour ce mandat + email');
   }
 
-  const passwordHash = await hashPassword(data.password);
-  const access = await prisma.portalAccess.create({
-    data: { mandatId: data.mandatId, clientId: data.clientId, email, passwordHash, name: data.contactName?.trim() || null },
+  // Un identifiant par contact : s'il a déjà un accès actif dans l'entreprise, on garde son mot de passe.
+  const sibling = await prisma.portalAccess.findFirst({
+    where: { email, revokedAt: null, mandat: { entrepriseId: mandat.entrepriseId } },
+    select: { passwordHash: true, name: true },
+  });
+  const passwordHash = sibling?.passwordHash ?? await hashPassword(data.password);
+  const created = await prisma.portalAccess.create({
+    data: { mandatId: data.mandatId, clientId: data.clientId, email, passwordHash, name: data.contactName?.trim() || sibling?.name || null },
     select: { id: true, email: true, mandatId: true, clientId: true, createdAt: true, lastLoginAt: true },
   });
+  const access = { ...created, reusedCredentials: !!sibling };
 
   // Email d'invitation (lien + identifiants) — envoyé seulement si demandé.
   if (data.sendInvite) {
@@ -113,7 +120,7 @@ export async function createAccess(
     });
     try {
       await sendInviteEmail({
-        email, password: data.password, mandatId: data.mandatId,
+        email, password: sibling ? null : data.password, mandatId: data.mandatId,
         titrePoste: mandat.titrePoste, contactName: data.contactName, nbVisible,
       });
     } catch (err) {
@@ -123,7 +130,7 @@ export async function createAccess(
   return access;
 }
 
-async function sendInviteEmail(p: { email: string; password: string; mandatId: string; titrePoste: string; contactName?: string; nbVisible: number }) {
+async function sendInviteEmail(p: { email: string; password: string | null; mandatId: string; titrePoste: string; contactName?: string; nbVisible: number }) {
   const link = `${PORTAL_BASE}/portail/login?m=${p.mandatId}`;
   const prenom = (p.contactName || '').trim().split(/\s+/)[0] || '';
   const hello = prenom ? `Bonjour ${prenom},` : 'Bonjour,';
@@ -131,7 +138,7 @@ async function sendInviteEmail(p: { email: string; password: string; mandatId: s
     ? `${p.nbVisible} profil${p.nbVisible > 1 ? 's' : ''} vous ${p.nbVisible > 1 ? 'attendent' : 'attend'} déjà.`
     : 'Les profils présentés y apparaîtront au fil de l’avancement.';
   const subject = `Votre espace de suivi — ${p.titrePoste}`;
-  const text = `${hello}\n\nVoici votre espace de suivi pour le recrutement « ${p.titrePoste} ». Vous y consultez les profils présentés et donnez votre avis en un clic (rencontrer, à discuter, écarter).\n\n${profils}\n\nAccès : ${link}\nIdentifiant : ${p.email}\nMot de passe : ${p.password}\n\nBien à vous,\nL’équipe HumanUp`;
+  const text = `${hello}\n\nVoici votre espace de suivi pour le recrutement « ${p.titrePoste} ». Vous y consultez les profils présentés et donnez votre avis en un clic (rencontrer, à discuter, écarter).\n\n${profils}\n\nAccès : ${link}\nIdentifiant : ${p.email}\nMot de passe : ${p.password ?? 'inchangé (le même que pour vos autres offres)'}\n\nBien à vous,\nL’équipe HumanUp`;
 
   const F = 'Arial,Helvetica,sans-serif';
   const html = `<div style="background:#ECECE4;padding:24px 12px;font-family:${F}">
@@ -149,7 +156,7 @@ async function sendInviteEmail(p: { email: string; password: string; mandatId: s
         <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:20px;background:#F2F3D8;border-radius:12px"><tr><td style="padding:14px 16px">
           <div style="font-family:${F};font-size:9.5px;font-weight:bold;letter-spacing:1.2px;text-transform:uppercase;color:#8A6A2E">Vos identifiants</div>
           <div style="font-family:${F};font-size:13.5px;color:#1A1533;margin-top:6px">Identifiant : <strong>${p.email}</strong></div>
-          <div style="font-family:${F};font-size:13.5px;color:#1A1533;margin-top:3px">Mot de passe : <strong style="font-family:monospace">${p.password}</strong></div>
+          <div style="font-family:${F};font-size:13.5px;color:#1A1533;margin-top:3px">Mot de passe : ${p.password ? `<strong style="font-family:monospace">${p.password}</strong>` : '<strong>inchangé</strong> (le même que pour vos autres offres)'}</div>
         </td></tr></table>
       </div>
       <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#22177A"><tr><td style="padding:16px 26px;text-align:center">
@@ -184,15 +191,24 @@ export async function revokeAccess(accessId: string) {
 
 // ─── Portal-side login + reads ────────────────────────────────
 
-export async function login(email: string, password: string, mandatId: string) {
-  const access = await prisma.portalAccess.findUnique({
-    where: { mandatId_email: { mandatId, email: email.toLowerCase().trim() } },
+export async function login(email: string, password: string, mandatId?: string) {
+  // Un contact peut avoir plusieurs accès (un par offre) : on essaie celui du lien d'abord.
+  const accesses = await prisma.portalAccess.findMany({
+    where: { email: email.toLowerCase().trim(), revokedAt: null },
+    orderBy: { createdAt: 'desc' },
   });
-  if (!access || access.revokedAt) {
-    throw new ForbiddenError('Identifiants invalides ou accès révoqué');
+  accesses.sort((a, b) => Number(b.mandatId === mandatId) - Number(a.mandatId === mandatId));
+  let access: (typeof accesses)[number] | null = null;
+  for (const a of accesses) {
+    if (await verifyPassword(password, a.passwordHash)) { access = a; break; }
   }
-  const ok = await verifyPassword(password, access.passwordHash);
-  if (!ok) throw new ForbiddenError('Identifiants invalides');
+  if (!access) throw new ForbiddenError('Identifiants invalides');
+  const entrepriseId = (await prisma.mandat.findUnique({ where: { id: access.mandatId }, select: { entrepriseId: true } }))!.entrepriseId;
+  // Offre d'entrée : celle du lien si elle appartient à la même entreprise, sinon celle de l'accès.
+  const linked = mandatId && mandatId !== access.mandatId
+    ? await prisma.mandat.findFirst({ where: { id: mandatId, entrepriseId }, select: { id: true } })
+    : null;
+  const homeMandatId = linked?.id ?? access.mandatId;
 
   // Update last login + log event
   await prisma.$transaction([
@@ -203,7 +219,7 @@ export async function login(email: string, password: string, mandatId: string) {
     prisma.portalEvent.create({
       data: {
         portalAccessId: access.id,
-        mandatId,
+        mandatId: homeMandatId,
         type: 'LOGIN' as PortalEventType,
         payload: { email },
       },
@@ -212,16 +228,17 @@ export async function login(email: string, password: string, mandatId: string) {
 
   const token = await generatePortalToken({
     sub: access.id,
-    mandatId: access.mandatId,
+    mandatId: homeMandatId,
     clientId: access.clientId,
     email: access.email,
+    entrepriseId,
   });
 
   return {
     token,
     access: {
       id: access.id,
-      mandatId: access.mandatId,
+      mandatId: homeMandatId,
       email: access.email,
     },
   };
@@ -357,20 +374,24 @@ async function openHireTasks(mandatId: string): Promise<string[]> {
 
 // Mot de passe oublié : régénère un mot de passe et l'envoie à l'adresse de l'accès.
 // Réponse identique que l'accès existe ou non (pas d'énumération).
-export async function resetPassword(mandatId: string, emailRaw: string) {
+export async function resetPassword(mandatId: string | undefined, emailRaw: string) {
   const email = emailRaw.toLowerCase().trim();
-  const access = await prisma.portalAccess.findUnique({
-    where: { mandatId_email: { mandatId, email } },
-    select: { id: true, name: true, revokedAt: true, mandat: { select: { titrePoste: true } } },
+  // Même mot de passe pour toutes les offres du contact.
+  const accesses = await prisma.portalAccess.findMany({
+    where: { email, revokedAt: null },
+    select: { id: true, name: true, mandatId: true, mandat: { select: { titrePoste: true, entreprise: { select: { nom: true } } } } },
+    orderBy: { createdAt: 'desc' },
   });
-  if (!access || access.revokedAt) return { ok: true };
+  if (accesses.length === 0) return { ok: true };
+  const access = accesses.find((a) => a.mandatId === mandatId) ?? accesses[0];
   const password = Array.from({ length: 12 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 56)]).join('');
-  await prisma.portalAccess.update({ where: { id: access.id }, data: { passwordHash: await hashPassword(password) } });
-  const link = `${PORTAL_BASE}/portail/login?m=${mandatId}`;
+  await prisma.portalAccess.updateMany({ where: { id: { in: accesses.map((a) => a.id) } }, data: { passwordHash: await hashPassword(password) } });
+  const link = `${PORTAL_BASE}/portail/login?m=${access.mandatId}`;
   const prenom = (access.name || '').trim().split(/\s+/)[0];
-  await sendEmail(email, `Votre nouveau mot de passe — ${access.mandat.titrePoste}`, renderBrandedEmail({
+  const espace = access.mandat.entreprise?.nom ? `votre espace de suivi ${access.mandat.entreprise.nom}` : 'votre espace de suivi';
+  await sendEmail(email, 'Votre nouveau mot de passe — espace de suivi HumanUp', renderBrandedEmail({
     title: 'Nouveau mot de passe',
-    bodyHtml: `<p>Bonjour${prenom ? ' ' + esc(prenom) : ''},</p><p>Voici votre nouveau mot de passe pour l’espace de suivi <strong>${esc(access.mandat.titrePoste)}</strong> :</p>
+    bodyHtml: `<p>Bonjour${prenom ? ' ' + esc(prenom) : ''},</p><p>Voici votre nouveau mot de passe pour ${esc(espace)} :</p>
       <p style="font-family:monospace;font-size:16px;background:#F2F3D8;border-radius:10px;padding:12px 14px;display:inline-block">${password}</p>
       <p>Identifiant : <strong>${esc(email)}</strong></p><p>Si vous n’êtes pas à l’origine de cette demande, prévenez votre consultant HumanUp.</p>`,
     cta: { label: 'Me connecter', href: link },
@@ -822,4 +843,218 @@ export async function listActivity(mandatId: string, candidatureId: string) {
   }
 
   return items.sort((a, b) => b.at.getTime() - a.at.getTime());
+}
+
+// ─── Espace client multi-offres (un identifiant = toutes les offres de l'entreprise) ───
+
+export interface PortalScope {
+  portalAccessId: string;
+  mandatId: string;      // offre « d'entrée » (celle du lien d'invitation)
+  clientId: string;
+  email: string;
+  entrepriseId: string;
+}
+
+// Vérifie que l'accès du jeton est toujours actif et renvoie son périmètre.
+export async function resolveScope(p: PortalJwtPayload): Promise<PortalScope | null> {
+  const access = await prisma.portalAccess.findUnique({
+    where: { id: p.sub },
+    select: { id: true, email: true, clientId: true, mandatId: true, revokedAt: true, mandat: { select: { entrepriseId: true } } },
+  });
+  if (!access || access.revokedAt) return null;
+  return { portalAccessId: access.id, mandatId: p.mandatId || access.mandatId, clientId: access.clientId, email: access.email, entrepriseId: access.mandat.entrepriseId };
+}
+
+// Offres visibles : celles de l'entreprise en cours (ouvertes / en cours) + celles
+// où ce contact a un accès actif (même clôturées).
+async function accessibleMandats(scope: PortalScope) {
+  return prisma.mandat.findMany({
+    where: {
+      entrepriseId: scope.entrepriseId,
+      type: { not: 'VIVIER' },
+      OR: [
+        { statut: { in: ['OUVERT', 'EN_COURS'] } },
+        { portalAccesses: { some: { email: scope.email, revokedAt: null } } },
+      ],
+    },
+    select: {
+      id: true, titrePoste: true, localisation: true, statut: true, createdAt: true, salaryRange: true, visibleStages: true,
+      recruteur: { select: { id: true, nom: true, prenom: true, avatarUrl: true } },
+      assignedTo: { select: { id: true, nom: true, prenom: true, avatarUrl: true } },
+      sales: { select: { id: true, nom: true, prenom: true, avatarUrl: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function assertMandat(scope: PortalScope, mandatId: string) {
+  const ids = (await accessibleMandats(scope)).map((m) => m.id);
+  if (!ids.includes(mandatId)) throw new ForbiddenError('Offre non accessible');
+}
+
+// Renvoie l'offre d'une candidature après contrôle du périmètre.
+export async function scopeCandidature(scope: PortalScope, candidatureId: string): Promise<string> {
+  const c = await prisma.candidature.findUnique({ where: { id: candidatureId }, select: { mandatId: true } });
+  if (!c) throw new NotFoundError('Candidature', candidatureId);
+  await assertMandat(scope, c.mandatId);
+  return c.mandatId;
+}
+
+// Candidatures visibles du client sur plusieurs offres (étapes visibles, refus internes exclus).
+function visibleWhere(mandats: Array<{ id: string; visibleStages: unknown }>) {
+  const sentStages = PORTAL_STAGE_ORDER.filter((s) => s !== 'REFUSE');
+  return {
+    OR: mandats.map((m) => {
+      const stages = PORTAL_STAGE_ORDER.filter((s) => (m.visibleStages as StageCandidature[]).includes(s));
+      return {
+        mandatId: m.id,
+        OR: [
+          { stage: { in: stages.filter((s) => s !== 'REFUSE') } },
+          ...(stages.includes('REFUSE')
+            ? [{ stage: 'REFUSE' as StageCandidature, OR: [{ datePresentation: { not: null } }, { stageHistory: { some: { toStage: { in: sentStages } } } }, { portalDecisions: { some: {} } }] }]
+            : []),
+        ],
+      };
+    }),
+  };
+}
+
+export async function getMe(scope: PortalScope) {
+  const [access, entreprise] = await Promise.all([
+    prisma.portalAccess.findUnique({ where: { id: scope.portalAccessId }, select: { email: true, name: true, client: { select: { nom: true, prenom: true, email: true } } } }),
+    prisma.entreprise.findUnique({ where: { id: scope.entrepriseId }, select: { nom: true } }),
+  ]);
+  return { email: scope.email, name: access ? portalAuthorName(access) : scope.email, entreprise: entreprise?.nom ?? null, homeMandatId: scope.mandatId };
+}
+
+export async function listOffres(scope: PortalScope) {
+  const mandats = await accessibleMandats(scope);
+  if (mandats.length === 0) return [];
+  const cands = await prisma.candidature.findMany({
+    where: visibleWhere(mandats),
+    select: { id: true, mandatId: true, stage: true, portalStage: true, updatedAt: true, portalDecisions: { select: { id: true }, take: 1 } },
+  });
+  return mandats.map((m) => {
+    const mine = cands.filter((c) => c.mandatId === m.id);
+    const byColumn: Record<string, number> = {};
+    for (const col of PORTAL_COLUMNS) if ((m.visibleStages as StageCandidature[]).includes(COLUMN_STAGE[col])) byColumn[col] = 0;
+    for (const c of mine) { const col = columnOf(c.stage, c.portalStage); if (col && col in byColumn) byColumn[col] += 1; }
+    const { recruteur, assignedTo, sales, visibleStages, ...rest } = m;
+    return {
+      ...rest,
+      ...humanupContacts({ recruteur, sales, assignedTo }),
+      total: mine.filter((c) => c.stage !== 'REFUSE').length,
+      toReview: mine.filter((c) => c.stage === 'ENVOYE_CLIENT' && columnOf(c.stage, c.portalStage) === 'INBOX' && c.portalDecisions.length === 0).length,
+      byColumn,
+      lastActivity: mine.reduce<Date | null>((a, c) => (!a || c.updatedAt > a ? c.updatedAt : a), null),
+    };
+  });
+}
+
+export async function listCandidats(scope: PortalScope) {
+  const mandats = await accessibleMandats(scope);
+  if (mandats.length === 0) return [];
+  const titles = new Map(mandats.map((m) => [m.id, m.titrePoste]));
+  const rows = await prisma.candidature.findMany({
+    where: visibleWhere(mandats),
+    select: {
+      id: true, mandatId: true, stage: true, portalStage: true, updatedAt: true, createdAt: true,
+      candidat: { select: { id: true, nom: true, prenom: true, posteActuel: true, entrepriseActuelle: true, photoUrl: true, salaireSouhaite: true, aiAnonymizedProfile: true } },
+      portalDecisions: { select: { decision: true }, orderBy: { createdAt: 'desc' }, take: 1 },
+      stageHistory: { select: { changedAt: true }, orderBy: { changedAt: 'desc' }, take: 1 },
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+  return rows.map(({ stageHistory, portalStage, portalDecisions, candidat, ...r }) => ({
+    ...r,
+    column: columnOf(r.stage, portalStage),
+    mandatTitre: titles.get(r.mandatId) ?? '',
+    decision: portalDecisions[0]?.decision ?? null,
+    stageSince: stageHistory[0]?.changedAt ?? r.createdAt,
+    candidat: { ...candidat, salary: salaryLabel(candidat) },
+  }));
+}
+
+function salaryLabel(c: { salaireSouhaite: number | null; aiAnonymizedProfile: unknown }): string | null {
+  const infos = Array.isArray((c.aiAnonymizedProfile as any)?.infos) ? (c.aiAnonymizedProfile as any).infos as Array<{ label: string; value: string }> : [];
+  const hit = infos.find((i) => /pr[ée]tention|r[ée]mun|salaire|package/i.test(i.label));
+  if (hit?.value) return hit.value.replace(/\s*\(.*\)\s*$/, '');
+  return c.salaireSouhaite ? `${Math.round(c.salaireSouhaite / 1000)} K€` : null;
+}
+
+// ─── Notifications (cloche) : nouveaux profils, étapes, commentaires ───
+
+export async function listNotifications(scope: PortalScope) {
+  const mandats = await accessibleMandats(scope);
+  const ids = mandats.map((m) => m.id);
+  const titles = new Map(mandats.map((m) => [m.id, m.titrePoste]));
+  const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  const me = await prisma.portalAccess.findUnique({ where: { id: scope.portalAccessId }, select: { notifSeenAt: true } });
+  const seenAt = me?.notifSeenAt ?? new Date(0);
+  if (ids.length === 0) return { unread: 0, items: [] };
+
+  const [history, moves, comments] = await Promise.all([
+    prisma.stageHistory.findMany({
+      where: { changedAt: { gte: since }, toStage: { in: PORTAL_STAGE_ORDER }, candidature: visibleWhere(mandats) },
+      select: {
+        id: true, fromStage: true, toStage: true, changedAt: true,
+        candidature: { select: { id: true, mandatId: true, candidat: { select: { nom: true, prenom: true, photoUrl: true } } } },
+      },
+      orderBy: { changedAt: 'desc' },
+      take: 60,
+    }),
+    prisma.portalEvent.findMany({ where: { mandatId: { in: ids }, type: 'MOVE' as PortalEventType, createdAt: { gte: since } }, select: { candidatureId: true, payload: true, createdAt: true } }),
+    prisma.portalComment.findMany({
+      where: { mandatId: { in: ids }, createdAt: { gte: since }, portalAccess: { email: { not: scope.email } } },
+      select: {
+        id: true, content: true, createdAt: true, mentions: true, mandatId: true,
+        portalAccess: { select: { email: true, name: true, client: { select: { nom: true, prenom: true, email: true } } } },
+        candidature: { select: { id: true, candidat: { select: { nom: true, prenom: true, photoUrl: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 40,
+    }),
+  ]);
+
+  type Item = { id: string; kind: 'NEW' | 'STAGE' | 'COMMENT' | 'MENTION'; at: Date; title: string; body: string; who: string | null; mandatId: string; candidatureId: string | null; photo: string | null; unread: boolean };
+  const items: Item[] = [];
+  const nameOf = (c: { prenom: string | null; nom: string }) => `${c.prenom ?? ''} ${c.nom}`.trim();
+
+  for (const h of history) {
+    // Mouvements faits depuis le portail : pas de notification (le client les connaît).
+    const byClient = moves.some((m) => m.candidatureId === h.candidature.id && ((m.payload as any)?.toStage ?? (m.payload as any)?.to) === h.toStage && Math.abs(m.createdAt.getTime() - h.changedAt.getTime()) < 60_000);
+    if (byClient) continue;
+    const isNew = h.toStage === 'ENVOYE_CLIENT' && (!h.fromStage || !PORTAL_STAGE_ORDER.includes(h.fromStage));
+    const nom = nameOf(h.candidature.candidat);
+    items.push({
+      id: `h-${h.id}`, kind: isNew ? 'NEW' : 'STAGE', at: h.changedAt,
+      title: isNew ? `Nouveau profil : ${nom}` : `${nom} est passé(e) en « ${labelOf(h.toStage)} »`,
+      body: titles.get(h.candidature.mandatId) ?? '', who: nom,
+      mandatId: h.candidature.mandatId, candidatureId: h.candidature.id, photo: h.candidature.candidat.photoUrl,
+      unread: h.changedAt > seenAt,
+    });
+  }
+  for (const c of comments) {
+    const mentionsMe = (Array.isArray(c.mentions) ? c.mentions : []).some((m: any) => m?.email === scope.email);
+    const auteur = portalAuthorName(c.portalAccess);
+    const nom = c.candidature ? nameOf(c.candidature.candidat) : null;
+    items.push({
+      id: `c-${c.id}`, kind: mentionsMe ? 'MENTION' : 'COMMENT', at: c.createdAt,
+      title: mentionsMe ? `${auteur} vous a mentionné${nom ? ` · ${nom}` : ''}` : `${auteur} a commenté${nom ? ` ${nom}` : ''}`,
+      body: c.content.length > 110 ? `${c.content.slice(0, 110)}…` : c.content, who: nom ?? auteur,
+      mandatId: c.mandatId, candidatureId: c.candidature?.id ?? null, photo: c.candidature?.candidat.photoUrl ?? null,
+      unread: c.createdAt > seenAt,
+    });
+  }
+  items.sort((a, b) => b.at.getTime() - a.at.getTime());
+  const top = items.slice(0, 40);
+  return { unread: top.filter((i) => i.unread).length, items: top };
+}
+
+export async function markNotificationsSeen(scope: PortalScope) {
+  await prisma.portalAccess.updateMany({
+    where: { email: scope.email, mandat: { entrepriseId: scope.entrepriseId } },
+    data: { notifSeenAt: new Date() },
+  });
+  return { ok: true };
 }

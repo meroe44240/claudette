@@ -26,9 +26,9 @@ export default function PortalLoginPage() {
 
   useEffect(() => {
     document.title = 'Portail client — HumanUp';
+    // Déjà connecté (ex. lien ouvert depuis un email) : on entre directement.
+    if (hasValidSession(mandatId || null)) { navigate(mandatId ? `/portail/mandat/${mandatId}` : '/portail/offres', { replace: true }); return; }
     if (!mandatId) return;
-    // Déjà connecté sur ce mandat (ex. lien ouvert depuis un email) : on entre directement.
-    if (hasValidSession(mandatId)) { navigate(`/portail/mandat/${mandatId}`, { replace: true }); return; }
     void fetch(`/api/v1/portal/public/mandat/${mandatId}`).then((r) => (r.ok ? r.json() : null)).then(setInfo).catch(() => {});
   }, [mandatId, navigate]);
 
@@ -36,7 +36,7 @@ export default function PortalLoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await fetch('/api/v1/portal/password-reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mandatId, email }) });
+      await fetch('/api/v1/portal/password-reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(mandatId ? { mandatId } : {}), email }) });
     } finally { setLoading(false); setMode('reset-sent'); }
   }
 
@@ -47,7 +47,7 @@ export default function PortalLoginPage() {
     try {
       const res = await fetch('/api/v1/portal/login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mandatId, email, password }),
+        body: JSON.stringify({ ...(mandatId ? { mandatId } : {}), email, password }),
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || 'Identifiants invalides'); }
       const data = (await res.json()) as LoginResponse;
@@ -143,11 +143,6 @@ export default function PortalLoginPage() {
               </div>
             )}
 
-            {!mandatId && (
-              <div style={{ marginTop: 18, borderRadius: 12, border: '1px solid rgba(201,162,39,.3)', background: '#FBF3E7', padding: 12, fontSize: 13, color: '#8A6A2E' }}>
-                Ce lien est incomplet — demandez à votre contact HumanUp de vous renvoyer l'URL exacte.
-              </div>
-            )}
 
             {mode === 'reset-sent' ? (
               <div role="status" style={{ display: 'flex', gap: 10, marginTop: 22, borderRadius: 12, background: '#E7F3EA', padding: 14, fontSize: 13.5, lineHeight: 1.5, color: '#256238' }}>
@@ -171,7 +166,7 @@ export default function PortalLoginPage() {
 
             {error && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, fontSize: 13, color: '#B3261E', fontWeight: 600 }}><AlertCircle size={15} style={{ flexShrink: 0 }} />{error}</div>}
 
-            <button type="submit" disabled={loading || !mandatId} className="pl-cta" style={{ width: '100%', marginTop: 22, fontWeight: 700, fontSize: 16, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 13, padding: 15, cursor: loading || !mandatId ? 'default' : 'pointer', opacity: loading || !mandatId ? 0.6 : 1 }}>{mode === 'login' ? (loading ? 'Connexion…' : 'Se connecter') : (loading ? 'Envoi…' : 'Recevoir un nouveau mot de passe')}</button>
+            <button type="submit" disabled={loading} className="pl-cta" style={{ width: '100%', marginTop: 22, fontWeight: 700, fontSize: 16, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 13, padding: 15, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1 }}>{mode === 'login' ? (loading ? 'Connexion…' : 'Se connecter') : (loading ? 'Envoi…' : 'Recevoir un nouveau mot de passe')}</button>
             </>)}
             {mode !== 'login' && (
               <button type="button" onClick={() => setMode('login')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 16, fontSize: 13.5, fontWeight: 700, color: '#22177A', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}><ArrowLeft size={15} aria-hidden />Retour à la connexion</button>

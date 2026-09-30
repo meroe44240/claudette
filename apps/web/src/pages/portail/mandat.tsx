@@ -5,9 +5,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
-import { useNavigate, useParams } from 'react-router';
-import { LogOut, X, Check, MessageSquare, AtSign, Banknote, CalendarClock, ArrowRight, Sparkles, MessageCircle, Inbox, Lock, BellRing, PartyPopper, ChevronDown } from 'lucide-react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { X, Check, MessageSquare, AtSign, Banknote, CalendarClock, ArrowRight, Sparkles, MessageCircle, Inbox, Lock, BellRing, PartyPopper, ChevronDown } from 'lucide-react';
 import { portalStore } from './portal-store';
+import { PortalTopBar, lastMandat, SHARED_CSS } from './portal-ui';
 
 type Stage = 'SOURCING' | 'CONTACTE' | 'ENTRETIEN_1' | 'ENVOYE_CLIENT' | 'ENTRETIEN_CLIENT' | 'PROCESS' | 'OFFRE' | 'PLACE' | 'REFUSE';
 type Decision = 'RENCONTRER' | 'A_DISCUTER' | 'ECARTER';
@@ -153,6 +154,7 @@ type Toast = { msg: string; undo?: () => void };
 
 export default function PortalMandatPage() {
   const { mandatId } = useParams<{ mandatId: string }>();
+  const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [data, setData] = useState<KanbanResponse | null>(null);
@@ -168,6 +170,8 @@ export default function PortalMandatPage() {
   useEffect(() => {
     if (!portalStore.get('portal_token')) { navigate(`/portail/login?m=${mandatId ?? ''}`); return; }
     document.title = 'Portail client — HumanUp';
+    setSelectedId(null);
+    if (mandatId) lastMandat.set(mandatId);
     void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mandatId]);
@@ -175,8 +179,9 @@ export default function PortalMandatPage() {
   async function reload(silent = false) {
     if (!silent) setLoading(true);
     try {
-      const res = await portalFetch('/kanban');
+      const res = await portalFetch(`/kanban?mandatId=${mandatId ?? ''}`);
       if (res.status === 401) { portalStore.clear(); navigate(`/portail/login?m=${mandatId ?? ''}&expired=1`); return; }
+      if (res.status === 403 || res.status === 404) { navigate('/portail/offres', { replace: true }); return; }
       setData((await res.json()) as KanbanResponse);
     } finally { setLoading(false); }
   }
@@ -190,6 +195,16 @@ export default function PortalMandatPage() {
   }
   const allCards = useCallback(() => (data ? Object.values(data.byStage).flat() : []), [data]);
   const selected = selectedId ? allCards().find((c) => c.id === selectedId) ?? null : null;
+
+  // Lien direct vers une fiche (page Candidats, notifications) : ?c=<candidature>&t=commentaires
+  useEffect(() => {
+    const cid = params.get('c');
+    if (!data || !cid) return;
+    const c = allCards().find((x) => x.id === cid);
+    if (c) openCard(c, params.get('t') === 'commentaires' ? 'commentaires' : 'activite');
+    setParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   function openCard(c: Candidature, tab: 'activite' | 'commentaires' = 'activite', prefill = false) {
     setSelectedId(c.id);
@@ -264,9 +279,12 @@ export default function PortalMandatPage() {
     if (res.ok) { flash({ msg: `Noté : ${repFirst || 'votre interlocuteur HumanUp'} organise la rencontre avec ${fullName(c)}.` }); void reload(true); }
   }
 
-  function handleLogout() { portalStore.clear(); navigate(`/portail/login?m=${mandatId ?? ''}`); }
-
-  if (loading || !data) return <div style={{ background: BG, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: FAINT, fontFamily: "'Manrope',sans-serif" }}>Chargement…</div>;
+  if (loading || !data) return (
+    <div style={{ background: BG, minHeight: '100vh', fontFamily: "'Manrope',sans-serif" }}>
+      <PortalTopBar active="candidatures" mandatId={mandatId} />
+      <p style={{ padding: 40, textAlign: 'center', color: FAINT }}>Chargement…</p>
+    </div>
+  );
 
   const consultant = data.mandat.consultant;
   const rep = consultant ? `${consultant.prenom ? consultant.prenom + ' ' : ''}${consultant.nom}`.trim() : '';
@@ -281,8 +299,8 @@ export default function PortalMandatPage() {
     .sort((a, b) => new Date(a.dateEntretienClient!).getTime() - new Date(b.dateEntretienClient!).getTime())[0];
 
   return (
-    <div style={{ background: BG, minHeight: '100vh', fontFamily: "'Manrope',sans-serif", display: 'flex', flexDirection: 'column', color: INK }}>
-      <style>{`
+    <div className="pm-page" style={{ background: BG, minHeight: '100vh', fontFamily: "'Manrope',sans-serif", display: 'flex', flexDirection: 'column', color: INK }}>
+      <style>{SHARED_CSS}{`
         .pm-card{ transition:transform .18s cubic-bezier(.16,1,.3,1), box-shadow .2s ease, border-color .18s ease; }
         .pm-card:hover{ transform:translateY(-2px); box-shadow:0 14px 28px -18px rgba(26,21,51,.35) !important; border-color:rgba(34,23,122,.2) !important; }
         .pm-focus:focus{ outline:none; }
@@ -303,21 +321,13 @@ export default function PortalMandatPage() {
         }
       `}</style>
 
-      {/* TOP BAR */}
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: isMobile ? '12px 16px' : '14px 28px', background: BRAND }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
-          <img src="/brand/logo-mark-cream.png" alt="" style={{ width: 26, height: 26 }} />
-          <span style={{ fontFamily: DISPLAY, fontSize: 18, letterSpacing: '.01em', color: CREAM }}>HUMANUP</span>
-          <span className="pm-hide-sm" style={{ fontSize: FS.xs, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: 'rgba(230,233,175,.7)', whiteSpace: 'nowrap' }}>Portail client</span>
-        </div>
-        <button className="pm-btn" onClick={handleLogout} aria-label="Déconnexion" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: FS.base, fontWeight: 600, color: CREAM, background: 'rgba(230,233,175,.12)', border: '1px solid rgba(230,233,175,.25)', borderRadius: 9, padding: '7px 12px', cursor: 'pointer', whiteSpace: 'nowrap' }}><LogOut size={14} aria-hidden />{!isMobile && 'Déconnexion'}</button>
-      </header>
+      <PortalTopBar active="candidatures" mandatId={mandatId} />
 
       {/* HERO */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, padding: isMobile ? '20px 16px 4px' : '28px 34px 6px' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: FS.base, color: FAINT, fontWeight: 600 }}>Suivi de recrutement · {data.mandat.entreprise.nom}</div>
-          <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 22 : FS.xxl, lineHeight: 1.15, letterSpacing: '-.025em', color: INK, marginTop: 5 }}>{data.mandat.titrePoste}</h1>
+          <OfferSwitcher current={data.mandat.id} title={data.mandat.titrePoste} compact={isMobile} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: '9px 14px' }}>
@@ -399,7 +409,7 @@ export default function PortalMandatPage() {
       )}
 
       {toast && (
-        <div role="status" aria-live="polite" style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 90, display: 'flex', alignItems: 'center', gap: 14, background: INK, color: '#F4F4EA', fontSize: FS.md, fontWeight: 600, padding: '12px 14px 12px 18px', borderRadius: 12, boxShadow: '0 18px 40px -18px rgba(26,21,51,.6)', maxWidth: 'calc(100vw - 32px)' }}>
+        <div role="status" aria-live="polite" style={{ position: 'fixed', left: '50%', bottom: isMobile ? 84 : 24, transform: 'translateX(-50%)', zIndex: 90, display: 'flex', alignItems: 'center', gap: 14, background: INK, color: '#F4F4EA', fontSize: FS.md, fontWeight: 600, padding: '12px 14px 12px 18px', borderRadius: 12, boxShadow: '0 18px 40px -18px rgba(26,21,51,.6)', maxWidth: 'calc(100vw - 32px)' }}>
           <span>{toast.msg}</span>
           {toast.undo && <button className="pm-btn" onClick={toast.undo} style={{ flexShrink: 0, fontSize: FS.base, fontWeight: 800, color: INK, background: CREAM, border: 'none', borderRadius: 8, padding: '6px 11px', cursor: 'pointer' }}>Annuler</button>}
         </div>
@@ -821,6 +831,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
   const [query, setQuery] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const { mandatId: mandatIdParam } = useParams<{ mandatId: string }>();
   const ta = useRef<HTMLTextAreaElement>(null);
   const listEnd = useRef<HTMLDivElement>(null);
 
@@ -834,7 +845,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
   useEffect(() => {
     void load();
     void (async () => {
-      const res = await portalFetch('/mentionables');
+      const res = await portalFetch(`/mentionables?mandatId=${mandatIdParam ?? ''}`);
       if (!res.ok) return;
       const m = await res.json() as { internal: Array<{ id: string; name: string; role: string; avatarUrl?: string | null }>; external: Array<{ email: string; name: string }> };
       const list: Mentionable[] = [
@@ -964,5 +975,45 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
         <p style={{ fontSize: FS.sm, color: FAINT, marginTop: 8, lineHeight: 1.5 }}>Les personnes identifiées reçoivent votre commentaire par email.</p>
       </div>
     </>
+  );
+}
+
+// ─── Titre de l'offre + changement d'offre (façon Teamtailor) ───
+function OfferSwitcher({ current, title, compact }: { current: string; title: string; compact?: boolean }) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [offres, setOffres] = useState<Array<{ id: string; titrePoste: string; statut: string; toReview: number }> | null>(null);
+  useEffect(() => {
+    if (!open || offres) return;
+    void portalFetch('/offres').then(async (r) => setOffres(r.ok ? await r.json() : []));
+  }, [open, offres]);
+  return (
+    <div style={{ position: 'relative', marginTop: 6 }}>
+      <button className="pm-chip" onClick={() => setOpen((v) => !v)} aria-haspopup="listbox" aria-expanded={open}
+        style={{ display: 'flex', alignItems: 'center', gap: 12, maxWidth: '100%', background: 'transparent', border: '1px solid transparent', borderRadius: 12, padding: '4px 8px 4px 4px', marginLeft: -4, cursor: 'pointer', color: INK, textAlign: 'left' }}>
+        <span aria-hidden style={{ flexShrink: 0, width: compact ? 34 : 40, height: compact ? 34 : 40, borderRadius: 10, background: '#fff', border: `1px solid ${LINE}`, color: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: DISPLAY, fontSize: FS.lg }}>{title.trim()[0]?.toUpperCase()}</span>
+        <h1 style={{ fontFamily: DISPLAY, fontSize: compact ? 20 : 26, lineHeight: 1.15, letterSpacing: '-.025em', minWidth: 0 }}>{title}</h1>
+        <ChevronDown size={18} aria-hidden style={{ flexShrink: 0, color: MUTED, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .15s ease' }} />
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 50 }} />
+          <div role="listbox" aria-label="Changer d'offre" style={{ position: 'absolute', left: 0, top: 'calc(100% + 6px)', zIndex: 51, width: 360, maxWidth: 'calc(100vw - 32px)', background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, boxShadow: '0 18px 40px -20px rgba(26,21,51,.45)', padding: 6 }}>
+            {!offres && <p style={{ padding: 10, fontSize: FS.base, color: FAINT }}>Chargement…</p>}
+            {offres?.map((o) => (
+              <button key={o.id} role="option" aria-selected={o.id === current} onClick={() => { setOpen(false); if (o.id !== current) navigate(`/portail/mandat/${o.id}`); }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', background: o.id === current ? '#EDEBFA' : 'transparent', border: 'none', borderRadius: 8, padding: '9px 10px', cursor: 'pointer' }}>
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <span style={{ display: 'block', fontSize: FS.base, fontWeight: 800, color: o.id === current ? BRAND : INK }}>{o.titrePoste}</span>
+                  {!['OUVERT', 'EN_COURS'].includes(o.statut) && <span style={{ display: 'block', fontSize: FS.sm, color: FAINT }}>{o.statut === 'GAGNE' ? 'Pourvue' : 'Terminée'}</span>}
+                </span>
+                {o.toReview > 0 && <span style={{ fontSize: FS.xs, fontWeight: 800, color: BRAND, background: '#EDEBFA', borderRadius: 99, padding: '2px 8px' }}>{o.toReview}</span>}
+              </button>
+            ))}
+            <button onClick={() => { setOpen(false); navigate('/portail/offres'); }} style={{ width: '100%', textAlign: 'left', fontSize: FS.base, fontWeight: 700, color: BRAND, background: 'transparent', border: 'none', borderTop: `1px solid ${LINE}`, marginTop: 4, padding: '10px 10px 6px', cursor: 'pointer' }}>Voir toutes les offres</button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

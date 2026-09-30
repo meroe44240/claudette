@@ -7,3 +7,6 @@ ALTER TABLE "portal_accesses" ADD COLUMN IF NOT EXISTS "name" VARCHAR(255);
 -- Colonne du portail client (Inbox, Screening, Case, Culture Fit…) : distingue
 -- Case et Culture Fit, qui correspondent tous deux à l'étape PROCESS dans l'ATS.
 ALTER TABLE "candidatures" ADD COLUMN IF NOT EXISTS "portal_stage" VARCHAR(20);
+
+-- Cloche du portail : notifications lues jusqu'à cette date.
+ALTER TABLE "portal_accesses" ADD COLUMN IF NOT EXISTS "notif_seen_at" TIMESTAMPTZ;
