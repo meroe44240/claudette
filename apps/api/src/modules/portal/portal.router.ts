@@ -147,6 +147,20 @@ export default async function portalRouter(fastify: FastifyInstance) {
     },
   });
 
+  // GET /portal/candidatures/:id/activity — fil d'activité du candidat
+  fastify.get('/candidatures/:id/activity', {
+    schema: {
+      description: 'Fil d\'activité (présentation, mouvements, avis, commentaires, entretien)',
+      tags: ['Portal'],
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+    },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      return portalService.listActivity(request.portal!.mandatId, id);
+    },
+  });
+
   // GET /portal/mentionables — personnes que le client peut mentionner (@)
   fastify.get('/mentionables', {
     schema: { description: 'Équipe HumanUp du mandat + contacts côté client', tags: ['Portal'] },

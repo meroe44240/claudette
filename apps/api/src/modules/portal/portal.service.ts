@@ -268,6 +268,7 @@ export async function getKanban(mandatId: string) {
         orderBy: { createdAt: 'desc' },
         take: 1,
       },
+      _count: { select: { portalComments: true } },
     },
     orderBy: { updatedAt: 'desc' },
   });
@@ -612,4 +613,65 @@ export async function listRecentEventsForMandat(mandatId: string, limit = 20) {
     orderBy: { createdAt: 'desc' },
     take: limit,
   });
+}
+
+// ─── Fil d'activité d'un candidat (onglet « Activité » du portail) ─────
+
+const DECISION_TEXT: Record<string, string> = { RENCONTRER: 'souhaite rencontrer ce profil', A_DISCUTER: 'veut en discuter', ECARTER: 'a écarté ce profil' };
+
+export async function listActivity(mandatId: string, candidatureId: string) {
+  const c = await prisma.candidature.findUnique({
+    where: { id: candidatureId },
+    select: {
+      mandatId: true, dateEntretienClient: true, interlocuteurClient: true,
+      stageHistory: { select: { fromStage: true, toStage: true, changedAt: true }, orderBy: { changedAt: 'asc' } },
+    },
+  });
+  if (!c || c.mandatId !== mandatId) throw new NotFoundError('Candidature', candidatureId);
+
+  const events = await prisma.portalEvent.findMany({
+    where: { candidatureId, type: { in: ['MOVE', 'DECISION', 'COMMENT'] as PortalEventType[] } },
+    select: { type: true, payload: true, createdAt: true, portalAccess: { select: { email: true, client: { select: { nom: true, prenom: true, email: true } } } } },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  type Item = { kind: 'STAGE' | 'MOVE' | 'DECISION' | 'COMMENT' | 'INTERVIEW'; at: Date; actor: string; text: string; detail?: string | null; stage?: string };
+  const items: Item[] = [];
+  const moves = events.filter((e) => e.type === 'MOVE');
+
+  for (const h of c.stageHistory) {
+    if (!PORTAL_STAGE_ORDER.includes(h.toStage)) continue;
+    // Mouvement fait par le client : déjà raconté par l'événement portail.
+    const byClient = moves.some((m) => (m.payload as any)?.to === h.toStage && Math.abs(m.createdAt.getTime() - h.changedAt.getTime()) < 60_000);
+    if (byClient) continue;
+    const firstPresentation = h.toStage === 'ENVOYE_CLIENT' && (!h.fromStage || !PORTAL_STAGE_ORDER.includes(h.fromStage));
+    items.push({
+      kind: 'STAGE', at: h.changedAt, actor: 'HumanUp', stage: h.toStage,
+      text: firstPresentation ? 'a présenté ce profil' : `a passé le profil en « ${PORTAL_STAGE_LABEL[h.toStage]} »`,
+    });
+  }
+  for (const e of events) {
+    const actor = portalAuthorName(e.portalAccess);
+    const p = (e.payload ?? {}) as any;
+    if (e.type === 'MOVE') {
+      items.push({
+        kind: 'MOVE', at: e.createdAt, actor, stage: p.to,
+        text: p.pending ? 'a annoncé l’embauche' : `a déplacé le profil en « ${PORTAL_STAGE_LABEL[p.to] ?? p.to} »`,
+        detail: p.reason ?? null,
+      });
+    } else if (e.type === 'DECISION') {
+      items.push({ kind: 'DECISION', at: e.createdAt, actor, text: DECISION_TEXT[p.decision] ?? 'a donné son avis', detail: p.reason ?? null });
+    } else {
+      items.push({ kind: 'COMMENT', at: e.createdAt, actor, text: 'a commenté', detail: p.preview ?? null });
+    }
+  }
+  if (c.dateEntretienClient) {
+    items.push({
+      kind: 'INTERVIEW', at: c.dateEntretienClient, actor: '',
+      text: c.dateEntretienClient > new Date() ? 'Entretien prévu' : 'Entretien',
+      detail: c.interlocuteurClient ? `avec ${c.interlocuteurClient}` : null,
+    });
+  }
+
+  return items.sort((a, b) => b.at.getTime() - a.at.getTime());
 }
