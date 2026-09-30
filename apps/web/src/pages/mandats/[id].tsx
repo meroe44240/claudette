@@ -130,6 +130,7 @@ interface AccessContact {
 interface PortalAccessRow {
   id: string;
   email: string;
+  name?: string | null;
   lastLoginAt: string | null;
   revokedAt: string | null;
   createdAt: string;
@@ -1195,7 +1196,7 @@ export default function MandatDetailPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 12 }}>
               {(portalAccessesQuery.data || []).length === 0 && <div style={{ fontSize: 13, color: FAINT }}>Aucun accès portail pour l'instant.</div>}
               {(portalAccessesQuery.data || []).map((a) => {
-                const nm = a.client ? `${a.client.prenom || ''} ${a.client.nom}`.trim() : a.email;
+                const nm = a.name?.trim() || (a.client ? `${a.client.prenom || ''} ${a.client.nom}`.trim() : a.email);
                 const revoked = !!a.revokedAt;
                 return (
                   <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', border: '1px solid rgba(34,23,122,0.1)', borderRadius: 13, opacity: revoked ? 0.55 : 1 }}>

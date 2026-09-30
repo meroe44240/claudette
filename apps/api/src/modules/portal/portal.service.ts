@@ -107,10 +107,12 @@ export async function createAccess(
     select: { passwordHash: true, name: true },
   });
   const passwordHash = sibling?.passwordHash ?? await hashPassword(data.password);
-  const created = await prisma.portalAccess.create({
-    data: { mandatId: data.mandatId, clientId: data.clientId, email, passwordHash, name: data.contactName?.trim() || sibling?.name || null },
-    select: { id: true, email: true, mandatId: true, clientId: true, createdAt: true, lastLoginAt: true },
-  });
+  const fields = { clientId: data.clientId, passwordHash, name: data.contactName?.trim() || sibling?.name || existing?.name || null };
+  const select = { id: true, email: true, mandatId: true, clientId: true, createdAt: true, lastLoginAt: true } as const;
+  // Accès révoqué pour ce mandat + email : on le réactive (la contrainte d'unicité empêche d'en recréer un).
+  const created = existing
+    ? await prisma.portalAccess.update({ where: { id: existing.id }, data: { ...fields, revokedAt: null }, select })
+    : await prisma.portalAccess.create({ data: { mandatId: data.mandatId, email, ...fields }, select });
   const access = { ...created, reusedCredentials: !!sibling };
 
   // Email d'invitation (lien + identifiants) — envoyé seulement si demandé.
@@ -173,6 +175,7 @@ export async function listAccessesForMandat(mandatId: string) {
     select: {
       id: true,
       email: true,
+      name: true,
       lastLoginAt: true,
       revokedAt: true,
       createdAt: true,
