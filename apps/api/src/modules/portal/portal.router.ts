@@ -207,7 +207,7 @@ export default async function portalRouter(fastify: FastifyInstance) {
     handler: async (request) => {
       const { id } = request.params as { id: string };
       const input = z.object({
-        stage: z.enum(['ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE', 'REFUSE']),
+        column: z.enum(portalService.PORTAL_COLUMNS),
         reason: z.string().max(2000).optional(),
         dateEntretienClient: z.string().datetime({ offset: true }).optional(),
         interlocuteurClient: z.string().max(255).optional(),

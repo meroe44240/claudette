@@ -23,9 +23,34 @@ import type {
 // Étapes montrables au client, dans l'ordre du portail :
 // Screening / Case / Culture Fit / Offre / Engagé / Perdu.
 const PORTAL_STAGE_ORDER: StageCandidature[] = ['ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE', 'REFUSE'];
-const PORTAL_STAGE_LABEL: Record<string, string> = {
-  ENVOYE_CLIENT: 'Screening', ENTRETIEN_CLIENT: 'Case', PROCESS: 'Culture Fit', OFFRE: 'Offre', PLACE: 'Engagé', REFUSE: 'Perdu',
+// Colonnes du portail client et étape ATS correspondante.
+// Inbox = Envoi client, Screening = Entretien client (présentation),
+// Case + Culture Fit = Process, Offre, Engagé = Gagné, Perdu.
+export const PORTAL_COLUMNS = ['INBOX', 'SCREENING', 'CASE', 'CULTURE_FIT', 'OFFRE', 'ENGAGE', 'PERDU'] as const;
+export type PortalColumn = (typeof PORTAL_COLUMNS)[number];
+const COLUMN_STAGE: Record<PortalColumn, StageCandidature> = {
+  INBOX: 'ENVOYE_CLIENT', SCREENING: 'ENTRETIEN_CLIENT', CASE: 'PROCESS', CULTURE_FIT: 'PROCESS', OFFRE: 'OFFRE', ENGAGE: 'PLACE', PERDU: 'REFUSE',
 };
+const COLUMN_LABEL: Record<PortalColumn, string> = {
+  INBOX: 'Inbox', SCREENING: 'Screening', CASE: 'Case', CULTURE_FIT: 'Culture Fit', OFFRE: 'Offre', ENGAGE: 'Engagé', PERDU: 'Perdu',
+};
+const DEFAULT_COLUMN: Partial<Record<StageCandidature, PortalColumn>> = {
+  ENVOYE_CLIENT: 'INBOX', ENTRETIEN_CLIENT: 'SCREENING', PROCESS: 'CASE', OFFRE: 'OFFRE', PLACE: 'ENGAGE', REFUSE: 'PERDU',
+};
+// Colonne affichée : celle choisie sur le portail si elle correspond encore à
+// l'étape ATS (HumanUp a pu déplacer le candidat entre-temps), sinon la colonne par défaut.
+function columnOf(stage: StageCandidature, portalStage?: string | null): PortalColumn | undefined {
+  if (portalStage && (PORTAL_COLUMNS as readonly string[]).includes(portalStage) && COLUMN_STAGE[portalStage as PortalColumn] === stage) {
+    return portalStage as PortalColumn;
+  }
+  return DEFAULT_COLUMN[stage];
+}
+// Libellé d'une colonne, ou d'une étape ATS (anciens événements).
+function labelOf(v: string): string {
+  if ((PORTAL_COLUMNS as readonly string[]).includes(v)) return COLUMN_LABEL[v as PortalColumn];
+  const col = DEFAULT_COLUMN[v as StageCandidature];
+  return col ? COLUMN_LABEL[col] : v;
+}
 
 const portalSecret = new TextEncoder().encode(
   process.env.JWT_ACCESS_SECRET || 'dev-access-secret',
@@ -250,6 +275,7 @@ export async function getKanban(mandatId: string, portalAccessId?: string) {
     select: {
       id: true,
       stage: true,
+      portalStage: true,
       dateEntretienClient: true,
       candidat: {
         select: {
@@ -287,19 +313,21 @@ export async function getKanban(mandatId: string, portalAccessId?: string) {
   const seen = new Set(views.map((v) => v.candidatureId));
   const hired = new Set(hires);
 
-  // Group by stage
-  const byStage: Record<string, Array<Omit<(typeof candidatures)[number], 'stageHistory' | 'createdAt'> & { seen: boolean; stageSince: Date; hireAnnounced: boolean }>> = {};
-  for (const s of stages) byStage[s] = [];
+  // Regroupement par colonne du portail
+  const columns = PORTAL_COLUMNS.filter((col) => stages.includes(COLUMN_STAGE[col]));
+  const byStage: Record<string, Array<Omit<(typeof candidatures)[number], 'stageHistory' | 'createdAt' | 'portalStage'> & { column: PortalColumn; seen: boolean; stageSince: Date; hireAnnounced: boolean }>> = {};
+  for (const col of columns) byStage[col] = [];
   for (const c of candidatures) {
-    const { stageHistory, createdAt, ...rest } = c;
-    if (byStage[c.stage]) byStage[c.stage].push({ ...rest, seen: seen.has(c.id), stageSince: stageHistory[0]?.changedAt ?? createdAt, hireAnnounced: hired.has(c.id) && c.stage !== 'PLACE' });
+    const { stageHistory, createdAt, portalStage, ...rest } = c;
+    const column = columnOf(c.stage, portalStage);
+    if (column && byStage[column]) byStage[column].push({ ...rest, column, seen: seen.has(c.id), stageSince: stageHistory[0]?.changedAt ?? createdAt, hireAnnounced: hired.has(c.id) && c.stage !== 'PLACE' });
   }
 
   const { recruteur, assignedTo, sales, ...mandatPublic } = mandat;
 
   return {
     mandat: { ...mandatPublic, ...humanupContacts({ recruteur, sales, assignedTo }) },
-    stages,
+    stages: columns,
     byStage,
   };
 }
@@ -592,18 +620,18 @@ export async function getMentionables(mandatId: string) {
 // ─── Déplacement d'une carte par le client ─────────────────────
 
 export async function moveCandidature(data: {
-  portalAccessId: string; mandatId: string; candidatureId: string; stage: StageCandidature;
+  portalAccessId: string; mandatId: string; candidatureId: string; column: PortalColumn;
   reason?: string; dateEntretienClient?: string; interlocuteurClient?: string;
 }) {
   const existing = await prisma.candidature.findUnique({
     where: { id: data.candidatureId },
-    select: { id: true, mandatId: true, stage: true, candidat: { select: { id: true, prenom: true, nom: true } } },
+    select: { id: true, mandatId: true, stage: true, portalStage: true, candidat: { select: { id: true, prenom: true, nom: true } } },
   });
   if (!existing || existing.mandatId !== data.mandatId) throw new NotFoundError('Candidature', data.candidatureId);
-  if (!PORTAL_STAGE_ORDER.includes(data.stage) || !PORTAL_STAGE_ORDER.includes(existing.stage)) {
-    throw new ForbiddenError('Déplacement non autorisé');
-  }
-  if (existing.stage === data.stage) return { ok: true, pending: false };
+  const fromCol = columnOf(existing.stage, existing.portalStage);
+  const targetStage = COLUMN_STAGE[data.column];
+  if (!fromCol || !targetStage) throw new ForbiddenError('Déplacement non autorisé');
+  if (fromCol === data.column) return { ok: true, pending: false };
   // Placement validé par HumanUp (facture + date) : seul le consultant peut le défaire.
   if (existing.stage === 'PLACE') throw new ForbiddenError('Cette embauche est validée : contactez votre consultant pour la modifier.');
 
@@ -623,32 +651,36 @@ export async function moveCandidature(data: {
   const consultant = mandat.recruteur ?? mandat.assignedTo;
   const auteur = access ? portalAuthorName(access) : 'Le client';
   const candidatNom = `${existing.candidat.prenom ?? ''} ${existing.candidat.nom}`.trim();
-  const from = PORTAL_STAGE_LABEL[existing.stage];
-  const to = PORTAL_STAGE_LABEL[data.stage];
+  const from = COLUMN_LABEL[fromCol];
+  const to = COLUMN_LABEL[data.column];
 
   // Engagé = close won : l'ATS exige facture + date de démarrage. Le client
   // signale l'embauche, le consultant la valide (la carte ne bouge pas).
-  const pending = data.stage === 'PLACE';
+  const pending = data.column === 'ENGAGE';
   if (pending && (await openHireTasks(data.mandatId)).includes(existing.id)) {
     return { ok: true, pending: true, already: true };
   }
   if (!pending) {
-    await candidatureService.update(existing.id, {
-      stage: data.stage,
-      ...(data.stage === 'REFUSE' ? { motifRefus: 'CLIENT_REFUSE', motifRefusDetail: data.reason?.trim() || undefined } : {}),
-      ...(data.stage === 'ENTRETIEN_CLIENT' ? { dateEntretienClient: data.dateEntretienClient, interlocuteurClient: data.interlocuteurClient?.trim() } : {}),
-    } as any, actorId as string);
+    // Case ↔ Culture Fit : même étape ATS, seule la colonne du portail change.
+    if (targetStage !== existing.stage) {
+      await candidatureService.update(existing.id, {
+        stage: targetStage,
+        ...(targetStage === 'REFUSE' ? { motifRefus: 'CLIENT_REFUSE', motifRefusDetail: data.reason?.trim() || undefined } : {}),
+        ...(targetStage === 'ENTRETIEN_CLIENT' ? { dateEntretienClient: data.dateEntretienClient, interlocuteurClient: data.interlocuteurClient?.trim() } : {}),
+      } as any, actorId as string);
+    }
+    await prisma.candidature.update({ where: { id: existing.id }, data: { portalStage: data.column } });
   }
 
-  // Avis cohérent avec la colonne : Case = rencontrer, Perdu = écarter.
-  const implied = data.stage === 'ENTRETIEN_CLIENT' ? 'RENCONTRER' : data.stage === 'REFUSE' ? 'ECARTER' : null;
+  // Avis cohérent avec la colonne : Screening = rencontrer, Perdu = écarter.
+  const implied = data.column === 'SCREENING' ? 'RENCONTRER' : data.column === 'PERDU' ? 'ECARTER' : null;
   await prisma.$transaction([
     ...(implied ? [prisma.portalDecision.create({ data: { portalAccessId: data.portalAccessId, candidatureId: existing.id, decision: implied as PortalDecisionType, reason: data.reason?.trim() || null } })] : []),
     prisma.portalEvent.create({
       data: {
         portalAccessId: data.portalAccessId, mandatId: data.mandatId, candidatureId: existing.id,
         type: 'MOVE' as PortalEventType,
-        payload: { from: existing.stage, to: data.stage, pending, reason: data.reason ?? null },
+        payload: { from: fromCol, to: data.column, fromStage: existing.stage, toStage: targetStage, pending, reason: data.reason ?? null },
       },
     }),
     prisma.activite.create({
@@ -662,7 +694,7 @@ export async function moveCandidature(data: {
         entiteType: 'CANDIDAT', entiteId: existing.candidat.id,
         userId: actorId,
         source: 'SYSTEME',
-        metadata: { portal: true, candidatureId: existing.id, mandatId: data.mandatId, from: existing.stage, to: data.stage },
+        metadata: { portal: true, candidatureId: existing.id, mandatId: data.mandatId, from: existing.stage, to: targetStage, column: data.column },
       },
     }),
   ]);
@@ -746,12 +778,12 @@ export async function listActivity(mandatId: string, candidatureId: string) {
   for (const h of c.stageHistory) {
     if (!PORTAL_STAGE_ORDER.includes(h.toStage)) continue;
     // Mouvement fait par le client : déjà raconté par l'événement portail.
-    const byClient = moves.some((m) => (m.payload as any)?.to === h.toStage && Math.abs(m.createdAt.getTime() - h.changedAt.getTime()) < 60_000);
+    const byClient = moves.some((m) => ((m.payload as any)?.toStage ?? (m.payload as any)?.to) === h.toStage && Math.abs(m.createdAt.getTime() - h.changedAt.getTime()) < 60_000);
     if (byClient) continue;
     const firstPresentation = h.toStage === 'ENVOYE_CLIENT' && (!h.fromStage || !PORTAL_STAGE_ORDER.includes(h.fromStage));
     items.push({
-      kind: 'STAGE', at: h.changedAt, actor: 'HumanUp', stage: h.toStage,
-      text: firstPresentation ? 'a présenté ce profil' : `a passé le profil en « ${PORTAL_STAGE_LABEL[h.toStage]} »`,
+      kind: 'STAGE', at: h.changedAt, actor: 'HumanUp', stage: DEFAULT_COLUMN[h.toStage],
+      text: firstPresentation ? 'a présenté ce profil' : `a passé le profil en « ${labelOf(h.toStage)} »`,
     });
   }
   for (const e of events) {
@@ -759,8 +791,8 @@ export async function listActivity(mandatId: string, candidatureId: string) {
     const p = (e.payload ?? {}) as any;
     if (e.type === 'MOVE') {
       items.push({
-        kind: 'MOVE', at: e.createdAt, actor, stage: p.to,
-        text: p.pending ? 'a annoncé l’embauche' : `a déplacé le profil en « ${PORTAL_STAGE_LABEL[p.to] ?? p.to} »`,
+        kind: 'MOVE', at: e.createdAt, actor, stage: (PORTAL_COLUMNS as readonly string[]).includes(p.to) ? p.to : DEFAULT_COLUMN[p.to as StageCandidature],
+        text: p.pending ? 'a annoncé l’embauche' : `a déplacé le profil en « ${labelOf(String(p.to))} »`,
         detail: p.reason ?? null,
       });
     } else if (e.type === 'DECISION') {

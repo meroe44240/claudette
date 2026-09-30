@@ -11,9 +11,12 @@ import { portalStore } from './portal-store';
 
 type Stage = 'SOURCING' | 'CONTACTE' | 'ENTRETIEN_1' | 'ENVOYE_CLIENT' | 'ENTRETIEN_CLIENT' | 'PROCESS' | 'OFFRE' | 'PLACE' | 'REFUSE';
 type Decision = 'RENCONTRER' | 'A_DISCUTER' | 'ECARTER';
+// Colonnes du portail (Case et Culture Fit = étape PROCESS dans l'ATS).
+type Col = 'INBOX' | 'SCREENING' | 'CASE' | 'CULTURE_FIT' | 'OFFRE' | 'ENGAGE' | 'PERDU';
+const COL_STAGE: Record<Col, Stage> = { INBOX: 'ENVOYE_CLIENT', SCREENING: 'ENTRETIEN_CLIENT', CASE: 'PROCESS', CULTURE_FIT: 'PROCESS', OFFRE: 'OFFRE', ENGAGE: 'PLACE', PERDU: 'REFUSE' };
 
 interface Candidature {
-  id: string; stage: Stage; dateEntretienClient: string | null;
+  id: string; stage: Stage; column: Col; dateEntretienClient: string | null;
   candidat: { id: string; nom: string; prenom: string | null; posteActuel: string | null; entrepriseActuelle: string | null; salaireSouhaite: number | null; photoUrl: string | null; aiPitchShort: string | null; aiAnonymizedProfile: any };
   portalDecisions: Array<{ decision: Decision; createdAt: string }>;
   _count?: { portalComments: number };
@@ -23,23 +26,20 @@ interface Candidature {
 }
 interface KanbanResponse {
   mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string }; client: { nom: string; prenom: string | null }; consultant: { nom: string; prenom: string | null; avatarUrl?: string | null } | null; commercial: { nom: string; prenom: string | null; avatarUrl?: string | null } | null };
-  stages: Stage[];
-  byStage: Record<Stage, Candidature[]>;
+  stages: Col[];
+  byStage: Record<Col, Candidature[]>;
 }
 type MoveExtra = { reason?: string; dateEntretienClient?: string; interlocuteurClient?: string };
 
-// Libellés côté client : Screening / Case / Culture Fit / Offre / Engagé / Perdu.
-const STAGE_LABELS: Record<Stage, string> = {
-  SOURCING: 'Sourcing', CONTACTE: 'Contactés', ENTRETIEN_1: 'Entretien recruteur', ENVOYE_CLIENT: 'Screening',
-  ENTRETIEN_CLIENT: 'Case', PROCESS: 'Culture Fit', OFFRE: 'Offre', PLACE: 'Engagé', REFUSE: 'Perdu',
+// Libellés côté client : Inbox / Screening / Case / Culture Fit / Offre / Engagé / Perdu.
+const STAGE_LABELS: Record<Col, string> = {
+  INBOX: 'Inbox', SCREENING: 'Screening', CASE: 'Case', CULTURE_FIT: 'Culture Fit', OFFRE: 'Offre', ENGAGE: 'Engagé', PERDU: 'Perdu',
 };
-const STAGE_ACCENT: Record<Stage, string> = {
-  SOURCING: '#8E7CC3', CONTACTE: '#8E7CC3', ENTRETIEN_1: '#22177A', ENVOYE_CLIENT: '#2A6BD8',
-  ENTRETIEN_CLIENT: '#D97F1E', PROCESS: '#7A5BD1', OFFRE: '#B8921A', PLACE: '#2F8A4A', REFUSE: '#8A8699',
+const STAGE_ACCENT: Record<Col, string> = {
+  INBOX: '#475467', SCREENING: '#2A6BD8', CASE: '#D97F1E', CULTURE_FIT: '#7A5BD1', OFFRE: '#B8921A', ENGAGE: '#2F8A4A', PERDU: '#8A8699',
 };
-const STAGE_TINT: Record<Stage, string> = {
-  SOURCING: '#F3F1FA', CONTACTE: '#F3F1FA', ENTRETIEN_1: '#EFEEF7', ENVOYE_CLIENT: '#EAF1FC',
-  ENTRETIEN_CLIENT: '#FCF1E4', PROCESS: '#F1ECFC', OFFRE: '#FAF4DE', PLACE: '#E7F3EA', REFUSE: '#F0EFF3',
+const STAGE_TINT: Record<Col, string> = {
+  INBOX: '#EEF0F3', SCREENING: '#EAF1FC', CASE: '#FCF1E4', CULTURE_FIT: '#F1ECFC', OFFRE: '#FAF4DE', ENGAGE: '#E7F3EA', PERDU: '#F0EFF3',
 };
 const DECISION_LABEL: Record<Decision, string> = { RENCONTRER: 'À rencontrer', A_DISCUTER: 'À discuter', ECARTER: 'Écarté' };
 const DECISION_TONE: Record<Decision, { bg: string; fg: string }> = {
@@ -81,7 +81,7 @@ function daysIn(c: Candidature): string | null {
   const d = Math.floor((Date.now() - new Date(c.stageSince).getTime()) / 86400000);
   return d <= 0 ? 'Aujourd’hui' : d === 1 ? 'Depuis 1 j' : `Depuis ${d} j`;
 }
-const needsReview = (c: Candidature) => c.stage === 'ENVOYE_CLIENT' && c.portalDecisions.length === 0;
+const needsReview = (c: Candidature) => c.column === 'INBOX' && c.portalDecisions.length === 0;
 
 // Photo du candidat si dispo, sinon initiales.
 function Avatar({ c, size, radius, bg, fg, fontSize }: { c: Candidature; size: number; radius: number | string; bg: string; fg: string; fontSize: number }) {
@@ -159,7 +159,7 @@ export default function PortalMandatPage() {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerTab, setDrawerTab] = useState<{ tab: 'activite' | 'commentaires'; prefill?: boolean }>({ tab: 'activite' });
-  const [pendingMove, setPendingMove] = useState<{ c: Candidature; to: Stage; fromDecision?: boolean } | null>(null);
+  const [pendingMove, setPendingMove] = useState<{ c: Candidature; to: Col; fromDecision?: boolean } | null>(null);
   const [dragging, setDragging] = useState<Candidature | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
@@ -196,10 +196,10 @@ export default function PortalMandatPage() {
   }
 
   // Toute demande de déplacement passe par ici (drag, fiche, boutons d'avis).
-  function requestMove(c: Candidature, to: Stage) {
-    if (c.stage === to) return;
+  function requestMove(c: Candidature, to: Col) {
+    if (c.column === to) return;
     if (c.stage === 'PLACE') { flash({ msg: `L'embauche de ${fullName(c)} est validée : contactez ${repFirst || 'votre consultant'} pour la modifier.` }); return; }
-    if (to === 'ENTRETIEN_CLIENT' || to === 'REFUSE' || to === 'PLACE') { setPendingMove({ c, to }); return; }
+    if (to === 'SCREENING' || to === 'PERDU' || to === 'ENGAGE') { setPendingMove({ c, to }); return; }
     void doMove(c, to, {});
   }
   function onDragStart(e: DragStartEvent) { setDragging(allCards().find((x) => x.id === e.active.id) ?? null); }
@@ -207,20 +207,20 @@ export default function PortalMandatPage() {
     setDragging(null);
     if (!e.over) return;
     const c = allCards().find((x) => x.id === e.active.id);
-    if (c) requestMove(c, e.over.id as Stage);
+    if (c) requestMove(c, e.over.id as Col);
   }
 
-  async function doMove(c: Candidature, to: Stage, extra: MoveExtra, isUndo = false) {
+  async function doMove(c: Candidature, to: Col, extra: MoveExtra, isUndo = false) {
     if (!data) return;
     const snapshot = data;
-    const from = c.stage;
-    if (to !== 'PLACE') {
+    const from = c.column;
+    if (to !== 'ENGAGE') {
       // Optimiste : la carte change de colonne tout de suite.
-      const byStage = Object.fromEntries(Object.entries(data.byStage).map(([k, arr]) => [k, arr.filter((x) => x.id !== c.id)])) as Record<Stage, Candidature[]>;
-      byStage[to] = [{ ...c, stage: to, stageSince: new Date().toISOString() }, ...(byStage[to] ?? [])];
+      const byStage = Object.fromEntries(Object.entries(data.byStage).map(([k, arr]) => [k, arr.filter((x) => x.id !== c.id)])) as Record<Col, Candidature[]>;
+      byStage[to] = [{ ...c, column: to, stage: COL_STAGE[to], stageSince: new Date().toISOString() }, ...(byStage[to] ?? [])];
       setData({ ...data, byStage });
     }
-    const res = await portalFetch(`/candidatures/${c.id}/move`, { method: 'POST', body: JSON.stringify({ stage: to, ...extra }) });
+    const res = await portalFetch(`/candidatures/${c.id}/move`, { method: 'POST', body: JSON.stringify({ column: to, ...extra }) });
     if (!res.ok) {
       setData(snapshot);
       const err = await res.json().catch(() => null);
@@ -237,7 +237,7 @@ export default function PortalMandatPage() {
     } else {
       flash({
         msg: `${fullName(c)} → ${STAGE_LABELS[to]}. ${repFirst || 'Votre consultant'} est prévenu(e).`,
-        undo: () => { setToast(null); void doMove({ ...c, stage: to }, from, {}, true); },
+        undo: () => { setToast(null); void doMove({ ...c, column: to, stage: COL_STAGE[to] }, from, {}, true); },
       });
     }
     void reload(true);
@@ -245,8 +245,8 @@ export default function PortalMandatPage() {
 
   async function decide(c: Candidature, d: Decision) {
     // Rencontrer depuis Screening = planifier le Case ; Écarter = Perdu (avec motif).
-    if (d === 'RENCONTRER' && c.stage === 'ENVOYE_CLIENT') { setPendingMove({ c, to: 'ENTRETIEN_CLIENT', fromDecision: true }); return; }
-    if (d === 'ECARTER') { setPendingMove({ c, to: 'REFUSE' }); return; }
+    if (d === 'RENCONTRER' && c.column === 'INBOX') { setPendingMove({ c, to: 'SCREENING', fromDecision: true }); return; }
+    if (d === 'ECARTER') { setPendingMove({ c, to: 'PERDU' }); return; }
     const res = await portalFetch(`/candidatures/${c.id}/decision`, { method: 'POST', body: JSON.stringify({ decision: d }) });
     if (!res.ok) { flash({ msg: 'Votre avis n’a pas pu être enregistré.' }); return; }
     if (d === 'A_DISCUTER') {
@@ -421,7 +421,7 @@ export default function PortalMandatPage() {
 }
 
 // ─── BOARD : colonnes + cartes déplaçables ─────────────
-function StageColumn({ stage, count, dragging, children }: { stage: Stage; count: number; dragging: boolean; children: React.ReactNode }) {
+function StageColumn({ stage, count, dragging, children }: { stage: Col; count: number; dragging: boolean; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage });
   const accent = STAGE_ACCENT[stage];
   const empty = count === 0;
@@ -518,7 +518,7 @@ function DraggableCard({ c, onOpen }: { c: Candidature; onOpen: () => void }) {
 
 // ─── Liste mobile (pas de glisser-déposer au doigt) ────
 function MobileList({ data, onOpen }: { data: KanbanResponse; onOpen: (c: Candidature) => void }) {
-  const [open, setOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(data.stages.map((s) => [s, (data.byStage[s]?.length ?? 0) > 0 && s !== 'REFUSE'])));
+  const [open, setOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(data.stages.map((s) => [s, (data.byStage[s]?.length ?? 0) > 0 && s !== 'PERDU'])));
   return (
     <main style={{ padding: '14px 16px 36px', display: 'flex', flexDirection: 'column', gap: 10 }}>
       {data.stages.map((s) => {
@@ -550,12 +550,12 @@ function MobileList({ data, onOpen }: { data: KanbanResponse; onOpen: (c: Candid
 
 // ─── FICHE CANDIDAT : dossier + panneau latéral (Activité / Commentaires) ──
 function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, onTab, onClose, onDecision, onMove }: {
-  candidature: Candidature; stages: Stage[]; repName: string;
+  candidature: Candidature; stages: Col[]; repName: string;
   tab: 'activite' | 'commentaires'; prefillMention?: boolean;
   onTab: (t: 'activite' | 'commentaires') => void;
   onClose: () => void;
   onDecision: (d: Decision) => void;
-  onMove: (to: Stage) => void;
+  onMove: (to: Col) => void;
 }) {
   const ref = useRef<HTMLElement>(null);
   useDialogFocus(ref, onClose);
@@ -574,7 +574,7 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
     const chip = ref.current?.querySelector<HTMLElement>('[aria-current="step"]');
     const bar = chip?.parentElement;
     if (chip && bar) bar.scrollLeft = chip.offsetLeft - (bar.clientWidth - chip.clientWidth) / 2;
-  }, [c.stage]);
+  }, [c.column]);
 
   const decisionBtn = (d: Decision, icon: React.ReactNode, label: string, tone: { bg: string; fg: string }) => (
     <button className="pm-btn" onClick={() => onDecision(d)} aria-pressed={last === d} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', borderRadius: 12, border: `1.5px solid ${last === d ? tone.fg : 'transparent'}`, background: tone.bg, color: tone.fg, cursor: 'pointer', fontWeight: 800, fontSize: FS.sm }}>{icon}{label}</button>
@@ -598,7 +598,7 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
           {/* Étapes : cliquer pour faire avancer (alternative au glisser-déposer) */}
           <div role="group" aria-label="Étape du recrutement" className="pm-scroll" style={{ position: 'relative', display: 'flex', gap: 6, marginTop: 14, overflowX: 'auto', paddingBottom: 2 }}>
             {stages.map((s) => {
-              const on = c.stage === s;
+              const on = c.column === s;
               return (
                 <button key={s} className="pm-chip" disabled={locked || on} aria-current={on ? 'step' : undefined} onClick={() => onMove(s)}
                   aria-label={on ? `${STAGE_LABELS[s]}, étape actuelle` : locked ? STAGE_LABELS[s] : `Passer en « ${STAGE_LABELS[s]} »`}
@@ -629,7 +629,7 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
                   {decisionBtn('ECARTER', <X size={17} aria-hidden />, 'Écarter', DECISION_TONE.ECARTER)}
                 </div>
                 <p style={{ fontSize: FS.sm, color: FAINT, marginTop: 10, lineHeight: 1.5 }}>
-                  {c.stage === 'ENVOYE_CLIENT' ? 'Rencontrer : vous planifiez le Case. ' : ''}Écarter : le profil passe en « Perdu ». À discuter : écrivez à {repName || 'votre consultant'}.
+                  {c.column === 'INBOX' ? 'Rencontrer : vous planifiez le Screening. ' : ''}Écarter : le profil passe en « Perdu ». À discuter : écrivez à {repName || 'votre consultant'}.
                 </p>
               </div>
             )}
@@ -698,7 +698,7 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
 }
 
 // ─── Onglet Activité ─────────────────────────────────
-interface ActivityItem { kind: 'STAGE' | 'MOVE' | 'DECISION' | 'COMMENT' | 'INTERVIEW'; at: string; actor: string; text: string; detail?: string | null; stage?: Stage }
+interface ActivityItem { kind: 'STAGE' | 'MOVE' | 'DECISION' | 'COMMENT' | 'INTERVIEW'; at: string; actor: string; text: string; detail?: string | null; stage?: Col }
 
 function ActivityFeed({ candidatureId }: { candidatureId: string }) {
   const [items, setItems] = useState<ActivityItem[] | null>(null);
@@ -715,7 +715,7 @@ function ActivityFeed({ candidatureId }: { candidatureId: string }) {
     if (it.kind === 'DECISION') return { el: <Check {...s} />, bg: '#E6F2E9', fg: '#256238' };
     if (it.kind === 'INTERVIEW') return { el: <CalendarClock {...s} />, bg: '#FCF1E4', fg: '#9A5A12' };
     if (it.kind === 'STAGE' && it.text.includes('présenté')) return { el: <Sparkles {...s} />, bg: '#EAF1FC', fg: '#1F58B8' };
-    const st = it.stage && STAGE_ACCENT[it.stage] ? it.stage : 'ENVOYE_CLIENT';
+    const st: Col = it.stage && STAGE_ACCENT[it.stage] ? it.stage : 'INBOX';
     return { el: <ArrowRight {...s} />, bg: STAGE_TINT[st], fg: STAGE_ACCENT[st] };
   };
 
@@ -748,7 +748,7 @@ function ActivityFeed({ candidatureId }: { candidatureId: string }) {
 
 // ─── Précision demandée avant certains déplacements ─────
 function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip }: {
-  c: Candidature; to: Stage; repName: string; fromDecision?: boolean;
+  c: Candidature; to: Col; repName: string; fromDecision?: boolean;
   onCancel: () => void;
   onConfirm: (extra: MoveExtra) => void;
   onSkip: () => void;
@@ -758,23 +758,23 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
   const [reason, setReason] = useState('');
   const [date, setDate] = useState('');
   const [who, setWho] = useState('');
-  const ok = to === 'REFUSE' ? reason.trim().length > 0 : to === 'ENTRETIEN_CLIENT' ? !!date && who.trim().length > 0 : true;
+  const ok = to === 'PERDU' ? reason.trim().length > 0 : to === 'SCREENING' ? !!date && who.trim().length > 0 : true;
   const field: React.CSSProperties = { width: '100%', marginTop: 6, fontSize: FS.md, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.18)', background: '#fff', outline: 'none', fontFamily: "'Manrope',sans-serif", color: INK };
   const label: React.CSSProperties = { fontSize: FS.sm, fontWeight: 800, color: MUTED, marginTop: 14, display: 'block' };
-  const title = to === 'REFUSE' ? `Écarter ${fullName(c)} ?` : to === 'PLACE' ? `Annoncer l'embauche de ${fullName(c)} ?` : `Planifier le Case avec ${fullName(c)}`;
+  const title = to === 'PERDU' ? `Écarter ${fullName(c)} ?` : to === 'ENGAGE' ? `Annoncer l'embauche de ${fullName(c)} ?` : `Planifier le Screening avec ${fullName(c)}`;
   return (
     <>
       <div onClick={onCancel} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(26,21,51,.42)' }} />
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="pm-move-title" style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', zIndex: 71, width: 440, maxWidth: 'calc(100vw - 32px)', background: '#FCFCF5', borderRadius: 18, padding: 24, boxShadow: '0 30px 80px -30px rgba(26,21,51,.6)', fontFamily: "'Manrope',sans-serif" }}>
         <h3 id="pm-move-title" style={{ fontFamily: DISPLAY, fontSize: FS.lg + 2, color: INK, letterSpacing: '-.01em', lineHeight: 1.25 }}>{title}</h3>
-        {to === 'REFUSE' && (
+        {to === 'PERDU' && (
           <>
             <p style={{ fontSize: FS.base, color: MUTED, marginTop: 8 }}>Le profil passe en « Perdu ». {repName || 'Votre consultant'} en tient compte pour la suite du sourcing.</p>
             <label htmlFor="pm-reason" style={label}>Pourquoi ?</label>
             <textarea id="pm-reason" data-autofocus value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex. : expérience trop éloignée des grands comptes…" style={{ ...field, minHeight: 84, resize: 'vertical' }} />
           </>
         )}
-        {to === 'ENTRETIEN_CLIENT' && (
+        {to === 'SCREENING' && (
           <>
             <label htmlFor="pm-date" style={label}>Date et heure de l'entretien</label>
             <input id="pm-date" data-autofocus type="datetime-local" value={date} onChange={e => setDate(e.target.value)} style={field} />
@@ -782,7 +782,7 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
             <input id="pm-who" value={who} onChange={e => setWho(e.target.value)} placeholder="Prénom Nom, fonction" style={field} />
           </>
         )}
-        {to === 'PLACE' && (
+        {to === 'ENGAGE' && (
           <p style={{ fontSize: FS.md, lineHeight: 1.6, color: TEXT, marginTop: 12 }}>
             {repName || 'Votre consultant'} est prévenu(e) immédiatement et finalise l'embauche avec vous (date de démarrage, contrat). La carte passera en « Engagé » dès validation.
           </p>
@@ -792,11 +792,11 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
           <button
             className="pm-btn"
             disabled={!ok}
-            onClick={() => onConfirm(to === 'REFUSE' ? { reason: reason.trim() } : to === 'ENTRETIEN_CLIENT' ? { dateEntretienClient: new Date(date).toISOString(), interlocuteurClient: who.trim() } : {})}
+            onClick={() => onConfirm(to === 'PERDU' ? { reason: reason.trim() } : to === 'SCREENING' ? { dateEntretienClient: new Date(date).toISOString(), interlocuteurClient: who.trim() } : {})}
             style={{ flex: 1, fontSize: FS.md, fontWeight: 800, background: ok ? BRAND : '#C4C1D0', color: CREAM, border: 'none', borderRadius: 11, padding: 11, cursor: ok ? 'pointer' : 'default' }}
-          >{to === 'REFUSE' ? 'Écarter' : to === 'PLACE' ? 'Annoncer' : 'Planifier'}</button>
+          >{to === 'PERDU' ? 'Écarter' : to === 'ENGAGE' ? 'Annoncer' : 'Planifier'}</button>
         </div>
-        {to === 'ENTRETIEN_CLIENT' && fromDecision && (
+        {to === 'SCREENING' && fromDecision && (
           <button className="pm-btn" onClick={onSkip} style={{ width: '100%', marginTop: 10, fontSize: FS.base, fontWeight: 700, background: 'transparent', color: BRAND, border: 'none', padding: 8, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}>
             Pas encore de date : {repName ? repName.split(' ')[0] : 'mon consultant'} organise la rencontre
           </button>
