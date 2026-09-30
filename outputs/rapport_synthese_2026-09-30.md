@@ -103,6 +103,34 @@ Trois signaux forts mais **hors fenêtre 7 jours** (18-22 septembre, datés et v
 - **Sales général (Méroë)** : 17 JOB + 3 NEWS au lieu de 14 + 6. Le volume total de 40 lignes est atteint, mais la part NEWS est faible : BIO-UV était déjà dans l'anti-doublons, et d'aucy / Volvo / Seat / NGE / SEB dépassaient le plafond groupe.
 - **Industrie** : les familles logistique industrielle, chantier, technico-commercial industriel, achats et direction de site n'ont pas été couvertes, budget de recherche épuisé avant.
 
+## 🔴 Incident de livraison — la boîte de Louis rejette tous les emails
+
+L'email du jour destiné à `louis@humanup.io` a été **rejeté par le serveur** :
+
+```
+550 5.7.1 Your message was not delivered because the recipient is unable to
+receive email. You can contact meroe@humanup.io instead.
+```
+
+Ce n'est ni un problème de pièce jointe ni de format : la boîte est hors service au niveau de l'administration Google Workspace, et le rebond redirige explicitement vers `meroe@humanup.io`.
+
+**Ce n'est pas nouveau** : le même rejet s'est produit le 29/09 à 06:54 et à 08:27, sur des envois sans archive ZIP. Louis n'a donc reçu aucun fichier depuis au moins deux jours, et les runs précédents ne l'ont pas détecté — aucun n'avait vérifié les rebonds après envoi.
+
+Décision à prendre : soit réactiver la boîte dans la console Google Workspace (ou corriger la règle de routage), soit retirer Louis de la liste de diffusion comme cela a été fait pour Marie Le Ret, pour éviter un rebond quotidien.
+
+En attendant, `sales_saas_2026-09-30.csv` a été renvoyé à Méroë.
+
+## Statut d'envoi des 4 emails
+
+| Destinataire | Fichiers | Statut |
+|---|---|---|
+| valentin@humanup.io | finance + hospitality (ZIP) | ✅ Délivré |
+| alexis@humanup.io | industrie (ZIP) | ✅ Délivré |
+| louis@humanup.io | sales_saas (ZIP) | ❌ **Rejeté 550 5.7.1** — rerouté vers Méroë |
+| meroe@humanup.io | sales (ZIP) + rapport en corps | ✅ Délivré |
+
+**Note technique sur les pièces jointes** : les CSV partent désormais en archive ZIP (à dézipper avant l'import Propium). Le connecteur Gmail exige un base64 inline dans l'appel d'outil ; un CSV brut de 26 Ko représente ~53 000 tokens de sortie, au-delà de ce qu'un appel peut porter — c'est ce qui avait fait partir un CSV tronqué lors d'un run précédent. Zippé, le payload tombe sous 8 000 caractères. Le XLSX (57 000 caractères de base64, incompressible car déjà une archive) **n'est pas attachable** : il se récupère par `git pull`.
+
 ## Actions recommandées
 
 1. **Enrichir avant d'appeler** : lancer FullEnrich à l'import Propium sur les 169 lignes `CONTACT_NON_SOURCE`, en commençant par les 7 signaux prioritaires ci-dessus.
@@ -110,3 +138,4 @@ Trois signaux forts mais **hors fenêtre 7 jours** (18-22 septembre, datés et v
 3. **Sortir Tessan et Groupe Okwind** du pipe.
 4. **Rattraper les 3 signaux hors fenêtre** (PAREF Gestion, Stoïk, BIO-UV Group) : ils sont datés et vérifiables.
 5. **Relancer une passe de récurrences dans 3-4 jours** sur les 16 entreprises non testées.
+6. **Trancher le cas de la boîte de Louis** (réactivation ou retrait de la diffusion) — c'est la seule action bloquante pour le run de demain.

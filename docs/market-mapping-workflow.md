@@ -229,6 +229,8 @@ Total : 110 lignes, ~53 entreprises, 11 contacts sourcés (10 %).
 
    **Ne jamais découper un base64 en chunks** pour contourner la limite : le résultat est un fichier corrompu que le destinataire ne détecte qu'à l'ouverture. Instruire explicitement les sous-agents d'envoi de signaler l'échec plutôt que de tronquer ou découper.
 4. **Slack** : le channel `#market-mapping` n'existe pas dans le workspace. → Le créer, ou garder le DM.
+
+4bis. **`louis@humanup.io` rejette tous les emails (détecté le 2026-09-30)** : la boîte renvoie `550 5.7.1 Your message was not delivered because the recipient is unable to receive email. You can contact meroe@humanup.io instead.` — elle est hors service au niveau de l'administration Google Workspace. Les rebonds datent d'au moins le 29/09 (06:54 et 08:27), sur des envois sans ZIP : ce n'est donc pas lié au format de pièce jointe. Les runs précédents ne l'avaient pas vu parce qu'aucun ne vérifiait les rebonds après l'envoi. → **Vérifier systématiquement les rebonds en fin de run** : `mcp__Gmail__search_threads` avec `from:mailer-daemon newer_than:1d`. Un `id` de message retourné par `send_message` signifie « accepté par Gmail », PAS « délivré ». En attendant une décision sur la boîte de Louis, son fichier est rerouté vers Méroë.
 5. **Git** : la session démarre en HEAD détaché. Le push doit se faire avec `git push -u origin HEAD:main`, pas `git push origin main`.
 6. **Hook Stop** : le hook "untracked files" se déclenche pendant que les agents tournent. Inoffensif, mais il faut attendre la fin des 5 agents avant de committer.
 
