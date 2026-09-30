@@ -16,22 +16,23 @@ interface Candidature {
   portalDecisions: Array<{ decision: Decision; createdAt: string }>;
 }
 interface KanbanResponse {
-  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string }; client: { nom: string; prenom: string | null } };
+  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string }; client: { nom: string; prenom: string | null }; consultant: { nom: string; prenom: string | null } | null };
   stages: Stage[];
   byStage: Record<Stage, Candidature[]>;
 }
 
+// Libellés côté client : Screening / Case / Culture Fit / Offre / Engagé / Perdu.
 const STAGE_LABELS: Record<Stage, string> = {
-  SOURCING: 'Sourcing', CONTACTE: 'Contactés', ENTRETIEN_1: 'Entretien recruteur', ENVOYE_CLIENT: 'Nouveaux profils',
-  ENTRETIEN_CLIENT: 'Entretien avec vous', PROCESS: 'En process', OFFRE: 'Offre', PLACE: 'Placé', REFUSE: 'Écartés',
+  SOURCING: 'Sourcing', CONTACTE: 'Contactés', ENTRETIEN_1: 'Entretien recruteur', ENVOYE_CLIENT: 'Screening',
+  ENTRETIEN_CLIENT: 'Case', PROCESS: 'Culture Fit', OFFRE: 'Offre', PLACE: 'Engagé', REFUSE: 'Perdu',
 };
 const STAGE_ACCENT: Record<Stage, string> = {
   SOURCING: '#8E7CC3', CONTACTE: '#8E7CC3', ENTRETIEN_1: '#22177A', ENVOYE_CLIENT: '#2A6BD8',
-  ENTRETIEN_CLIENT: '#E08A2B', PROCESS: '#D9A441', OFFRE: '#C9A227', PLACE: '#3B9A54', REFUSE: '#B3261E',
+  ENTRETIEN_CLIENT: '#E08A2B', PROCESS: '#7A5BD1', OFFRE: '#C9A227', PLACE: '#3B9A54', REFUSE: '#B3261E',
 };
 const STAGE_BG: Record<Stage, string> = {
   SOURCING: '#F6F4FB', CONTACTE: '#F6F4FB', ENTRETIEN_1: 'rgba(34,23,122,.05)', ENVOYE_CLIENT: '#F2F3D8',
-  ENTRETIEN_CLIENT: '#FBF7F0', PROCESS: '#FDF7E3', OFFRE: '#FBFAEC', PLACE: '#EFF6F0', REFUSE: '#FBF1EF',
+  ENTRETIEN_CLIENT: '#FBF7F0', PROCESS: '#F5F2FC', OFFRE: '#FBFAEC', PLACE: '#EFF6F0', REFUSE: '#FBF1EF',
 };
 const DECISION_LABEL: Record<Decision, string> = { RENCONTRER: 'À rencontrer', A_DISCUTER: 'À discuter', ECARTER: 'Écarté' };
 const DECISION_TONE: Record<Decision, { bg: string; fg: string }> = {
@@ -72,7 +73,9 @@ export default function PortalMandatPage() {
 
   if (loading || !data) return <div style={{ background: '#F4F4EA', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9A96AE', fontFamily: "'Manrope',sans-serif" }}>Chargement…</div>;
 
-  const rep = `${data.mandat.client.prenom ? data.mandat.client.prenom + ' ' : ''}${data.mandat.client.nom}`.trim();
+  // Le message part vers le consultant HumanUp du mandat (pas vers le client lui-même).
+  const consultant = data.mandat.consultant;
+  const rep = consultant ? `${consultant.prenom ? consultant.prenom + ' ' : ''}${consultant.nom}`.trim() : '';
 
   return (
     <div style={{ background: '#F4F4EA', minHeight: '100vh', fontFamily: "'Manrope',sans-serif", display: 'flex', flexDirection: 'column' }}>
@@ -106,7 +109,7 @@ export default function PortalMandatPage() {
           {data.stages.map(stage => {
             const items = data.byStage[stage] ?? [];
             return (
-              <div key={stage} style={{ flex: '0 0 300px', background: STAGE_BG[stage], border: '1px solid rgba(34,23,122,.07)', borderRadius: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div key={stage} style={{ flex: '1 0 215px', maxWidth: 320, background: STAGE_BG[stage], border: '1px solid rgba(34,23,122,.07)', borderRadius: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <div style={{ height: 4, background: STAGE_ACCENT[stage] }} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '14px 15px 10px' }}>
                   <span style={{ width: 9, height: 9, borderRadius: 3, background: STAGE_ACCENT[stage] }} />
@@ -224,7 +227,8 @@ function ProfileDrawer({ candidature: c, repName, onClose, onDecision, onComment
           )}
           {!c.candidat.aiPitchShort && bullets.length === 0 && <p style={{ fontSize: 13.5, color: '#8A8699' }}>Le dossier détaillé sera disponible sous peu.</p>}
 
-          {/* DECISION */}
+          {/* DECISION — inutile une fois le process terminé (Engagé / Perdu) */}
+          {c.stage !== 'PLACE' && c.stage !== 'REFUSE' && (<>
           <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE', marginTop: 24 }}>Votre avis</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginTop: 10 }}>
             <button className="pm-dec" disabled={busy} onClick={() => decide('RENCONTRER')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', borderRadius: 12, border: '1.5px solid rgba(59,154,84,.28)', background: '#EAF3EC', color: '#2C6B3F', cursor: 'pointer', fontWeight: 800, fontSize: 12 }}><Check size={17} />Rencontrer</button>
@@ -232,6 +236,7 @@ function ProfileDrawer({ candidature: c, repName, onClose, onDecision, onComment
             <button className="pm-dec" disabled={busy || !reason.trim()} onClick={() => decide('ECARTER')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', borderRadius: 12, border: '1.5px solid rgba(176,54,31,.28)', background: '#F9ECE9', color: '#B0361F', cursor: reason.trim() ? 'pointer' : 'default', fontWeight: 800, fontSize: 12, opacity: reason.trim() ? 1 : 0.55 }}><X size={17} />Écarter</button>
           </div>
           <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Motif (obligatoire pour écarter)…" style={{ width: '100%', marginTop: 10, fontSize: 13, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#fff', outline: 'none' }} />
+          </>)}
 
           {/* COMMENT */}
           <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE', marginTop: 24 }}>Un message pour {repName || 'votre consultant'} ?</div>

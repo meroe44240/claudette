@@ -308,8 +308,8 @@ model Mandat {
   sourceLead       String?      @db.VarChar(255)
   // Stages visibles côté client via le portail (chantier 3) et le bouton
   // "Aperçu client" du kanban. Par défaut : les étapes où le client a du
-  // contexte à voir (envoyés, entretien client, offre, placé).
-  visibleStages    StageCandidature[] @default([ENVOYE_CLIENT, ENTRETIEN_CLIENT, OFFRE, PLACE])
+  // contexte à voir (Screening, Case, Culture Fit, Offre, Engagé, Perdu).
+  visibleStages    StageCandidature[] @default([ENVOYE_CLIENT, ENTRETIEN_CLIENT, PROCESS, OFFRE, PLACE, REFUSE])
   // Contrat mandat (envoi signature). Placeholder tant qu'aucun provider
   // (DocuSign/Yousign) n'est branché — trace en base seulement.
   contractStatus   ContractStatus @default(DRAFT)

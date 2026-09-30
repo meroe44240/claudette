@@ -19,7 +19,11 @@ import type {
   StageCandidature,
 } from '@prisma/client';
 
-const portalSecret = new TextEncoder().encode(
+// Étapes montrables au client, dans l'ordre du portail :
+// Screening / Case / Culture Fit / Offre / Engagé / Perdu.
+const PORTAL_STAGE_ORDER: StageCandidature[] = ['ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE', 'REFUSE'];
+
+const portalSecret =new TextEncoder().encode(
   process.env.JWT_ACCESS_SECRET || 'dev-access-secret',
 );
 
@@ -207,14 +211,37 @@ export async function getKanban(mandatId: string) {
       visibleStages: true,
       entreprise: { select: { nom: true } },
       client: { select: { nom: true, prenom: true } },
+      recruteur: { select: { nom: true, prenom: true } },
+      assignedTo: { select: { nom: true, prenom: true } },
     },
   });
   if (!mandat) throw new NotFoundError('Mandat', mandatId);
 
-  const stages = (mandat.visibleStages as StageCandidature[]).filter((s) => s !== 'REFUSE');
+  // Colonnes dans l'ordre du pipeline, quel que soit l'ordre stocké.
+  const visible = mandat.visibleStages as StageCandidature[];
+  const stages = PORTAL_STAGE_ORDER.filter((s) => visible.includes(s));
+  const activeStages = stages.filter((s) => s !== 'REFUSE');
+  const sentStages = PORTAL_STAGE_ORDER.filter((s) => s !== 'REFUSE');
 
   const candidatures = await prisma.candidature.findMany({
-    where: { mandatId, stage: { in: stages } },
+    where: {
+      mandatId,
+      OR: [
+        { stage: { in: activeStages } },
+        // « Perdu » : seulement les profils que le client a déjà vus
+        // (jamais les refus internes au sourcing / à la qualification).
+        ...(stages.includes('REFUSE')
+          ? [{
+              stage: 'REFUSE' as StageCandidature,
+              OR: [
+                { datePresentation: { not: null } },
+                { stageHistory: { some: { toStage: { in: sentStages } } } },
+                { portalDecisions: { some: {} } },
+              ],
+            }]
+          : []),
+      ],
+    },
     select: {
       id: true,
       stage: true,
@@ -246,8 +273,11 @@ export async function getKanban(mandatId: string) {
     if (byStage[c.stage]) byStage[c.stage].push(c);
   }
 
+  const { recruteur, assignedTo, ...mandatPublic } = mandat;
+  const consultant = recruteur ?? assignedTo;
+
   return {
-    mandat,
+    mandat: { ...mandatPublic, consultant: consultant ? { nom: consultant.nom, prenom: consultant.prenom } : null },
     stages,
     byStage,
   };
