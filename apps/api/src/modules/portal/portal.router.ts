@@ -20,12 +20,7 @@ import { authenticate, requireRole } from '../../middleware/auth.js';
 // Extend request to carry portalAccess payload
 declare module 'fastify' {
   interface FastifyRequest {
-    portal?: {
-      portalAccessId: string;
-      mandatId: string;
-      clientId: string;
-      email: string;
-    };
+    portal?: portalService.PortalScope;
   }
 }
 
@@ -38,12 +33,13 @@ async function portalAuthenticate(request: FastifyRequest, reply: FastifyReply) 
   const token = auth.slice(7);
   try {
     const payload = await portalService.verifyPortalToken(token);
-    request.portal = {
-      portalAccessId: payload.sub,
-      mandatId: payload.mandatId,
-      clientId: payload.clientId,
-      email: payload.email,
-    };
+    // Accès révoqué depuis l'émission du jeton : on coupe.
+    const scope = await portalService.resolveScope(payload);
+    if (!scope) {
+      reply.code(401).send({ error: 'PORTAL_UNAUTHORIZED', message: 'Accès révoqué' });
+      return reply;
+    }
+    request.portal = scope;
   } catch {
     reply.code(401).send({ error: 'PORTAL_UNAUTHORIZED', message: 'Token invalide' });
     return reply;
@@ -56,12 +52,12 @@ export default async function portalRouter(fastify: FastifyInstance) {
   // POST /portal/login — auth portail
   fastify.post('/login', {
     schema: {
-      description: 'Login portail client (public — auth par mandatId + email + password)',
+      description: 'Login portail client (email + mot de passe ; offre du lien facultative)',
       tags: ['Portal'],
     },
     handler: async (request, reply) => {
       const input = z.object({
-        mandatId: z.string().uuid(),
+        mandatId: z.string().uuid().optional(),
         email: z.string().email(),
         password: z.string().min(1),
       }).parse(request.body);
@@ -73,13 +69,75 @@ export default async function portalRouter(fastify: FastifyInstance) {
     },
   });
 
+  // GET /portal/public/mandat/:id — contexte de la page de connexion (poste, consultant)
+  fastify.get('/public/mandat/:id', {
+    schema: {
+      description: 'Infos publiques du lien portail (titre du poste, entreprise, consultant)',
+      tags: ['Portal'],
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+    },
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      return portalService.publicMandatInfo(id);
+    },
+  });
+
+  // POST /portal/password-reset — mot de passe oublié (réponse identique dans tous les cas)
+  fastify.post('/password-reset', {
+    schema: { description: 'Envoie un nouveau mot de passe à l’adresse de l’accès', tags: ['Portal'] },
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+    handler: async (request) => {
+      const input = z.object({ mandatId: z.string().uuid().optional(), email: z.string().email() }).parse(request.body);
+      try { await portalService.resetPassword(input.mandatId, input.email); } catch (e) { request.log.error(e, '[Portal] reset password'); }
+      return { ok: true };
+    },
+  });
+
   // GET /portal/kanban — kanban filtré par visibleStages
   fastify.get('/kanban', {
     schema: { description: 'Kanban en lecture (colonnes = mandat.visibleStages)', tags: ['Portal'] },
     preHandler: [portalAuthenticate],
     handler: async (request) => {
-      return portalService.getKanban(request.portal!.mandatId);
+      const { mandatId } = request.query as { mandatId?: string };
+      const id = mandatId && /^[0-9a-f-]{36}$/i.test(mandatId) ? mandatId : request.portal!.mandatId;
+      await portalService.assertMandat(request.portal!, id);
+      return portalService.getKanban(id, request.portal!.portalAccessId);
     },
+  });
+
+  // GET /portal/me — contact connecté + entreprise
+  fastify.get('/me', {
+    schema: { description: 'Contact connecté', tags: ['Portal'] },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => portalService.getMe(request.portal!),
+  });
+
+  // GET /portal/offres — toutes les offres de l'entreprise suivies par HumanUp
+  fastify.get('/offres', {
+    schema: { description: 'Offres d’emploi du client (compteurs par colonne)', tags: ['Portal'] },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => portalService.listOffres(request.portal!),
+  });
+
+  // GET /portal/candidats — tous les candidats présentés, toutes offres confondues
+  fastify.get('/candidats', {
+    schema: { description: 'Candidats présentés au client (toutes offres)', tags: ['Portal'] },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => portalService.listCandidats(request.portal!),
+  });
+
+  // GET /portal/notifications — cloche
+  fastify.get('/notifications', {
+    schema: { description: 'Notifications du client (nouveaux profils, étapes, commentaires)', tags: ['Portal'] },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => portalService.listNotifications(request.portal!),
+  });
+
+  // POST /portal/notifications/seen — tout marquer comme lu
+  fastify.post('/notifications/seen', {
+    schema: { description: 'Marque les notifications comme lues', tags: ['Portal'] },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => portalService.markNotificationsSeen(request.portal!),
   });
 
   // POST /portal/candidatures/:id/decision
@@ -98,7 +156,7 @@ export default async function portalRouter(fastify: FastifyInstance) {
       }).parse(request.body);
       return portalService.recordDecision({
         portalAccessId: request.portal!.portalAccessId,
-        mandatId: request.portal!.mandatId,
+        mandatId: await portalService.scopeCandidature(request.portal!, id),
         candidatureId: id,
         decision: input.decision,
         reason: input.reason,
@@ -116,12 +174,86 @@ export default async function portalRouter(fastify: FastifyInstance) {
     preHandler: [portalAuthenticate],
     handler: async (request) => {
       const { id } = request.params as { id: string };
-      const input = z.object({ content: z.string().min(1).max(4000) }).parse(request.body);
+      const input = z.object({
+        content: z.string().min(1).max(4000),
+        mentions: z.array(z.discriminatedUnion('kind', [
+          z.object({ kind: z.literal('internal'), id: z.string().uuid() }),
+          z.object({ kind: z.literal('external'), email: z.string().email(), name: z.string().max(200).optional() }),
+        ])).max(10).optional(),
+      }).parse(request.body);
       return portalService.recordComment({
         portalAccessId: request.portal!.portalAccessId,
-        mandatId: request.portal!.mandatId,
+        mandatId: await portalService.scopeCandidature(request.portal!, id),
         candidatureId: id,
         content: input.content,
+        mentions: input.mentions,
+      });
+    },
+  });
+
+  // GET /portal/candidatures/:id/comments — fil de commentaires du candidat
+  fastify.get('/candidatures/:id/comments', {
+    schema: {
+      description: 'Fil de commentaires client sur un candidat',
+      tags: ['Portal'],
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+    },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      return portalService.listComments(await portalService.scopeCandidature(request.portal!, id), id);
+    },
+  });
+
+  // GET /portal/candidatures/:id/activity — fil d'activité du candidat
+  fastify.get('/candidatures/:id/activity', {
+    schema: {
+      description: 'Fil d\'activité (présentation, mouvements, avis, commentaires, entretien)',
+      tags: ['Portal'],
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+    },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      return portalService.listActivity(await portalService.scopeCandidature(request.portal!, id), id);
+    },
+  });
+
+  // GET /portal/mentionables — personnes que le client peut mentionner (@)
+  fastify.get('/mentionables', {
+    schema: { description: 'Équipe HumanUp du mandat + contacts côté client', tags: ['Portal'] },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => {
+      const { mandatId } = request.query as { mandatId?: string };
+      const id = mandatId && /^[0-9a-f-]{36}$/i.test(mandatId) ? mandatId : request.portal!.mandatId;
+      await portalService.assertMandat(request.portal!, id);
+      const { internal, external } = await portalService.getMentionables(id);
+      // Pas d'emails de l'équipe HumanUp exposés au client.
+      return { internal: internal.map(({ id, name, role, avatarUrl }) => ({ id, name, role, avatarUrl })), external };
+    },
+  });
+
+  // POST /portal/candidatures/:id/move — le client déplace une carte
+  fastify.post('/candidatures/:id/move', {
+    schema: {
+      description: 'Déplacement d\'une carte par le client (Engagé = signalé au consultant)',
+      tags: ['Portal'],
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+    },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      const input = z.object({
+        column: z.enum(portalService.PORTAL_COLUMNS),
+        reason: z.string().max(2000).optional(),
+        dateEntretienClient: z.string().datetime({ offset: true }).optional(),
+        interlocuteurClient: z.string().max(255).optional(),
+      }).parse(request.body);
+      return portalService.moveCandidature({
+        portalAccessId: request.portal!.portalAccessId,
+        mandatId: await portalService.scopeCandidature(request.portal!, id),
+        candidatureId: id,
+        ...input,
       });
     },
   });
@@ -138,7 +270,7 @@ export default async function portalRouter(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
       return portalService.recordViewProfile({
         portalAccessId: request.portal!.portalAccessId,
-        mandatId: request.portal!.mandatId,
+        mandatId: await portalService.scopeCandidature(request.portal!, id),
         candidatureId: id,
       });
     },

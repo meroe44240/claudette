@@ -513,11 +513,19 @@ export default function MandatDetailPage() {
 
   const grantAccessMutation = useMutation({
     mutationFn: (p: { email: string; password: string; sendInvite: boolean; contactName?: string }) =>
-      api.post('/portal/access', { mandatId: id, clientId: mandat?.client?.id, email: p.email, password: p.password, sendInvite: p.sendInvite, contactName: p.contactName }),
-    onSuccess: (_res, p) => {
+      api.post<{ reusedCredentials?: boolean }>('/portal/access', { mandatId: id, clientId: mandat?.client?.id, email: p.email, password: p.password, sendInvite: p.sendInvite, contactName: p.contactName }),
+    onSuccess: (res, p) => {
       queryClient.invalidateQueries({ queryKey: ['portal-accesses', id] });
-      setLastGrantedPwd({ email: p.email, pwd: p.password });
       setCEmail('');
+      // Contact déjà invité sur une autre offre de l'entreprise : mêmes identifiants.
+      if (res?.reusedCredentials) {
+        setLastGrantedPwd(null);
+        toast('success', p.sendInvite
+          ? `Offre ajoutée à l'espace de ${p.email} (identifiants inchangés) — email envoyé`
+          : `Offre ajoutée à l'espace de ${p.email} — ses identifiants restent les mêmes`);
+        return;
+      }
+      setLastGrantedPwd({ email: p.email, pwd: p.password });
       toast('success', p.sendInvite ? `Accès créé — invitation envoyée à ${p.email}` : `Accès portail créé pour ${p.email}`);
     },
     onError: (e: any) => toast('error', e?.message || "Impossible de créer l'accès"),

@@ -377,6 +377,8 @@ model PortalAccess {
   clientId     String   @db.Uuid
   client       Client   @relation("PortalAccessClient", fields: [clientId], references: [id], onDelete: Cascade)
   email        String   @db.VarChar(255)
+  name         String?  @db.VarChar(255) // nom du contact invité (affiché dans le portail)
+  notifSeenAt  DateTime? @map("notif_seen_at") @db.Timestamptz() // cloche : notifications lues jusqu'à
   passwordHash String   @db.VarChar(255)
   lastLoginAt  DateTime? @db.Timestamptz()
   revokedAt    DateTime? @db.Timestamptz()
@@ -451,6 +453,8 @@ model PortalComment {
   candidature    Candidature? @relation("PortalCommentCandidature", fields: [candidatureId], references: [id], onDelete: SetNull)
   mandatId       String       @db.Uuid
   content        String       @db.Text
+  // Personnes mentionnées : [{ kind: internal|external, id?, email, name }]
+  mentions       Json         @default("[]")
   createdAt      DateTime     @default(now()) @db.Timestamptz()
 
   @@index([candidatureId])
@@ -557,6 +561,8 @@ model Candidature {
   motifRefus          MotifRefus?
   motifRefusDetail    String?          @db.Text
   // Intérêt confirmé par le candidat pour ce poste (via l'email de confirmation)
+  // Colonne du portail client (Case / Culture Fit partagent l'étape PROCESS)
+  portalStage         String?          @map("portal_stage") @db.VarChar(20)
   interetConfirme     Boolean          @default(false) @map("interet_confirme")
   interetConfirmeDate DateTime?        @db.Timestamptz() @map("interet_confirme_date")
   createdById         String?          @db.Uuid
