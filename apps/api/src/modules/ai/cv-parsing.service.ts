@@ -186,7 +186,9 @@ export async function updateCandidatFromCv(
   const dossierManuel = (current?.aiAnonymizedProfile as any)?.dossierManuel === true;
   if (!dossierManuel) {
     updateData.aiPitchShort = parsed.pitch.short;
-    updateData.aiAnonymizedProfile = parsed.anonymized_profile;
+    // Garde le choix « coordonnées visibles par le client »
+    const coordonneesVisibles = (current?.aiAnonymizedProfile as any)?.coordonneesVisibles === true;
+    updateData.aiAnonymizedProfile = coordonneesVisibles ? { ...(parsed.anonymized_profile as any), coordonneesVisibles } : parsed.anonymized_profile;
   }
   updateData.aiPitchLong = parsed.pitch.long;
   updateData.aiSellingPoints = parsed.pitch.key_selling_points;

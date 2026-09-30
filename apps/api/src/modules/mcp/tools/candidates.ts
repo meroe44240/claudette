@@ -212,6 +212,7 @@ export function registerCandidateTools(server: McpServer) {
         adequation: d.adequation,
         sections: d.sections,
         protected: d.manuel,
+        contact_visible_to_client: d.coordonneesVisibles,
         updated_at: d.modifieLe,
       };
     }),
@@ -230,6 +231,7 @@ export function registerCandidateTools(server: McpServer) {
       sections: z.array(z.object({ title: z.string(), items: z.array(z.string()) })).optional()
         .describe('Sections titrees, ex. [{title:"Parcours",items:["Depuis 03.2026 : ... · Agicap"]}]'),
       photo_url: z.string().optional().describe("URL http(s) d'une photo (JPG/PNG/WebP) : elle est telechargee et hebergee par l'ATS. Chaine vide pour retirer la photo."),
+      show_contact: z.boolean().optional().describe("Montrer au client l'email, le telephone, le LinkedIn et le CV du candidat sur le portail. A activer seulement si le candidat a donne son accord."),
       protect: z.boolean().optional().default(true).describe("Proteger le dossier : un nouveau CV importe ne l'ecrasera pas (defaut true)"),
     },
     wrapTool('update_candidate_dossier', async (args) => {
@@ -239,7 +241,7 @@ export function registerCandidateTools(server: McpServer) {
         if (url) await dossierService.setPhotoFromUrl(id, url);
         else await dossierService.removePhoto(id);
       }
-      const hasContent = ['synthese', 'infos', 'adequation', 'sections'].some((k) => args[k] !== undefined);
+      const hasContent = ['synthese', 'infos', 'adequation', 'sections', 'show_contact'].some((k) => args[k] !== undefined);
       const d = hasContent || args.protect !== undefined
         ? await dossierService.updateDossier(id, {
             synthese: args.synthese as string | undefined,
@@ -247,6 +249,7 @@ export function registerCandidateTools(server: McpServer) {
             adequation: args.adequation as string[] | undefined,
             sections: args.sections as any,
             manuel: args.protect as boolean | undefined,
+            coordonneesVisibles: args.show_contact as boolean | undefined,
           })
         : await dossierService.getDossier(id);
       return {
@@ -258,6 +261,7 @@ export function registerCandidateTools(server: McpServer) {
         adequation: d.adequation,
         sections: d.sections,
         protected: d.manuel,
+        contact_visible_to_client: d.coordonneesVisibles,
         message: 'Dossier client mis a jour (visible sur le portail)',
       };
     }),

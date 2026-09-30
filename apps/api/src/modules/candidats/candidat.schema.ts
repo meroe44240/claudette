@@ -42,6 +42,7 @@ export const dossierSchema = z.object({
   adequation: z.array(z.string().max(600)).max(20).optional(),
   sections: z.array(z.object({ title: z.string().max(120), items: z.array(z.string().max(600)).max(30) })).max(12).optional(),
   manuel: z.boolean().optional(),
+  coordonneesVisibles: z.boolean().optional(),
 });
 
 // ─── EXPERIENCE SCHEMAS ─────────────────────────────

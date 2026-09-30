@@ -11,6 +11,7 @@ import { NotFoundError, ValidationError } from '../../lib/errors.js';
 //   cartes d'infos   → aiAnonymizedProfile.infos [{label, value}]
 //   adéquation poste → aiAnonymizedProfile.bulletPoints
 //   parcours, etc.   → aiAnonymizedProfile.sections [{title, items}]
+//   coordonnées + CV → affichés seulement si aiAnonymizedProfile.coordonneesVisibles
 // Un dossier retouché à la main est marqué `dossierManuel` : le parsing d'un
 // nouveau CV ne l'écrase plus (voir cv-parsing.service).
 
@@ -28,11 +29,13 @@ export interface Dossier {
   posteActuel: string | null;
   entrepriseActuelle: string | null;
   photoUrl: string | null;
+  contact: { email: string | null; telephone: string | null; linkedinUrl: string | null; cvUrl: string | null };
   synthese: string;
   infos: DossierInfo[];
   adequation: string[];
   sections: DossierSection[];
   manuel: boolean;
+  coordonneesVisibles: boolean;
   modifieLe: string | null;
 }
 
@@ -42,6 +45,7 @@ export interface DossierInput {
   adequation?: string[];
   sections?: DossierSection[];
   manuel?: boolean;
+  coordonneesVisibles?: boolean;
 }
 
 function asProfile(v: unknown): Record<string, any> {
@@ -58,16 +62,18 @@ function toDossier(c: any): Dossier {
     posteActuel: c.posteActuel,
     entrepriseActuelle: c.entrepriseActuelle,
     photoUrl: c.photoUrl,
+    contact: { email: c.email, telephone: c.telephone, linkedinUrl: c.linkedinUrl, cvUrl: c.cvUrl },
     synthese: c.aiPitchShort || '',
     infos: Array.isArray(p.infos) ? p.infos.filter((i: any) => i && typeof i.label === 'string').map((i: any) => ({ label: i.label, value: String(i.value ?? '') })) : [],
     adequation: bullets.filter((b: any) => typeof b === 'string'),
     sections: Array.isArray(p.sections) ? p.sections.filter((s: any) => s && typeof s.title === 'string').map((s: any) => ({ title: s.title, items: Array.isArray(s.items) ? s.items.map(String) : [] })) : [],
     manuel: p.dossierManuel === true,
+    coordonneesVisibles: p.coordonneesVisibles === true,
     modifieLe: typeof p.dossierModifieLe === 'string' ? p.dossierModifieLe : null,
   };
 }
 
-const SELECT = { id: true, nom: true, prenom: true, posteActuel: true, entrepriseActuelle: true, photoUrl: true, aiPitchShort: true, aiAnonymizedProfile: true } as const;
+const SELECT = { id: true, nom: true, prenom: true, posteActuel: true, entrepriseActuelle: true, photoUrl: true, aiPitchShort: true, aiAnonymizedProfile: true, email: true, telephone: true, linkedinUrl: true, cvUrl: true } as const;
 
 export async function getDossier(candidatId: string): Promise<Dossier> {
   const c = await prisma.candidat.findUnique({ where: { id: candidatId }, select: SELECT });
@@ -103,6 +109,7 @@ export async function updateDossier(candidatId: string, input: DossierInput): Pr
       .filter((s) => s.title && s.items.length > 0);
   }
   // Toute retouche verrouille le dossier contre le parsing CV, sauf demande explicite.
+  if (input.coordonneesVisibles !== undefined) profile.coordonneesVisibles = input.coordonneesVisibles;
   profile.dossierManuel = input.manuel ?? true;
   profile.dossierModifieLe = new Date().toISOString();
   data.aiAnonymizedProfile = profile;
