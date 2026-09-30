@@ -84,7 +84,12 @@ export async function updateDossier(candidatId: string, input: DossierInput): Pr
   const profile = asProfile(c.aiAnonymizedProfile);
   const data: Record<string, any> = {};
 
-  if (input.synthese !== undefined) data.aiPitchShort = clean(input.synthese) || null;
+  if (input.synthese !== undefined) {
+    const synthese = clean(input.synthese);
+    // candidats.ai_pitch_short est un VarChar(500)
+    if (synthese.length > 500) throw new ValidationError(`La synthèse fait ${synthese.length} caractères, 500 maximum`);
+    data.aiPitchShort = synthese || null;
+  }
   if (input.infos !== undefined) {
     profile.infos = input.infos.map((i) => ({ label: clean(i.label), value: clean(i.value) })).filter((i) => i.label && i.value);
   }

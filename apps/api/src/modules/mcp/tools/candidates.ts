@@ -223,7 +223,7 @@ export function registerCandidateTools(server: McpServer) {
     "[CONFIRMATION REQUISE] Met a jour le dossier client d'un candidat (visible par le client sur le portail). Chaque champ fourni REMPLACE entierement l'existant ; les champs omis ne changent pas. Lire d'abord avec get_candidate_dossier. Ne jamais y mettre d'infos sensibles (sante, situation perso, enveloppe interne, coordonnees). Tu DOIS montrer le dossier final au recruteur et obtenir sa confirmation avant d'appeler.",
     {
       candidate_id: z.string().describe('UUID du candidat'),
-      synthese: z.string().optional().describe('Paragraphe de synthese (4-6 lignes)'),
+      synthese: z.string().optional().describe('Paragraphe de synthese, 500 caracteres maximum'),
       infos: z.array(z.object({ label: z.string(), value: z.string() })).optional()
         .describe("Cartes d'infos, ex. [{label:'Localisation', value:'Lyon'}, {label:'Disponibilite', value:'Preavis ~3 mois'}, {label:'Experience', value:'8+ ans'}, {label:'Pretentions', value:'70-75 K€ package'}]"),
       adequation: z.array(z.string()).optional().describe("Points d'adequation au poste (8 max affiches)"),
