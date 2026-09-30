@@ -180,7 +180,9 @@ export default function PortalMandatPage() {
       setData((await res.json()) as KanbanResponse);
     } finally { setLoading(false); }
   }
-  const repFirst = data?.mandat.consultant?.prenom || data?.mandat.consultant?.nom || '';
+  // Interlocuteur du client côté HumanUp : le commercial (à défaut le consultant).
+  const contactUser = data?.mandat.commercial ?? data?.mandat.consultant ?? null;
+  const repFirst = contactUser?.prenom || contactUser?.nom || '';
   function flash(t: Toast) {
     window.clearTimeout(toastTimer.current);
     setToast(t);
@@ -198,7 +200,7 @@ export default function PortalMandatPage() {
   // Toute demande de déplacement passe par ici (drag, fiche, boutons d'avis).
   function requestMove(c: Candidature, to: Col) {
     if (c.column === to) return;
-    if (c.stage === 'PLACE') { flash({ msg: `L'embauche de ${fullName(c)} est validée : contactez ${repFirst || 'votre consultant'} pour la modifier.` }); return; }
+    if (c.stage === 'PLACE') { flash({ msg: `L'embauche de ${fullName(c)} est validée : contactez ${repFirst || 'votre interlocuteur HumanUp'} pour la modifier.` }); return; }
     if (to === 'SCREENING' || to === 'PERDU' || to === 'ENGAGE') { setPendingMove({ c, to }); return; }
     void doMove(c, to, {});
   }
@@ -230,13 +232,13 @@ export default function PortalMandatPage() {
     const out = await res.json().catch(() => ({}));
     if (out?.pending) {
       flash({ msg: out.already
-        ? `${repFirst || 'Votre consultant'} a déjà été prévenu(e) de l'embauche de ${fullName(c)}.`
-        : `C'est noté ! ${repFirst || 'Votre consultant'} est prévenu(e) et finalise l'embauche de ${fullName(c)}.` });
+        ? `${repFirst || 'Votre interlocuteur HumanUp'} a déjà été prévenu(e) de l'embauche de ${fullName(c)}.`
+        : `C'est noté ! ${repFirst || 'Votre interlocuteur HumanUp'} est prévenu(e) et finalise l'embauche de ${fullName(c)}.` });
     } else if (isUndo) {
       flash({ msg: `${fullName(c)} est revenu(e) en « ${STAGE_LABELS[to]} ».` });
     } else {
       flash({
-        msg: `${fullName(c)} → ${STAGE_LABELS[to]}. ${repFirst || 'Votre consultant'} est prévenu(e).`,
+        msg: `${fullName(c)} → ${STAGE_LABELS[to]}. ${repFirst || 'Votre interlocuteur HumanUp'} est prévenu(e).`,
         undo: () => { setToast(null); void doMove({ ...c, column: to, stage: COL_STAGE[to] }, from, {}, true); },
       });
     }
@@ -251,15 +253,15 @@ export default function PortalMandatPage() {
     if (!res.ok) { flash({ msg: 'Votre avis n’a pas pu être enregistré.' }); return; }
     if (d === 'A_DISCUTER') {
       setDrawerTab({ tab: 'commentaires', prefill: true });
-      flash({ msg: `Dites à ${repFirst || 'votre consultant'} ce que vous voulez creuser : il/elle est notifié(e).` });
+      flash({ msg: `Dites à ${repFirst || 'votre interlocuteur HumanUp'} ce que vous voulez creuser : il/elle est notifié(e).` });
     } else {
-      flash({ msg: `Avis enregistré. ${repFirst || 'Votre consultant'} est prévenu(e).` });
+      flash({ msg: `Avis enregistré. ${repFirst || 'Votre interlocuteur HumanUp'} est prévenu(e).` });
     }
     void reload(true);
   }
   async function decideOnly(c: Candidature, d: Decision) {
     const res = await portalFetch(`/candidatures/${c.id}/decision`, { method: 'POST', body: JSON.stringify({ decision: d }) });
-    if (res.ok) { flash({ msg: `Noté : ${repFirst || 'votre consultant'} organise la rencontre avec ${fullName(c)}.` }); void reload(true); }
+    if (res.ok) { flash({ msg: `Noté : ${repFirst || 'votre interlocuteur HumanUp'} organise la rencontre avec ${fullName(c)}.` }); void reload(true); }
   }
 
   function handleLogout() { portalStore.clear(); navigate(`/portail/login?m=${mandatId ?? ''}`); }
@@ -270,6 +272,7 @@ export default function PortalMandatPage() {
   const rep = consultant ? `${consultant.prenom ? consultant.prenom + ' ' : ''}${consultant.nom}`.trim() : '';
   const com = data.mandat.commercial;
   const commercial = com ? `${com.prenom ? com.prenom + ' ' : ''}${com.nom}`.trim() : '';
+  const contact = commercial || rep;
   const cards = allCards();
   const enCours = cards.filter((c) => c.stage !== 'REFUSE' && c.stage !== 'PLACE').length;
   const toReview = cards.filter(needsReview);
@@ -323,7 +326,7 @@ export default function PortalMandatPage() {
           </div>
           {(rep || commercial) && (
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: '9px 14px' }}>
-              {([[rep, 'Votre consultant', BRAND, CREAM, consultant?.avatarUrl ?? null], [commercial, 'Votre commercial', '#F2F3D8', BRAND, com?.avatarUrl ?? null]] as const).filter(([n]) => n).map(([n, label, bg, fg, photo]) => (
+              {([[commercial, 'Votre commercial', BRAND, CREAM, com?.avatarUrl ?? null], [rep, 'Votre consultant', '#F2F3D8', BRAND, consultant?.avatarUrl ?? null]] as const).filter(([n]) => n).map(([n, label, bg, fg, photo]) => (
                 <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <PersonAvatar name={n} photo={photo} size={38} bg={bg} fg={fg} />
                   <div>
@@ -357,11 +360,11 @@ export default function PortalMandatPage() {
           </div>
         ) : cards.length > 0 ? (
           <div role="status" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: FS.base, color: MUTED }}>
-            <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}><Check size={16} color="#2F8A4A" strokeWidth={2.6} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span><strong style={{ color: INK }}>Vous êtes à jour.</strong> {rep ? `${rep.split(' ')[0]} vous préviendra` : 'Vous serez prévenu'} dès qu’un nouveau profil arrive.</span></span>
+            <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}><Check size={16} color="#2F8A4A" strokeWidth={2.6} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span><strong style={{ color: INK }}>Vous êtes à jour.</strong> {contact ? `${contact.split(' ')[0]} vous préviendra` : 'Vous serez prévenu'} dès qu’un nouveau profil arrive.</span></span>
             {nextInterview && <span style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}><CalendarClock size={15} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span>Prochain entretien : <strong style={{ color: INK }}>{fullName(nextInterview)}</strong>, {fmtInterview(nextInterview.dateEntretienClient!)}</span></span>}
           </div>
         ) : (
-          <div style={{ fontSize: FS.base, color: MUTED }}>Les premiers profils arrivent bientôt. {rep ? `${rep.split(' ')[0]} vous préviendra par email.` : ''}</div>
+          <div style={{ fontSize: FS.base, color: MUTED }}>Les premiers profils arrivent bientôt. {contact ? `${contact.split(' ')[0]} vous préviendra par email.` : ''}</div>
         )}
         {!isMobile && cards.length > 0 && <p style={{ fontSize: FS.base, color: FAINT, marginTop: 10 }}>Cliquez sur un profil pour ouvrir son dossier, glissez une carte pour la faire avancer.</p>}
       </div>
@@ -388,7 +391,7 @@ export default function PortalMandatPage() {
 
       {pendingMove && (
         <MoveDialog
-          c={pendingMove.c} to={pendingMove.to} repName={rep} fromDecision={pendingMove.fromDecision}
+          c={pendingMove.c} to={pendingMove.to} repName={contact} fromDecision={pendingMove.fromDecision}
           onCancel={() => setPendingMove(null)}
           onConfirm={(extra) => { const m = pendingMove; setPendingMove(null); void doMove(m.c, m.to, extra); }}
           onSkip={() => { const m = pendingMove; setPendingMove(null); void decideOnly(m.c, 'RENCONTRER'); }}
@@ -407,7 +410,7 @@ export default function PortalMandatPage() {
           key={selected.id}
           candidature={selected}
           stages={data.stages}
-          repName={rep}
+          repName={contact}
           tab={drawerTab.tab}
           prefillMention={drawerTab.prefill}
           onTab={(tab) => setDrawerTab({ tab })}
@@ -609,8 +612,8 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
               );
             })}
           </div>
-          {locked && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><Lock size={13} aria-hidden />Embauche validée : contactez {repName || 'votre consultant'} pour toute modification.</div>}
-          {c.hireAnnounced && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><PartyPopper size={13} aria-hidden />Embauche annoncée : {repName || 'votre consultant'} finalise avec vous.</div>}
+          {locked && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><Lock size={13} aria-hidden />Embauche validée : contactez {repName || 'votre interlocuteur HumanUp'} pour toute modification.</div>}
+          {c.hireAnnounced && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><PartyPopper size={13} aria-hidden />Embauche annoncée : {repName || 'votre interlocuteur HumanUp'} finalise avec vous.</div>}
         </div>
 
         <div className="pm-drawer-body" style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 380px' }}>
@@ -629,7 +632,7 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
                   {decisionBtn('ECARTER', <X size={17} aria-hidden />, 'Écarter', DECISION_TONE.ECARTER)}
                 </div>
                 <p style={{ fontSize: FS.sm, color: FAINT, marginTop: 10, lineHeight: 1.5 }}>
-                  {c.column === 'INBOX' ? 'Rencontrer : vous planifiez le Screening. ' : ''}Écarter : le profil passe en « Perdu ». À discuter : écrivez à {repName || 'votre consultant'}.
+                  {c.column === 'INBOX' ? 'Rencontrer : vous planifiez le Screening. ' : ''}Écarter : le profil passe en « Perdu ». À discuter : écrivez à {repName || 'votre interlocuteur HumanUp'}.
                 </p>
               </div>
             )}
@@ -769,7 +772,7 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
         <h3 id="pm-move-title" style={{ fontFamily: DISPLAY, fontSize: FS.lg + 2, color: INK, letterSpacing: '-.01em', lineHeight: 1.25 }}>{title}</h3>
         {to === 'PERDU' && (
           <>
-            <p style={{ fontSize: FS.base, color: MUTED, marginTop: 8 }}>Le profil passe en « Perdu ». {repName || 'Votre consultant'} en tient compte pour la suite du sourcing.</p>
+            <p style={{ fontSize: FS.base, color: MUTED, marginTop: 8 }}>Le profil passe en « Perdu ». {repName || 'Votre interlocuteur HumanUp'} en tient compte pour la suite du sourcing.</p>
             <label htmlFor="pm-reason" style={label}>Pourquoi ?</label>
             <textarea id="pm-reason" data-autofocus value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex. : expérience trop éloignée des grands comptes…" style={{ ...field, minHeight: 84, resize: 'vertical' }} />
           </>
@@ -784,7 +787,7 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
         )}
         {to === 'ENGAGE' && (
           <p style={{ fontSize: FS.md, lineHeight: 1.6, color: TEXT, marginTop: 12 }}>
-            {repName || 'Votre consultant'} est prévenu(e) immédiatement et finalise l'embauche avec vous (date de démarrage, contrat). La carte passera en « Engagé » dès validation.
+            {repName || 'Votre interlocuteur HumanUp'} est prévenu(e) immédiatement et finalise l'embauche avec vous (date de démarrage, contrat). La carte passera en « Engagé » dès validation.
           </p>
         )}
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
@@ -840,10 +843,10 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
       ];
       setPeople(list);
       // « À discuter » : on prépare le message pour le consultant.
-      const consultant = list.find((p) => p.label === repName) ?? list.find((p) => p.mention.kind === 'internal');
-      if (prefillMention && consultant) {
-        const v = `@${consultant.label} `;
-        setText(v); setPicked([consultant]);
+      const target = list.find((p) => p.label === repName) ?? list.find((p) => p.mention.kind === 'internal');
+      if (prefillMention && target) {
+        const v = `@${target.label} `;
+        setText(v); setPicked([target]);
         window.setTimeout(() => { ta.current?.focus(); ta.current?.setSelectionRange(v.length, v.length); }, 0);
       }
     })();
@@ -907,7 +910,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
         {rows?.length === 0 && (
           <div style={{ margin: 'auto 0', textAlign: 'center', color: FAINT, fontSize: FS.base, lineHeight: 1.6, padding: '24px 8px' }}>
             <MessageCircle size={22} strokeWidth={1.8} aria-hidden style={{ display: 'block', margin: '0 auto 8px' }} />
-            Aucun commentaire pour l’instant.<br />Tapez <strong style={{ color: MUTED }}>@</strong> pour identifier {repName || 'votre consultant'} ou un collègue.
+            Aucun commentaire pour l’instant.<br />Tapez <strong style={{ color: MUTED }}>@</strong> pour identifier {repName || 'votre interlocuteur HumanUp'} ou un collègue.
           </div>
         )}
         {rows?.map((r) => (

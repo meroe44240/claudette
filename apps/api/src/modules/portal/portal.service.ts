@@ -503,9 +503,16 @@ export async function recordComment(
     }),
   ]);
 
-  if (resolved.length > 0) {
-    void notifyMentions({ mandatId: data.mandatId, portalAccessId: data.portalAccessId, candidat, content, mentions: resolved })
-      .catch((e) => console.error('[Portal] notif mentions échouée', e));
+  // L'interlocuteur du client (le commercial, sinon le consultant) est prévenu de chaque commentaire,
+  // même s'il n'est pas mentionné.
+  const contact = internal.find((u) => u.role === 'Commercial') ?? internal.find((u) => u.role === 'Consultant');
+  const recipients: Array<{ kind: 'internal' | 'external'; email: string; name: string; mentioned: boolean }> = resolved.map((r) => ({ ...r, mentioned: true }));
+  if (contact && !recipients.some((r) => r.email === contact.email)) {
+    recipients.push({ kind: 'internal', email: contact.email, name: contact.name, mentioned: false });
+  }
+  if (recipients.length > 0) {
+    void notifyMentions({ mandatId: data.mandatId, portalAccessId: data.portalAccessId, candidat, content, mentions: recipients })
+      .catch((e) => console.error('[Portal] notif commentaire échouée', e));
   }
 
   return { ok: true, id: comment.id };
@@ -519,7 +526,7 @@ async function notifyMentions(p: {
   mandatId: string; portalAccessId: string;
   candidat: { id: string; prenom: string | null; nom: string } | null;
   content: string;
-  mentions: Array<{ kind: 'internal' | 'external'; email: string; name: string }>;
+  mentions: Array<{ kind: 'internal' | 'external'; email: string; name: string; mentioned?: boolean }>;
 }) {
   const [mandat, access] = await Promise.all([
     prisma.mandat.findUnique({ where: { id: p.mandatId }, select: { titrePoste: true, entreprise: { select: { nom: true } } } }),
@@ -527,7 +534,7 @@ async function notifyMentions(p: {
   ]);
   const auteur = access ? portalAuthorName(access) : 'Votre client';
   const candidatNom = p.candidat ? `${p.candidat.prenom ?? ''} ${p.candidat.nom}`.trim() : null;
-  const sujet = `${auteur} vous a mentionné${candidatNom ? ` — ${candidatNom}` : ''} · ${mandat?.titrePoste ?? ''}`;
+  const sujetOf = (mentioned: boolean) => `${auteur} ${mentioned ? 'vous a mentionné' : 'a commenté'}${candidatNom ? ` — ${candidatNom}` : ''} · ${mandat?.titrePoste ?? ''}`;
   const quote = `<p style="border-left:3px solid #E6E9AF;padding-left:12px;margin:16px 0;color:#4a4568;">${esc(p.content).replace(/\n/g, '<br>')}</p>`;
   for (const m of p.mentions) {
     const internal = m.kind === 'internal';
@@ -535,10 +542,10 @@ async function notifyMentions(p: {
       ? `${PORTAL_BASE}/candidats/${p.candidat.id}`
       : `${PORTAL_BASE}/portail/login?m=${p.mandatId}`;
     const body = `<p>Bonjour ${esc(m.name.split(/\s+/)[0] || '')},</p>
-      <p><strong>${esc(auteur)}</strong> vous a mentionné dans un commentaire sur le recrutement <strong>${esc(mandat?.titrePoste ?? '')}</strong>${mandat?.entreprise?.nom ? ` (${esc(mandat.entreprise.nom)})` : ''}${candidatNom ? `, à propos de <strong>${esc(candidatNom)}</strong>` : ''} :</p>${quote}`;
+      <p><strong>${esc(auteur)}</strong> ${m.mentioned === false ? 'a laissé un commentaire' : 'vous a mentionné dans un commentaire'} sur le recrutement <strong>${esc(mandat?.titrePoste ?? '')}</strong>${mandat?.entreprise?.nom ? ` (${esc(mandat.entreprise.nom)})` : ''}${candidatNom ? `, à propos de <strong>${esc(candidatNom)}</strong>` : ''} :</p>${quote}`;
     try {
-      await sendEmail(m.email, sujet, renderBrandedEmail({
-        title: 'Nouvelle mention',
+      await sendEmail(m.email, sujetOf(m.mentioned !== false), renderBrandedEmail({
+        title: m.mentioned === false ? 'Nouveau commentaire client' : 'Nouvelle mention',
         bodyHtml: body,
         cta: { label: internal ? 'Ouvrir la fiche candidat' : 'Ouvrir l’espace de suivi', href },
         signature: 'L’équipe HumanUp',
@@ -640,7 +647,9 @@ export async function moveCandidature(data: {
       where: { id: data.mandatId },
       select: {
         titrePoste: true, recruteurId: true, assignedToId: true, createdById: true,
-        recruteur: { select: { email: true, prenom: true } }, assignedTo: { select: { email: true, prenom: true } },
+        recruteur: { select: { id: true, email: true, prenom: true, nom: true } },
+        assignedTo: { select: { id: true, email: true, prenom: true, nom: true } },
+        sales: { select: { id: true, email: true, prenom: true, nom: true } },
       },
     }),
     prisma.portalAccess.findUnique({ where: { id: data.portalAccessId }, select: { email: true, name: true, client: { select: { nom: true, prenom: true, email: true } } } }),
@@ -648,7 +657,9 @@ export async function moveCandidature(data: {
   if (!mandat) throw new NotFoundError('Mandat', data.mandatId);
   // Mouvement attribué au consultant du mandat (stats, agenda) et tracé comme venant du client.
   const actorId = mandat.recruteurId ?? mandat.assignedToId ?? mandat.createdById ?? null;
-  const consultant = mandat.recruteur ?? mandat.assignedTo;
+  // Interlocuteur du client = le commercial (sales, sinon le responsable du mandat), à défaut le consultant.
+  const commercial = mandat.sales ?? (mandat.assignedTo && mandat.assignedTo.id !== mandat.recruteurId ? mandat.assignedTo : null);
+  const contact = commercial ?? mandat.recruteur ?? mandat.assignedTo;
   const auteur = access ? portalAuthorName(access) : 'Le client';
   const candidatNom = `${existing.candidat.prenom ?? ''} ${existing.candidat.nom}`.trim();
   const from = COLUMN_LABEL[fromCol];
@@ -692,22 +703,23 @@ export async function moveCandidature(data: {
           : `Portail client : ${auteur} a déplacé ${candidatNom} de « ${from} » vers « ${to} »`,
         contenu: data.reason?.trim() || null,
         entiteType: 'CANDIDAT', entiteId: existing.candidat.id,
-        userId: actorId,
+        // Validation de l'embauche (facture + date) : tâche du commercial.
+        userId: pending ? (contact?.id ?? actorId) : actorId,
         source: 'SYSTEME',
         metadata: { portal: true, candidatureId: existing.id, mandatId: data.mandatId, from: existing.stage, to: targetStage, column: data.column },
       },
     }),
   ]);
 
-  if (consultant?.email) {
+  if (contact?.email) {
     const sujet = pending
       ? `${auteur} annonce l'embauche de ${candidatNom} · ${mandat.titrePoste}`
       : `${auteur} a déplacé ${candidatNom} vers « ${to} » · ${mandat.titrePoste}`;
-    const body = `<p>Bonjour ${esc(consultant.prenom ?? '')},</p>
+    const body = `<p>Bonjour ${esc(contact.prenom ?? '')},</p>
       <p>Sur le portail client, <strong>${esc(auteur)}</strong> a déplacé <strong>${esc(candidatNom)}</strong> de « ${from} » vers « ${to} ».</p>
       ${pending ? '<p>Passe la candidature en <strong>Gagné</strong> dans l’ATS (montant de la facture + date de démarrage) pour valider l’embauche.</p>' : ''}
       ${data.reason?.trim() ? `<p style="border-left:3px solid #E6E9AF;padding-left:12px;color:#4a4568;">${esc(data.reason.trim())}</p>` : ''}`;
-    void sendEmail(consultant.email, sujet, renderBrandedEmail({
+    void sendEmail(contact.email, sujet, renderBrandedEmail({
       title: pending ? 'Embauche annoncée' : 'Mouvement client',
       bodyHtml: body,
       cta: { label: 'Ouvrir la fiche candidat', href: `${PORTAL_BASE}/candidats/${existing.candidat.id}` },
