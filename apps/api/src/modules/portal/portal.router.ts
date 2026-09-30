@@ -73,12 +73,36 @@ export default async function portalRouter(fastify: FastifyInstance) {
     },
   });
 
+  // GET /portal/public/mandat/:id — contexte de la page de connexion (poste, consultant)
+  fastify.get('/public/mandat/:id', {
+    schema: {
+      description: 'Infos publiques du lien portail (titre du poste, entreprise, consultant)',
+      tags: ['Portal'],
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+    },
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      return portalService.publicMandatInfo(id);
+    },
+  });
+
+  // POST /portal/password-reset — mot de passe oublié (réponse identique dans tous les cas)
+  fastify.post('/password-reset', {
+    schema: { description: 'Envoie un nouveau mot de passe à l’adresse de l’accès', tags: ['Portal'] },
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+    handler: async (request) => {
+      const input = z.object({ mandatId: z.string().uuid(), email: z.string().email() }).parse(request.body);
+      try { await portalService.resetPassword(input.mandatId, input.email); } catch (e) { request.log.error(e, '[Portal] reset password'); }
+      return { ok: true };
+    },
+  });
+
   // GET /portal/kanban — kanban filtré par visibleStages
   fastify.get('/kanban', {
     schema: { description: 'Kanban en lecture (colonnes = mandat.visibleStages)', tags: ['Portal'] },
     preHandler: [portalAuthenticate],
     handler: async (request) => {
-      return portalService.getKanban(request.portal!.mandatId);
+      return portalService.getKanban(request.portal!.mandatId, request.portal!.portalAccessId);
     },
   });
 

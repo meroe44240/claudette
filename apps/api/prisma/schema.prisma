@@ -377,6 +377,7 @@ model PortalAccess {
   clientId     String   @db.Uuid
   client       Client   @relation("PortalAccessClient", fields: [clientId], references: [id], onDelete: Cascade)
   email        String   @db.VarChar(255)
+  name         String?  @db.VarChar(255) // nom du contact invité (affiché dans le portail)
   passwordHash String   @db.VarChar(255)
   lastLoginAt  DateTime? @db.Timestamptz()
   revokedAt    DateTime? @db.Timestamptz()

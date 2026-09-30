@@ -43,7 +43,7 @@ export async function generatePortalToken(payload: Omit<PortalJwtPayload, 'type'
   return new SignJWT({ ...payload, type: 'portal' })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('4h')
+    .setExpirationTime('8h')
     .sign(portalSecret);
 }
 
@@ -77,7 +77,7 @@ export async function createAccess(
 
   const passwordHash = await hashPassword(data.password);
   const access = await prisma.portalAccess.create({
-    data: { mandatId: data.mandatId, clientId: data.clientId, email, passwordHash },
+    data: { mandatId: data.mandatId, clientId: data.clientId, email, passwordHash, name: data.contactName?.trim() || null },
     select: { id: true, email: true, mandatId: true, clientId: true, createdAt: true, lastLoginAt: true },
   });
 
@@ -206,7 +206,7 @@ export async function login(email: string, password: string, mandatId: string) {
  * Retourne le kanban en lecture pour un mandat, filtre par visibleStages
  * du mandat. Le portail voit uniquement les colonnes autorisées.
  */
-export async function getKanban(mandatId: string) {
+export async function getKanban(mandatId: string, portalAccessId?: string) {
   const mandat = await prisma.mandat.findUnique({
     where: { id: mandatId },
     select: {
@@ -269,15 +269,29 @@ export async function getKanban(mandatId: string) {
         take: 1,
       },
       _count: { select: { portalComments: true } },
+      stageHistory: { select: { changedAt: true }, orderBy: { changedAt: 'desc' }, take: 1 },
+      createdAt: true,
     },
     orderBy: { updatedAt: 'desc' },
   });
 
+  // Profils déjà ouverts par ce contact (badge « Nouveau » sinon).
+  const ids = candidatures.map((c) => c.id);
+  const [views, hires] = await Promise.all([
+    portalAccessId
+      ? prisma.portalEvent.findMany({ where: { portalAccessId, type: 'VIEW_PROFILE' as PortalEventType, candidatureId: { in: ids } }, select: { candidatureId: true }, distinct: ['candidatureId'] })
+      : Promise.resolve([] as Array<{ candidatureId: string | null }>),
+    openHireTasks(mandatId),
+  ]);
+  const seen = new Set(views.map((v) => v.candidatureId));
+  const hired = new Set(hires);
+
   // Group by stage
-  const byStage: Record<string, typeof candidatures> = {};
+  const byStage: Record<string, Array<Omit<(typeof candidatures)[number], 'stageHistory' | 'createdAt'> & { seen: boolean; stageSince: Date; hireAnnounced: boolean }>> = {};
   for (const s of stages) byStage[s] = [];
   for (const c of candidatures) {
-    if (byStage[c.stage]) byStage[c.stage].push(c);
+    const { stageHistory, createdAt, ...rest } = c;
+    if (byStage[c.stage]) byStage[c.stage].push({ ...rest, seen: seen.has(c.id), stageSince: stageHistory[0]?.changedAt ?? createdAt, hireAnnounced: hired.has(c.id) });
   }
 
   const { recruteur, assignedTo, ...mandatPublic } = mandat;
@@ -288,6 +302,53 @@ export async function getKanban(mandatId: string) {
     stages,
     byStage,
   };
+}
+
+// Candidatures dont l'embauche a été annoncée par le client et pas encore validée.
+async function openHireTasks(mandatId: string): Promise<string[]> {
+  const rows = await prisma.activite.findMany({
+    where: {
+      isTache: true, tacheCompleted: false,
+      AND: [{ metadata: { path: ['mandatId'], equals: mandatId } }, { metadata: { path: ['to'], equals: 'PLACE' } }, { metadata: { path: ['portal'], equals: true } }],
+    },
+    select: { metadata: true },
+  });
+  return rows.map((r) => (r.metadata as any)?.candidatureId).filter(Boolean);
+}
+
+// Mot de passe oublié : régénère un mot de passe et l'envoie à l'adresse de l'accès.
+// Réponse identique que l'accès existe ou non (pas d'énumération).
+export async function resetPassword(mandatId: string, emailRaw: string) {
+  const email = emailRaw.toLowerCase().trim();
+  const access = await prisma.portalAccess.findUnique({
+    where: { mandatId_email: { mandatId, email } },
+    select: { id: true, name: true, revokedAt: true, mandat: { select: { titrePoste: true } } },
+  });
+  if (!access || access.revokedAt) return { ok: true };
+  const password = Array.from({ length: 12 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 56)]).join('');
+  await prisma.portalAccess.update({ where: { id: access.id }, data: { passwordHash: await hashPassword(password) } });
+  const link = `${PORTAL_BASE}/portail/login?m=${mandatId}`;
+  const prenom = (access.name || '').trim().split(/\s+/)[0];
+  await sendEmail(email, `Votre nouveau mot de passe — ${access.mandat.titrePoste}`, renderBrandedEmail({
+    title: 'Nouveau mot de passe',
+    bodyHtml: `<p>Bonjour${prenom ? ' ' + esc(prenom) : ''},</p><p>Voici votre nouveau mot de passe pour l’espace de suivi <strong>${esc(access.mandat.titrePoste)}</strong> :</p>
+      <p style="font-family:monospace;font-size:16px;background:#F2F3D8;border-radius:10px;padding:12px 14px;display:inline-block">${password}</p>
+      <p>Identifiant : <strong>${esc(email)}</strong></p><p>Si vous n’êtes pas à l’origine de cette demande, prévenez votre consultant HumanUp.</p>`,
+    cta: { label: 'Me connecter', href: link },
+    signature: 'L’équipe HumanUp',
+  }));
+  return { ok: true };
+}
+
+// Contexte public de la page de connexion (poste + consultant), par l'id du lien.
+export async function publicMandatInfo(mandatId: string) {
+  const m = await prisma.mandat.findUnique({
+    where: { id: mandatId },
+    select: { titrePoste: true, entreprise: { select: { nom: true } }, recruteur: { select: { prenom: true, nom: true } }, assignedTo: { select: { prenom: true, nom: true } } },
+  });
+  if (!m) throw new NotFoundError('Mandat', mandatId);
+  const u = m.recruteur ?? m.assignedTo;
+  return { titrePoste: m.titrePoste, entreprise: m.entreprise?.nom ?? null, consultant: u ? `${u.prenom ? u.prenom + ' ' : ''}${u.nom}`.trim() : null };
 }
 
 export async function recordDecision(
@@ -343,7 +404,7 @@ export async function recordComment(
   }
 
   // On ne garde que les mentions internes de l'équipe du mandat, et des emails valides.
-  const { internal } = await getMentionables(data.mandatId);
+  const { internal, external: knownExternal } = await getMentionables(data.mandatId);
   const byId = new Map(internal.map((u) => [u.id, u]));
   const resolved: Array<{ kind: 'internal' | 'external'; id?: string; email: string; name: string }> = [];
   for (const m of (data.mentions ?? []).slice(0, 10)) {
@@ -355,6 +416,22 @@ export async function recordComment(
       if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !resolved.some((r) => r.email === email)) {
         resolved.push({ kind: 'external', email, name: (m.name || '').trim() || email });
       }
+    }
+  }
+
+  // Adresses hors des contacts connus : au plus 5 nouvelles par jour et par accès (anti-abus du mailer).
+  const known = new Set(knownExternal.map((k) => k.email));
+  const unknown = resolved.filter((r) => r.kind === 'external' && !known.has(r.email));
+  if (unknown.length > 0) {
+    const recent = await prisma.portalComment.findMany({
+      where: { portalAccessId: data.portalAccessId, createdAt: { gte: new Date(Date.now() - 24 * 3600 * 1000) } },
+      select: { mentions: true },
+    });
+    const already = new Set<string>();
+    for (const r of recent) for (const m of (Array.isArray(r.mentions) ? r.mentions : []) as any[]) if (m?.kind === 'external' && !known.has(m.email)) already.add(m.email);
+    const fresh = unknown.filter((u) => !already.has(u.email));
+    if (already.size + fresh.length > 5) {
+      throw new ValidationError('Limite atteinte : 5 nouvelles adresses par jour. Demandez à votre consultant HumanUp d’ajouter ce contact.');
     }
   }
 
@@ -400,7 +477,7 @@ async function notifyMentions(p: {
 }) {
   const [mandat, access] = await Promise.all([
     prisma.mandat.findUnique({ where: { id: p.mandatId }, select: { titrePoste: true, entreprise: { select: { nom: true } } } }),
-    prisma.portalAccess.findUnique({ where: { id: p.portalAccessId }, select: { email: true, client: { select: { nom: true, prenom: true, email: true } } } }),
+    prisma.portalAccess.findUnique({ where: { id: p.portalAccessId }, select: { email: true, name: true, client: { select: { nom: true, prenom: true, email: true } } } }),
   ]);
   const auteur = access ? portalAuthorName(access) : 'Votre client';
   const candidatNom = p.candidat ? `${p.candidat.prenom ?? ''} ${p.candidat.nom}`.trim() : null;
@@ -426,7 +503,8 @@ async function notifyMentions(p: {
   }
 }
 
-function portalAuthorName(a: { email: string; client: { nom: string; prenom: string | null; email: string | null } | null }) {
+function portalAuthorName(a: { email: string; name?: string | null; client: { nom: string; prenom: string | null; email?: string | null } | null }) {
+  if (a.name?.trim()) return a.name.trim();
   if (a.client && a.client.email?.toLowerCase() === a.email.toLowerCase()) {
     return `${a.client.prenom ? a.client.prenom + ' ' : ''}${a.client.nom}`.trim();
   }
@@ -439,7 +517,7 @@ export async function listComments(mandatId: string, candidatureId: string) {
     where: { mandatId, candidatureId },
     select: {
       id: true, content: true, createdAt: true, mentions: true,
-      portalAccess: { select: { email: true, client: { select: { nom: true, prenom: true, email: true } } } },
+      portalAccess: { select: { email: true, name: true, client: { select: { nom: true, prenom: true, email: true } } } },
     },
     orderBy: { createdAt: 'asc' },
   });
@@ -460,7 +538,7 @@ export async function getMentionables(mandatId: string) {
     select: {
       entrepriseId: true,
       recruteur: userSel, sales: userSel, sourceur: userSel, assignedTo: userSel, createdBy: userSel,
-      portalAccesses: { where: { revokedAt: null }, select: { email: true, client: { select: { nom: true, prenom: true, email: true } } } },
+      portalAccesses: { where: { revokedAt: null }, select: { email: true, name: true, client: { select: { nom: true, prenom: true, email: true } } } },
     },
   });
   if (!mandat) throw new NotFoundError('Mandat', mandatId);
@@ -508,6 +586,8 @@ export async function moveCandidature(data: {
     throw new ForbiddenError('Déplacement non autorisé');
   }
   if (existing.stage === data.stage) return { ok: true, pending: false };
+  // Placement validé par HumanUp (facture + date) : seul le consultant peut le défaire.
+  if (existing.stage === 'PLACE') throw new ForbiddenError('Cette embauche est validée : contactez votre consultant pour la modifier.');
 
   const [mandat, access] = await Promise.all([
     prisma.mandat.findUnique({
@@ -517,7 +597,7 @@ export async function moveCandidature(data: {
         recruteur: { select: { email: true, prenom: true } }, assignedTo: { select: { email: true, prenom: true } },
       },
     }),
-    prisma.portalAccess.findUnique({ where: { id: data.portalAccessId }, select: { email: true, client: { select: { nom: true, prenom: true, email: true } } } }),
+    prisma.portalAccess.findUnique({ where: { id: data.portalAccessId }, select: { email: true, name: true, client: { select: { nom: true, prenom: true, email: true } } } }),
   ]);
   if (!mandat) throw new NotFoundError('Mandat', data.mandatId);
   // Mouvement attribué au consultant du mandat (stats, agenda) et tracé comme venant du client.
@@ -531,6 +611,9 @@ export async function moveCandidature(data: {
   // Engagé = close won : l'ATS exige facture + date de démarrage. Le client
   // signale l'embauche, le consultant la valide (la carte ne bouge pas).
   const pending = data.stage === 'PLACE';
+  if (pending && (await openHireTasks(data.mandatId)).includes(existing.id)) {
+    return { ok: true, pending: true, already: true };
+  }
   if (!pending) {
     await candidatureService.update(existing.id, {
       stage: data.stage,
@@ -539,7 +622,10 @@ export async function moveCandidature(data: {
     } as any, actorId as string);
   }
 
+  // Avis cohérent avec la colonne : Case = rencontrer, Perdu = écarter.
+  const implied = data.stage === 'ENTRETIEN_CLIENT' ? 'RENCONTRER' : data.stage === 'REFUSE' ? 'ECARTER' : null;
   await prisma.$transaction([
+    ...(implied ? [prisma.portalDecision.create({ data: { portalAccessId: data.portalAccessId, candidatureId: existing.id, decision: implied as PortalDecisionType, reason: data.reason?.trim() || null } })] : []),
     prisma.portalEvent.create({
       data: {
         portalAccessId: data.portalAccessId, mandatId: data.mandatId, candidatureId: existing.id,
@@ -608,7 +694,7 @@ export async function listRecentEventsForMandat(mandatId: string, limit = 20) {
       candidatureId: true,
       payload: true,
       createdAt: true,
-      portalAccess: { select: { email: true, client: { select: { nom: true, prenom: true } } } },
+      portalAccess: { select: { email: true, name: true, client: { select: { nom: true, prenom: true } } } },
     },
     orderBy: { createdAt: 'desc' },
     take: limit,
@@ -631,7 +717,7 @@ export async function listActivity(mandatId: string, candidatureId: string) {
 
   const events = await prisma.portalEvent.findMany({
     where: { candidatureId, type: { in: ['MOVE', 'DECISION', 'COMMENT'] as PortalEventType[] } },
-    select: { type: true, payload: true, createdAt: true, portalAccess: { select: { email: true, client: { select: { nom: true, prenom: true, email: true } } } } },
+    select: { type: true, payload: true, createdAt: true, portalAccess: { select: { email: true, name: true, client: { select: { nom: true, prenom: true, email: true } } } } },
     orderBy: { createdAt: 'asc' },
   });
 
