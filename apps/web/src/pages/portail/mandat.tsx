@@ -12,7 +12,7 @@ type Decision = 'RENCONTRER' | 'A_DISCUTER' | 'ECARTER';
 
 interface Candidature {
   id: string; stage: Stage; dateEntretienClient: string | null;
-  candidat: { id: string; nom: string; prenom: string | null; posteActuel: string | null; entrepriseActuelle: string | null; aiPitchShort: string | null; aiAnonymizedProfile: any };
+  candidat: { id: string; nom: string; prenom: string | null; posteActuel: string | null; entrepriseActuelle: string | null; photoUrl: string | null; aiPitchShort: string | null; aiAnonymizedProfile: any };
   portalDecisions: Array<{ decision: Decision; createdAt: string }>;
 }
 interface KanbanResponse {
@@ -45,6 +45,16 @@ function portalFetch(path: string, init?: RequestInit) {
 }
 function fullName(c: Candidature) { return `${c.candidat.prenom || ''} ${c.candidat.nom}`.trim() || '(profil)'; }
 function initials(c: Candidature) { return `${(c.candidat.prenom?.[0] ?? '')}${c.candidat.nom?.[0] ?? ''}`.toUpperCase() || '?'; }
+
+// Photo du candidat si dispo, sinon initiales.
+function Avatar({ c, size, radius, bg, fg, fontSize }: { c: Candidature; size: number; radius: number | string; bg: string; fg: string; fontSize: number }) {
+  const [broken, setBroken] = useState(false);
+  const box: React.CSSProperties = { flexShrink: 0, width: size, height: size, borderRadius: radius, overflow: 'hidden' };
+  if (c.candidat.photoUrl && !broken) {
+    return <img src={c.candidat.photoUrl} alt="" onError={() => setBroken(true)} style={{ ...box, objectFit: 'cover', display: 'block' }} />;
+  }
+  return <span style={{ ...box, background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize }}>{initials(c)}</span>;
+}
 
 export default function PortalMandatPage() {
   const { mandatId } = useParams<{ mandatId: string }>();
@@ -123,7 +133,7 @@ export default function PortalMandatPage() {
                     return (
                       <div key={c.id} className="pm-card" onClick={() => { setSelected(c); void portalFetch(`/candidatures/${c.id}/view`, { method: 'POST' }); }} style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 13, padding: 14, boxShadow: '0 1px 2px rgba(34,23,122,.05)', cursor: 'pointer' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ flexShrink: 0, width: 36, height: 36, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 12 }}>{initials(c)}</span>
+                          <Avatar c={c} size={36} radius="50%" bg="#22177A" fg="#E6E9AF" fontSize={12} />
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fullName(c)}</div>
                             {(c.candidat.posteActuel || c.candidat.entrepriseActuelle) && <div style={{ fontSize: 12, color: '#8A8699', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(' · ')}</div>}
@@ -174,6 +184,9 @@ function ProfileDrawer({ candidature: c, repName, onClose, onDecision, onComment
   const last = c.portalDecisions[0]?.decision;
   const profile = c.candidat.aiAnonymizedProfile;
   const bullets: string[] = Array.isArray(profile?.bulletPoints) ? profile.bulletPoints : Array.isArray(profile?.highlights) ? profile.highlights : [];
+  // Debrief structuré (optionnel) : infos clés + sections titrées.
+  const infos: Array<{ label: string; value: string }> = Array.isArray(profile?.infos) ? profile.infos : [];
+  const sections: Array<{ title: string; items: string[] }> = Array.isArray(profile?.sections) ? profile.sections : [];
 
   const decide = async (d: Decision) => {
     if (d === 'ECARTER' && !reason.trim()) { return; }
@@ -199,7 +212,7 @@ function ProfileDrawer({ candidature: c, repName, onClose, onDecision, onComment
             <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(230,233,175,.25)', background: 'transparent', color: '#E6E9AF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} strokeWidth={2.4} /></button>
           </div>
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 13, marginTop: 16 }}>
-            <span style={{ flexShrink: 0, width: 54, height: 54, borderRadius: 16, background: '#E6E9AF', color: '#22177A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 18 }}>{initials(c)}</span>
+            <Avatar c={c} size={54} radius={16} bg="#E6E9AF" fg="#22177A" fontSize={18} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 800, fontSize: 18, color: '#fff' }}>{fullName(c)}</div>
               {(c.candidat.posteActuel || c.candidat.entrepriseActuelle) && <div style={{ fontSize: 12.5, color: '#E6E9AF', fontWeight: 600, marginTop: 3 }}>{[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(' · ')}</div>}
@@ -215,9 +228,22 @@ function ProfileDrawer({ candidature: c, repName, onClose, onDecision, onComment
               <p style={{ fontSize: 13.5, lineHeight: 1.6, color: '#4A4568', marginTop: 9 }}>{c.candidat.aiPitchShort}</p>
             </>
           )}
+          {infos.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginTop: 18 }}>
+              {infos.map((it, i) => (
+                <div key={i} style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 11, padding: '9px 11px' }}>
+                  <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9A96AE' }}>{it.label}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1A1533', marginTop: 3, lineHeight: 1.4 }}>{it.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {bullets.length > 0 && (sections.length > 0 || infos.length > 0) && (
+            <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE', marginTop: 22 }}>Adéquation au poste</div>
+          )}
           {bullets.length > 0 && (
-            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {bullets.slice(0, 6).map((b, i) => (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {bullets.slice(0, 8).map((b, i) => (
                 <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
                   <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: 6, background: '#F2F3D8', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}><Check size={11} color="#22177A" strokeWidth={2.6} /></span>
                   <span style={{ fontSize: 13, lineHeight: 1.5, color: '#4A4568' }}>{b}</span>
@@ -225,7 +251,15 @@ function ProfileDrawer({ candidature: c, repName, onClose, onDecision, onComment
               ))}
             </div>
           )}
-          {!c.candidat.aiPitchShort && bullets.length === 0 && <p style={{ fontSize: 13.5, color: '#8A8699' }}>Le dossier détaillé sera disponible sous peu.</p>}
+          {sections.map((sec, i) => (
+            <div key={i} style={{ marginTop: 22 }}>
+              <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>{sec.title}</div>
+              <ul style={{ margin: '9px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {sec.items.map((it, j) => <li key={j} style={{ fontSize: 13, lineHeight: 1.55, color: '#4A4568' }}>{it}</li>)}
+              </ul>
+            </div>
+          ))}
+          {!c.candidat.aiPitchShort && bullets.length === 0 && sections.length === 0 && <p style={{ fontSize: 13.5, color: '#8A8699' }}>Le dossier détaillé sera disponible sous peu.</p>}
 
           {/* DECISION — inutile une fois le process terminé (Engagé / Perdu) */}
           {c.stage !== 'PLACE' && c.stage !== 'REFUSE' && (<>

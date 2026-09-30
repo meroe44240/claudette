@@ -23,7 +23,7 @@ import type {
 // Screening / Case / Culture Fit / Offre / Engagé / Perdu.
 const PORTAL_STAGE_ORDER: StageCandidature[] = ['ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE', 'REFUSE'];
 
-const portalSecret =new TextEncoder().encode(
+const portalSecret = new TextEncoder().encode(
   process.env.JWT_ACCESS_SECRET || 'dev-access-secret',
 );
 
@@ -253,6 +253,7 @@ export async function getKanban(mandatId: string) {
           prenom: true,
           posteActuel: true,
           entrepriseActuelle: true,
+          photoUrl: true,
           aiPitchShort: true,
           aiAnonymizedProfile: true,
         },
