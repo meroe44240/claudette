@@ -215,9 +215,9 @@ export async function getKanban(mandatId: string, portalAccessId?: string) {
       visibleStages: true,
       entreprise: { select: { nom: true } },
       client: { select: { nom: true, prenom: true } },
-      recruteur: { select: { id: true, nom: true, prenom: true } },
-      assignedTo: { select: { id: true, nom: true, prenom: true } },
-      sales: { select: { id: true, nom: true, prenom: true } },
+      recruteur: { select: { id: true, nom: true, prenom: true, avatarUrl: true } },
+      assignedTo: { select: { id: true, nom: true, prenom: true, avatarUrl: true } },
+      sales: { select: { id: true, nom: true, prenom: true, avatarUrl: true } },
     },
   });
   if (!mandat) throw new NotFoundError('Mandat', mandatId);
@@ -306,11 +306,11 @@ export async function getKanban(mandatId: string, portalAccessId?: string) {
 
 // Interlocuteurs HumanUp affichés au client : consultant (recruteur) et commercial
 // (sales, sinon le responsable du mandat s'il n'est pas déjà le consultant).
-type Person = { id: string; nom: string; prenom: string | null } | null;
+type Person = { id: string; nom: string; prenom: string | null; avatarUrl?: string | null } | null;
 function humanupContacts(m: { recruteur: Person; sales: Person; assignedTo: Person }) {
   const consultant = m.recruteur ?? m.assignedTo;
   const commercial = m.sales ?? (m.assignedTo && m.assignedTo.id !== consultant?.id ? m.assignedTo : null);
-  const pub = (u: Person) => (u ? { nom: u.nom, prenom: u.prenom } : null);
+  const pub = (u: Person) => (u ? { nom: u.nom, prenom: u.prenom, avatarUrl: u.avatarUrl ?? null } : null);
   return { consultant: pub(consultant), commercial: commercial && commercial.id !== consultant?.id ? pub(commercial) : null };
 }
 const fullNameOf = (u: { nom: string; prenom: string | null } | null) => (u ? `${u.prenom ? u.prenom + ' ' : ''}${u.nom}`.trim() : null);
@@ -357,12 +357,16 @@ export async function publicMandatInfo(mandatId: string) {
     where: { id: mandatId },
     select: {
       titrePoste: true, entreprise: { select: { nom: true } },
-      recruteur: { select: { id: true, prenom: true, nom: true } }, assignedTo: { select: { id: true, prenom: true, nom: true } }, sales: { select: { id: true, prenom: true, nom: true } },
+      recruteur: { select: { id: true, prenom: true, nom: true, avatarUrl: true } }, assignedTo: { select: { id: true, prenom: true, nom: true, avatarUrl: true } }, sales: { select: { id: true, prenom: true, nom: true, avatarUrl: true } },
     },
   });
   if (!m) throw new NotFoundError('Mandat', mandatId);
   const { consultant, commercial } = humanupContacts(m);
-  return { titrePoste: m.titrePoste, entreprise: m.entreprise?.nom ?? null, consultant: fullNameOf(consultant), commercial: fullNameOf(commercial) };
+  return {
+    titrePoste: m.titrePoste, entreprise: m.entreprise?.nom ?? null,
+    consultant: fullNameOf(consultant), consultantPhoto: consultant?.avatarUrl ?? null,
+    commercial: fullNameOf(commercial), commercialPhoto: commercial?.avatarUrl ?? null,
+  };
 }
 
 export async function recordDecision(
@@ -546,7 +550,7 @@ export async function listComments(mandatId: string, candidatureId: string) {
 
 // Personnes mentionnables : l'équipe HumanUp du mandat + les contacts connus côté client.
 export async function getMentionables(mandatId: string) {
-  const userSel = { select: { id: true, nom: true, prenom: true, email: true, status: true } } as const;
+  const userSel = { select: { id: true, nom: true, prenom: true, email: true, status: true, avatarUrl: true } } as const;
   const mandat = await prisma.mandat.findUnique({
     where: { id: mandatId },
     select: {
@@ -557,15 +561,15 @@ export async function getMentionables(mandatId: string) {
   });
   if (!mandat) throw new NotFoundError('Mandat', mandatId);
 
-  type U = { id: string; nom: string; prenom: string | null; email: string; status: string } | null;
-  const internal: Array<{ id: string; name: string; email: string; role: string }> = [];
+  type U = { id: string; nom: string; prenom: string | null; email: string; status: string; avatarUrl: string | null } | null;
+  const internal: Array<{ id: string; name: string; email: string; role: string; avatarUrl: string | null }> = [];
   const roles: Array<[U, string]> = [
     [mandat.recruteur, 'Consultant'], [mandat.sales, 'Commercial'], [mandat.sourceur, 'Sourcing'],
     [mandat.assignedTo, !mandat.recruteur ? 'Consultant' : mandat.sales ? 'HumanUp' : 'Commercial'], [mandat.createdBy, 'HumanUp'],
   ];
   for (const [u, role] of roles) {
     if (!u || u.status === 'ARCHIVED' || internal.some((i) => i.id === u.id)) continue;
-    internal.push({ id: u.id, name: `${u.prenom ? u.prenom + ' ' : ''}${u.nom}`.trim(), email: u.email, role });
+    internal.push({ id: u.id, name: `${u.prenom ? u.prenom + ' ' : ''}${u.nom}`.trim(), email: u.email, role, avatarUrl: u.avatarUrl });
   }
 
   const external: Array<{ email: string; name: string }> = [];

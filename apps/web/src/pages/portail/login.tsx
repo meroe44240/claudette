@@ -9,7 +9,7 @@ import { Eye, EyeOff, Check, AlertCircle, Lock, ArrowLeft, MailCheck } from 'luc
 import { portalStore, hasValidSession } from './portal-store';
 
 interface LoginResponse { token: string; access: { id: string; mandatId: string; email: string } }
-interface PublicInfo { titrePoste: string; entreprise: string | null; consultant: string | null; commercial: string | null }
+interface PublicInfo { titrePoste: string; entreprise: string | null; consultant: string | null; consultantPhoto?: string | null; commercial: string | null; commercialPhoto?: string | null }
 
 export default function PortalLoginPage() {
   const navigate = useNavigate();
@@ -117,8 +117,21 @@ export default function PortalLoginPage() {
               <div style={{ marginBottom: 18, background: '#fff', border: '1px solid rgba(26,21,51,.09)', borderRadius: 14, padding: '12px 14px' }}>
                 <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: '#6E6A85' }}>Recrutement{info.entreprise ? ` · ${info.entreprise}` : ''}</div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#1A1533', marginTop: 3 }}>{info.titrePoste}</div>
-                {info.consultant && <div style={{ fontSize: 13, color: '#5C5875', marginTop: 3 }}>Consultant : <strong style={{ color: '#1A1533' }}>{info.consultant}</strong></div>}
-                {info.commercial && <div style={{ fontSize: 13, color: '#5C5875', marginTop: 2 }}>Commercial : <strong style={{ color: '#1A1533' }}>{info.commercial}</strong></div>}
+                {(info.consultant || info.commercial) && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 10 }}>
+                    {([[info.consultant, info.consultantPhoto, 'Consultant'], [info.commercial, info.commercialPhoto, 'Commercial']] as const).filter(([n]) => n).map(([n, photo, role]) => (
+                      <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {photo
+                          ? <img src={photo} alt="" style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover' }} />
+                          : <span aria-hidden style={{ width: 30, height: 30, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>{(n ?? '').split(' ').map((w) => w[0]).slice(0, 2).join('')}</span>}
+                        <div style={{ lineHeight: 1.25 }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: '#6E6A85' }}>{role}</div>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: '#1A1533' }}>{n}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             <h2 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 28, letterSpacing: '-.02em', color: '#1A1533' }}>{mode === 'login' ? 'Connexion' : 'Mot de passe oublié'}</h2>

@@ -192,7 +192,7 @@ export default async function portalRouter(fastify: FastifyInstance) {
     handler: async (request) => {
       const { internal, external } = await portalService.getMentionables(request.portal!.mandatId);
       // Pas d'emails de l'équipe HumanUp exposés au client.
-      return { internal: internal.map(({ id, name, role }) => ({ id, name, role })), external };
+      return { internal: internal.map(({ id, name, role, avatarUrl }) => ({ id, name, role, avatarUrl })), external };
     },
   });
 

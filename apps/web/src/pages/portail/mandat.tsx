@@ -22,7 +22,7 @@ interface Candidature {
   hireAnnounced?: boolean;
 }
 interface KanbanResponse {
-  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string }; client: { nom: string; prenom: string | null }; consultant: { nom: string; prenom: string | null } | null; commercial: { nom: string; prenom: string | null } | null };
+  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string }; client: { nom: string; prenom: string | null }; consultant: { nom: string; prenom: string | null; avatarUrl?: string | null } | null; commercial: { nom: string; prenom: string | null; avatarUrl?: string | null } | null };
   stages: Stage[];
   byStage: Record<Stage, Candidature[]>;
 }
@@ -91,6 +91,14 @@ function Avatar({ c, size, radius, bg, fg, fontSize }: { c: Candidature; size: n
     return <img src={c.candidat.photoUrl} alt="" onError={() => setBroken(true)} style={{ ...box, objectFit: 'cover', display: 'block' }} />;
   }
   return <span aria-hidden style={{ ...box, background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: DISPLAY, fontSize }}>{initials(c)}</span>;
+}
+
+// Photo d'un membre de l'équipe HumanUp, sinon initiales.
+function PersonAvatar({ name, photo, size, bg = BRAND, fg = CREAM }: { name: string; photo?: string | null; size: number; bg?: string; fg?: string }) {
+  const [broken, setBroken] = useState(false);
+  const box: React.CSSProperties = { flexShrink: 0, width: size, height: size, borderRadius: '50%', overflow: 'hidden' };
+  if (photo && !broken) return <img src={photo} alt="" onError={() => setBroken(true)} style={{ ...box, objectFit: 'cover', display: 'block' }} />;
+  return <span aria-hidden style={{ ...box, background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: DISPLAY, fontSize: Math.round(size * 0.36) }}>{initialsOf(name)}</span>;
 }
 
 function relTime(iso: string | Date) {
@@ -315,9 +323,9 @@ export default function PortalMandatPage() {
           </div>
           {(rep || commercial) && (
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: '9px 14px' }}>
-              {([[rep, 'Votre consultant', BRAND, CREAM], [commercial, 'Votre commercial', '#F2F3D8', BRAND]] as const).filter(([n]) => n).map(([n, label, bg, fg]) => (
+              {([[rep, 'Votre consultant', BRAND, CREAM, consultant?.avatarUrl ?? null], [commercial, 'Votre commercial', '#F2F3D8', BRAND, com?.avatarUrl ?? null]] as const).filter(([n]) => n).map(([n, label, bg, fg, photo]) => (
                 <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span aria-hidden style={{ width: 34, height: 34, borderRadius: '50%', background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: DISPLAY, fontSize: FS.sm }}>{initialsOf(n)}</span>
+                  <PersonAvatar name={n} photo={photo} size={38} bg={bg} fg={fg} />
                   <div>
                     <div style={LABEL}>{label}</div>
                     <div style={{ fontSize: FS.md, fontWeight: 800, marginTop: 2 }}>{n}</div>
@@ -799,7 +807,7 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
 }
 
 // ─── Onglet Commentaires (avec @mentions) ──────────────
-type Mentionable = { key: string; label: string; sub: string; mention: { kind: 'internal'; id: string } | { kind: 'external'; email: string; name?: string } };
+type Mentionable = { key: string; label: string; sub: string; photo?: string | null; mention: { kind: 'internal'; id: string } | { kind: 'external'; email: string; name?: string } };
 interface PortalCommentRow { id: string; content: string; createdAt: string; author: string; mentions: Array<{ name: string; kind: string }> }
 
 function CommentThread({ candidatureId, repName, prefillMention, onCount, onPosted }: { candidatureId: string; repName: string; prefillMention?: boolean; onCount: (n: number) => void; onPosted: () => void }) {
@@ -825,9 +833,9 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
     void (async () => {
       const res = await portalFetch('/mentionables');
       if (!res.ok) return;
-      const m = await res.json() as { internal: Array<{ id: string; name: string; role: string }>; external: Array<{ email: string; name: string }> };
+      const m = await res.json() as { internal: Array<{ id: string; name: string; role: string; avatarUrl?: string | null }>; external: Array<{ email: string; name: string }> };
       const list: Mentionable[] = [
-        ...m.internal.map((u) => ({ key: u.id, label: u.name, sub: `HumanUp · ${u.role}`, mention: { kind: 'internal' as const, id: u.id } })),
+        ...m.internal.map((u) => ({ key: u.id, label: u.name, sub: `HumanUp · ${u.role}`, photo: u.avatarUrl, mention: { kind: 'internal' as const, id: u.id } })),
         ...m.external.map((x) => ({ key: x.email, label: x.name, sub: x.email, mention: { kind: 'external' as const, email: x.email, name: x.name } })),
       ];
       setPeople(list);
@@ -935,7 +943,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
             <div role="listbox" aria-label="Personnes à identifier" style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', marginBottom: 6, background: '#fff', border: '1px solid rgba(34,23,122,.14)', borderRadius: 12, boxShadow: '0 18px 40px -20px rgba(26,21,51,.45)', overflow: 'hidden', zIndex: 5 }}>
               {suggestions.map((p) => (
                 <button key={p.key} role="option" aria-selected={false} onMouseDown={(e) => { e.preventDefault(); pick(p); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '9px 12px', background: 'transparent', border: 'none', borderBottom: '1px solid rgba(34,23,122,.06)', cursor: 'pointer' }}>
-                  <span aria-hidden style={{ flexShrink: 0, width: 26, height: 26, borderRadius: '50%', background: p.mention.kind === 'internal' ? BRAND : '#F2F3D8', color: p.mention.kind === 'internal' ? CREAM : BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: FS.xs, fontWeight: 800 }}>{initialsOf(p.label)}</span>
+                  <PersonAvatar name={p.label} photo={p.photo} size={28} bg={p.mention.kind === 'internal' ? BRAND : '#F2F3D8'} fg={p.mention.kind === 'internal' ? CREAM : BRAND} />
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: 'block', fontSize: FS.base, fontWeight: 700, color: INK }}>{p.label}</span>
                     <span style={{ display: 'block', fontSize: FS.sm, color: FAINT }}>{p.sub}</span>
