@@ -1,12 +1,12 @@
 /**
- * Portail client — vue « Suivi Client » d'un mandat (design pack).
+ * Portail client : tableau des candidatures d'une offre.
  * URL : /portail/mandat/:mandatId — session portail (localStorage, 8h).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { X, Check, MessageSquare, AtSign, Banknote, CalendarClock, ArrowRight, Sparkles, MessageCircle, Inbox, Lock, BellRing, PartyPopper, ChevronDown } from 'lucide-react';
+import { X, Check, MessageSquare, AtSign, Banknote, CalendarClock, ArrowRight, UserPlus, MessageCircle, Lock, BellRing, BadgeCheck, ChevronDown } from 'lucide-react';
 import { portalStore } from './portal-store';
 import { PortalTopBar, lastMandat, SHARED_CSS } from './portal-ui';
 
@@ -58,7 +58,7 @@ const CREAM = '#E6E9AF';
 const BG = '#F6F5EF';
 const FS = { xs: 11, sm: 12, base: 13, md: 14, lg: 16, xl: 20, xxl: 28 } as const;
 const DISPLAY = "'Archivo Black',sans-serif";
-const LABEL: React.CSSProperties = { fontSize: FS.xs, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: FAINT };
+const LABEL: React.CSSProperties = { fontSize: FS.sm, fontWeight: 700, color: MUTED };
 
 function portalFetch(path: string, init?: RequestInit) {
   const token = portalStore.get('portal_token');
@@ -169,7 +169,7 @@ export default function PortalMandatPage() {
 
   useEffect(() => {
     if (!portalStore.get('portal_token')) { navigate(`/portail/login?m=${mandatId ?? ''}`); return; }
-    document.title = 'Portail client — HumanUp';
+    document.title = 'Candidatures | HumanUp';
     setSelectedId(null);
     if (mandatId) lastMandat.set(mandatId);
     void reload();
@@ -247,13 +247,13 @@ export default function PortalMandatPage() {
     const out = await res.json().catch(() => ({}));
     if (out?.pending) {
       flash({ msg: out.already
-        ? `${repFirst || 'Votre interlocuteur HumanUp'} a déjà été prévenu(e) de l'embauche de ${fullName(c)}.`
-        : `C'est noté ! ${repFirst || 'Votre interlocuteur HumanUp'} est prévenu(e) et finalise l'embauche de ${fullName(c)}.` });
+        ? `Embauche déjà signalée à ${repFirst || 'HumanUp'}.`
+        : `Embauche signalée à ${repFirst || 'HumanUp'}.` });
     } else if (isUndo) {
-      flash({ msg: `${fullName(c)} est revenu(e) en « ${STAGE_LABELS[to]} ».` });
+      flash({ msg: 'Déplacement annulé.' });
     } else {
       flash({
-        msg: `${fullName(c)} → ${STAGE_LABELS[to]}. ${repFirst || 'Votre interlocuteur HumanUp'} est prévenu(e).`,
+        msg: `${fullName(c)} → ${STAGE_LABELS[to]}`,
         undo: () => { setToast(null); void doMove({ ...c, column: to, stage: COL_STAGE[to] }, from, {}, true); },
       });
     }
@@ -268,15 +268,15 @@ export default function PortalMandatPage() {
     if (!res.ok) { flash({ msg: 'Votre avis n’a pas pu être enregistré.' }); return; }
     if (d === 'A_DISCUTER') {
       setDrawerTab({ tab: 'commentaires', prefill: true });
-      flash({ msg: `Dites à ${repFirst || 'votre interlocuteur HumanUp'} ce que vous voulez creuser : il/elle est notifié(e).` });
+      flash({ msg: 'Avis enregistré.' });
     } else {
-      flash({ msg: `Avis enregistré. ${repFirst || 'Votre interlocuteur HumanUp'} est prévenu(e).` });
+      flash({ msg: 'Avis enregistré.' });
     }
     void reload(true);
   }
   async function decideOnly(c: Candidature, d: Decision) {
     const res = await portalFetch(`/candidatures/${c.id}/decision`, { method: 'POST', body: JSON.stringify({ decision: d }) });
-    if (res.ok) { flash({ msg: `Noté : ${repFirst || 'votre interlocuteur HumanUp'} organise la rencontre avec ${fullName(c)}.` }); void reload(true); }
+    if (res.ok) { flash({ msg: 'Avis enregistré.' }); void reload(true); }
   }
 
   if (loading || !data) return (
@@ -326,7 +326,7 @@ export default function PortalMandatPage() {
       {/* HERO */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, padding: isMobile ? '20px 16px 4px' : '28px 34px 6px' }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: FS.base, color: FAINT, fontWeight: 600 }}>Suivi de recrutement · {data.mandat.entreprise.nom}</div>
+          <div style={{ fontSize: FS.base, color: FAINT, fontWeight: 600 }}>{data.mandat.entreprise.nom}</div>
           <OfferSwitcher current={data.mandat.id} title={data.mandat.titrePoste} compact={isMobile} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -370,13 +370,12 @@ export default function PortalMandatPage() {
           </div>
         ) : cards.length > 0 ? (
           <div role="status" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: FS.base, color: MUTED }}>
-            <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}><Check size={16} color="#2F8A4A" strokeWidth={2.6} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span><strong style={{ color: INK }}>Vous êtes à jour.</strong> {contact ? `${contact.split(' ')[0]} vous préviendra` : 'Vous serez prévenu'} dès qu’un nouveau profil arrive.</span></span>
+            <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}><Check size={16} color="#2F8A4A" strokeWidth={2.6} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span>Aucun profil en attente d’avis.</span></span>
             {nextInterview && <span style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}><CalendarClock size={15} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span>Prochain entretien : <strong style={{ color: INK }}>{fullName(nextInterview)}</strong>, {fmtInterview(nextInterview.dateEntretienClient!)}</span></span>}
           </div>
         ) : (
-          <div style={{ fontSize: FS.base, color: MUTED }}>Les premiers profils arrivent bientôt. {contact ? `${contact.split(' ')[0]} vous préviendra par email.` : ''}</div>
+          <div style={{ fontSize: FS.base, color: MUTED }}>Aucun profil pour l’instant.</div>
         )}
-        {!isMobile && cards.length > 0 && <p style={{ fontSize: FS.base, color: FAINT, marginTop: 10 }}>Cliquez sur un profil pour ouvrir son dossier, glissez une carte pour la faire avancer.</p>}
       </div>
 
       {/* BOARD (ordinateur) / LISTE (mobile) */}
@@ -456,7 +455,6 @@ function StageColumn({ stage, count, dragging, children }: { stage: Col; count: 
       >
         {empty && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: FAINT, fontSize: FS.sm, textAlign: 'center', padding: '0 6px' }}>
-            <Inbox size={18} strokeWidth={1.8} aria-hidden />
             {dragging ? 'Déposez le profil ici' : 'Aucun profil'}
           </div>
         )}
@@ -497,7 +495,7 @@ function CardBody({ c, lifted }: { c: Candidature; lifted?: boolean }) {
             <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{salary}</span>
           </span>
         )}
-        {c.hireAnnounced && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: FS.sm, fontWeight: 800, borderRadius: 8, padding: '3px 8px', background: '#E7F3EA', color: '#256238' }}><PartyPopper size={13} aria-hidden />Embauche annoncée</span>}
+        {c.hireAnnounced && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: FS.sm, fontWeight: 800, borderRadius: 8, padding: '3px 8px', background: '#E7F3EA', color: '#256238' }}><BadgeCheck size={13} aria-hidden />Embauche annoncée</span>}
         {locked && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: FS.sm, fontWeight: 800, borderRadius: 8, padding: '3px 8px', background: '#E7F3EA', color: '#256238' }}><Lock size={12} aria-hidden />Embauche validée</span>}
         {!c.hireAnnounced && !locked && last && <span style={{ fontSize: FS.sm, fontWeight: 800, borderRadius: 8, padding: '3px 8px', background: DECISION_TONE[last].bg, color: DECISION_TONE[last].fg, whiteSpace: 'nowrap' }}>{DECISION_LABEL[last]}</span>}
       </div>
@@ -599,7 +597,6 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
       <aside ref={ref} role="dialog" aria-modal="true" aria-label={`Dossier de ${fullName(c)}`} className="pm-drawer" style={{ position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 61, width: 1000, maxWidth: '96vw', background: '#FCFCF7', boxShadow: '-26px 0 70px -30px rgba(26,21,51,.55)', display: 'flex', flexDirection: 'column' }}>
         {/* En-tête */}
         <div style={{ flexShrink: 0, background: BRAND, padding: '18px 20px 14px', position: 'relative', overflow: 'hidden' }}>
-          <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(230,233,175,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(230,233,175,.05) 1px,transparent 1px)', backgroundSize: '36px 36px' }} />
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 14 }}>
             <Avatar c={c} size={56} radius={16} bg={CREAM} fg={BRAND} fontSize={18} />
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -622,8 +619,8 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
               );
             })}
           </div>
-          {locked && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><Lock size={13} aria-hidden />Embauche validée : contactez {repName || 'votre interlocuteur HumanUp'} pour toute modification.</div>}
-          {c.hireAnnounced && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><PartyPopper size={13} aria-hidden />Embauche annoncée : {repName || 'votre interlocuteur HumanUp'} finalise avec vous.</div>}
+          {locked && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><Lock size={13} aria-hidden />Embauche validée</div>}
+          {c.hireAnnounced && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><BadgeCheck size={13} aria-hidden />Embauche annoncée, en cours de validation par HumanUp</div>}
         </div>
 
         <div className="pm-drawer-body" style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 380px' }}>
@@ -641,9 +638,6 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
                   {decisionBtn('A_DISCUTER', <MessageSquare size={17} aria-hidden />, 'À discuter', DECISION_TONE.A_DISCUTER)}
                   {decisionBtn('ECARTER', <X size={17} aria-hidden />, 'Écarter', DECISION_TONE.ECARTER)}
                 </div>
-                <p style={{ fontSize: FS.sm, color: FAINT, marginTop: 10, lineHeight: 1.5 }}>
-                  {c.column === 'INBOX' ? 'Rencontrer : vous planifiez le Screening. ' : ''}Écarter : le profil passe en « Perdu ». À discuter : écrivez à {repName || 'votre interlocuteur HumanUp'}.
-                </p>
               </div>
             )}
 
@@ -657,7 +651,7 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginTop: 18 }}>
                 {infos.map((it, i) => (
                   <div key={i} style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, padding: '10px 12px' }}>
-                    <div style={{ ...LABEL, letterSpacing: '.08em' }}>{it.label}</div>
+                    <div style={LABEL}>{it.label}</div>
                     <div style={{ fontSize: FS.base, fontWeight: 700, color: INK, marginTop: 3, lineHeight: 1.4 }}>{it.value}</div>
                   </div>
                 ))}
@@ -727,7 +721,7 @@ function ActivityFeed({ candidatureId }: { candidatureId: string }) {
     if (it.kind === 'COMMENT') return { el: <MessageCircle {...s} />, bg: '#EDEBFA', fg: BRAND };
     if (it.kind === 'DECISION') return { el: <Check {...s} />, bg: '#E6F2E9', fg: '#256238' };
     if (it.kind === 'INTERVIEW') return { el: <CalendarClock {...s} />, bg: '#FCF1E4', fg: '#9A5A12' };
-    if (it.kind === 'STAGE' && it.text.includes('présenté')) return { el: <Sparkles {...s} />, bg: '#EAF1FC', fg: '#1F58B8' };
+    if (it.kind === 'STAGE' && it.text.includes('présenté')) return { el: <UserPlus {...s} />, bg: '#EAF1FC', fg: '#1F58B8' };
     const st: Col = it.stage && STAGE_ACCENT[it.stage] ? it.stage : 'INBOX';
     return { el: <ArrowRight {...s} />, bg: STAGE_TINT[st], fg: STAGE_ACCENT[st] };
   };
@@ -782,7 +776,6 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
         <h3 id="pm-move-title" style={{ fontFamily: DISPLAY, fontSize: FS.lg + 2, color: INK, letterSpacing: '-.01em', lineHeight: 1.25 }}>{title}</h3>
         {to === 'PERDU' && (
           <>
-            <p style={{ fontSize: FS.base, color: MUTED, marginTop: 8 }}>Le profil passe en « Perdu ». {repName || 'Votre interlocuteur HumanUp'} en tient compte pour la suite du sourcing.</p>
             <label htmlFor="pm-reason" style={label}>Pourquoi ?</label>
             <textarea id="pm-reason" data-autofocus value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex. : expérience trop éloignée des grands comptes…" style={{ ...field, minHeight: 84, resize: 'vertical' }} />
           </>
@@ -797,7 +790,7 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
         )}
         {to === 'ENGAGE' && (
           <p style={{ fontSize: FS.md, lineHeight: 1.6, color: TEXT, marginTop: 12 }}>
-            {repName || 'Votre interlocuteur HumanUp'} est prévenu(e) immédiatement et finalise l'embauche avec vous (date de démarrage, contrat). La carte passera en « Engagé » dès validation.
+            {repName || 'HumanUp'} finalise l’embauche avec vous (date de démarrage, contrat). La carte passera en « Engagé » une fois validée.
           </p>
         )}
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
@@ -811,7 +804,7 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
         </div>
         {to === 'SCREENING' && fromDecision && (
           <button className="pm-btn" onClick={onSkip} style={{ width: '100%', marginTop: 10, fontSize: FS.base, fontWeight: 700, background: 'transparent', color: BRAND, border: 'none', padding: 8, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}>
-            Pas encore de date : {repName ? repName.split(' ')[0] : 'mon consultant'} organise la rencontre
+            Je n’ai pas encore de date
           </button>
         )}
       </div>
@@ -920,8 +913,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
         {rows === null && <p style={{ fontSize: FS.base, color: FAINT }}>Chargement…</p>}
         {rows?.length === 0 && (
           <div style={{ margin: 'auto 0', textAlign: 'center', color: FAINT, fontSize: FS.base, lineHeight: 1.6, padding: '24px 8px' }}>
-            <MessageCircle size={22} strokeWidth={1.8} aria-hidden style={{ display: 'block', margin: '0 auto 8px' }} />
-            Aucun commentaire pour l’instant.<br />Tapez <strong style={{ color: MUTED }}>@</strong> pour identifier {repName || 'votre interlocuteur HumanUp'} ou un collègue.
+            Aucun commentaire.
           </div>
         )}
         {rows?.map((r) => (
@@ -950,7 +942,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
               if (e.key === 'Enter' && suggestions.length > 0 && query !== null) { e.preventDefault(); pick(suggestions[0]); return; }
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); }
             }}
-            placeholder="Écrire un commentaire… (@ pour identifier quelqu’un)"
+            placeholder="Écrire un commentaire, @ pour mentionner"
             style={{ width: '100%', minHeight: 76, resize: 'vertical', fontFamily: "'Manrope',sans-serif", fontSize: FS.md, lineHeight: 1.5, padding: '11px 13px', borderRadius: 12, border: '1.5px solid rgba(34,23,122,.18)', background: '#fff', outline: 'none', color: INK }}
           />
           {query !== null && suggestions.length > 0 && (
@@ -969,16 +961,15 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
         </div>
         {error && <p role="alert" style={{ fontSize: FS.sm, color: '#9E2F1A', fontWeight: 700, marginTop: 8 }}>{error}</p>}
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button className="pm-btn" onClick={startMention} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FS.base, fontWeight: 700, background: '#F2F3D8', color: BRAND, border: 'none', borderRadius: 11, padding: '0 14px', cursor: 'pointer' }}><AtSign size={14} aria-hidden />Identifier</button>
+          <button className="pm-btn" onClick={startMention} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FS.base, fontWeight: 700, background: '#F2F3D8', color: BRAND, border: 'none', borderRadius: 11, padding: '0 14px', cursor: 'pointer' }}><AtSign size={14} aria-hidden />Mentionner</button>
           <button className="pm-btn" disabled={busy || !text.trim()} onClick={send} style={{ flex: 1, fontSize: FS.md, fontWeight: 800, background: text.trim() ? BRAND : '#C4C1D0', color: CREAM, border: 'none', borderRadius: 11, padding: 11, cursor: text.trim() ? 'pointer' : 'default' }}>Envoyer</button>
         </div>
-        <p style={{ fontSize: FS.sm, color: FAINT, marginTop: 8, lineHeight: 1.5 }}>Les personnes identifiées reçoivent votre commentaire par email.</p>
       </div>
     </>
   );
 }
 
-// ─── Titre de l'offre + changement d'offre (façon Teamtailor) ───
+// ─── Titre de l'offre + changement d'offre ───
 function OfferSwitcher({ current, title, compact }: { current: string; title: string; compact?: boolean }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);

@@ -137,7 +137,7 @@ async function sendInviteEmail(p: { email: string; password: string | null; mand
   const profils = p.nbVisible > 0
     ? `${p.nbVisible} profil${p.nbVisible > 1 ? 's' : ''} vous ${p.nbVisible > 1 ? 'attendent' : 'attend'} déjà.`
     : 'Les profils présentés y apparaîtront au fil de l’avancement.';
-  const subject = `Votre espace de suivi — ${p.titrePoste}`;
+  const subject = `Votre espace de suivi : ${p.titrePoste}`;
   const text = `${hello}\n\nVoici votre espace de suivi pour le recrutement « ${p.titrePoste} ». Vous y consultez les profils présentés et donnez votre avis en un clic (rencontrer, à discuter, écarter).\n\n${profils}\n\nAccès : ${link}\nIdentifiant : ${p.email}\nMot de passe : ${p.password ?? 'inchangé (le même que pour vos autres offres)'}\n\nBien à vous,\nL’équipe HumanUp`;
 
   const F = 'Arial,Helvetica,sans-serif';
@@ -389,7 +389,7 @@ export async function resetPassword(mandatId: string | undefined, emailRaw: stri
   const link = `${PORTAL_BASE}/portail/login?m=${access.mandatId}`;
   const prenom = (access.name || '').trim().split(/\s+/)[0];
   const espace = access.mandat.entreprise?.nom ? `votre espace de suivi ${access.mandat.entreprise.nom}` : 'votre espace de suivi';
-  await sendEmail(email, 'Votre nouveau mot de passe — espace de suivi HumanUp', renderBrandedEmail({
+  await sendEmail(email, 'Votre nouveau mot de passe HumanUp', renderBrandedEmail({
     title: 'Nouveau mot de passe',
     bodyHtml: `<p>Bonjour${prenom ? ' ' + esc(prenom) : ''},</p><p>Voici votre nouveau mot de passe pour ${esc(espace)} :</p>
       <p style="font-family:monospace;font-size:16px;background:#F2F3D8;border-radius:10px;padding:12px 14px;display:inline-block">${password}</p>
@@ -555,7 +555,7 @@ async function notifyMentions(p: {
   ]);
   const auteur = access ? portalAuthorName(access) : 'Votre client';
   const candidatNom = p.candidat ? `${p.candidat.prenom ?? ''} ${p.candidat.nom}`.trim() : null;
-  const sujetOf = (mentioned: boolean) => `${auteur} ${mentioned ? 'vous a mentionné' : 'a commenté'}${candidatNom ? ` — ${candidatNom}` : ''} · ${mandat?.titrePoste ?? ''}`;
+  const sujetOf = (mentioned: boolean) => `${auteur} ${mentioned ? 'vous a mentionné' : 'a commenté'}${candidatNom ? `, ${candidatNom}` : ''} (${mandat?.titrePoste ?? ''})`;
   const quote = `<p style="border-left:3px solid #E6E9AF;padding-left:12px;margin:16px 0;color:#4a4568;">${esc(p.content).replace(/\n/g, '<br>')}</p>`;
   for (const m of p.mentions) {
     const internal = m.kind === 'internal';
@@ -1028,7 +1028,7 @@ export async function listNotifications(scope: PortalScope) {
     const nom = nameOf(h.candidature.candidat);
     items.push({
       id: `h-${h.id}`, kind: isNew ? 'NEW' : 'STAGE', at: h.changedAt,
-      title: isNew ? `Nouveau profil : ${nom}` : `${nom} est passé(e) en « ${labelOf(h.toStage)} »`,
+      title: isNew ? `Nouveau profil : ${nom}` : `${nom} → ${labelOf(h.toStage)}`,
       body: titles.get(h.candidature.mandatId) ?? '', who: nom,
       mandatId: h.candidature.mandatId, candidatureId: h.candidature.id, photo: h.candidature.candidat.photoUrl,
       unread: h.changedAt > seenAt,

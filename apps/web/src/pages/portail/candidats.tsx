@@ -1,5 +1,5 @@
 /**
- * Portail client — « Candidats » : tous les profils présentés, toutes offres confondues.
+ * Portail client : tous les profils présentés, toutes offres confondues.
  * URL : /portail/candidats — un clic ouvre la fiche dans le tableau de l'offre.
  */
 
@@ -29,7 +29,7 @@ export default function PortalCandidatsPage() {
 
   useEffect(() => {
     if (!portalStore.get('portal_token')) { navigate('/portail/login'); return; }
-    document.title = 'Candidats — HumanUp';
+    document.title = 'Candidats | HumanUp';
     void portalFetch('/candidats').then(async (r) => {
       if (r.status === 401) { portalStore.clear(); navigate('/portail/login?expired=1'); return; }
       setRows(r.ok ? await r.json() : []);
@@ -54,7 +54,6 @@ export default function PortalCandidatsPage() {
       <PortalTopBar active="candidats" />
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: isMobile ? '22px 16px 40px' : '32px 32px 56px' }}>
         <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 22 : FS.xxl, letterSpacing: '-.025em' }}>Candidats</h1>
-        <p style={{ fontSize: FS.md, color: MUTED, marginTop: 6 }}>Tous les profils présentés par HumanUp, toutes offres confondues.</p>
 
         {/* Recherche + filtres */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 20 }}>
@@ -68,7 +67,7 @@ export default function PortalCandidatsPage() {
             {offres.map(([id, t]) => <option key={id} value={id}>{t}</option>)}
           </select>
           <select aria-label="Filtrer par étape" value={col} onChange={(e) => setCol(e.target.value as '' | Col | 'ACTIFS')} style={{ ...selectStyle, flex: '0 1 190px' }}>
-            <option value="ACTIFS">En cours (hors Perdu)</option>
+            <option value="ACTIFS">En cours</option>
             <option value="">Toutes les étapes</option>
             {COL_ORDER.map((c) => <option key={c} value={c}>{COL_LABELS[c]}</option>)}
           </select>
@@ -104,14 +103,14 @@ export default function PortalCandidatsPage() {
               <thead>
                 <tr style={{ background: '#FAFAF6', borderBottom: `1px solid ${LINE}` }}>
                   {['Candidat', 'Offre', 'Étape', 'Avis', 'Salaire', 'Mis à jour'].map((h) => (
-                    <th key={h} scope="col" style={{ ...LABEL, letterSpacing: '.08em', textAlign: 'left', padding: '11px 14px', whiteSpace: 'nowrap' }}>{h}</th>
+                    <th key={h} scope="col" style={{ ...LABEL, textAlign: 'left', padding: '11px 14px', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.id} className="pm-row" tabIndex={0} onClick={() => open(r)} onKeyDown={(e) => { if (e.key === 'Enter') open(r); }}
-                    aria-label={`${fullName(r)} — ${r.mandatTitre}. Ouvrir le dossier`} style={{ borderBottom: `1px solid ${LINE}`, cursor: 'pointer' }}>
+                    aria-label={`${fullName(r)}, ${r.mandatTitre}. Ouvrir le dossier`} style={{ borderBottom: `1px solid ${LINE}`, cursor: 'pointer' }}>
                     <td style={{ padding: '11px 14px' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
                         <PersonAvatar name={fullName(r)} photo={r.candidat.photoUrl} size={36} radius={10} />

@@ -1,11 +1,11 @@
 /**
- * Portail client — éléments partagés : charte, libellés des colonnes, appels API,
+ * Portail client : éléments partagés (charte, libellés des colonnes, appels API,
  * avatars et barre de navigation (Candidatures / Offres d'emploi / Candidats + cloche).
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Bell, ChevronDown, LogOut, Check, Sparkles, ArrowRight, MessageCircle, AtSign, Columns3, Briefcase, Users } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, UserPlus, ArrowRight, MessageCircle, AtSign, Columns3, Briefcase, Users } from 'lucide-react';
 import { portalStore } from './portal-store';
 
 // ── Charte (contrastes ≥ 4,5:1 sur le fond) ──
@@ -20,7 +20,7 @@ export const BG = '#F6F5EF';
 export const FS = { xs: 11, sm: 12, base: 13, md: 14, lg: 16, xl: 20, xxl: 28 } as const;
 export const DISPLAY = "'Archivo Black',sans-serif";
 export const FONT = "'Manrope',sans-serif";
-export const LABEL: React.CSSProperties = { fontSize: FS.xs, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', color: FAINT };
+export const LABEL: React.CSSProperties = { fontSize: FS.sm, fontWeight: 700, color: MUTED };
 
 // ── Colonnes du portail ──
 export type Col = 'INBOX' | 'SCREENING' | 'CASE' | 'CULTURE_FIT' | 'OFFRE' | 'ENGAGE' | 'PERDU';
@@ -126,7 +126,7 @@ export function PortalTopBar({ active, mandatId }: { active: Tab; mandatId?: str
 
   return (
     <header style={{ position: 'sticky', top: 0, zIndex: 40, display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 18, height: 58, padding: isMobile ? '0 12px' : '0 24px', background: '#fff', borderBottom: `1px solid ${LINE}` }}>
-      <Link to="/portail/offres" aria-label="HumanUp — accueil" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+      <Link to="/portail/offres" aria-label="HumanUp, accueil" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         <span style={{ width: 32, height: 32, borderRadius: 9, background: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <img src="/brand/logo-mark-cream.png" alt="" style={{ width: 19, height: 19 }} />
         </span>
@@ -219,7 +219,7 @@ export function NotificationsBell() {
     close();
     navigate(`/portail/mandat/${n.mandatId}${n.candidatureId ? `?c=${n.candidatureId}${n.kind === 'COMMENT' || n.kind === 'MENTION' ? '&t=commentaires' : ''}` : ''}`);
   }
-  const icon = (k: Notif['kind']) => (k === 'NEW' ? <Sparkles size={12} /> : k === 'STAGE' ? <ArrowRight size={12} /> : k === 'MENTION' ? <AtSign size={12} /> : <MessageCircle size={12} />);
+  const icon = (k: Notif['kind']) => (k === 'NEW' ? <UserPlus size={12} /> : k === 'STAGE' ? <ArrowRight size={12} /> : k === 'MENTION' ? <AtSign size={12} /> : <MessageCircle size={12} />);
   const unread = data?.unread ?? 0;
 
   return (
@@ -242,7 +242,7 @@ export function NotificationsBell() {
               {!data && <p style={{ padding: 16, fontSize: FS.base, color: FAINT }}>Chargement…</p>}
               {data?.items.length === 0 && (
                 <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: FS.base, color: FAINT }}>
-                  <Check size={20} aria-hidden style={{ display: 'block', margin: '0 auto 8px' }} />Rien de nouveau pour l’instant.
+                  Aucune notification.
                 </div>
               )}
               {data?.items.map((n) => (

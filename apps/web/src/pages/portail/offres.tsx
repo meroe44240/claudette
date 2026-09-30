@@ -1,11 +1,11 @@
 /**
- * Portail client — « Offres d'emploi » : toutes les offres de l'entreprise suivies par HumanUp.
+ * Portail client : offres d'emploi de l'entreprise suivies par HumanUp.
  * URL : /portail/offres
  */
 
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { MapPin, BellRing, Briefcase } from 'lucide-react';
+import { MapPin, BellRing } from 'lucide-react';
 import { portalStore } from './portal-store';
 import {
   BG, BRAND, COL_ACCENT, COL_LABELS, COL_ORDER, CREAM, DISPLAY, FAINT, FONT, FS, INK, LABEL, LINE, MUTED, SHARED_CSS,
@@ -28,7 +28,7 @@ export default function PortalOffresPage() {
 
   useEffect(() => {
     if (!portalStore.get('portal_token')) { navigate('/portail/login'); return; }
-    document.title = 'Offres d’emploi — HumanUp';
+    document.title = 'Offres d’emploi | HumanUp';
     void portalFetch('/offres').then(async (r) => {
       if (r.status === 401) { portalStore.clear(); navigate('/portail/login?expired=1'); return; }
       setOffres(r.ok ? await r.json() : []);
@@ -48,12 +48,11 @@ export default function PortalOffresPage() {
       <PortalTopBar active="offres" />
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '22px 16px 40px' : '32px 32px 56px' }}>
         <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 22 : FS.xxl, letterSpacing: '-.025em' }}>Offres d’emploi</h1>
-        <p style={{ fontSize: FS.md, color: MUTED, marginTop: 6 }}>Les postes que HumanUp recrute pour vous.</p>
 
         {offres === null && <p style={{ marginTop: 28, fontSize: FS.base, color: FAINT }}>Chargement…</p>}
         {offres?.length === 0 && (
           <div style={{ marginTop: 28, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, padding: 28, textAlign: 'center', color: MUTED, fontSize: FS.md }}>
-            <Briefcase size={22} aria-hidden style={{ display: 'block', margin: '0 auto 10px', color: FAINT }} />Aucune offre en cours pour le moment.
+            Aucune offre en cours.
           </div>
         )}
 
@@ -67,7 +66,7 @@ export default function PortalOffresPage() {
 function OfferList({ title, offres, muted }: { title: string; offres: Offre[]; muted?: boolean }) {
   return (
     <section style={{ marginTop: 28 }}>
-      <div style={{ ...LABEL, marginBottom: 10 }}>{title} · {offres.length}</div>
+      <div style={{ ...LABEL, marginBottom: 10 }}>{title} ({offres.length})</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {offres.map((o) => <OfferCard key={o.id} o={o} muted={muted} />)}
       </div>
