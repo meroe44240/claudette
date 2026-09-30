@@ -1,7 +1,8 @@
 import path from 'path';
 import { mkdir, writeFile } from 'fs/promises';
 import { FastifyInstance } from 'fastify';
-import { createCandidatSchema, updateCandidatSchema, createExperienceSchema, updateExperienceSchema } from './candidat.schema.js';
+import { createCandidatSchema, updateCandidatSchema, createExperienceSchema, updateExperienceSchema, dossierSchema } from './candidat.schema.js';
+import * as dossierService from './dossier.service.js';
 import * as candidatService from './candidat.service.js';
 import * as activiteService from '../activites/activite.service.js';
 import prisma from '../../lib/db.js';
@@ -243,6 +244,47 @@ export default async function candidatRouter(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
       const input = updateCandidatSchema.parse(request.body);
       return candidatService.update(id, input);
+    },
+  });
+
+  // ─── Dossier client (ce que le client voit sur le portail) ───
+  fastify.get('/:id/dossier', {
+    schema: { description: 'Dossier client du candidat (portail)', tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      return dossierService.getDossier(id);
+    },
+  });
+
+  fastify.put('/:id/dossier', {
+    schema: { description: 'Mettre à jour le dossier client du candidat', tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      return dossierService.updateDossier(id, dossierSchema.parse(request.body));
+    },
+  });
+
+  fastify.post('/:id/photo', {
+    schema: { description: 'Envoyer la photo du candidat', tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const data = await request.file();
+      if (!data) return reply.status(400).send({ error: 'Aucun fichier envoyé' });
+      const chunks: Buffer[] = [];
+      for await (const chunk of data.file) chunks.push(chunk);
+      return dossierService.uploadPhoto(id, Buffer.concat(chunks), data.mimetype);
+    },
+  });
+
+  fastify.delete('/:id/photo', {
+    schema: { description: 'Retirer la photo du candidat', tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      return dossierService.removePhoto(id);
     },
   });
 

@@ -180,11 +180,17 @@ export async function updateCandidatFromCv(
   }
 
   // AI-specific fields
-  updateData.aiPitchShort = parsed.pitch.short;
+  // Un dossier client retouché à la main (dossierManuel) n'est pas écrasé :
+  // la synthèse et le profil anonymisé sont ce que le client voit sur le portail.
+  const current = await prisma.candidat.findUnique({ where: { id: candidatId }, select: { aiAnonymizedProfile: true } });
+  const dossierManuel = (current?.aiAnonymizedProfile as any)?.dossierManuel === true;
+  if (!dossierManuel) {
+    updateData.aiPitchShort = parsed.pitch.short;
+    updateData.aiAnonymizedProfile = parsed.anonymized_profile;
+  }
   updateData.aiPitchLong = parsed.pitch.long;
   updateData.aiSellingPoints = parsed.pitch.key_selling_points;
   updateData.aiIdealFor = parsed.pitch.ideal_for;
-  updateData.aiAnonymizedProfile = parsed.anonymized_profile;
   updateData.aiParsedAt = new Date();
 
   const candidat = await prisma.candidat.update({

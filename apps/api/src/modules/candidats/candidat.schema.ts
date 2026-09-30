@@ -34,6 +34,16 @@ export const updateCandidatSchema = createCandidatSchema.partial();
 export type CreateCandidatInput = z.infer<typeof createCandidatSchema>;
 export type UpdateCandidatInput = z.infer<typeof updateCandidatSchema>;
 
+// ─── DOSSIER CLIENT (portail) ───────────────────────
+
+export const dossierSchema = z.object({
+  synthese: z.string().max(4000).optional().nullable(),
+  infos: z.array(z.object({ label: z.string().max(80), value: z.string().max(300) })).max(12).optional(),
+  adequation: z.array(z.string().max(600)).max(20).optional(),
+  sections: z.array(z.object({ title: z.string().max(120), items: z.array(z.string().max(600)).max(30) })).max(12).optional(),
+  manuel: z.boolean().optional(),
+});
+
 // ─── EXPERIENCE SCHEMAS ─────────────────────────────
 
 export const createExperienceSchema = z.object({

@@ -13,6 +13,7 @@ import NoteContent from '../../components/activity/NoteContent';
 import MentionTextarea from '../../components/activity/MentionTextarea';
 import QualificationCard from '../../components/candidats/QualificationCard';
 import CandidatureQualif from '../../components/candidats/CandidatureQualif';
+import DossierClientModal from '../../components/candidats/DossierClientModal';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Candidature {
@@ -95,6 +96,7 @@ export default function CandidatDetailPage() {
   const [planOpen, setPlanOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [dossierOpen, setDossierOpen] = useState(false);
   const cvInputRef = useRef<HTMLInputElement>(null);
 
   const { data: c, isLoading } = useQuery({ queryKey: ['candidat', id], queryFn: () => api.get<CandidatDetail>(`/candidats/${id}`), enabled: !!id });
@@ -212,6 +214,7 @@ export default function CandidatDetailPage() {
                 </div>
                 <button onClick={() => setRailTab('eval')} style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 14px', cursor: 'pointer' }}>Ajouter une évaluation</button>
                 <button onClick={() => setEditOpen(true)} style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 14px', cursor: 'pointer' }}>Modifier les infos</button>
+                <button onClick={() => setDossierOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 14px', cursor: 'pointer' }}><FileText size={14} />Dossier client</button>
                 <button onClick={() => confirmMut.mutate()} disabled={!c.email || confirmMut.isPending} title={c.email ? 'Envoyer un email de confirmation (intérêt + transfert CV)' : "Le candidat n'a pas d'email"} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: c.email ? '#22177A' : '#B8B4C2', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 14px', cursor: c.email && !confirmMut.isPending ? 'pointer' : 'default' }}><MailCheck size={14} />{confirmMut.isPending ? 'Envoi…' : 'Demander la confirmation'}</button>
                 <button onClick={() => setPlanOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 9, padding: '9px 15px', cursor: 'pointer' }}><Plus size={14} strokeWidth={2.2} />Prévoir une action</button>
               </div>
@@ -526,6 +529,8 @@ export default function CandidatDetailPage() {
 
       {/* EXPORT MODAL */}
       {exportOpen && <ExportModal name={fullName} onClose={() => setExportOpen(false)} />}
+
+      {dossierOpen && <DossierClientModal candidatId={c.id} prefill={{ localisation: c.localisation, disponibilite: c.disponibilite, salaireSouhaite: c.salaireSouhaite }} onClose={() => setDossierOpen(false)} />}
 
       {/* EDIT MODAL */}
       {editOpen && <EditModal candidat={c} onClose={() => setEditOpen(false)} onSaved={() => { invalidate(); setEditOpen(false); toast('success', 'Fiche mise à jour'); }} />}
