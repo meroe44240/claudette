@@ -13,6 +13,8 @@ interface Dossier {
   candidatId: string; nom: string; prenom: string | null;
   posteActuel: string | null; entrepriseActuelle: string | null;
   photoUrl: string | null; synthese: string;
+  contact: { email: string | null; telephone: string | null; linkedinUrl: string | null; cvUrl: string | null };
+  coordonneesVisibles: boolean;
   infos: Info[]; adequation: string[]; sections: Section[];
   manuel: boolean; modifieLe: string | null;
 }
@@ -48,6 +50,7 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
   const [adequation, setAdequation] = useState<string[]>([]);
   const [sections, setSections] = useState<{ title: string; text: string }[]>([]);
   const [manuel, setManuel] = useState(true);
+  const [coordonnees, setCoordonnees] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -60,6 +63,7 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
     setSections(data.sections.map((s) => ({ title: s.title, text: s.items.join('\n') })));
     setManuel(data.modifieLe ? data.manuel : true);
     setPhotoUrl(data.photoUrl);
+    setCoordonnees(data.coordonneesVisibles);
   }, [data]);
 
   useEffect(() => {
@@ -77,7 +81,7 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
 
   const saveMut = useMutation({
     mutationFn: () => api.put<Dossier>(`/candidats/${candidatId}/dossier`, {
-      synthese, infos, adequation, sections: sectionsOut, manuel,
+      synthese, infos, adequation, sections: sectionsOut, manuel, coordonneesVisibles: coordonnees,
     }),
     onSuccess: () => { refresh(); toast('success', 'Dossier client enregistré'); onClose(); },
     onError: (e: any) => toast('error', e?.message || "Échec de l'enregistrement"),
@@ -199,6 +203,16 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
               </Block>
 
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 24, padding: '12px 14px', borderRadius: 12, background: '#F6F5EC', cursor: 'pointer' }}>
+                <input type="checkbox" checked={coordonnees} onChange={(e) => setCoordonnees(e.target.checked)} style={{ marginTop: 3 }} />
+                <span>
+                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: INK }}>Montrer les coordonnées et le CV au client</span>
+                  <span style={{ display: 'block', fontSize: 12.5, color: MUTED, marginTop: 2 }}>
+                    {[data.contact.email, data.contact.telephone, data.contact.linkedinUrl ? 'LinkedIn' : null, data.contact.cvUrl ? 'CV' : null].filter(Boolean).join(' · ') || 'Aucune coordonnée sur la fiche'}
+                  </span>
+                </span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 10, padding: '12px 14px', borderRadius: 12, background: '#F6F5EC', cursor: 'pointer' }}>
                 <input type="checkbox" checked={manuel} onChange={(e) => setManuel(e.target.checked)} style={{ marginTop: 3 }} />
                 <span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 700, color: INK }}><Lock size={13} />Protéger ce dossier</span>
@@ -221,6 +235,17 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
                   </div>
                 </div>
                 <div style={{ padding: '16px 18px 20px' }}>
+                  {coordonnees && (data.contact.email || data.contact.telephone || data.contact.linkedinUrl || data.contact.cvUrl) && (
+                    <div style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 11, padding: '9px 11px', marginBottom: 14 }}>
+                      <div style={PREVIEW_LABEL}>Coordonnées</div>
+                      <div style={{ fontSize: 12.5, color: INK, fontWeight: 600, marginTop: 4, lineHeight: 1.6 }}>
+                        {data.contact.email && <div>{data.contact.email}</div>}
+                        {data.contact.telephone && <div>{data.contact.telephone}</div>}
+                        {data.contact.linkedinUrl && <div>Profil LinkedIn</div>}
+                        {data.contact.cvUrl && <div>Télécharger le CV</div>}
+                      </div>
+                    </div>
+                  )}
                   {synthese.trim() && (<><div style={PREVIEW_LABEL}>Synthèse</div><p style={{ fontSize: 13.5, lineHeight: 1.6, color: TEXT, marginTop: 6, whiteSpace: 'pre-line' }}>{synthese.trim()}</p></>)}
                   {pInfos.length > 0 && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 7, marginTop: 14 }}>

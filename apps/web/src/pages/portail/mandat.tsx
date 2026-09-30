@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { X, Check, MessageSquare, AtSign, Banknote, CalendarClock, ArrowRight, UserPlus, MessageCircle, Lock, BellRing, BadgeCheck, ChevronDown } from 'lucide-react';
+import { X, Check, MessageSquare, AtSign, Banknote, CalendarClock, ArrowRight, UserPlus, MessageCircle, Lock, BellRing, BadgeCheck, ChevronDown, Mail, Phone, Linkedin, FileText } from 'lucide-react';
 import { portalStore } from './portal-store';
 import { PortalTopBar, lastMandat, SHARED_CSS, CompanyLogo } from './portal-ui';
 
@@ -18,7 +18,8 @@ const COL_STAGE: Record<Col, Stage> = { INBOX: 'ENVOYE_CLIENT', SCREENING: 'ENTR
 
 interface Candidature {
   id: string; stage: Stage; column: Col; dateEntretienClient: string | null;
-  candidat: { id: string; nom: string; prenom: string | null; posteActuel: string | null; entrepriseActuelle: string | null; salaireSouhaite: number | null; photoUrl: string | null; aiPitchShort: string | null; aiAnonymizedProfile: any };
+  candidat: { id: string; nom: string; prenom: string | null; posteActuel: string | null; entrepriseActuelle: string | null; salaireSouhaite: number | null; photoUrl: string | null; aiPitchShort: string | null; aiAnonymizedProfile: any;
+    contact?: { email: string | null; telephone: string | null; linkedinUrl: string | null; cvUrl: string | null } | null };
   portalDecisions: Array<{ decision: Decision; createdAt: string }>;
   _count?: { portalComments: number };
   seen?: boolean;
@@ -559,6 +560,32 @@ function MobileList({ data, onOpen }: { data: KanbanResponse; onOpen: (c: Candid
   );
 }
 
+// ─── Coordonnées du candidat (si HumanUp les a rendues visibles) ──
+function ContactBlock({ contact }: { contact: NonNullable<Candidature['candidat']['contact']> }) {
+  const linkedin = contact.linkedinUrl ? (/^https?:\/\//i.test(contact.linkedinUrl) ? contact.linkedinUrl : `https://${contact.linkedinUrl}`) : null;
+  const rows = [
+    contact.email && { Icon: Mail, label: contact.email, href: `mailto:${contact.email}` },
+    contact.telephone && { Icon: Phone, label: contact.telephone, href: `tel:${contact.telephone.replace(/\s+/g, '')}` },
+    linkedin && { Icon: Linkedin, label: 'Profil LinkedIn', href: linkedin, ext: true },
+    contact.cvUrl && { Icon: FileText, label: 'Télécharger le CV', href: contact.cvUrl, ext: true },
+  ].filter(Boolean) as Array<{ Icon: typeof Mail; label: string; href: string; ext?: boolean }>;
+  if (rows.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 24, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, padding: 16 }}>
+      <div style={LABEL}>Coordonnées</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 8, marginTop: 10 }}>
+        {rows.map(({ Icon, label, href, ext }) => (
+          <a key={href} href={href} {...(ext ? { target: '_blank', rel: 'noopener noreferrer' } : {})} className="pm-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 11px', borderRadius: 10, background: '#F7F6F0', color: INK, textDecoration: 'none', fontSize: FS.base, fontWeight: 700, minWidth: 0 }}>
+            <Icon size={15} color={BRAND} aria-hidden style={{ flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── FICHE CANDIDAT : dossier + panneau latéral (Activité / Commentaires) ──
 function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, onTab, onClose, onDecision, onMove }: {
   candidature: Candidature; stages: Col[]; repName: string;
@@ -640,6 +667,8 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
                 </div>
               </div>
             )}
+
+            {c.candidat.contact && <ContactBlock contact={c.candidat.contact} />}
 
             {c.candidat.aiPitchShort && (
               <>

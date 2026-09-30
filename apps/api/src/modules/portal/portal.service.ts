@@ -308,6 +308,10 @@ export async function getKanban(mandatId: string, portalAccessId?: string) {
           photoUrl: true,
           aiPitchShort: true,
           aiAnonymizedProfile: true,
+          email: true,
+          telephone: true,
+          linkedinUrl: true,
+          cvUrl: true,
         },
       },
       portalDecisions: {
@@ -340,7 +344,7 @@ export async function getKanban(mandatId: string, portalAccessId?: string) {
   for (const c of candidatures) {
     const { stageHistory, createdAt, portalStage, ...rest } = c;
     const column = columnOf(c.stage, portalStage);
-    if (column && byStage[column]) byStage[column].push({ ...rest, column, seen: seen.has(c.id), stageSince: stageHistory[0]?.changedAt ?? createdAt, hireAnnounced: hired.has(c.id) && c.stage !== 'PLACE' });
+    if (column && byStage[column]) byStage[column].push({ ...rest, candidat: withContact(c.candidat) as any, column, seen: seen.has(c.id), stageSince: stageHistory[0]?.changedAt ?? createdAt, hireAnnounced: hired.has(c.id) && c.stage !== 'PLACE' });
   }
 
   const { recruteur, assignedTo, sales, ...mandatPublic } = mandat;
@@ -350,6 +354,14 @@ export async function getKanban(mandatId: string, portalAccessId?: string) {
     stages: columns,
     byStage,
   };
+}
+
+// Coordonnées + CV : masqués par défaut, visibles seulement si le recruteur l'a
+// activé sur le dossier client du candidat (aiAnonymizedProfile.coordonneesVisibles).
+function withContact<T extends { aiAnonymizedProfile: unknown; email: string | null; telephone: string | null; linkedinUrl: string | null; cvUrl: string | null }>(c: T) {
+  const { email, telephone, linkedinUrl, cvUrl, ...cand } = c;
+  const visible = (c.aiAnonymizedProfile as any)?.coordonneesVisibles === true;
+  return { ...cand, contact: visible ? { email, telephone, linkedinUrl, cvUrl } : null };
 }
 
 // Interlocuteurs HumanUp affichés au client : consultant (recruteur) et commercial
