@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
+import { useGoBack } from '../../hooks/useGoBack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ChevronDown, Plus, Mail, Phone, Linkedin, Building2, MapPin, Globe,
@@ -63,6 +64,7 @@ function fmtEur(n: number) { return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000
 export default function ClientDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { goBack, hasHistory } = useGoBack('/clients');
   const qc = useQueryClient();
   usePageTitle('Fiche client');
 
@@ -131,7 +133,7 @@ export default function ClientDetailPage() {
 
       {/* TOPBAR */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
-        <button onClick={() => navigate('/clients')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#4A4568', border: '1px solid rgba(34,23,122,.14)', background: '#fff', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}><ArrowLeft size={14} strokeWidth={2.4} />Clients</button>
+        <button onClick={goBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#4A4568', border: '1px solid rgba(34,23,122,.14)', background: '#fff', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}><ArrowLeft size={14} strokeWidth={2.4} />{hasHistory ? 'Retour' : 'Clients'}</button>
         {c.entreprise && <button onClick={() => navigate(`/entreprises/${c.entreprise!.id}`)} style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#22177A', border: '1px solid rgba(34,23,122,.16)', background: '#fff', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }}><Building2 size={14} />Voir la société</button>}
       </div>
 
