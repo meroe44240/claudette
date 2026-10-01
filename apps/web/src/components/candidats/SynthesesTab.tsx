@@ -16,7 +16,7 @@ interface Proposal {
 }
 interface Synthese {
   id: string; createdAt: string; user: { nom: string; prenom: string | null } | null;
-  filename: string; url: string; size: number;
+  filename: string; url: string | null; size: number; texte?: string | null;
   status: 'propose' | 'applique' | 'erreur'; error: string | null; appliedAt: string | null;
   proposal: Proposal | null;
 }
@@ -38,6 +38,7 @@ const SynthesesTab = forwardRef<SynthesesTabHandle, { candidatId: string; meetin
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [textId, setTextId] = useState<string | null>(null);
   const { data = [], isLoading } = useQuery({ queryKey: ['syntheses', candidatId], queryFn: () => api.get<Synthese[]>(`/candidats/${candidatId}/syntheses`) });
   const refresh = () => { qc.invalidateQueries({ queryKey: ['syntheses', candidatId] }); qc.invalidateQueries({ queryKey: ['activites', 'candidat', candidatId] }); };
 
@@ -79,7 +80,9 @@ const SynthesesTab = forwardRef<SynthesesTabHandle, { candidatId: string; meetin
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 15px' }}>
               <span style={{ flexShrink: 0, width: 36, height: 44, borderRadius: 8, background: '#F9ECE9', border: '1px solid rgba(176,54,31,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FileText size={17} color="#B0361F" /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <a href={s.url} target="_blank" rel="noreferrer" style={{ display: 'block', fontSize: 13.5, fontWeight: 800, color: INK, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.filename}</a>
+                {s.url
+                  ? <a href={s.url} target="_blank" rel="noreferrer" style={{ display: 'block', fontSize: 13.5, fontWeight: 800, color: INK, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.filename}</a>
+                  : <button onClick={() => setTextId(textId === s.id ? null : s.id)} title="Voir le texte du débrief" style={{ display: 'block', maxWidth: '100%', fontSize: 13.5, fontWeight: 800, color: INK, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.filename}</button>}
                 <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{dateFr(s.createdAt)}{s.user ? ` · ${s.user.prenom ?? ''} ${s.user.nom}`.trimEnd() : ''}</div>
               </div>
               {s.status === 'applique' && <span style={{ fontSize: 11.5, fontWeight: 800, color: '#2C6B3F', background: '#EAF3EC', borderRadius: 999, padding: '4px 10px' }}>Appliquée</span>}
@@ -89,6 +92,7 @@ const SynthesesTab = forwardRef<SynthesesTabHandle, { candidatId: string; meetin
               <button onClick={() => reanalyse.mutate(s.id)} disabled={reanalyse.isPending} title="Relire avec l'IA" style={iconBtn}><RefreshCw size={13} className={reanalyse.isPending && reanalyse.variables === s.id ? 'spin' : ''} /></button>
               <button onClick={() => { if (confirm('Retirer cette synthèse de la fiche ?')) remove.mutate(s.id); }} title="Retirer" style={iconBtn}><Trash2 size={13} /></button>
             </div>
+            {textId === s.id && s.texte && <div style={{ borderTop: `1px solid ${LINE}`, padding: '12px 16px', maxHeight: 360, overflowY: 'auto', fontSize: 12.5, lineHeight: 1.6, color: '#4A4568', whiteSpace: 'pre-wrap', background: '#FDFDF8' }}>{s.texte}</div>}
             {openId === s.id && s.proposal && <ProposalReview candidatId={candidatId} synthese={s} onDone={() => { refresh(); onApplied(); setOpenId(null); }} />}
           </div>
         ))}
