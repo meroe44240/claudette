@@ -37,6 +37,11 @@ const extractTasksSchema = z.object({
   sourceId: z.string().optional(),
 });
 
+const translateSchema = z.object({
+  texts: z.array(z.string().max(8000)).min(1).max(400),
+  target: z.enum(['fr', 'en']),
+});
+
 const acceptSuggestionSchema = z.object({
   titre: z.string().optional(),
   tacheDueDate: z.string().datetime().optional(),
@@ -710,6 +715,44 @@ Format: JSON array de strings, chaque string = 1 priorite du jour. Ex: ["Relance
         return { priorities, stats: { overdueTasks, todayTasks: todayTasks.length, activeMandats: activeMandats.length, recentActivities } };
       } catch {
         return { priorities: ['Erreur lors de la generation du briefing'], stats: { overdueTasks, todayTasks: todayTasks.length, activeMandats: activeMandats.length, recentActivities } };
+      }
+    },
+  });
+
+  // ─── TRADUCTION DE DOCUMENT (CV & Dossier) ─────────────
+
+  // POST /translate — Traduit une liste de textes courts en conservant l'ordre
+  fastify.post('/translate', {
+    schema: {
+      description: 'Traduire le contenu du document candidat (one-pager / dossier) en FR ou EN',
+      tags: ['AI'],
+    },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { texts, target } = translateSchema.parse(request.body);
+      const langue = target === 'en' ? 'anglais (britannique, registre professionnel)' : 'français (registre professionnel)';
+      const systemPrompt = `Tu es traducteur spécialisé en recrutement. Tu traduis les éléments d'un profil candidat en ${langue}.
+Règles :
+- Réponds UNIQUEMENT par un tableau JSON de chaînes, de la même longueur et dans le même ordre que l'entrée.
+- Un élément déjà dans la langue cible est renvoyé tel quel.
+- Ne traduis pas les noms propres (personnes, entreprises, produits, écoles, certifications) ni les acronymes métier.
+- Conserve les chiffres, devises, pourcentages et unités à l'identique.
+- Traduis les intitulés de poste par leur équivalent usuel dans la langue cible.
+- N'ajoute rien, ne résume pas, ne commente pas.`;
+      try {
+        const response = await callClaude({
+          feature: 'doc_translation',
+          systemPrompt,
+          userPrompt: JSON.stringify(texts),
+          userId: request.userId,
+          maxTokens: 16000,
+          temperature: 0,
+        });
+        const out = Array.isArray(response.content) ? response.content : JSON.parse((response.rawText.match(/\[[\s\S]*\]/) || ['null'])[0]);
+        if (!Array.isArray(out) || out.length !== texts.length) throw new Error('Traduction incomplète, réessayez.');
+        return { data: { texts: out.map((t, i) => (typeof t === 'string' && t.trim() ? t : texts[i])) } };
+      } catch (err: any) {
+        return handleAiError(err, reply);
       }
     },
   });

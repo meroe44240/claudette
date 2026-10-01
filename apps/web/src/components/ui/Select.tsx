@@ -22,6 +22,7 @@ export default function Select({ options, value, onChange, placeholder = 'Sélec
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const [listMaxHeight, setListMaxHeight] = useState(240);
   const ref = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -30,14 +31,20 @@ export default function Select({ options, value, onChange, placeholder = 'Sélec
   const updatePosition = useCallback(() => {
     if (!buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
+    // Flip above the trigger when there is not enough room below (e.g. last field of a panel)
+    const spaceBelow = window.innerHeight - rect.bottom - 12;
+    const spaceAbove = rect.top - 12;
+    const needed = Math.min(options.length * 40, 240) + (searchable ? 38 : 0) + 14;
+    const openUp = spaceBelow < needed && spaceAbove > spaceBelow;
+    setListMaxHeight(Math.max(120, Math.min(240, (openUp ? spaceAbove : spaceBelow) - (searchable ? 38 : 0) - 14)));
     setDropdownStyle({
       position: 'fixed',
-      top: rect.bottom + 4,
+      ...(openUp ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
       left: rect.left,
       width: rect.width,
       zIndex: 9999,
     });
-  }, []);
+  }, [options.length, searchable]);
 
   useEffect(() => {
     if (!open) return;
@@ -92,7 +99,7 @@ export default function Select({ options, value, onChange, placeholder = 'Sélec
             </div>
           </div>
         )}
-        <div className="max-h-60 overflow-y-auto">
+        <div className="overflow-y-auto" style={{ maxHeight: listMaxHeight }}>
           {filtered.map((option) => (
             <button
               key={option.value}
