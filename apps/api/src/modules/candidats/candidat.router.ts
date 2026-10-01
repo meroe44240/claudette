@@ -1,8 +1,9 @@
 import path from 'path';
 import { mkdir, writeFile } from 'fs/promises';
 import { FastifyInstance } from 'fastify';
-import { createCandidatSchema, updateCandidatSchema, createExperienceSchema, updateExperienceSchema, dossierSchema } from './candidat.schema.js';
+import { createCandidatSchema, updateCandidatSchema, createExperienceSchema, updateExperienceSchema, dossierSchema, syntheseApplySchema } from './candidat.schema.js';
 import * as dossierService from './dossier.service.js';
+import * as syntheseService from './synthese.service.js';
 import * as candidatService from './candidat.service.js';
 import * as activiteService from '../activites/activite.service.js';
 import prisma from '../../lib/db.js';
@@ -286,6 +287,59 @@ export default async function candidatRouter(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
       return dossierService.removePhoto(id);
     },
+  });
+
+  // ─── Synthèses d'entretien (PDF) : stockage + proposition IA à valider ───
+  fastify.get('/:id/syntheses', {
+    schema: { description: "Synthèses d'entretien du candidat", tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request) => syntheseService.listSyntheses((request.params as { id: string }).id),
+  });
+
+  fastify.post('/:id/syntheses', {
+    schema: { description: "Ajouter une synthèse d'entretien (PDF) et obtenir une proposition de mise à jour", tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const data = await request.file();
+      if (!data) return reply.status(400).send({ error: 'Aucun fichier envoyé' });
+      const chunks: Buffer[] = [];
+      for await (const chunk of data.file) chunks.push(chunk);
+      return syntheseService.uploadSynthese(id, Buffer.concat(chunks), data.filename, data.mimetype, request.userId);
+    },
+  });
+
+  fastify.post('/:id/syntheses/:actId/reanalyse', {
+    schema: { description: 'Relancer la lecture IA de la synthèse', tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id, actId } = request.params as { id: string; actId: string };
+      return syntheseService.reanalyse(id, actId, request.userId);
+    },
+  });
+
+  fastify.post('/:id/syntheses/:actId/apply', {
+    schema: { description: 'Appliquer tout ou partie de la proposition', tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id, actId } = request.params as { id: string; actId: string };
+      return syntheseService.applySynthese(id, actId, syntheseApplySchema.parse(request.body ?? {}));
+    },
+  });
+
+  fastify.delete('/:id/syntheses/:actId', {
+    schema: { description: 'Retirer une synthèse', tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id, actId } = request.params as { id: string; actId: string };
+      return syntheseService.removeSynthese(id, actId);
+    },
+  });
+
+  fastify.get('/:id/portail', {
+    schema: { description: 'Visibilité du candidat sur les portails clients', tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request) => syntheseService.portailSummary((request.params as { id: string }).id),
   });
 
   // DELETE /:id - Delete candidat (admin only)
