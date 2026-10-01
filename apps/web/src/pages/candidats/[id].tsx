@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
+import { useGoBack } from '../../hooks/useGoBack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, ArrowRight, ChevronDown, Plus, Star, Mail, Phone, Linkedin, MapPin,
@@ -94,6 +95,7 @@ interface PortailSummary {
 export default function CandidatDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { goBack, hasHistory } = useGoBack('/candidats');
   const qc = useQueryClient();
   usePageTitle('Fiche candidat');
 
@@ -212,7 +214,7 @@ export default function CandidatDetailPage() {
       `}</style>
 
       {/* TOPBAR */}
-      <button onClick={() => navigate('/candidats')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#4A4568', border: '1px solid rgba(34,23,122,.14)', background: '#fff', borderRadius: 10, padding: '8px 13px', cursor: 'pointer', marginBottom: 14 }}><ArrowLeft size={14} strokeWidth={2.4} />Candidats</button>
+      <button onClick={goBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#4A4568', border: '1px solid rgba(34,23,122,.14)', background: '#fff', borderRadius: 10, padding: '8px 13px', cursor: 'pointer', marginBottom: 14 }}><ArrowLeft size={14} strokeWidth={2.4} />{hasHistory ? 'Retour' : 'Candidats'}</button>
 
       {/* EN-TÊTE */}
       <div style={{ background: '#fff', border: '1px solid rgba(34,23,122,.09)', borderRadius: 18, padding: '24px 26px 0' }}>

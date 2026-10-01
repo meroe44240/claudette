@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router';
+import { useGoBack } from '../../hooks/useGoBack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Plus, Mail, Phone, Globe, Building2, MapPin, Briefcase, Banknote,
@@ -41,6 +42,7 @@ const AV: Array<[string, string]> = [['#22177A', '#E6E9AF'], ['#3B9A54', '#fff']
 export default function EntrepriseDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { goBack, hasHistory } = useGoBack('/entreprises');
   const qc = useQueryClient();
   usePageTitle('Fiche société');
   const [railTab, setRailTab] = useState<'rel' | 'notes'>('rel');
@@ -85,7 +87,7 @@ export default function EntrepriseDetailPage() {
 
       {/* TOPBAR */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
-        <button onClick={() => navigate('/entreprises')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#4A4568', border: '1px solid rgba(34,23,122,.14)', background: '#fff', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}><ArrowLeft size={14} strokeWidth={2.4} />Entreprises</button>
+        <button onClick={goBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#4A4568', border: '1px solid rgba(34,23,122,.14)', background: '#fff', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}><ArrowLeft size={14} strokeWidth={2.4} />{hasHistory ? 'Retour' : 'Entreprises'}</button>
         {e.pappersUrl && <a href={e.pappersUrl} target="_blank" rel="noreferrer" style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#22177A', border: '1px solid rgba(34,23,122,.16)', background: '#fff', borderRadius: 10, padding: '8px 14px', textDecoration: 'none' }}><ExternalLink size={14} />Fiche Pappers</a>}
       </div>
 
