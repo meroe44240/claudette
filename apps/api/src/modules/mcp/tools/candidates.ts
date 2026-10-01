@@ -6,6 +6,7 @@ import * as candidatureService from '../../candidatures/candidature.service.js';
 import prisma from '../../../lib/db.js';
 import { resolvePersonPhoto } from '../../../lib/photo.js';
 import * as dossierService from '../../candidats/dossier.service.js';
+import * as syntheseService from '../../candidats/synthese.service.js';
 
 export function registerCandidateTools(server: McpServer) {
   // ─── search_candidates ────────────────────────────────
@@ -264,6 +265,96 @@ export function registerCandidateTools(server: McpServer) {
         contact_visible_to_client: d.coordonneesVisibles,
         message: 'Dossier client mis a jour (visible sur le portail)',
       };
+    }),
+  );
+
+  // ─── Débriefs / synthèses d'entretien ─────────────────
+  const debriefView = (s: any) => ({
+    debrief_id: s.id,
+    filename: s.filename,
+    file_url: s.url,
+    status: s.status, // propose = à valider, applique, erreur
+    error: s.error,
+    created_at: s.createdAt,
+    applied_at: s.appliedAt,
+    proposal: s.proposal
+      ? {
+          internal_summary: s.proposal.resume,
+          fields: s.proposal.fields,
+          experiences: s.proposal.experiences,
+          client_dossier: s.proposal.dossier,
+        }
+      : null,
+  });
+
+  server.tool(
+    'list_candidate_debriefs',
+    "Liste les debriefs / syntheses d'entretien ranges sur la fiche d'un candidat (onglet Entretiens), avec la proposition de mise a jour et son statut (propose = a valider, applique, erreur).",
+    { candidate_id: z.string().describe('UUID du candidat') },
+    wrapTool('list_candidate_debriefs', async (args) => {
+      const rows = await syntheseService.listSyntheses(args.candidate_id as string);
+      return { total: rows.length, debriefs: rows.map(debriefView) };
+    }),
+  );
+
+  server.tool(
+    'add_candidate_debrief',
+    "[CONFIRMATION REQUISE] Ajoute un debrief / une synthese d'entretien sur la fiche d'un candidat (onglet Entretiens). L'ATS le lit et renvoie une PROPOSITION (champs de la fiche, experiences, dossier client) : rien n'est modifie tant que apply_candidate_debrief n'est pas appele. Fournir UNE source : `text` (recommande : le contenu integral du debrief que tu as lu dans le PDF ou le document, sans le resumer), `pdf_url` (lien https vers le PDF, ou lien Google Drive partage a tous ceux qui ont le lien), ou `pdf_base64` (petit PDF encode en base64). Montre ensuite la proposition au recruteur.",
+    {
+      candidate_id: z.string().describe('UUID du candidat'),
+      title: z.string().optional().describe("Nom du debrief, ex. 'Synthese entretien Vicky 25-09'. Pour un PDF : nom du fichier."),
+      text: z.string().optional().describe('Contenu integral du debrief (texte brut). A privilegier quand tu as deja lu le document.'),
+      pdf_url: z.string().optional().describe('Lien https vers le PDF (ou lien de partage Google Drive public)'),
+      pdf_base64: z.string().optional().describe('PDF encode en base64 (10 Mo max). A eviter pour les gros fichiers.'),
+    },
+    wrapTool('add_candidate_debrief', async (args, user) => {
+      const id = args.candidate_id as string;
+      const title = (args.title as string | undefined)?.trim();
+      let s: any;
+      if (args.pdf_base64) {
+        const buffer = Buffer.from(String(args.pdf_base64).replace(/^data:application\/pdf;base64,/, ''), 'base64');
+        if (buffer.subarray(0, 5).toString('latin1') !== '%PDF-') return { error: 'pdf_base64 ne contient pas un PDF valide' };
+        if (buffer.length > 10 * 1024 * 1024) return { error: 'PDF trop volumineux (max 10 Mo)' };
+        const name = title ? (/\.pdf$/i.test(title) ? title : `${title}.pdf`) : 'synthese.pdf';
+        s = await syntheseService.uploadSynthese(id, buffer, name, 'application/pdf', user.userId);
+      } else if (args.pdf_url) {
+        s = await syntheseService.uploadSyntheseFromUrl(id, args.pdf_url as string, user.userId, title);
+      } else if (args.text) {
+        s = await syntheseService.addSyntheseText(id, args.text as string, title || 'Débrief', user.userId);
+      } else {
+        return { error: 'Fournir text, pdf_url ou pdf_base64' };
+      }
+      return {
+        success: s.status !== 'erreur',
+        ...debriefView(s),
+        message: s.status === 'erreur'
+          ? `Debrief range, mais la lecture a echoue : ${s.error}`
+          : "Debrief range et lu. Rien n'est encore applique : montre la proposition au recruteur puis appelle apply_candidate_debrief.",
+      };
+    }),
+  );
+
+  server.tool(
+    'apply_candidate_debrief',
+    "[CONFIRMATION REQUISE] Applique la proposition d'un debrief deja range (voir add_candidate_debrief / list_candidate_debriefs). Choisir ce qui est applique : champs de la fiche, experiences (les doublons sont ignores), dossier client. ATTENTION : apply_client_dossier REMPLACE le dossier que le client voit sur le portail ; ne l'activer que si le recruteur l'a demande, surtout si un dossier a deja ete redige a la main.",
+    {
+      candidate_id: z.string().describe('UUID du candidat'),
+      debrief_id: z.string().describe('Identifiant du debrief (debrief_id)'),
+      apply_fields: z.boolean().optional().default(true).describe('Appliquer les champs de la fiche (remuneration, disponibilite, mobilite, experience, localisation)'),
+      apply_experiences: z.boolean().optional().default(true).describe('Ajouter les experiences'),
+      apply_client_dossier: z.boolean().optional().default(false).describe('Remplacer le dossier client du portail par celui de la proposition (defaut false)'),
+    },
+    wrapTool('apply_candidate_debrief', async (args) => {
+      const id = args.candidate_id as string;
+      const s = (await syntheseService.listSyntheses(id)).find((x) => x.id === args.debrief_id);
+      if (!s) return { error: 'Debrief introuvable pour ce candidat' };
+      if (!s.proposal) return { error: "Ce debrief n'a pas de proposition (lecture echouee)" };
+      const res = await syntheseService.applySynthese(id, s.id, {
+        fields: args.apply_fields === false ? undefined : s.proposal.fields,
+        experiences: args.apply_experiences === false ? undefined : s.proposal.experiences,
+        dossier: args.apply_client_dossier === true ? s.proposal.dossier : undefined,
+      });
+      return { success: true, applied: res.applied, message: res.applied.length ? `Applique : ${res.applied.join(', ')}` : 'Rien a appliquer' };
     }),
   );
 

@@ -155,7 +155,8 @@ export async function listSyntheses(candidatId: string) {
     const m = (r.metadata || {}) as any;
     return {
       id: r.id, createdAt: r.createdAt, user: r.user,
-      filename: m.filename as string, url: m.url as string, size: m.size as number,
+      filename: m.filename as string, url: (m.url as string) || null, size: m.size as number,
+      texte: m.url ? null : ((m.texte as string) || null),
       status: m.status as 'propose' | 'applique' | 'erreur',
       error: (m.error as string) || null,
       appliedAt: (m.appliedAt as string) || null,
@@ -167,6 +168,10 @@ export async function listSyntheses(candidatId: string) {
 async function analyse(candidatId: string, buffer: Buffer, filename: string, userId: string): Promise<SyntheseProposal> {
   const text = await extractText(buffer);
   if (text.length < 80) throw new Error("Le PDF ne contient pas de texte lisible (PDF scanné ?)");
+  return analyseText(candidatId, text, filename, userId);
+}
+
+async function analyseText(candidatId: string, text: string, filename: string, userId: string): Promise<SyntheseProposal> {
   const client = await clientName(candidatId);
   const res = await callClaude({
     feature: 'synthese_entretien',
@@ -202,15 +207,69 @@ export async function uploadSynthese(candidatId: string, buffer: Buffer, filenam
   return (await listSyntheses(candidatId))[0];
 }
 
+// Débrief fourni en texte (MCP : Claude a lu le document et transmet son contenu).
+// Pas de fichier : le texte est gardé dans l'activité.
+export async function addSyntheseText(candidatId: string, text: string, titre: string, userId: string) {
+  const body = text.trim();
+  if (body.length < 80) throw new ValidationError('Le débrief est trop court pour être analysé');
+  const exists = await prisma.candidat.findUnique({ where: { id: candidatId }, select: { id: true } });
+  if (!exists) throw new NotFoundError('Candidat', candidatId);
+
+  const filename = titre.trim().slice(0, 200) || 'Débrief';
+  const base = { synthese: true, url: null, filename, size: body.length, texte: body.slice(0, 60000) };
+  let metadata: Record<string, unknown>;
+  try {
+    metadata = { ...base, status: 'propose', proposal: await analyseText(candidatId, body, filename, userId) };
+  } catch (e: any) {
+    metadata = { ...base, status: 'erreur', error: e?.message || 'Analyse impossible' };
+  }
+  await prisma.activite.create({
+    data: {
+      type: 'NOTE', entiteType: 'CANDIDAT', entiteId: candidatId, userId,
+      titre: `Synthèse d'entretien ajoutée : ${filename}`,
+      contenu: (metadata.proposal as SyntheseProposal | undefined)?.resume || null,
+      metadata: metadata as any,
+    },
+  });
+  return (await listSyntheses(candidatId))[0];
+}
+
+// PDF accessible par un lien (MCP). Les liens de partage Google Drive sont convertis
+// en lien de téléchargement ; le fichier doit être partagé « tous ceux qui ont le lien ».
+export async function uploadSyntheseFromUrl(candidatId: string, rawUrl: string, userId: string, filename?: string) {
+  let u: URL;
+  try { u = new URL(rawUrl); } catch { throw new ValidationError('Lien invalide'); }
+  if (u.protocol !== 'https:') throw new ValidationError('Le lien doit être en https');
+  if (/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.)/i.test(u.hostname)) throw new ValidationError('Lien non autorisé');
+  const drive = u.hostname.endsWith('drive.google.com') ? u.pathname.match(/\/file\/d\/([^/]+)/)?.[1] ?? u.searchParams.get('id') : null;
+  const target = drive ? `https://drive.google.com/uc?export=download&id=${drive}` : u.toString();
+
+  const res = await fetch(target, { signal: AbortSignal.timeout(30000), redirect: 'follow' });
+  if (!res.ok) throw new ValidationError(`Fichier introuvable (HTTP ${res.status})`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (buffer.length > 10 * 1024 * 1024) throw new ValidationError('Fichier trop volumineux (max 10 Mo)');
+  if (buffer.subarray(0, 5).toString('latin1') !== '%PDF-') throw new ValidationError("Le lien ne renvoie pas un PDF (fichier privé ou page de connexion ?)");
+  const name = filename?.trim() || decodeURIComponent(u.pathname.split('/').pop() || '').replace(/[^\w.\- ]+/g, '_') || 'synthese.pdf';
+  return uploadSynthese(candidatId, buffer, /\.pdf$/i.test(name) ? name : `${name}.pdf`, 'application/pdf', userId);
+}
+
 export async function reanalyse(candidatId: string, activiteId: string, userId: string) {
   const act = await prisma.activite.findFirst({ where: { id: activiteId, entiteId: candidatId } });
   const m = (act?.metadata || {}) as any;
   if (!act || !m.synthese) throw new NotFoundError('Synthèse', activiteId);
-  const fs = await import('fs/promises');
-  const path = await import('path');
-  const buffer = await fs.readFile(path.join(process.cwd(), m.url.replace(/^\//, '')));
   let next: Record<string, unknown>;
-  try { next = { ...m, status: 'propose', error: null, proposal: await analyse(candidatId, buffer, m.filename, userId) }; }
+  try {
+    let proposal: SyntheseProposal;
+    if (m.url) {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      const buffer = await fs.readFile(path.join(process.cwd(), m.url.replace(/^\//, '')));
+      proposal = await analyse(candidatId, buffer, m.filename, userId);
+    } else {
+      proposal = await analyseText(candidatId, String(m.texte ?? ''), m.filename, userId);
+    }
+    next = { ...m, status: 'propose', error: null, proposal };
+  }
   catch (e: any) { next = { ...m, status: 'erreur', error: e?.message || 'Analyse impossible' }; }
   await prisma.activite.update({ where: { id: activiteId }, data: { metadata: next as any } });
   return (await listSyntheses(candidatId)).find((s) => s.id === activiteId);
