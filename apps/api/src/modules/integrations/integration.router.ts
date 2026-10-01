@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import type { MeetingKind } from '../meetings/meeting-kind.js';
 import { z } from 'zod';
 import prisma from '../../lib/db.js';
 import { authenticate } from '../../middleware/auth.js';
@@ -482,6 +483,7 @@ export default async function integrationRouter(fastify: FastifyInstance) {
       const meetingTypeLabels: Record<string, string> = {
         entretien_candidat: '👤 Entretien candidat',
         entretien_client: '🏢 Entretien client',
+        rdv_client: '📅 RDV client',
         call_interne: '📞 Call interne',
         suivi: '🔄 Suivi',
         debrief: '📋 Debrief',
@@ -496,6 +498,28 @@ export default async function integrationRouter(fastify: FastifyInstance) {
 
       // Normalize entiteType to uppercase
       const entiteType = input.entiteType?.toUpperCase() as 'CANDIDAT' | 'CLIENT' | 'ENTREPRISE' | 'MANDAT' | undefined;
+
+      // Nature du meeting. Un RDV client exige une date et des interlocuteurs.
+      const kindByType: Record<string, MeetingKind> = {
+        rdv_client: 'RDV_CLIENT',
+        entretien_candidat: 'INTERVIEW',
+        call_interne: 'AUTRE',
+        suivi: 'AUTRE',
+        debrief: 'AUTRE',
+        autre: 'AUTRE',
+      };
+      const kind = input.meetingType ? kindByType[input.meetingType] : undefined;
+      if (kind === 'RDV_CLIENT') {
+        const aUneDate = !!input.date || !!(input.startTime && input.startTime.includes('T'));
+        const aDesInterlocuteurs = eventAttendees.length > 0 || (entiteType === 'CLIENT' && !!input.entiteId);
+        if (!aUneDate || !aDesInterlocuteurs) {
+          reply.status(400);
+          return {
+            success: false,
+            message: 'Un RDV client doit avoir une date et au moins un interlocuteur (email du participant).',
+          };
+        }
+      }
 
       // Build ISO start/end times
       let startTimeISO: string;
@@ -527,6 +551,7 @@ export default async function integrationRouter(fastify: FastifyInstance) {
         attendees: eventAttendees.length > 0 ? eventAttendees : undefined,
         entiteType,
         entiteId: input.entiteId,
+        kind,
       }, input.sendEmail !== false);
 
       reply.status(201);

@@ -4,7 +4,6 @@ import type { CreateCandidatureInput, UpdateCandidatureInput } from './candidatu
 import type { StageCandidature } from '@prisma/client';
 import {
   notifyPresentation,
-  notifyRdvClient,
   notifyCloseWon,
   notifyNewCandidate,
 } from '../slack/slack.service.js';
@@ -99,6 +98,27 @@ function escapeHtmlLite(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
 }
 
+const jourParis = (d: Date) => d.toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
+
+/** Vrai si la détection agenda a déjà annoncé une présentation de ce candidat ce jour-là. */
+async function presentationDejaAnnoncee(candidatId: string, date: Date): Promise<boolean> {
+  const rows = await prisma.activite.findMany({
+    where: {
+      type: 'MEETING',
+      entiteType: 'CANDIDAT',
+      entiteId: candidatId,
+      metadata: { path: ['annonceSlack'], equals: true },
+    },
+    select: { metadata: true },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  });
+  return rows.some((r) => {
+    const meta = r.metadata as any;
+    return meta?.calendarEventType === 'PRESENTATION' && meta?.startTime && jourParis(new Date(meta.startTime)) === jourParis(date);
+  });
+}
+
 /**
  * Fetch full context for a candidature (candidat, mandat, entreprise, client, recruteur)
  * and fire the appropriate Slack notification based on the new stage.
@@ -130,25 +150,20 @@ async function fireSlackStageNotification(
     : null;
 
   if (newStage === 'ENTRETIEN_CLIENT') {
+    // Une présentation n'est annoncée que datée et avec un interlocuteur côté client.
+    const date = dateEntretienClient || candidature.dateEntretienClient || null;
+    const interlocuteur = ((candidature as any).interlocuteurClient as string | null)?.trim() || null;
+    if (!date || !interlocuteur) return;
+    // Déjà annoncée par la détection agenda (même candidat, même jour) → pas de doublon.
+    if (await presentationDejaAnnoncee(candidature.candidatId, date)) return;
     await notifyPresentation({
       candidatPrenom: candidat.prenom,
       candidatNom: candidat.nom,
       entrepriseNom: mandat.entreprise?.nom || 'N/A',
-      contactNom,
+      contactNom: interlocuteur,
       mandatTitre: mandat.titrePoste,
       recruteurPrenom: mandat.assignedTo?.prenom || null,
-      // Prefer the explicit client-interview date if set, else today.
-      date: dateEntretienClient || candidature.dateEntretienClient || null,
-    });
-  } else if (newStage === 'ENTRETIEN_1') {
-    await notifyRdvClient({
-      candidatPrenom: candidat.prenom,
-      candidatNom: candidat.nom,
-      entrepriseNom: mandat.entreprise?.nom || 'N/A',
-      contactNom,
-      mandatTitre: mandat.titrePoste,
-      dateEntretien: dateEntretienClient || candidature.dateEntretienClient || null,
-      recruteurPrenom: mandat.assignedTo?.prenom || null,
+      date,
     });
   } else if (newStage === 'PLACE') {
     await notifyCloseWon({
@@ -282,17 +297,22 @@ export async function create(data: CreateCandidatureInput, createdById: string) 
   })();
 
   // If the candidature is created DIRECTLY at an advanced stage
-  // (ENTRETIEN_1 / ENTRETIEN_CLIENT / PLACE), fire the matching Slack notif —
+  // (ENTRETIEN_CLIENT / PLACE), fire the matching Slack notif —
   // this happens e.g. when a recruiter drops a candidat straight into the
   // client-interview column of the kanban.
-  if (['ENTRETIEN_1', 'ENTRETIEN_CLIENT', 'PLACE'].includes(data.stage)) {
+  if (['ENTRETIEN_CLIENT', 'PLACE'].includes(data.stage)) {
     fireSlackStageNotification(candidature.id, data.stage, null).catch(() => {});
   }
 
   return candidature;
 }
 
-export async function update(id: string, data: UpdateCandidatureInput, changedById: string) {
+export async function update(
+  id: string,
+  data: UpdateCandidatureInput,
+  changedById: string,
+  opts: { googleEventId?: string } = {},
+) {
   const existing = await prisma.candidature.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError('Candidature', id);
 
@@ -399,7 +419,10 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
     // Présentation → crée l'event Google Agenda + stocke googleEventId (best-effort, spec §4).
     if (data.stage === 'ENTRETIEN_CLIENT') {
       const dt = updateData.dateEntretienClient || existing.dateEntretienClient;
-      if (dt) {
+      if (opts.googleEventId) {
+        // Présentation validée depuis un événement d'agenda existant : on le rattache, sans en recréer un.
+        await prisma.candidature.update({ where: { id }, data: { googleEventId: opts.googleEventId } as any });
+      } else if (dt) {
         try {
           const [cand, mnd] = await Promise.all([
             prisma.candidat.findUnique({ where: { id: existing.candidatId }, select: { nom: true, prenom: true } }),
@@ -414,6 +437,7 @@ export async function update(id: string, data: UpdateCandidatureInput, changedBy
             endTime: new Date(start.getTime() + 45 * 60000).toISOString(),
             entiteType: 'CANDIDAT', entiteId: existing.candidatId,
             withMeet: false,
+            kind: 'PRESENTATION',
           });
           if (ev?.googleEventId) await prisma.candidature.update({ where: { id }, data: { googleEventId: ev.googleEventId } as any });
         } catch (e) { console.warn('[Candidature] event présentation Google échoué', (e as Error).message); }

@@ -21,6 +21,7 @@ import qualificationRouter from './modules/qualification/qualification.router.js
 import candidatureRouter from './modules/candidatures/candidature.router.js';
 import searchRouter from './modules/search/search.router.js';
 import activiteRouter from './modules/activites/activite.router.js';
+import meetingRouter from './modules/meetings/meeting.router.js';
 import tacheRouter from './modules/taches/tache.router.js';
 import dashboardRouter from './modules/dashboard/dashboard.router.js';
 import settingsRouter from './modules/settings/settings.router.js';
@@ -156,6 +157,7 @@ async function buildApp() {
   await app.register(candidatureRouter, { prefix: '/api/v1/candidatures' });
   await app.register(searchRouter, { prefix: '/api/v1/search' });
   await app.register(activiteRouter, { prefix: '/api/v1/activites' });
+  await app.register(meetingRouter, { prefix: '/api/v1/meetings' });
   await app.register(tacheRouter, { prefix: '/api/v1/taches' });
   await app.register(dashboardRouter, { prefix: '/api/v1/dashboard' });
   await app.register(settingsRouter, { prefix: '/api/v1/settings' });

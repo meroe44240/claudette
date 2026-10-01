@@ -4,6 +4,7 @@ import { AppError } from '../../lib/errors.js';
 import * as notificationService from '../notifications/notification.service.js';
 import { matchEmail } from './gmail.service.js';
 import { notifyNewMeeting } from '../slack/slack.service.js';
+import type { MeetingKind } from '../meetings/meeting-kind.js';
 
 // ─── TYPES ──────────────────────────────────────────
 
@@ -27,6 +28,7 @@ interface CalendarEventData {
   entiteType?: 'CANDIDAT' | 'CLIENT' | 'ENTREPRISE' | 'MANDAT';
   entiteId?: string;
   withMeet?: boolean;                // génère un lien Google Meet (visioconférence)
+  kind?: MeetingKind;                // nature du meeting ; seul un RDV_CLIENT est annoncé sur Slack
 }
 
 interface CalendlyParsedData {
@@ -604,6 +606,7 @@ export async function createEvent(userId: string, data: CalendarEventData, sendN
         attendees: data.attendees,
         createdViaApi,
         googleEventId: calResult.id,
+        ...(data.kind ? { calendarEventType: data.kind } : {}),
       },
     },
   });
@@ -618,34 +621,40 @@ export async function createEvent(userId: string, data: CalendarEventData, sendN
     entiteId,
   });
 
-  // Slack notification for new meeting (fire-and-forget)
-  (async () => {
-    try {
-      const user = await prisma.user.findUnique({ where: { id: userId }, select: { prenom: true } });
-      let clientNom: string | null = null;
-      let entrepriseNom: string | null = null;
-      if (entiteId && entiteType === 'CLIENT') {
-        const client = await prisma.client.findUnique({
-          where: { id: entiteId },
-          select: { nom: true, prenom: true, entreprise: { select: { nom: true } } },
-        });
-        if (client) {
-          clientNom = [client.prenom, client.nom].filter(Boolean).join(' ');
-          entrepriseNom = client.entreprise?.nom || null;
+  // Slack : seul un RDV client est annoncé ici (il a forcément une date ; il lui faut des interlocuteurs).
+  // Une présentation est annoncée par le pipeline, les autres meetings ne le sont pas.
+  const interlocuteursInvites = (data.attendees || []).filter((e) => !e.toLowerCase().endsWith('@humanup.io'));
+  const clientLie = entiteType === 'CLIENT' && entiteId !== '00000000-0000-0000-0000-000000000000';
+  if (data.kind === 'RDV_CLIENT' && (clientLie || interlocuteursInvites.length > 0)) {
+    (async () => {
+      try {
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { prenom: true } });
+        let clientNom: string | null = null;
+        let entrepriseNom: string | null = null;
+        if (clientLie) {
+          const client = await prisma.client.findUnique({
+            where: { id: entiteId },
+            select: { nom: true, prenom: true, entreprise: { select: { nom: true } } },
+          });
+          if (client) {
+            clientNom = [client.prenom, client.nom].filter(Boolean).join(' ');
+            entrepriseNom = client.entreprise?.nom || null;
+          }
         }
+        await notifyNewMeeting({
+          titre: data.summary,
+          recruteurPrenom: user?.prenom || null,
+          clientNom,
+          entrepriseNom,
+          interlocuteurs: interlocuteursInvites.join(', ') || null,
+          date: data.startTime,
+          lieu: data.location || null,
+        });
+      } catch (err) {
+        console.error('[Slack] Failed to send new meeting notification:', err);
       }
-      await notifyNewMeeting({
-        titre: data.summary,
-        recruteurPrenom: user?.prenom || null,
-        clientNom,
-        entrepriseNom,
-        date: data.startTime,
-        lieu: data.location || null,
-      });
-    } catch (err) {
-      console.error('[Slack] Failed to send new meeting notification:', err);
-    }
-  })();
+    })();
+  }
 
   if (!createdViaApi) {
     return {
@@ -1005,10 +1014,7 @@ export async function registerAllCalendarWatches(): Promise<void> {
 
 // ─── CALENDAR EVENT CLASSIFIER & WATCHER ───────────
 
-type CalendarEventType = 'INTERVIEW' | 'PRESENTATION' | 'INTERNAL' | 'AMBIGU';
-
 interface ClassifiedEvent {
-  type: CalendarEventType;
   googleEventId: string;
   summary: string;
   startTime: string;
@@ -1020,13 +1026,9 @@ interface ClassifiedEvent {
 }
 
 /**
- * Classify a single Google Calendar event based on attendees.
- *
- * Rules:
- *  - All internal (humanup.io) → INTERNAL (skip)
- *  - 1 internal + 1 external  → INTERVIEW  (recruiter + candidat)
- *  - 1 internal + 2+ external → PRESENTATION (recruiter + candidat + client)
- *  - Otherwise               → AMBIGU     (ask recruiter via Slack)
+ * Lit un événement Google Calendar et qualifie ses participants
+ * (interne / candidat / client / externe inconnu). La nature du meeting
+ * (RDV client, présentation…) est décidée dans _processClassifiedEventInner.
  */
 async function classifyCalendarEvent(
   item: any,
@@ -1043,41 +1045,235 @@ async function classifyCalendarEvent(
 
   const analysis = await analyzeAttendees(attendeeEmails);
 
-  const internalCount = analysis.details.filter((d) => d.role === 'internal').length;
-  const externalCount = analysis.details.filter((d) => d.role !== 'internal').length;
-
-  let type: CalendarEventType;
-  if (externalCount === 0) {
-    type = 'INTERNAL';
-  } else if (internalCount >= 1 && externalCount === 1) {
-    type = 'INTERVIEW';
-  } else if (internalCount >= 1 && externalCount >= 2) {
-    type = 'PRESENTATION';
-  } else {
-    type = 'AMBIGU';
-  }
-
   return {
-    type,
     googleEventId: item.id,
     summary: item.summary || '(Sans titre)',
     startTime: item.start?.dateTime || item.start?.date || '',
     endTime: item.end?.dateTime || item.end?.date || '',
     htmlLink: item.htmlLink,
     attendees: analysis.details,
-    internalCount,
-    externalCount,
+    internalCount: analysis.details.filter((d) => d.role === 'internal').length,
+    externalCount: analysis.details.filter((d) => d.role !== 'internal').length,
   };
 }
 
+const RE_TITRE_RDV = /\b(rdv|rendez[\s-]?vous)\b/i;
+const RE_TITRE_PRESENTATION = /\b(pr[ée]sentation|prez|entretien|interview)\b/i;
+const RE_TITRE_INDICE = /\b(rdv|rendez[\s-]?vous|pr[ée]sentation|prez|client|prospect|d[ée]couverte|discovery)\b/i;
+
+const jourParis = (d: Date) => d.toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
+
+interface ResolvedCandidat {
+  id: string;
+  prenom: string | null;
+  nom: string;
+}
+
 /**
- * DM the recruiter to classify an ambiguous event. Silent no-op if the user
- * has no slackUserId or the bot token is missing.
+ * Retrouve le candidat d'un événement : invité connu comme candidat, sinon
+ * nom lu dans le titre ou dans le nom d'un invité inconnu.
  */
-async function notifyAmbiguousEvent(
+async function resolveCandidat(
+  classified: ClassifiedEvent,
+  clientAtt: AttendeeDetail | undefined,
+): Promise<ResolvedCandidat | null> {
+  const externalAtts = classified.attendees.filter((a) => a.role !== 'internal');
+  const candidatAtt = externalAtts.find((a) => a.role === 'candidat');
+
+  if (candidatAtt?.entityId) {
+    const candidat = await prisma.candidat.findUnique({
+      where: { id: candidatAtt.entityId },
+      select: { id: true, nom: true, prenom: true },
+    });
+    if (candidat) return { id: candidat.id, prenom: candidat.prenom || null, nom: candidat.nom };
+  }
+
+  // No attendee matched a candidat in DB — fall back to parsing the event title.
+  // Patterns supported:
+  //   "Entretien : Dimitri X Privateaser" → token "Dimitri"
+  //   "Mendo × Théo Faugeras" → token "Théo Faugeras"
+  //
+  // Rules (strict — must not false-match):
+  //  - Only EXACT matches on prenom or nom (no contains — "Of" would match "Coffolé").
+  //  - Skip common non-name words (stopwords).
+  //  - Only look for active candidats with a pipeline (candidatures exist).
+  //  - If client entreprise is known, prefer candidats linked to a mandate on
+  //    that entreprise.
+  const STOPWORDS = new Set([
+    'of', 'the', 'and', 'weekly', 'daily', 'standup', 'stand-up', 'meeting',
+    'rdv', 'review', 'sync', 'call', 'suivi', 'entretien', 'presentation',
+    'présentation', 'interview', 'brief', 'debrief', 'team', 'head', 'director',
+    'directeur', 'manager', 'sales', 'marketing', 'product', 'chief', 'lead',
+    'senior', 'junior', 'mid', 'staff', 'founding', 'co-founder', 'cofounder',
+    'cto', 'ceo', 'cfo', 'coo', 'vp', 'account', 'executive', 'comptable',
+    'general', 'général', 'auxiliaire', 'new', 'onboarding', 'client',
+    'prospect', 'candidat', 'point', 'sync', 'catch', 'catchup', 'kickoff',
+    'kick-off', 'kick', 'off', 'on', 'in', 'internal', 'externe', 'external',
+  ]);
+
+  const isNameToken = (s: string): boolean => {
+    const lower = s.toLowerCase();
+    if (lower.length < 3) return false;
+    if (STOPWORDS.has(lower)) return false;
+    if (!/^[A-ZÀ-Ý][a-zà-ÿ'\-]+$/u.test(s)) return false; // Capitalized word only
+    return true;
+  };
+
+  const rawTitle = (classified.summary || '').replace(
+    /^(entretien|suivi|présentation|presentation|meeting|rdv)\s*[:\-–]\s*/i,
+    '',
+  );
+  const parts = rawTitle.split(/\s+(?:x|X|×)\s+/).map((p) => p.trim()).filter(Boolean);
+
+  const externalNames = externalAtts
+    .filter((a) => !a.entityId && a.name)
+    .map((a) => a.name as string);
+
+  // Gather candidate tokens. For each part, keep the whole trimmed string
+  // if every word is a name, and also the individual words.
+  const candidateTokens: string[] = [];
+  for (const part of [...parts, ...externalNames]) {
+    if (clientAtt?.name && part.toLowerCase().includes(clientAtt.name.toLowerCase())) continue;
+    const words = part.split(/\s+/);
+    if (words.length >= 2 && words.every(isNameToken)) {
+      candidateTokens.push(part);
+    }
+    for (const w of words) {
+      if (isNameToken(w)) candidateTokens.push(w);
+    }
+  }
+  const uniqueTokens = Array.from(new Set(candidateTokens));
+  if (uniqueTokens.length === 0) return null;
+
+  // Candidats with an open candidature (any stage except final REFUSE/PLACE),
+  // optionally on the client entreprise if known.
+  const candidatureWhere: any = { stage: { notIn: ['REFUSE', 'PLACE'] } };
+  const clientEntrepriseForFilter = clientAtt?.entityId
+    ? (await prisma.client.findUnique({
+        where: { id: clientAtt.entityId },
+        select: { entrepriseId: true },
+      }))?.entrepriseId
+    : null;
+  if (clientEntrepriseForFilter) {
+    candidatureWhere.mandat = { entrepriseId: clientEntrepriseForFilter };
+  }
+
+  for (const q of uniqueTokens) {
+    // EXACT match only, with ACTIVE pipeline.
+    const found = await prisma.candidat.findFirst({
+      where: {
+        OR: [
+          { prenom: { equals: q, mode: 'insensitive' } },
+          { nom: { equals: q, mode: 'insensitive' } },
+        ],
+        candidatures: { some: candidatureWhere },
+      },
+      select: { id: true, nom: true, prenom: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (found) {
+      console.log(`[CalendarWatcher] Resolved candidat from title/name "${q}": ${found.prenom} ${found.nom}`);
+      return { id: found.id, prenom: found.prenom || null, nom: found.nom };
+    }
+  }
+  return null;
+}
+
+/**
+ * Annonce Slack d'une présentation identifiée dans l'agenda (candidat + contact client connus).
+ * Retourne true si le message est parti, false si la présentation était déjà annoncée par le pipeline.
+ */
+async function annoncerPresentationAgenda(
+  classified: ClassifiedEvent,
+  candidat: ResolvedCandidat,
+  clientAtt: AttendeeDetail,
+  recruiterName: string,
+): Promise<boolean> {
+  const start = classified.startTime ? new Date(classified.startTime) : null;
+
+  // Le recruteur a déjà passé la candidature en Entretien client pour ce jour-là → annonce déjà faite.
+  if (start) {
+    const dejaEnPipeline = await prisma.candidature.findMany({
+      where: { candidatId: candidat.id, stage: 'ENTRETIEN_CLIENT', dateEntretienClient: { not: null } },
+      select: { dateEntretienClient: true },
+    });
+    if (dejaEnPipeline.some((c) => c.dateEntretienClient && jourParis(c.dateEntretienClient) === jourParis(start))) {
+      return false;
+    }
+  }
+
+  // ── Resolve client/entreprise ──
+  let entrepriseNom = 'Entreprise';
+  let contactNom = clientAtt.name || clientAtt.email;
+  let clientEntrepriseId: string | null = null;
+
+  if (clientAtt.entityId) {
+    const client = await prisma.client.findUnique({
+      where: { id: clientAtt.entityId },
+      select: { nom: true, prenom: true, entreprise: { select: { id: true, nom: true } } },
+    });
+    if (client) {
+      contactNom = `${client.prenom || ''} ${client.nom}`.trim();
+      if (client.entreprise) {
+        entrepriseNom = client.entreprise.nom;
+        clientEntrepriseId = client.entreprise.id;
+      }
+    }
+  }
+
+  // ── Resolve mandat — priority order ──
+  //  1. Candidat is in pipeline for an active mandate on the client's entreprise
+  //  2. Candidat is in pipeline for any active mandate
+  //  3. Any active mandate on the client's entreprise
+  //  4. Fall back to the event title
+  let mandatTitre: string | null = null;
+
+  const mandatsCandidat = await prisma.mandat.findMany({
+    where: {
+      statut: { in: ['OUVERT', 'EN_COURS'] },
+      candidatures: { some: { candidatId: candidat.id } },
+    },
+    select: { titrePoste: true, entrepriseId: true, entreprise: { select: { nom: true } } },
+    orderBy: { updatedAt: 'desc' },
+  });
+  const candidatMandat =
+    mandatsCandidat.find((m) => clientEntrepriseId && m.entrepriseId === clientEntrepriseId) || mandatsCandidat[0];
+  if (candidatMandat) {
+    mandatTitre = candidatMandat.titrePoste;
+    if (!clientEntrepriseId && candidatMandat.entreprise) entrepriseNom = candidatMandat.entreprise.nom;
+  }
+
+  if (!mandatTitre && clientEntrepriseId) {
+    const anyMandat = await prisma.mandat.findFirst({
+      where: { entrepriseId: clientEntrepriseId, statut: { in: ['OUVERT', 'EN_COURS'] } },
+      select: { titrePoste: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (anyMandat) mandatTitre = anyMandat.titrePoste;
+  }
+
+  const { notifyPresentation } = await import('../slack/slack.service.js');
+  await notifyPresentation({
+    candidatPrenom: candidat.prenom,
+    candidatNom: candidat.nom,
+    entrepriseNom,
+    contactNom,
+    mandatTitre: mandatTitre || classified.summary,
+    recruteurPrenom: recruiterName,
+    date: start,
+  });
+  return true;
+}
+
+/**
+ * Événement non identifié : message privé Slack avec un lien vers l'ATS pour dire
+ * s'il s'agit d'un RDV client, d'une présentation ou d'autre chose. Sans slackUserId
+ * ni SLACK_BOT_TOKEN, l'événement reste visible dans l'ATS sur /rdv/classer.
+ */
+async function demanderClassement(
+  activiteId: string,
   classified: ClassifiedEvent,
   userId: string,
-  _recruiterName: string,
 ): Promise<void> {
   try {
     const { sendSlackDm } = await import('../slack/slack.service.js');
@@ -1099,105 +1295,37 @@ async function notifyAmbiguousEvent(
         })
       : 'Heure inconnue';
 
-    const attendeeList = classified.attendees
-      .map((a) => {
-        const label = a.role === 'internal' ? '(interne)' : a.name ? `${a.name}` : a.email;
-        return `${a.email} ${label !== a.email ? `— ${label}` : ''}`;
-      })
-      .join('\n');
-
-    const blocks = [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: [
-            `❓ *Événement détecté — dis-moi le type*`,
-            ``,
-            `📅 *${classified.summary}* — ${startDate}`,
-            `👥 Participants :`,
-            attendeeList,
-            ``,
-            `Réponds :`,
-            `→ *INTERVIEW* (toi + candidat)`,
-            `→ *PRES* (toi + candidat + client)`,
-          ].join('\n'),
-        },
-      },
-    ];
-
-    const sent = await sendSlackDm(user.slackUserId, { blocks });
-    if (sent) {
-      console.log(`[CalendarWatcher] Slack DM ambiguous sent for event: ${classified.summary}`);
-    }
-  } catch (err) {
-    console.error('[CalendarWatcher] Failed to send ambiguous DM:', err);
-  }
-}
-
-/**
- * Send a Slack DM to the recruiter when a meeting is client-only (no candidat
- * attendee) — could be a business-dev RDV or a presentation where the candidat
- * was missed. Silent no-op if the recruiter has no slackUserId configured or
- * SLACK_BOT_TOKEN is missing (we don't spam the channel for ambiguous events).
- */
-async function notifyClientMeetingAmbiguity(
-  classified: ClassifiedEvent,
-  userId: string,
-  recruiterName: string,
-): Promise<void> {
-  try {
-    const { sendSlackDm } = await import('../slack/slack.service.js');
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { slackUserId: true },
-    });
-    if (!user?.slackUserId) return; // No DM target — skip silently
-
-    const startDate = classified.startTime
-      ? new Date(classified.startTime).toLocaleString('fr-FR', {
-          weekday: 'short',
-          day: '2-digit',
-          month: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZone: 'Europe/Paris',
-        })
-      : 'Heure inconnue';
-
-    const clientsList = classified.attendees
-      .filter((a) => a.role === 'client')
+    const avec = classified.attendees
+      .filter((a) => a.role !== 'internal')
       .map((a) => a.name || a.email)
       .join(', ');
 
+    const lien = `${(process.env.APP_URL || 'https://ats.propium.co').replace(/\/$/, '')}/rdv/classer/${activiteId}`;
+
     const blocks = [
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
           text: [
-            `❓ *${recruiterName}* — c'était quoi ce meeting ?`,
+            `❓ *RDV client ou présentation ?*`,
             ``,
-            `📅 *${classified.summary}* — ${startDate}`,
-            `🏢 Avec : ${clientsList}`,
+            `📅 *${classified.summary}* · ${startDate}`,
+            `👥 Avec : ${avec || 'participants inconnus'}`,
             ``,
-            `📅 *RDV client* (business dev)`,
-            `🤝 *Présentation* (avec un candidat qui aurait dû être invité)`,
-            `🎯 *Entretien candidat* (le client n'est pas pertinent)`,
-            ``,
-            `_Classe-le dans l'ATS si besoin._`,
+            `<${lien}|Répondre dans l'ATS>`,
+            `_Rien n'est annoncé ni compté tant que tu n'as pas répondu._`,
           ].join('\n'),
         },
       },
     ];
 
-    const sent = await sendSlackDm(user.slackUserId, { blocks });
+    const sent = await sendSlackDm(user.slackUserId, { blocks, text: `RDV client ou présentation ? ${classified.summary}` });
     if (sent) {
-      console.log(`[CalendarWatcher] Slack DM ambiguity sent to ${recruiterName} for: ${classified.summary}`);
+      console.log(`[CalendarWatcher] Slack DM "à classer" sent for event: ${classified.summary}`);
     }
   } catch (err) {
-    console.error('[CalendarWatcher] Failed to send client-meeting ambiguity DM:', err);
+    console.error('[CalendarWatcher] Failed to send "à classer" DM:', err);
   }
 }
 
@@ -1214,7 +1342,7 @@ async function processClassifiedEvent(
   recruiterName: string,
 ): Promise<boolean> {
   // Skip internal events
-  if (classified.type === 'INTERNAL') return false;
+  if (classified.externalCount === 0) return false;
 
   // In-memory lock: skip if already being processed right now
   const lockKey = `${classified.googleEventId}:${userId}`;
@@ -1229,6 +1357,16 @@ async function processClassifiedEvent(
   }
 }
 
+/**
+ * Nature d'un événement d'agenda. Un RDV client ou une présentation n'est retenu
+ * automatiquement que s'il est clairement identifié ; sinon on pose la question.
+ *
+ *  - un seul externe, candidat connu                      → INTERVIEW
+ *  - candidat identifié + contact client connu            → PRESENTATION (annoncée)
+ *  - uniquement des contacts clients connus + titre « RDV » → RDV_CLIENT (annoncé)
+ *  - contact client, plusieurs externes ou titre évocateur → A_CLASSER (question en message privé)
+ *  - sinon (un externe inconnu, sans indice)              → INTERVIEW, comme avant
+ */
 async function _processClassifiedEventInner(
   classified: ClassifiedEvent,
   userId: string,
@@ -1243,277 +1381,101 @@ async function _processClassifiedEventInner(
   });
   if (existing) return false;
 
-  // For AMBIGU events, send Slack and still create a MEETING with AMBIGU tag
-  if (classified.type === 'AMBIGU') {
-    notifyAmbiguousEvent(classified, userId, recruiterName).catch(() => {});
-  }
+  // RDV pris via la page de réservation : déjà enregistré et compté côté booking.
+  const booking = await prisma.booking.findFirst({
+    where: { googleEventId: classified.googleEventId },
+    select: { id: true },
+  });
+  if (booking) return false;
 
-  // Client-only meetings are ambiguous: they could be either business-dev RDV
-  // (recruiter + client) or a presentation where the candidat's email wasn't
-  // added to the invite. Ping the recruiter on Slack to ask the nature.
-  const externalsForCheck = classified.attendees.filter((a) => a.role !== 'internal');
-  const hasCandidatAttendee = externalsForCheck.some((a) => a.role === 'candidat');
-  const hasClientAttendee = externalsForCheck.some((a) => a.role === 'client');
-  const clientOnlyMeeting =
-    !hasCandidatAttendee &&
-    hasClientAttendee &&
-    (classified.type === 'INTERVIEW' || classified.type === 'PRESENTATION');
-  if (clientOnlyMeeting) {
-    notifyClientMeetingAmbiguity(classified, userId, recruiterName).catch(() => {});
-  }
+  const externals = classified.attendees.filter((a) => a.role !== 'internal');
+  const candidatAtt = externals.find((a) => a.role === 'candidat' && a.entityId);
+  const clients = externals.filter((a) => a.role === 'client');
+  const clientAtt = clients[0];
 
-  // For PRESENTATION events, notify the whole team on Slack
-  if (classified.type === 'PRESENTATION') {
-    try {
-      const { notifyPresentation } = await import('../slack/slack.service.js');
-      const externalAtts = classified.attendees.filter((a) => a.role !== 'internal');
-      let candidatAtt = externalAtts.find((a) => a.role === 'candidat');
-      const clientAtt = externalAtts.find((a) => a.role === 'client');
+  let kind: MeetingKind;
+  let candidat: ResolvedCandidat | null = null;
 
-      // ── Resolve candidat ──
-      let candidatPrenom: string | null = null;
-      let candidatNom = candidatAtt?.name || candidatAtt?.email || 'Candidat externe';
-      let resolvedCandidatId: string | null = candidatAtt?.entityId || null;
-
-      if (resolvedCandidatId) {
-        const candidat = await prisma.candidat.findUnique({
-          where: { id: resolvedCandidatId },
-          select: { nom: true, prenom: true },
-        });
-        if (candidat) {
-          candidatPrenom = candidat.prenom || null;
-          candidatNom = candidat.nom;
-        }
-      } else {
-        // No attendee matched a candidat in DB — fall back to parsing the event title.
-        // Patterns supported:
-        //   "Entretien : Dimitri X Privateaser" → token "Dimitri"
-        //   "Mendo × Théo Faugeras" → token "Théo Faugeras"
-        //
-        // Rules (strict — must not false-match):
-        //  - Only EXACT matches on prenom or nom (no contains — "Of" would match "Coffolé").
-        //  - Skip common non-name words (stopwords).
-        //  - Only look for active candidats with a pipeline (candidatures exist).
-        //  - If client entreprise is known, prefer candidats linked to a mandate on
-        //    that entreprise.
-
-        const STOPWORDS = new Set([
-          'of', 'the', 'and', 'weekly', 'daily', 'standup', 'stand-up', 'meeting',
-          'rdv', 'review', 'sync', 'call', 'suivi', 'entretien', 'presentation',
-          'présentation', 'interview', 'brief', 'debrief', 'team', 'head', 'director',
-          'directeur', 'manager', 'sales', 'marketing', 'product', 'chief', 'lead',
-          'senior', 'junior', 'mid', 'staff', 'founding', 'co-founder', 'cofounder',
-          'cto', 'ceo', 'cfo', 'coo', 'vp', 'account', 'executive', 'comptable',
-          'general', 'général', 'auxiliaire', 'new', 'onboarding', 'client',
-          'prospect', 'candidat', 'point', 'sync', 'catch', 'catchup', 'kickoff',
-          'kick-off', 'kick', 'off', 'on', 'in', 'internal', 'externe', 'external',
-        ]);
-
-        const isNameToken = (s: string): boolean => {
-          const lower = s.toLowerCase();
-          if (lower.length < 3) return false;
-          if (STOPWORDS.has(lower)) return false;
-          if (!/^[A-ZÀ-Ý][a-zà-ÿ'\-]+$/u.test(s)) return false; // Capitalized word only
-          return true;
-        };
-
-        const rawTitle = (classified.summary || '').replace(
-          /^(entretien|suivi|présentation|presentation|meeting|rdv)\s*[:\-–]\s*/i,
-          '',
-        );
-        const parts = rawTitle.split(/\s+(?:x|X|×)\s+/).map((p) => p.trim()).filter(Boolean);
-
-        const externalNames = externalAtts
-          .filter((a) => !a.entityId && a.name)
-          .map((a) => a.name as string);
-
-        // Gather candidate tokens. For each part, keep the whole trimmed string
-        // if every word is a name, and also the individual words.
-        const candidateTokens: string[] = [];
-        for (const part of [...parts, ...externalNames]) {
-          if (clientAtt?.name && part.toLowerCase().includes(clientAtt.name.toLowerCase())) continue;
-          // Whole string if all tokens are name-like
-          const words = part.split(/\s+/);
-          if (words.length >= 2 && words.every(isNameToken)) {
-            candidateTokens.push(part);
-          }
-          for (const w of words) {
-            if (isNameToken(w)) candidateTokens.push(w);
-          }
-        }
-        // Dedupe
-        const uniqueTokens = Array.from(new Set(candidateTokens));
-
-        for (const q of uniqueTokens) {
-          // EXACT match only, with ACTIVE pipeline. If we know the client entreprise,
-          // strongly prefer candidats linked to a mandate on that entreprise.
-          const whereBase: any = {
-            OR: [
-              { prenom: { equals: q, mode: 'insensitive' } },
-              { nom: { equals: q, mode: 'insensitive' } },
-            ],
-          };
-
-          // Candidats with an open candidature (any stage except final REFUSE/PLACE),
-          // optionally on the client entreprise if known.
-          const candidatureWhere: any = {
-            stage: { notIn: ['REFUSE', 'PLACE'] },
-          };
-          const clientEntrepriseForFilter = clientAtt?.entityId
-            ? (await prisma.client.findUnique({
-                where: { id: clientAtt.entityId },
-                select: { entrepriseId: true },
-              }))?.entrepriseId
-            : null;
-          if (clientEntrepriseForFilter) {
-            candidatureWhere.mandat = { entrepriseId: clientEntrepriseForFilter };
-          }
-
-          const found = await prisma.candidat.findFirst({
-            where: {
-              ...whereBase,
-              candidatures: { some: candidatureWhere },
-            },
-            select: { id: true, nom: true, prenom: true },
-            orderBy: { updatedAt: 'desc' },
-          });
-
-          if (found) {
-            resolvedCandidatId = found.id;
-            candidatPrenom = found.prenom || null;
-            candidatNom = found.nom;
-            candidatAtt = {
-              email: candidatAtt?.email || '',
-              role: 'candidat',
-              name: `${found.prenom || ''} ${found.nom}`.trim(),
-              entityId: found.id,
-            };
-            console.log(`[CalendarWatcher] Resolved candidat from title/name "${q}": ${found.prenom} ${found.nom}`);
-            break;
-          }
-        }
-
-      }
-
-      // If no candidat could be resolved, skip the Slack notification entirely.
-      // Better silent than sending a wrong "Candidat externe" or a false match.
-      if (!resolvedCandidatId) {
-        console.log(`[CalendarWatcher] No candidat resolved for event "${classified.summary}" — skipping Slack presentation notification`);
-      } else {
-
-      // ── Resolve client/entreprise ──
-      let entrepriseNom = 'Entreprise';
-      let contactNom = clientAtt?.name || null;
-      let clientEntrepriseId: string | null = null;
-
-      if (clientAtt?.entityId) {
-        const client = await prisma.client.findUnique({
-          where: { id: clientAtt.entityId },
-          select: { nom: true, prenom: true, entreprise: { select: { id: true, nom: true } } },
-        });
-        if (client) {
-          contactNom = `${client.prenom || ''} ${client.nom}`.trim();
-          if (client.entreprise) {
-            entrepriseNom = client.entreprise.nom;
-            clientEntrepriseId = client.entreprise.id;
-          }
-        }
-      }
-
-      // ── Resolve mandat — priority order ──
-      //  1. Candidat is in pipeline for an active mandate (any entreprise)
-      //     → this is the most reliable signal and handles duplicated entreprises.
-      //  2. Mandat on the client's entreprise that is ENTRETIEN_CLIENT-stage for the candidat
-      //  3. Any active mandate on the client's entreprise
-      //  4. Fall back to the event title
-      let mandatTitre: string | null = null;
-
-      if (resolvedCandidatId) {
-        const candidatMandat = await prisma.mandat.findFirst({
-          where: {
-            statut: { in: ['OUVERT', 'EN_COURS'] },
-            candidatures: { some: { candidatId: resolvedCandidatId } },
-          },
-          select: { titrePoste: true, entreprise: { select: { id: true, nom: true } } },
-          orderBy: { updatedAt: 'desc' },
-        });
-        if (candidatMandat) {
-          mandatTitre = candidatMandat.titrePoste;
-          // If the client was unknown, infer entreprise from the mandat
-          if (!clientEntrepriseId && candidatMandat.entreprise) {
-            entrepriseNom = candidatMandat.entreprise.nom;
-          }
-        }
-      }
-
-      if (!mandatTitre && clientEntrepriseId) {
-        const anyMandat = await prisma.mandat.findFirst({
-          where: {
-            entrepriseId: clientEntrepriseId,
-            statut: { in: ['OUVERT', 'EN_COURS'] },
-          },
-          select: { titrePoste: true },
-          orderBy: { updatedAt: 'desc' },
-        });
-        if (anyMandat) mandatTitre = anyMandat.titrePoste;
-      }
-
-        if (!mandatTitre) mandatTitre = classified.summary;
-
-        await notifyPresentation({
-          candidatPrenom,
-          candidatNom,
-          entrepriseNom,
-          contactNom,
-          mandatTitre,
-          recruteurPrenom: recruiterName,
-          // Use the calendar event start time as the presentation date
-          date: classified.startTime ? new Date(classified.startTime) : null,
-        });
-      } // end of "else" — candidat resolved, notif sent
-    } catch (err) {
-      console.error('[CalendarWatcher] Slack presentation notification error:', err);
+  if (externals.length === 1 && candidatAtt) {
+    kind = 'INTERVIEW';
+  } else {
+    if (clients.length > 0 || externals.length >= 2) {
+      candidat = await resolveCandidat(classified, clientAtt);
+    }
+    const titreRdv = RE_TITRE_RDV.test(classified.summary) && !RE_TITRE_PRESENTATION.test(classified.summary);
+    if (candidat && clientAtt) {
+      kind = 'PRESENTATION';
+    } else if (!candidat && clients.length > 0 && clients.length === externals.length && titreRdv) {
+      kind = 'RDV_CLIENT';
+    } else if (clients.length > 0 || externals.length >= 2 || RE_TITRE_INDICE.test(classified.summary)) {
+      kind = 'A_CLASSER';
+    } else {
+      kind = 'INTERVIEW';
     }
   }
 
-  // Determine the linked entity from attendees
-  const externalAttendees = classified.attendees.filter((a) => a.role !== 'internal');
+  // Linked entity
   let entiteType: 'CANDIDAT' | 'CLIENT' = 'CANDIDAT';
   let entiteId = '00000000-0000-0000-0000-000000000000';
-
-  // For INTERVIEW: link to the candidat if found
-  // For PRESENTATION: link to the candidat if found (the main subject)
-  for (const att of externalAttendees) {
-    if (att.role === 'candidat' && att.entityId) {
-      entiteType = 'CANDIDAT';
-      entiteId = att.entityId;
-      break;
-    }
-    if (att.role === 'client' && att.entityId) {
-      entiteType = 'CLIENT';
-      entiteId = att.entityId;
-      // Don't break — prefer candidat if available
-    }
+  if (kind === 'RDV_CLIENT' && clientAtt?.entityId) {
+    entiteType = 'CLIENT';
+    entiteId = clientAtt.entityId;
+  } else if (candidat) {
+    entiteId = candidat.id;
+  } else if (candidatAtt?.entityId) {
+    entiteId = candidatAtt.entityId;
+  } else if (clientAtt?.entityId) {
+    entiteType = 'CLIENT';
+    entiteId = clientAtt.entityId;
   }
 
-  const calendarEventType = classified.type === 'INTERVIEW'
-    ? 'INTERVIEW'
-    : classified.type === 'PRESENTATION'
-      ? 'PRESENTATION'
-      : 'AMBIGU';
+  // Annonces Slack : uniquement pour ce qui est identifié.
+  let annonceSlack = false;
+  try {
+    if (kind === 'PRESENTATION' && candidat && clientAtt) {
+      annonceSlack = await annoncerPresentationAgenda(classified, candidat, clientAtt, recruiterName);
+    } else if (kind === 'RDV_CLIENT' && clientAtt) {
+      const client = clientAtt.entityId
+        ? await prisma.client.findUnique({
+            where: { id: clientAtt.entityId },
+            select: { nom: true, prenom: true, entreprise: { select: { nom: true } } },
+          })
+        : null;
+      await notifyNewMeeting({
+        titre: classified.summary,
+        recruteurPrenom: recruiterName,
+        clientNom: client ? [client.prenom, client.nom].filter(Boolean).join(' ') : clientAtt.name || clientAtt.email,
+        entrepriseNom: client?.entreprise?.nom || null,
+        date: classified.startTime || null,
+        lieu: null,
+      });
+      annonceSlack = true;
+    }
+  } catch (err) {
+    console.error('[CalendarWatcher] Slack notification error:', err);
+  }
 
-  await prisma.activite.create({
+  const prefixes: Record<MeetingKind, string> = {
+    INTERVIEW: '🎯 Interview',
+    PRESENTATION: '🤝 Présentation',
+    RDV_CLIENT: '📅 RDV client',
+    A_CLASSER: '❓ À classer',
+    AUTRE: 'Meeting',
+  };
+
+  const activite = await prisma.activite.create({
     data: {
       type: 'MEETING',
       entiteType,
       entiteId,
       userId,
-      titre: `${calendarEventType === 'INTERVIEW' ? '🎯 Interview' : calendarEventType === 'PRESENTATION' ? '🤝 Présentation' : '❓ RDV'} — ${classified.summary}`,
+      titre: `${prefixes[kind]} — ${classified.summary}`,
       contenu: `Événement détecté automatiquement.\nParticipants : ${classified.attendees.map((a) => a.email).join(', ')}`,
       source: 'CALENDAR',
       metadata: {
         googleEventId: classified.googleEventId,
-        calendarEventType,
+        calendarEventType: kind,
+        summary: classified.summary,
         startTime: classified.startTime,
         endTime: classified.endTime,
         htmlLink: classified.htmlLink,
@@ -1524,12 +1486,17 @@ async function _processClassifiedEventInner(
           entityId: a.entityId,
         })),
         autoClassified: true,
+        annonceSlack,
       },
     },
   });
 
+  if (kind === 'A_CLASSER') {
+    demanderClassement(activite.id, classified, userId).catch(() => {});
+  }
+
   console.log(
-    `[CalendarWatcher] Created ${calendarEventType} activity for event "${classified.summary}" (user ${userId})`,
+    `[CalendarWatcher] Created ${kind} activity for event "${classified.summary}" (user ${userId})`,
   );
   return true;
 }
@@ -1540,8 +1507,8 @@ async function _processClassifiedEventInner(
  * For each recruiter with Calendar connected:
  *  1. Fetch events created/modified in the last 16 minutes (overlap for safety)
  *  2. Classify each event
- *  3. Create Activite for INTERVIEW / PRESENTATION / AMBIGU
- *  4. Send Slack DM for AMBIGU events
+ *  3. Create Activite typed INTERVIEW / PRESENTATION / RDV_CLIENT / A_CLASSER
+ *  4. Send Slack DM with an ATS link for A_CLASSER events
  */
 export async function runCalendarWatcher(): Promise<void> {
   // Only run Mon-Fri 8h-19h Paris

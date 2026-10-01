@@ -56,6 +56,7 @@ const LeadsPage = lazy(() => import('./pages/leads/index'));
 const FastReviewPage = lazy(() => import('./pages/mandats/[id]-review'));
 const ActivitesPage = lazy(() => import('./pages/activites/index'));
 const TachesPage = lazy(() => import('./pages/taches/index'));
+const RdvClasserPage = lazy(() => import('./pages/rdv-classer/index'));
 const IntegrationsSettingsPage = lazy(() => import('./pages/settings/integrations'));
 const IntegrationsGuidePage = lazy(() => import('./pages/settings/integrations-guide'));
 const ImportPage = lazy(() => import('./pages/import/index'));
@@ -133,6 +134,8 @@ export default function App() {
           <Route path="mandats/:id" element={<MandatDetailPage />} />
           <Route path="activites" element={<ActivitesPage />} />
           <Route path="taches" element={<TachesPage />} />
+          <Route path="rdv/classer" element={<RdvClasserPage />} />
+          <Route path="rdv/classer/:id" element={<RdvClasserPage />} />
           <Route path="import" element={<ImportPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/integrations" element={<IntegrationsSettingsPage />} />

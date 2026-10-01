@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Calendar, Video, Phone, Users, Coffee, Check, AlertCircle } from 'lucide-react';
-import { api } from '../../lib/api-client';
+import { api, ApiError } from '../../lib/api-client';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import { Textarea } from '../ui/Input';
@@ -20,7 +20,7 @@ interface ScheduleMeetingProps {
 
 const MEETING_TYPES = [
   { value: 'entretien_candidat', label: 'Entretien candidat', icon: '👤' },
-  { value: 'entretien_client', label: 'Entretien client', icon: '🏢' },
+  { value: 'rdv_client', label: 'RDV client', icon: '🏢' },
   { value: 'call_interne', label: 'Call interne', icon: '📞' },
   { value: 'suivi', label: 'Point de suivi', icon: '🔄' },
   { value: 'debrief', label: 'Debrief', icon: '📋' },
@@ -91,8 +91,8 @@ export default function ScheduleMeeting({
         toast('warning', data.message || 'RDV enregistré mais pas dans le calendrier');
       }
     },
-    onError: () => {
-      toast('error', 'Erreur lors de la planification');
+    onError: (e) => {
+      toast('error', e instanceof ApiError && e.data.message ? e.data.message : 'Erreur lors de la planification');
     },
   });
 
@@ -103,6 +103,11 @@ export default function ScheduleMeeting({
     }
     if (!date) {
       toast('warning', 'Veuillez sélectionner une date');
+      return;
+    }
+    // Un RDV client n'est compté et annoncé qu'avec ses interlocuteurs
+    if (meetingType === 'rdv_client' && entiteType?.toUpperCase() !== 'CLIENT' && !participants.includes('@')) {
+      toast('warning', "Ajoutez l'email d'au moins un interlocuteur");
       return;
     }
 

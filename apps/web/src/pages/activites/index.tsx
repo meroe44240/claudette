@@ -154,6 +154,8 @@ export default function ActivitesPage() {
   const [newDirection, setNewDirection] = useState('');
   const [newTitre, setNewTitre] = useState('');
   const [newContenu, setNewContenu] = useState('');
+  const [newMeetingDate, setNewMeetingDate] = useState('');
+  const [newInterlocuteurs, setNewInterlocuteurs] = useState('');
   const [newEntiteType, setNewEntiteType] = useState('CANDIDAT');
   const [newEntiteId, setNewEntiteId] = useState('');
   const [entitySearch, setEntitySearch] = useState('');
@@ -201,6 +203,14 @@ export default function ActivitesPage() {
         entiteType: newEntiteType,
         entiteId: newEntiteId,
         source: 'MANUEL',
+        ...(newType === 'MEETING' && (newMeetingDate || newInterlocuteurs.trim())
+          ? {
+              metadata: {
+                ...(newMeetingDate ? { startTime: new Date(newMeetingDate).toISOString() } : {}),
+                ...(newInterlocuteurs.trim() ? { interlocuteurs: newInterlocuteurs.trim() } : {}),
+              },
+            }
+          : {}),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activites'] });
@@ -218,6 +228,8 @@ export default function ActivitesPage() {
     setNewDirection('');
     setNewTitre('');
     setNewContenu('');
+    setNewMeetingDate('');
+    setNewInterlocuteurs('');
     setNewEntiteType('CANDIDAT');
     setNewEntiteId('');
     setEntitySearch('');
@@ -474,6 +486,24 @@ export default function ActivitesPage() {
               onChange={setNewDirection}
               placeholder="Aucune"
             />
+          )}
+
+          {/* Meeting : date + interlocuteurs (requis pour compter comme RDV client) */}
+          {newType === 'MEETING' && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Input
+                label="Date et heure"
+                type="datetime-local"
+                value={newMeetingDate}
+                onChange={(e) => setNewMeetingDate(e.target.value)}
+              />
+              <Input
+                label="Interlocuteurs"
+                value={newInterlocuteurs}
+                onChange={(e) => setNewInterlocuteurs(e.target.value)}
+                placeholder="Prénom Nom"
+              />
+            </div>
           )}
 
           {/* Titre */}

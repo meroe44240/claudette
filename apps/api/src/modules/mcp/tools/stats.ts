@@ -600,7 +600,18 @@ export function registerStatsTools(server: McpServer) {
         }
       }
 
+      const invites = ((args.attendees as string[] | undefined) || []).filter(Boolean);
+      if (!entiteId && invites.length === 0) {
+        return {
+          success: false,
+          message: "Un RDV client doit avoir une date et au moins un interlocuteur : precise le client (client_id ou client_name) ou les emails des participants.",
+        };
+      }
+
       const startTime = new Date(args.date as string);
+      if (Number.isNaN(startTime.getTime())) {
+        return { success: false, message: 'Date du RDV invalide : format ISO attendu (ex: 2026-04-16T14:00:00).' };
+      }
       const dureeMin = (args.duree as number) || 60;
       const endTime = new Date(startTime.getTime() + dureeMin * 60 * 1000);
 
@@ -615,6 +626,7 @@ export function registerStatsTools(server: McpServer) {
           attendees: args.attendees as string[] | undefined,
           entiteType: 'CLIENT',
           entiteId: entiteId,
+          kind: 'RDV_CLIENT',
         });
         return {
           success: true,
@@ -642,6 +654,7 @@ export function registerStatsTools(server: McpServer) {
               location: (args.lieu as string) || null,
               attendees: (args.attendees as string[]) || [],
               dureeMinutes: dureeMin,
+              calendarEventType: 'RDV_CLIENT',
             },
           },
         });

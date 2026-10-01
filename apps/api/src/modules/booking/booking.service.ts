@@ -380,6 +380,7 @@ L'équipe HumanUp`;
       entiteType: candidat ? 'CANDIDAT' : undefined,
       entiteId: candidat?.id,
       withMeet: true,
+      kind: kind === 'QUALIFICATION' ? 'INTERVIEW' : 'RDV_CLIENT',
     });
     meetLink = ev?.meetLink ?? null;
     googleEventId = ev?.googleEventId ?? null;
