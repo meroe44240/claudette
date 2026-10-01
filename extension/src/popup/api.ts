@@ -148,6 +148,24 @@ export async function createCandidat(
   return { ...data, _updated: res.status === 200 };
 }
 
+// La photo LinkedIn est envoyée en fichier : son lien expire au bout de quelques
+// semaines, l'ATS doit donc garder sa propre copie.
+export async function uploadCandidatPhoto(candidatId: string, photoUrl: string): Promise<void> {
+  try {
+    const img = await fetch(photoUrl);
+    if (!img.ok) return;
+    const blob = await img.blob();
+    if (!/^image\/(jpeg|png|webp)$/.test(blob.type) || blob.size > 5 * 1024 * 1024) return;
+    const token = (await getToken()) ?? (await refreshFromSession());
+    if (!token) return;
+    const fd = new FormData();
+    fd.append('file', blob, 'photo.jpg');
+    await fetch(`${API_BASE_URL}/candidats/${candidatId}/photo`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+  } catch {
+    // la photo reste celle du lien : pas bloquant
+  }
+}
+
 // --- Clients ---
 
 export interface CreateClientPayload {

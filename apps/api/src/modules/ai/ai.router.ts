@@ -633,6 +633,7 @@ export default async function aiRouter(fastify: FastifyInstance) {
         request.userId,
         candidatId,
       );
+      void import('../candidats/photo.service.js').then((m) => m.autoFromCv(candidatId, request.userId));
 
       return { data: { ...result, cvUrl: doc.url } };
     },

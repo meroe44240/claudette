@@ -46,7 +46,21 @@ async function profileSeen(linkedinUrl: string, photoUrl: string): Promise<void>
     if (!token) return;
     res = await post('/candidats/photo-linkedin', { linkedinUrl, photoUrl }, token);
   }
-  if (res.ok) seen.add(linkedinUrl);
+  if (!res.ok) return;
+  seen.add(linkedinUrl);
+  // Le serveur n'a pas pu récupérer l'image : on l'envoie depuis le navigateur.
+  const data = await res.json().catch(() => null);
+  if (data?.needsUpload && data.candidatId) await uploadPhoto(data.candidatId, photoUrl, token);
+}
+
+async function uploadPhoto(candidatId: string, photoUrl: string, token: string): Promise<void> {
+  const img = await fetch(photoUrl);
+  if (!img.ok) return;
+  const blob = await img.blob();
+  if (!/^image\/(jpeg|png|webp)$/.test(blob.type) || blob.size > 5 * 1024 * 1024) return;
+  const fd = new FormData();
+  fd.append('file', blob, 'photo.jpg');
+  await fetch(`${API_BASE_URL}/candidats/${candidatId}/photo`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
 }
 
 chrome.runtime.onMessage.addListener((message: { type?: string; linkedinUrl?: string; photoUrl?: string }) => {

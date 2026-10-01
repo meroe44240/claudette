@@ -172,6 +172,7 @@ export default async function candidatRouter(fastify: FastifyInstance) {
         data: { cvUrl: doc.url },
       });
 
+      void photoService.autoFromCv(id, request.userId);
       return { cvUrl: doc.url, filename: doc.originalName, size: doc.size };
     },
   });
