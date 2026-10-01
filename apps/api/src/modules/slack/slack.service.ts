@@ -198,6 +198,7 @@ async function gatherDailyData(): Promise<DailyReportData> {
 
   // Get all active users (exclude test accounts)
   const allUsers = await prisma.user.findMany({
+    where: { status: 'ACTIVE' } as any, // comptes archivés exclus
     select: { id: true, nom: true, prenom: true },
   });
   const users = allUsers.filter((u) => {

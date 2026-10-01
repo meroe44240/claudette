@@ -689,7 +689,7 @@ export function registerStatsTools(server: McpServer) {
       }
 
       const users = await prisma.user.findMany({
-        where: { role: { in: ['RECRUTEUR', 'ADMIN', 'MANAGER'] } },
+        where: { role: { in: ['RECRUTEUR', 'ADMIN', 'MANAGER'] }, status: 'ACTIVE' } as any,
         select: { id: true, nom: true, prenom: true },
       });
 
@@ -738,7 +738,7 @@ export function registerStatsTools(server: McpServer) {
       }
 
       const users = await prisma.user.findMany({
-        where: { role: { in: ['RECRUTEUR', 'ADMIN', 'MANAGER'] } },
+        where: { role: { in: ['RECRUTEUR', 'ADMIN', 'MANAGER'] }, status: 'ACTIVE' } as any,
         select: { id: true, nom: true, prenom: true },
       });
 
