@@ -199,6 +199,8 @@ model Candidat {
   mobilite           String?   @db.VarChar(255)
   source             String?   @db.VarChar(100)
   aPlayer            Boolean   @default(false)
+  // Niveau choisi par le recruteur : A, B ou C
+  tier               String?   @db.VarChar(1)
   tags               String[]  @default([])
   notes              String?   @db.Text
   consentementRgpd   Boolean   @default(false)

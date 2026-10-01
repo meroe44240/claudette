@@ -20,6 +20,7 @@ export const createCandidatSchema = z.object({
   notes: z.string().optional().nullable(),
   consentementRgpd: z.boolean().optional(),
   assignedToId: z.string().uuid().optional().nullable(),
+  tier: z.enum(['A', 'B', 'C']).optional().nullable(),
   // AI-generated fields
   aiPitchShort: z.string().optional(),
   aiPitchLong: z.string().optional(),
@@ -43,6 +44,23 @@ export const dossierSchema = z.object({
   sections: z.array(z.object({ title: z.string().max(120), items: z.array(z.string().max(600)).max(30) })).max(12).optional(),
   manuel: z.boolean().optional(),
   coordonneesVisibles: z.boolean().optional(),
+});
+
+export const syntheseApplySchema = z.object({
+  fields: z.object({
+    localisation: z.string().max(255).nullable().optional(),
+    salaireActuel: z.number().int().positive().nullable().optional(),
+    salaireSouhaite: z.number().int().positive().nullable().optional(),
+    anneesExperience: z.number().int().min(0).nullable().optional(),
+    disponibilite: z.string().max(100).nullable().optional(),
+    mobilite: z.string().max(255).nullable().optional(),
+  }).optional(),
+  experiences: z.array(z.object({
+    titre: z.string().min(1).max(255), entreprise: z.string().min(1).max(255),
+    anneeDebut: z.number().int().min(1950).max(2100), anneeFin: z.number().int().min(1950).max(2100).nullable(),
+    highlights: z.array(z.string().max(600)).max(5),
+  })).optional(),
+  dossier: dossierSchema.omit({ manuel: true, coordonneesVisibles: true }).optional(),
 });
 
 // ─── EXPERIENCE SCHEMAS ─────────────────────────────
