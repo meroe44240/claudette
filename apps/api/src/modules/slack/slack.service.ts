@@ -1,4 +1,5 @@
 import prisma from '../../lib/db.js';
+import { compteCommeRdvClient, dateComptage, CLASSEMENT_LOOKBACK_MS } from '../meetings/meeting-kind.js';
 
 // ─── TYPES ──────────────────────────────────────────
 
@@ -231,16 +232,23 @@ async function gatherDailyData(): Promise<DailyReportData> {
             createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
           },
         }),
-        // MEETING(CLIENT) not classified as PRESENTATION = business dev RDV
-        prisma.activite.count({
-          where: {
-            userId: user.id,
-            type: 'MEETING',
-            entiteType: 'CLIENT',
-            createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
-            NOT: { metadata: { path: ['calendarEventType'], equals: 'PRESENTATION' } },
-          },
-        }),
+        // RDV client = meeting typé RDV_CLIENT, daté, avec interlocuteurs (compté le jour de sa validation)
+        prisma.activite
+          .findMany({
+            where: {
+              userId: user.id,
+              type: 'MEETING',
+              entiteType: { in: ['CLIENT', 'ENTREPRISE'] },
+              createdAt: { gte: new Date(yesterdayStart.getTime() - CLASSEMENT_LOOKBACK_MS), lte: yesterdayEnd },
+            },
+            select: { entiteType: true, entiteId: true, createdAt: true, metadata: true },
+          })
+          .then((rows) =>
+            rows.filter((r) => {
+              const d = dateComptage(r);
+              return compteCommeRdvClient(r) && !!d && d >= yesterdayStart && d <= yesterdayEnd;
+            }).length,
+          ),
         // MEETING(CANDIDAT) not classified as PRESENTATION = interview with candidat
         prisma.activite.count({
           where: {
@@ -248,7 +256,11 @@ async function gatherDailyData(): Promise<DailyReportData> {
             type: 'MEETING',
             entiteType: 'CANDIDAT',
             createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
-            NOT: { metadata: { path: ['calendarEventType'], equals: 'PRESENTATION' } },
+            NOT: [
+              { metadata: { path: ['calendarEventType'], equals: 'PRESENTATION' } },
+              { metadata: { path: ['calendarEventType'], equals: 'A_CLASSER' } },
+              { metadata: { path: ['calendarEventType'], equals: 'AUTRE' } },
+            ],
           },
         }),
         // MEETING classified PRESENTATION = 3-way client+candidat meetings
@@ -815,61 +827,6 @@ export async function notifyPresentation(data: {
 }
 
 /**
- * Notify Slack when a candidature reaches ENTRETIEN_1 (RDV client booké).
- */
-export async function notifyRdvClient(data: {
-  candidatPrenom: string | null;
-  candidatNom: string;
-  entrepriseNom: string;
-  contactNom: string | null;
-  mandatTitre: string;
-  dateEntretien: Date | null;
-  recruteurPrenom: string | null;
-}): Promise<void> {
-  const config = await getSlackConfig();
-  if (!config || !config.enabled) return;
-
-  const candidatName = [data.candidatPrenom, data.candidatNom].filter(Boolean).join(' ');
-  const recruteur = data.recruteurPrenom || 'Non assigné';
-  const contact = data.contactNom || 'Non renseigné';
-
-  let dateLine = '🕐 Date à confirmer';
-  if (data.dateEntretien) {
-    const d = data.dateEntretien;
-    const datePart = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Paris' });
-    const timePart = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
-    dateLine = `🕐 ${datePart} à ${timePart}`;
-  }
-
-  const payload = {
-    blocks: [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: [
-            `📅 *RDV client booké*`,
-            ``,
-            `👤 ${candidatName}`,
-            `🏢 ${data.entrepriseNom} — ${contact}`,
-            `📋 Mandat : ${data.mandatTitre}`,
-            dateLine,
-            `👔 Recruteur : ${recruteur}`,
-          ].join('\n'),
-        },
-      },
-    ],
-  };
-
-  try {
-    await sendToWebhook(config.webhookUrl, payload);
-    console.log(`[Slack] RDV notification sent: ${candidatName}`);
-  } catch (err) {
-    console.error('[Slack] Failed to send RDV notification:', err);
-  }
-}
-
-/**
  * Notify Slack when a new mandat is created (nouvelle opportunité).
  */
 export async function notifyNouvelleOpportunite(data: {
@@ -1140,7 +1097,7 @@ export async function notifyCloseWon(data: {
 // ─── NEW MEETING NOTIFICATION ─────────────────────
 
 /**
- * Notify Slack when a new meeting/RDV is created.
+ * Annonce un RDV client (identifié, daté, avec interlocuteurs). Les autres meetings ne sont pas annoncés.
  */
 export async function notifyNewMeeting(data: {
   titre: string;
@@ -1149,14 +1106,17 @@ export async function notifyNewMeeting(data: {
   entrepriseNom: string | null;
   date: string | null;
   lieu: string | null;
+  /** Interlocuteurs saisis ou invités, quand le contact n'est pas une fiche client. */
+  interlocuteurs?: string | null;
 }): Promise<void> {
   const config = await getSlackConfig();
   if (!config || !config.enabled) return;
 
   const recruteur = data.recruteurPrenom || 'Non assigné';
-  const lines = [`📅 *Nouveau RDV*`, ``];
+  const lines = [`📅 *Nouveau RDV client*`, ``];
   lines.push(`📋 ${data.titre}`);
   if (data.clientNom) lines.push(`👤 Contact : ${data.clientNom}`);
+  else if (data.interlocuteurs) lines.push(`👤 Avec : ${data.interlocuteurs}`);
   if (data.entrepriseNom) lines.push(`🏢 ${data.entrepriseNom}`);
   if (data.date) {
     const d = new Date(data.date);

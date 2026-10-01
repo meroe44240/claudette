@@ -1,4 +1,5 @@
 import prisma from '../../lib/db.js';
+import { compteCommeRdvClient, dateComptage, CLASSEMENT_LOOKBACK_MS } from '../meetings/meeting-kind.js';
 
 /**
  * get_team_daily_report — rapport d'activité quotidien par personne (support standup).
@@ -68,16 +69,26 @@ async function callsConnectes(uid: string, s: Date, e: Date): Promise<number> {
   return rows.filter((r) => Number((r.metadata as any)?.duration ?? 0) > 30).length;
 }
 
-// RDV client pris = bookings + meetings client, dédupliqués par googleEventId.
+// RDV client pris = bookings + meetings typés RDV client (datés, avec interlocuteurs),
+// dédupliqués par googleEventId. Un meeting classé après coup compte le jour de sa validation.
 async function rdvNouveaux(uid: string, s: Date, e: Date): Promise<number> {
   const [bookings, meetings] = await Promise.all([
     prisma.booking.findMany({ where: { userId: uid, createdAt: { gte: s, lt: e } }, select: { googleEventId: true } }),
-    prisma.activite.findMany({ where: { userId: uid, type: 'MEETING', entiteType: { in: ['CLIENT', 'ENTREPRISE'] }, createdAt: { gte: s, lt: e } }, select: { metadata: true } }),
+    prisma.activite.findMany({
+      where: { userId: uid, type: 'MEETING', entiteType: { in: ['CLIENT', 'ENTREPRISE'] }, createdAt: { gte: new Date(s.getTime() - CLASSEMENT_LOOKBACK_MS), lt: e } },
+      select: { entiteType: true, entiteId: true, createdAt: true, metadata: true },
+    }),
   ]);
   const seen = new Set<string>();
   let n = 0;
   for (const b of bookings) { const k = b.googleEventId || `bk-${n}`; if (!seen.has(k)) { seen.add(k); n++; } }
-  for (const mt of meetings) { const gid = (mt.metadata as any)?.googleEventId || (mt.metadata as any)?.google_event_id; const k = gid || `mt-${n}-${Math.random()}`; if (!seen.has(k)) { seen.add(k); n++; } }
+  for (const mt of meetings) {
+    const d = dateComptage(mt);
+    if (!compteCommeRdvClient(mt) || !d || d < s || d >= e) continue;
+    const gid = (mt.metadata as any)?.googleEventId || (mt.metadata as any)?.google_event_id;
+    const k = gid || `mt-${n}-${Math.random()}`;
+    if (!seen.has(k)) { seen.add(k); n++; }
+  }
   return n;
 }
 
@@ -148,7 +159,7 @@ const mouvementsPipeline = (uid: string, s: Date, e: Date) =>
 // Présentations réalisées (semaine) avec détail candidat · date · mandat · interlocuteur.
 async function presentations(uid: string, s: Date, e: Date) {
   const rows = await prisma.stageHistory.findMany({
-    where: { changedById: uid, toStage: 'ENTRETIEN_CLIENT' as any, changedAt: { gte: s, lt: e }, candidature: { presentationNoShow: false } as any },
+    where: { changedById: uid, toStage: 'ENTRETIEN_CLIENT' as any, changedAt: { gte: s, lt: e }, candidature: { presentationNoShow: false, dateEntretienClient: { not: null }, interlocuteurClient: { not: null } } as any },
     select: {
       changedAt: true,
       candidature: {
