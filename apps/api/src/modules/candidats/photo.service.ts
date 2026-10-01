@@ -56,8 +56,13 @@ export async function refreshFromLinkedin(linkedinUrl: string, photoUrl: string)
   if (!cand) return { found: false, updated: false };
   if (isHosted(cand.photoUrl)) return { found: true, updated: false, candidatId: cand.id };
 
-  await dossierService.setPhotoFromUrl(cand.id, photoUrl);
-  return { found: true, updated: true, candidatId: cand.id };
+  try {
+    await dossierService.setPhotoFromUrl(cand.id, photoUrl);
+    return { found: true, updated: true, candidatId: cand.id };
+  } catch {
+    // Le serveur n'a pas pu télécharger l'image : l'extension l'enverra elle-même.
+    return { found: true, updated: false, needsUpload: true, candidatId: cand.id };
+  }
 }
 
 // ─── Photo du CV ─────────────────────────────────────
@@ -130,6 +135,17 @@ export async function fromCv(candidatId: string, userId: string) {
   const base64 = chosen.dataUrl!.replace(/^data:image\/\w+;base64,/, '');
   const mime = chosen.dataUrl!.match(/^data:(image\/\w+);/)?.[1] ?? 'image/png';
   return dossierService.uploadPhoto(candidatId, Buffer.from(base64, 'base64'), mime);
+}
+
+/** À l'import d'un CV : prend la photo du CV si le candidat n'en a pas. Ne lève jamais. */
+export async function autoFromCv(candidatId: string, userId: string): Promise<void> {
+  try {
+    const c = await prisma.candidat.findUnique({ where: { id: candidatId }, select: { photoUrl: true, cvUrl: true } });
+    if (!c || c.photoUrl || !c.cvUrl || !/\.pdf($|\?)/i.test(c.cvUrl)) return;
+    await fromCv(candidatId, userId);
+  } catch {
+    // pas de photo dans le CV : rien à faire
+  }
 }
 
 /** Rattrapage : héberge les photos externes encore valides. */

@@ -4,6 +4,7 @@ import {
   login,
   logout,
   createCandidat,
+  uploadCandidatPhoto,
   createClient,
   createEntreprise,
   createCandidature,
@@ -397,6 +398,7 @@ function ProfileView({ data }: { data: PersonData }) {
           .filter(Boolean),
       };
       const result = await createCandidat(payload);
+      if (data.photoUrl && result?.id) void uploadCandidatPhoto(result.id, data.photoUrl);
 
       // If a mandat is selected, also create the candidature
       if (selectedMandatId) {
