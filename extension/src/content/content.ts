@@ -789,6 +789,53 @@ function getPageData(): PageData {
 }
 
 // ---------------------------------------------------------------------------
+// Photo automatique : à la visite d'un profil, on envoie sa photo au service
+// worker, qui met à jour le candidat s'il existe déjà dans l'ATS.
+// ---------------------------------------------------------------------------
+
+// Version stricte (pas d'heuristique large) : la photo doit être dans la fiche du
+// profil, assez grande, et son texte alternatif doit contenir le prénom affiché.
+// Sinon on risquerait d'envoyer l'avatar du recruteur connecté ou d'un autre membre.
+function extractProfilePhotoStrict(): string {
+  const firstName = extractFullName().trim().split(/\s+/)[0]?.toLowerCase();
+  if (!firstName) return '';
+  const imgs = document.querySelectorAll<HTMLImageElement>('main section img[src*="profile-displayphoto"]');
+  for (const img of Array.from(imgs)) {
+    if (img.closest('header, nav, aside, .global-nav')) continue;
+    if (!isValidProfilePhoto(img.src)) continue;
+    if (img.getBoundingClientRect().width < 100) continue;
+    if (!(img.alt || '').toLowerCase().includes(firstName)) continue;
+    return img.src;
+  }
+  return '';
+}
+
+let lastProfileSent = '';
+function notifyProfileSeen(): void {
+  if (!window.location.href.includes('linkedin.com/in/')) return;
+  const linkedinUrl = cleanLinkedInUrl();
+  if (linkedinUrl === lastProfileSent) return;
+  const photoUrl = extractProfilePhotoStrict();
+  if (!photoUrl) return;
+  lastProfileSent = linkedinUrl;
+  try {
+    chrome.runtime.sendMessage({ type: 'PROFILE_SEEN', linkedinUrl, photoUrl }).catch(() => undefined);
+  } catch {
+    // extension rechargée : le contexte n'est plus valide, on ignore
+  }
+}
+
+setTimeout(notifyProfileSeen, 3000);
+// LinkedIn change de profil sans recharger la page : on surveille l'adresse.
+let lastHref = window.location.href;
+setInterval(() => {
+  if (window.location.href !== lastHref) {
+    lastHref = window.location.href;
+    setTimeout(notifyProfileSeen, 3000);
+  }
+}, 1500);
+
+// ---------------------------------------------------------------------------
 // Message listener
 // ---------------------------------------------------------------------------
 
