@@ -3,6 +3,7 @@ import { NotFoundError } from '../../lib/errors.js';
 import { paginatedResult, paginationToSkipTake } from '../../lib/pagination.js';
 import type { PaginationParams } from '../../lib/pagination.js';
 import type { CreateCandidatInput, UpdateCandidatInput, CreateExperienceInput, UpdateExperienceInput } from './candidat.schema.js';
+import { hostIfExternal, isHosted } from './photo.service.js';
 
 export async function list(
   params: PaginationParams,
@@ -222,6 +223,13 @@ export async function getById(id: string) {
   return candidat;
 }
 
+// Photo posée par lien externe (LinkedIn, Kalent…) : on la recopie chez nous en
+// arrière-plan pour qu'elle ne disparaisse pas quand le lien expire.
+function hostPhotoLater(candidatId: string, photoUrl: string | null) {
+  if (!photoUrl || isHosted(photoUrl)) return;
+  void hostIfExternal(candidatId);
+}
+
 export async function create(data: CreateCandidatInput, createdById: string) {
   // Cast JSON fields to any for Prisma compatibility
   const prismaData = {
@@ -246,21 +254,24 @@ export async function create(data: CreateCandidatInput, createdById: string) {
       },
     });
     if (existing) {
-      return {
-        ...(await prisma.candidat.update({
-          where: { id: existing.id },
-          data: {
-            ...prismaData,
-            linkedinUrl: normalized, // Normalize stored URL
-            createdById: existing.createdById,
-          },
-        })),
-        _updated: true,
-      };
+      // Une photo déjà hébergée par l'ATS n'est pas remplacée par un lien externe (qui expire).
+      const { photoUrl: incomingPhoto, ...rest } = prismaData;
+      const keepPhoto = isHosted(existing.photoUrl);
+      const updated = await prisma.candidat.update({
+        where: { id: existing.id },
+        data: {
+          ...rest,
+          ...(keepPhoto || incomingPhoto === undefined ? {} : { photoUrl: incomingPhoto }),
+          linkedinUrl: normalized, // Normalize stored URL
+          createdById: existing.createdById,
+        },
+      });
+      hostPhotoLater(updated.id, updated.photoUrl);
+      return { ...updated, _updated: true };
     }
   }
 
-  return prisma.candidat.create({
+  const created = await prisma.candidat.create({
     data: {
       ...prismaData,
       consentementDate: data.consentementRgpd ? new Date() : undefined,
@@ -268,6 +279,8 @@ export async function create(data: CreateCandidatInput, createdById: string) {
       assignedToId: prismaData.assignedToId ?? createdById,
     },
   });
+  hostPhotoLater(created.id, created.photoUrl);
+  return created;
 }
 
 export async function update(id: string, data: UpdateCandidatInput) {
@@ -281,10 +294,12 @@ export async function update(id: string, data: UpdateCandidatInput) {
     updateData.consentementDate = new Date();
   }
 
-  return prisma.candidat.update({
+  const updated = await prisma.candidat.update({
     where: { id },
     data: updateData,
   });
+  if (data.photoUrl) hostPhotoLater(id, updated.photoUrl);
+  return updated;
 }
 
 export async function remove(id: string) {

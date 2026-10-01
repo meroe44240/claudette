@@ -16,6 +16,7 @@ import QualificationCard from '../../components/candidats/QualificationCard';
 import CandidatureQualif from '../../components/candidats/CandidatureQualif';
 import DossierClientModal from '../../components/candidats/DossierClientModal';
 import SynthesesTab, { type SynthesesTabHandle } from '../../components/candidats/SynthesesTab';
+import PhotoMenu from '../../components/candidats/PhotoMenu';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Candidature {
@@ -216,11 +217,7 @@ export default function CandidatDetailPage() {
       {/* EN-TÊTE */}
       <div style={{ background: '#fff', border: '1px solid rgba(34,23,122,.09)', borderRadius: 18, padding: '24px 26px 0' }}>
         <div className="fc-head" style={{ display: 'flex', alignItems: 'flex-start', gap: 22, flexWrap: 'wrap' }}>
-          <span style={{ flexShrink: 0 }}>
-            {c.photoUrl
-              ? <img src={c.photoUrl} alt="" style={{ width: 104, height: 104, borderRadius: '50%', objectFit: 'cover', background: '#F2F3D8' }} />
-              : <span style={{ width: 104, height: 104, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 34 }}>{initials(c.prenom, c.nom)}</span>}
-          </span>
+          <PhotoMenu candidatId={c.id} photoUrl={c.photoUrl} initials={initials(c.prenom, c.nom)} hasCv={!!c.cvUrl} onChanged={invalidate} />
           <div style={{ flex: '1 1 300px', minWidth: 0, paddingTop: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 30, letterSpacing: '-.03em', color: '#1A1533', lineHeight: 1.1 }}>{fullName}</h1>

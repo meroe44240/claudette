@@ -22,8 +22,22 @@ async function clearToken(): Promise<void> {
   });
 }
 
+// Session déjà ouverte dans l'ATS (cookie de rafraîchissement) → jeton sans mot de passe.
+async function refreshFromSession(): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/refresh`, { method: 'POST', credentials: 'include' });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.accessToken) return null;
+    await setToken(data.accessToken);
+    return data.accessToken as string;
+  } catch {
+    return null;
+  }
+}
+
 export async function isAuthenticated(): Promise<boolean> {
-  const token = await getToken();
+  const token = (await getToken()) ?? (await refreshFromSession());
   return !!token;
 }
 
@@ -65,19 +79,26 @@ async function apiFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  const token = await getToken();
+  let token = (await getToken()) ?? (await refreshFromSession());
   if (!token) {
     throw new Error('NOT_AUTHENTICATED');
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const call = (t: string) => fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${t}`,
       ...options.headers,
     },
   });
+
+  let res = await call(token);
+  if (res.status === 401) {
+    // Jeton expiré (15 min) : on tente de le renouveler avant de redemander la connexion.
+    token = await refreshFromSession();
+    if (token) res = await call(token);
+  }
 
   if (res.status === 401) {
     await clearToken();

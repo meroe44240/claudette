@@ -3,6 +3,8 @@ import { mkdir, writeFile } from 'fs/promises';
 import { FastifyInstance } from 'fastify';
 import { createCandidatSchema, updateCandidatSchema, createExperienceSchema, updateExperienceSchema, dossierSchema, syntheseApplySchema } from './candidat.schema.js';
 import * as dossierService from './dossier.service.js';
+import * as photoService from './photo.service.js';
+import { z } from 'zod';
 import * as syntheseService from './synthese.service.js';
 import * as candidatService from './candidat.service.js';
 import * as activiteService from '../activites/activite.service.js';
@@ -277,6 +279,36 @@ export default async function candidatRouter(fastify: FastifyInstance) {
       const chunks: Buffer[] = [];
       for await (const chunk of data.file) chunks.push(chunk);
       return dossierService.uploadPhoto(id, Buffer.concat(chunks), data.mimetype);
+    },
+  });
+
+  fastify.post('/:id/photo/url', {
+    schema: { description: "Photo depuis un lien : l'image est téléchargée et hébergée", tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      const { url } = z.object({ url: z.string().url().max(2000) }).parse(request.body);
+      return dossierService.setPhotoFromUrl(id, url);
+    },
+  });
+
+  fastify.post('/:id/photo/from-cv', {
+    schema: { description: 'Utiliser la photo intégrée au CV (PDF)', tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      return photoService.fromCv(id, request.userId);
+    },
+  });
+
+  // Extension Chrome : à la visite d'un profil LinkedIn, met à jour la photo du
+  // candidat correspondant s'il existe et n'a pas encore de photo hébergée.
+  fastify.post('/photo-linkedin', {
+    schema: { description: 'Mettre à jour la photo depuis un profil LinkedIn visité', tags: ['Candidats'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const body = z.object({ linkedinUrl: z.string().max(500), photoUrl: z.string().url().max(2000) }).parse(request.body);
+      return photoService.refreshFromLinkedin(body.linkedinUrl, body.photoUrl);
     },
   });
 
