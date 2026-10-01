@@ -84,6 +84,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
 
   // Fetch all users
   const users = await prisma.user.findMany({
+    where: { status: 'ACTIVE' } as any, // comptes archivés exclus
     select: {
       id: true,
       nom: true,

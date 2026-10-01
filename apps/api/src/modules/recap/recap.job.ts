@@ -86,6 +86,7 @@ async function getRecipients(): Promise<string[]> {
 
   // Fallback : tous les users. Bruyant, mais dev/staging on veut voir passer.
   const users = await prisma.user.findMany({
+    where: { status: 'ACTIVE' } as any, // comptes archivés exclus
     select: { email: true },
   });
   return users.map((u) => u.email).filter((e) => e.includes('@'));

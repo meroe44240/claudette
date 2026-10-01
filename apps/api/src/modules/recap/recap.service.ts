@@ -110,6 +110,10 @@ export async function buildRecap(windowStart: Date, windowEnd: Date): Promise<Re
     }),
   ]);
 
+  const archives = new Set(
+    (await prisma.user.findMany({ where: { status: 'ARCHIVED' } as any, select: { id: true } })).map((u) => u.id),
+  );
+
   const userMap = new Map<string, UserRef>();
   for (const u of allUsers) userMap.set(u.id, toUserRef(u));
 
@@ -285,7 +289,8 @@ export async function buildRecap(windowStart: Date, windowEnd: Date): Promise<Re
 
   // ── 5. Activite par personne ─────────────────────────
   const parPersonne = buildParPersonne({
-    users: allUsers.map(toUserRef),
+    // Les comptes archivés restent dans userMap (noms sur l'historique) mais n'ont plus de ligne.
+    users: allUsers.filter((u) => !archives.has(u.id)).map(toUserRef),
     activitesWindow,
     windowStageHistoriesAll,
     windowMandatsCrees,

@@ -106,6 +106,7 @@ export async function getTeamStats(period: string, dateStr?: string): Promise<{
 
   // Get all users
   const users = await prisma.user.findMany({
+    where: { status: 'ACTIVE' } as any, // comptes archivés exclus
     select: {
       id: true,
       nom: true,

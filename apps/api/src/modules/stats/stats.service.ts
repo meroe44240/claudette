@@ -470,6 +470,7 @@ export async function getStatsData(
     }),
     // ── All users for team comparison ──
     prisma.user.findMany({
+      where: { status: 'ACTIVE' } as any, // comptes archivés exclus
       select: { id: true, nom: true, prenom: true, role: true },
     }),
   ]);
