@@ -20,6 +20,7 @@ const settingsSchema = z.object({
 // Réponses du formulaire des pages /careers (recrutement interne HumanUp).
 const careersSchema = z.object({
   role: z.enum(['LEAD', 'TAM']),
+  phone: z.string().trim().max(40).optional(),
   english: z.enum(['Yes', 'No']),
   tech: z.enum(['Yes', 'No']),
   techDetail: z.string().max(200).optional(),

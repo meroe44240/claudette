@@ -307,6 +307,7 @@ export async function getPublicPage(slug: string) {
 // Le candidat répond à 3 questions puis réserve son call de qualification.
 export interface CareersAnswers {
   role: 'LEAD' | 'TAM';
+  phone?: string; // Zalo ou téléphone (facultatif)
   english: 'Yes' | 'No';
   tech: 'Yes' | 'No';
   techDetail?: string;
@@ -322,6 +323,7 @@ function careersRecap(email: string, c: CareersAnswers): string {
   return [
     `Role: ${CAREERS_ROLES[c.role].title}`,
     `Email: ${email}`,
+    ...(c.phone?.trim() ? [`Zalo / phone: ${c.phone.trim()}`] : []),
     '',
     '1. Do you speak English fluently?',
     c.english,
@@ -346,23 +348,28 @@ export async function recordCareersApplication(data: { name: string; email: stri
   const jour = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeZone: 'Europe/Paris' }).format(new Date());
   const block = `Candidature HumanUp (page careers) du ${jour}\n${recap}`;
   const role = CAREERS_ROLES[data.careers.role];
+  const phone = data.careers.phone?.trim() || null;
 
   const existing = await prisma.candidat.findFirst({
     where: { email: { equals: email, mode: 'insensitive' } },
-    select: { id: true, notes: true },
+    select: { id: true, notes: true, telephone: true },
   });
   if (existing) {
     if (existing.notes?.includes(recap)) return { candidatId: existing.id, created: false };
     await prisma.candidat.update({
       where: { id: existing.id },
-      data: { notes: existing.notes?.trim() ? `${existing.notes.trim()}\n\n${block}` : block },
+      data: {
+        notes: existing.notes?.trim() ? `${existing.notes.trim()}\n\n${block}` : block,
+        // On ne remplace pas un numéro déjà connu.
+        ...(phone && !existing.telephone ? { telephone: phone } : {}),
+      },
     });
   }
   const parts = data.name.trim().split(/\s+/);
   const prenom = parts.length > 1 ? parts.shift()! : null;
   const nom = parts.join(' ') || data.name.trim();
   const candidat = existing ?? await prisma.candidat.create({
-    data: { nom, prenom, email, source: 'Careers HumanUp', notes: block },
+    data: { nom, prenom, email, telephone: phone, source: 'Careers HumanUp', notes: block },
     select: { id: true },
   });
 
@@ -370,6 +377,7 @@ export async function recordCareersApplication(data: { name: string; email: stri
     candidatNom: data.name.trim(),
     offreTitre: `${role.title} (recrutement interne HumanUp)`,
     email,
+    telephone: phone,
   });
   return { candidatId: candidat.id, created: !existing };
 }
