@@ -24,7 +24,7 @@ const careersSchema = z.object({
   tech: z.enum(['Yes', 'No']),
   techDetail: z.string().max(200).optional(),
   ambition: z.string().trim().min(1).max(600),
-  why: z.string().trim().min(1).max(600),
+  why: z.string().trim().max(600).optional(),
 });
 
 // ── ATS (authentifié) : /api/v1/booking ──
