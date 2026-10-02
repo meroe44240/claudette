@@ -13,15 +13,26 @@ const BASE = process.env.PORTAL_BASE_URL || 'https://ats.propium.co';
 const CAREERS_CC_EMAIL = process.env.CAREERS_CC_EMAIL?.trim() || '';
 const bookingSecret = new TextEncoder().encode(process.env.JWT_ACCESS_SECRET || 'dev-access-secret');
 
-async function signCancelToken(bookingId: string): Promise<string> {
-  return new SignJWT({ bid: bookingId, type: 'booking-cancel' })
+// `locale` (optionnel) : langue et fuseau dans lesquels la page d'annulation s'affiche
+// (ex. candidat /careers : anglais, heure de Saigon). Absent = français, heure de Paris.
+interface CancelLocale { lang: 'en'; tz: string }
+async function signCancelToken(bookingId: string, locale?: CancelLocale): Promise<string> {
+  return new SignJWT({ bid: bookingId, type: 'booking-cancel', ...(locale ?? {}) })
     .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('60d').sign(bookingSecret);
 }
-async function verifyCancelToken(token: string): Promise<string> {
+async function verifyCancelToken(token: string): Promise<{ bid: string; lang?: string; tz?: string }> {
   const { payload } = await jwtVerify(token, bookingSecret);
-  const p = payload as unknown as { bid: string; type: string };
+  const p = payload as unknown as { bid: string; type: string; lang?: string; tz?: string };
   if (p.type !== 'booking-cancel') throw new ValidationError('Lien invalide.');
-  return p.bid;
+  return p;
+}
+/** « Friday, October 16 at 17:30 (GMT+7) » : date d'un RDV en anglais, dans le fuseau du candidat. */
+function dateEnglish(d: Date, tz: string): string {
+  const timeZone = validTimeZone(tz);
+  const day = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone }).format(d);
+  const time = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone }).format(d);
+  const offset = new Intl.DateTimeFormat('en-US', { timeZoneName: 'shortOffset', timeZone }).formatToParts(d).find((x) => x.type === 'timeZoneName')?.value;
+  return `${day} at ${time}${offset ? ` (${offset})` : ''}`;
 }
 
 interface AvailabilityWindow { day: number; start: string; end: string } // day 0=dim..6=sam, "HH:MM"
@@ -435,7 +446,9 @@ export async function createBooking(slug: string, data: {
 
   // Liens client (reprogrammer / annuler)
   const rescheduleUrl = `${BASE}/book/${slug}`;
-  const cancelUrl = `${BASE}/annuler-rdv?token=${encodeURIComponent(await signCancelToken(booking.id))}`;
+  // Candidature /careers : page d'annulation en anglais, à l'heure du fuseau de la page (Saigon).
+  const cancelLocale: CancelLocale | undefined = data.careers ? { lang: 'en', tz: validTimeZone(settings.timezone) } : undefined;
+  const cancelUrl = `${BASE}/annuler-rdv?token=${encodeURIComponent(await signCancelToken(booking.id, cancelLocale))}${cancelLocale ? '&lang=en' : ''}`;
 
   // Titre + description rédigés POUR le client (pas de fiche d'intake interne).
   const careersRole = careers ? CAREERS_ROLES[careers.role] : null;
@@ -582,15 +595,21 @@ L'équipe HumanUp`;
 
 // ── Annulation par le client (lien public tokenisé) ──
 export async function getCancelContext(token: string) {
-  const bid = await verifyCancelToken(token);
+  const { bid, lang, tz } = await verifyCancelToken(token);
   const b = await prisma.booking.findUnique({ where: { id: bid }, select: { status: true, slotStart: true, inviteeName: true } });
   if (!b) throw new NotFoundError('Rendez-vous', bid);
   const { l1, l2 } = dateLines(b.slotStart);
-  return { prenom: firstNameOf(b.inviteeName), date: `${l1} ${l2}`, alreadyCancelled: b.status === 'CANCELLED' };
+  const english = lang === 'en';
+  return {
+    prenom: firstNameOf(b.inviteeName),
+    date: english ? dateEnglish(b.slotStart, tz || 'Europe/Paris') : `${l1} ${l2}`,
+    lang: english ? 'en' : 'fr',
+    alreadyCancelled: b.status === 'CANCELLED',
+  };
 }
 
 export async function cancelBooking(token: string) {
-  const bid = await verifyCancelToken(token);
+  const { bid } = await verifyCancelToken(token);
   const b = await prisma.booking.findUnique({ where: { id: bid } });
   if (!b) throw new NotFoundError('Rendez-vous', bid);
   if (b.status !== 'CANCELLED') {
