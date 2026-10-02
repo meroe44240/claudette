@@ -28,6 +28,15 @@ const careersSchema = z.object({
   why: z.string().trim().max(600).optional(),
 });
 
+// Réponses du formulaire d'une page de poste du site (mandat client).
+const intakeSchema = z.object({
+  label: z.string().trim().min(2).max(120),
+  short: z.string().trim().max(40).optional(),
+  tz: z.string().trim().max(64).optional(),
+  phone: z.string().trim().max(40).optional(),
+  answers: z.array(z.object({ q: z.string().trim().min(1).max(200), a: z.string().trim().max(600) })).max(8),
+});
+
 // ── ATS (authentifié) : /api/v1/booking ──
 export default async function bookingRouter(fastify: FastifyInstance) {
   // Liste des types de page de réservation
@@ -101,9 +110,21 @@ export async function bookingPublicRouter(fastify: FastifyInstance) {
         roleHiring: z.string().optional(),
         timeline: z.string().optional(),
         careers: careersSchema.optional(),
+        intake: intakeSchema.optional(),
       }).parse(request.body);
       reply.code(201);
       return service.createBooking(slug, body);
+    },
+  });
+  // Candidature depuis une page de poste du site, sans réservation (aucun créneau libre).
+  fastify.post('/:slug/apply', {
+    schema: { tags: ['Public'], params: { type: 'object', required: ['slug'], properties: { slug: { type: 'string' } } } },
+    handler: async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+      const body = z.object({ name: z.string().trim().min(2).max(120), email: z.string().email().max(254), intake: intakeSchema }).parse(request.body);
+      const { candidatId } = await service.recordJobPageApplication(slug, body);
+      reply.code(201);
+      return { ok: true, candidatId };
     },
   });
 }
