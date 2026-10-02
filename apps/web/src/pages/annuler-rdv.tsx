@@ -6,7 +6,43 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { AlertCircle, CalendarX, Check } from 'lucide-react';
 
-interface Ctx { prenom: string; date: string; alreadyCancelled: boolean }
+interface Ctx { prenom: string; date: string; alreadyCancelled: boolean; lang?: 'fr' | 'en' }
+
+// Les candidats des pages /careers (recrutement Humanup au Vietnam) voient la page en anglais.
+const TEXTS = {
+  fr: {
+    docTitle: 'Annuler le rendez-vous — HumanUp',
+    loading: 'Chargement…',
+    invalidTitle: 'Lien invalide ou expiré',
+    invalidBody: 'Écrivez-nous à meroe@humanup.io et nous nous en occupons.',
+    askTitle: 'Annuler votre rendez-vous ?',
+    askBefore: "Vous êtes sur le point d'annuler l'échange prévu le ",
+    askAfter: '. Le créneau sera libéré.',
+    sending: 'Annulation…',
+    confirm: "Confirmer l'annulation",
+    keep: "Changé d'avis ? Fermez simplement cette page, le rendez-vous reste confirmé.",
+    doneTitle: 'Rendez-vous annulé',
+    noted: "C'est noté",
+    doneBody: '. Le créneau a été libéré. Vous pouvez en réserver un autre quand vous le souhaitez.',
+    back: 'Retour sur humanup.io',
+  },
+  en: {
+    docTitle: 'Cancel your call | Humanup',
+    loading: 'Loading...',
+    invalidTitle: 'Invalid or expired link',
+    invalidBody: 'Write to us at meroe@humanup.io and we will take care of it.',
+    askTitle: 'Cancel your call?',
+    askBefore: 'You are about to cancel the call planned on ',
+    askAfter: '. The slot will be released.',
+    sending: 'Cancelling...',
+    confirm: 'Confirm cancellation',
+    keep: 'Changed your mind? Just close this page, your call stays confirmed.',
+    doneTitle: 'Call cancelled',
+    noted: 'Noted',
+    doneBody: '. The slot has been released. You can book another one whenever you like.',
+    back: 'Back to humanup.io',
+  },
+} as const;
 
 export default function AnnulerRdvPage() {
   const [params] = useSearchParams();
@@ -14,7 +50,10 @@ export default function AnnulerRdvPage() {
   const [ctx, setCtx] = useState<Ctx | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'invalid' | 'sending' | 'done'>('loading');
 
-  useEffect(() => { document.title = 'Annuler le rendez-vous — HumanUp'; }, []);
+  const lang: 'fr' | 'en' = (ctx?.lang ?? params.get('lang')) === 'en' ? 'en' : 'fr';
+  const t = TEXTS[lang];
+
+  useEffect(() => { document.title = t.docTitle; }, [t]);
 
   useEffect(() => {
     if (!token) { setState('invalid'); return; }
@@ -52,35 +91,35 @@ export default function AnnulerRdvPage() {
         </div>
 
         <div style={{ padding: '30px 30px 34px' }}>
-          {state === 'loading' && <p style={{ fontSize: 14, color: '#8A8699' }}>Chargement…</p>}
+          {state === 'loading' && <p style={{ fontSize: 14, color: '#8A8699' }}>{t.loading}</p>}
 
           {state === 'invalid' && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
               <AlertCircle size={20} color="#B3261E" style={{ flexShrink: 0, marginTop: 2 }} />
               <div>
-                <h2 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, color: '#1A1533', margin: 0 }}>Lien invalide ou expiré</h2>
-                <p style={{ fontSize: 14, color: '#6E6A85', marginTop: 8 }}>Écrivez-nous à meroe@humanup.io et nous nous en occupons.</p>
+                <h2 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, color: '#1A1533', margin: 0 }}>{t.invalidTitle}</h2>
+                <p style={{ fontSize: 14, color: '#6E6A85', marginTop: 8 }}>{t.invalidBody}</p>
               </div>
             </div>
           )}
 
           {(state === 'ready' || state === 'sending') && ctx && (
             <>
-              <h2 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 23, letterSpacing: '-.02em', color: '#1A1533', margin: 0 }}>Annuler votre rendez-vous ?</h2>
+              <h2 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 23, letterSpacing: '-.02em', color: '#1A1533', margin: 0 }}>{t.askTitle}</h2>
               <p style={{ fontSize: 15, lineHeight: 1.6, color: '#4A4568', marginTop: 12 }}>
-                Vous êtes sur le point d'annuler l'échange prévu le <strong>{ctx.date}</strong>. Le créneau sera libéré.
+                {t.askBefore}<strong>{ctx.date}</strong>{t.askAfter}
               </p>
-              <button onClick={handleCancel} disabled={state === 'sending'} style={{ width: '100%', marginTop: 20, fontWeight: 700, fontSize: 16, background: '#B3261E', color: '#fff', border: 'none', borderRadius: 13, padding: 15, cursor: state === 'sending' ? 'default' : 'pointer' }}>{state === 'sending' ? 'Annulation…' : "Confirmer l'annulation"}</button>
-              <p style={{ fontSize: 12.5, color: '#9A96AE', marginTop: 14, textAlign: 'center' }}>Changé d'avis ? Fermez simplement cette page, le rendez-vous reste confirmé.</p>
+              <button onClick={handleCancel} disabled={state === 'sending'} style={{ width: '100%', marginTop: 20, fontWeight: 700, fontSize: 16, background: '#B3261E', color: '#fff', border: 'none', borderRadius: 13, padding: 15, cursor: state === 'sending' ? 'default' : 'pointer' }}>{state === 'sending' ? t.sending : t.confirm}</button>
+              <p style={{ fontSize: 12.5, color: '#9A96AE', marginTop: 14, textAlign: 'center' }}>{t.keep}</p>
             </>
           )}
 
           {state === 'done' && (
             <div style={{ textAlign: 'center', padding: '10px 0' }}>
               <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#F7DEDB', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}><CalendarX size={30} color="#B3261E" /></div>
-              <h2 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, color: '#1A1533', marginTop: 18 }}>Rendez-vous annulé</h2>
-              <p style={{ fontSize: 14.5, lineHeight: 1.6, color: '#6E6A85', marginTop: 10 }}>C'est noté{ctx ? `, ${ctx.prenom}` : ''}. Le créneau a été libéré. Vous pouvez en réserver un autre quand vous le souhaitez.</p>
-              <a href="https://humanup.io" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 18, fontSize: 13.5, fontWeight: 700, color: '#22177A', textDecoration: 'none', borderBottom: '2px solid #E6E9AF', paddingBottom: 2 }}><Check size={14} />Retour sur humanup.io</a>
+              <h2 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, color: '#1A1533', marginTop: 18 }}>{t.doneTitle}</h2>
+              <p style={{ fontSize: 14.5, lineHeight: 1.6, color: '#6E6A85', marginTop: 10 }}>{t.noted}{ctx ? `, ${ctx.prenom}` : ''}{t.doneBody}</p>
+              <a href="https://humanup.io" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 18, fontSize: 13.5, fontWeight: 700, color: '#22177A', textDecoration: 'none', borderBottom: '2px solid #E6E9AF', paddingBottom: 2 }}><Check size={14} />{t.back}</a>
             </div>
           )}
         </div>
