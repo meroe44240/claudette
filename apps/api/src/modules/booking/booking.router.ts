@@ -17,6 +17,16 @@ const settingsSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+// Réponses du formulaire des pages /careers (recrutement interne HumanUp).
+const careersSchema = z.object({
+  role: z.enum(['LEAD', 'TAM']),
+  english: z.enum(['Yes', 'No']),
+  tech: z.enum(['Yes', 'No']),
+  techDetail: z.string().max(200).optional(),
+  ambition: z.string().trim().min(1).max(600),
+  why: z.string().trim().min(1).max(600),
+});
+
 // ── ATS (authentifié) : /api/v1/booking ──
 export default async function bookingRouter(fastify: FastifyInstance) {
   // Liste des types de page de réservation
@@ -61,6 +71,16 @@ export async function bookingPublicRouter(fastify: FastifyInstance) {
     schema: { tags: ['Public'] },
     handler: (request) => service.cancelBooking(String(((request.body ?? {}) as { token?: string }).token || '')),
   });
+  // Candidature aux postes HumanUp (pages /careers du site), sans réservation.
+  fastify.post('/careers/apply', {
+    schema: { tags: ['Public'] },
+    handler: async (request, reply) => {
+      const body = z.object({ name: z.string().trim().min(2).max(120), email: z.string().email().max(254), careers: careersSchema }).parse(request.body);
+      const { candidatId } = await service.recordCareersApplication(body);
+      reply.code(201);
+      return { ok: true, candidatId };
+    },
+  });
   fastify.get('/:slug', {
     schema: { tags: ['Public'], params: { type: 'object', required: ['slug'], properties: { slug: { type: 'string' } } } },
     handler: (request) => service.getPublicPage((request.params as { slug: string }).slug),
@@ -79,6 +99,7 @@ export async function bookingPublicRouter(fastify: FastifyInstance) {
         phone: z.string().optional(),
         roleHiring: z.string().optional(),
         timeline: z.string().optional(),
+        careers: careersSchema.optional(),
       }).parse(request.body);
       reply.code(201);
       return service.createBooking(slug, body);
