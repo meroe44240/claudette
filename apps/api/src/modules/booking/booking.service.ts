@@ -4,9 +4,13 @@ import { createEvent, getBusyTimes, deleteEvent } from '../integrations/calendar
 import { sendRawEmail } from '../integrations/gmail.service.js';
 import * as leadService from '../leads/lead.service.js';
 import { isPersonalEmail } from '../integrations/allo.service.js';
+import { notifyJobBoardApplication } from '../slack/slack.service.js';
+import { validTimeZone, zonedDate, zonedToUtc } from '../../lib/timezone.js';
 import { SignJWT, jwtVerify } from 'jose';
 
 const BASE = process.env.PORTAL_BASE_URL || 'https://ats.propium.co';
+// Invité supplémentaire (optionnel) sur les calls de qualification /careers, ex. Méroë.
+const CAREERS_CC_EMAIL = process.env.CAREERS_CC_EMAIL?.trim() || '';
 const bookingSecret = new TextEncoder().encode(process.env.JWT_ACCESS_SECRET || 'dev-access-secret');
 
 async function signCancelToken(bookingId: string): Promise<string> {
@@ -232,15 +236,19 @@ async function computeSlots(userId: string, settings: any): Promise<string[]> {
     return true;
   };
 
+  // Les plages sont exprimées dans le fuseau de la page (ex. Asia/Ho_Chi_Minh),
+  // pas dans celui du serveur : on parcourt les jours calendaires de ce fuseau.
+  const tz = validTimeZone(settings.timezone);
+  const today = zonedDate(now, tz);
   const slots: string[] = [];
   for (let d = 0; d <= settings.advanceDays; d++) {
-    const day = new Date(now + d * 86400000);
-    const dow = day.getDay();
+    const cal = new Date(Date.UTC(today.y, today.m - 1, today.d + d));
+    const [y, m, dd, dow] = [cal.getUTCFullYear(), cal.getUTCMonth() + 1, cal.getUTCDate(), cal.getUTCDay()];
     for (const w of windows.filter((x) => x.day === dow)) {
       const [sh, sm] = w.start.split(':').map(Number);
       const [eh, em] = w.end.split(':').map(Number);
-      const windowStart = new Date(day); windowStart.setHours(sh, sm, 0, 0);
-      const windowEnd = new Date(day); windowEnd.setHours(eh, em, 0, 0);
+      const windowStart = new Date(zonedToUtc(y, m, dd, sh, sm, tz));
+      const windowEnd = new Date(zonedToUtc(y, m, dd, eh, em, tz));
       for (let t = windowStart.getTime(); t + duration <= windowEnd.getTime(); t += duration + buffer) {
         if (t < now + 3600000) continue; // pas de créneau dans l'heure qui vient
         if (t > horizon) break;
@@ -284,9 +292,83 @@ export async function getPublicPage(slug: string) {
   };
 }
 
+// ── Recrutement interne HumanUp (pages /careers du site) ──
+// Le candidat répond à 4 questions puis réserve son call de qualification.
+export interface CareersAnswers {
+  role: 'LEAD' | 'TAM';
+  english: 'Yes' | 'No';
+  tech: 'Yes' | 'No';
+  techDetail?: string;
+  ambition: string;
+  why: string;
+}
+const CAREERS_ROLES: Record<CareersAnswers['role'], { short: string; title: string }> = {
+  LEAD: { short: 'Lead TAM', title: 'Lead Talent Acquisition Manager, US Market' },
+  TAM: { short: 'TAM', title: 'Talent Acquisition Manager, US and UK Market' },
+};
+
+function careersRecap(email: string, c: CareersAnswers): string {
+  return [
+    `Role: ${CAREERS_ROLES[c.role].title}`,
+    `Email: ${email}`,
+    '',
+    '1. Do you speak English fluently?',
+    c.english,
+    '',
+    '2. Have you recruited for tech roles before?',
+    `${c.tech}${c.techDetail?.trim() ? ` (${c.techDetail.trim()})` : ''}`,
+    '',
+    '3. What is your ambition in 5 years?',
+    c.ambition.trim(),
+    '',
+    '4. Why you and not someone else?',
+    c.why.trim(),
+  ].join('\n');
+}
+
+/**
+ * Enregistre une candidature /careers : crée le candidat (ou complète sa fiche
+ * s'il existe déjà, cas d'un profil chassé). Idempotent : les mêmes réponses
+ * ne sont notées qu'une fois.
+ */
+export async function recordCareersApplication(data: { name: string; email: string; careers: CareersAnswers }) {
+  const email = data.email.trim();
+  const recap = careersRecap(email, data.careers);
+  const jour = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeZone: 'Europe/Paris' }).format(new Date());
+  const block = `Candidature HumanUp (page careers) du ${jour}\n${recap}`;
+  const role = CAREERS_ROLES[data.careers.role];
+
+  const existing = await prisma.candidat.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+    select: { id: true, notes: true },
+  });
+  if (existing) {
+    if (existing.notes?.includes(recap)) return { candidatId: existing.id, created: false };
+    await prisma.candidat.update({
+      where: { id: existing.id },
+      data: { notes: existing.notes?.trim() ? `${existing.notes.trim()}\n\n${block}` : block },
+    });
+  }
+  const parts = data.name.trim().split(/\s+/);
+  const prenom = parts.length > 1 ? parts.shift()! : null;
+  const nom = parts.join(' ') || data.name.trim();
+  const candidat = existing ?? await prisma.candidat.create({
+    data: { nom, prenom, email, source: 'Careers HumanUp', notes: block },
+    select: { id: true },
+  });
+
+  void notifyJobBoardApplication({
+    candidatNom: data.name.trim(),
+    offreTitre: `${role.title} (recrutement interne HumanUp)`,
+    email,
+  });
+  return { candidatId: candidat.id, created: !existing };
+}
+
 export async function createBooking(slug: string, data: {
   name: string; email: string; note?: string; slotStart: string;
   poste?: string; societe?: string; phone?: string; roleHiring?: string; timeline?: string;
+  careers?: CareersAnswers;
 }) {
   const settings = await prisma.bookingSettings.findUnique({ where: { slug } });
   if (!settings || !settings.isActive) throw new NotFoundError('Page de réservation', slug);
@@ -301,7 +383,8 @@ export async function createBooking(slug: string, data: {
   }
 
   // Note enrichie avec les réponses d'intake
-  const intakeNote = [
+  const careers = data.careers;
+  const intakeNote = careers ? careersRecap(data.email.trim(), careers) : [
     data.poste ? `Poste : ${data.poste}` : '',
     data.societe ? `Société : ${data.societe}` : '',
     data.phone ? `Téléphone : ${data.phone}` : '',
@@ -320,9 +403,21 @@ export async function createBooking(slug: string, data: {
     where: { userId: settings.userId, status: 'CONFIRMED', slotStart: { lt: end }, slotEnd: { gt: start } },
   });
   if (conflict) throw new ValidationError('Ce créneau vient d\'être réservé — choisissez-en un autre.');
+  // Relit l'agenda Google à l'instant : un événement a pu être posé depuis l'affichage des créneaux.
+  const busyNow = await getBusyTimes(settings.userId, start.toISOString(), end.toISOString());
+  if (busyNow.some((b) => overlaps(start.getTime(), end.getTime(), new Date(b.start).getTime(), new Date(b.end).getTime()))) {
+    throw new ValidationError('Ce créneau n\'est plus disponible — choisissez-en un autre.');
+  }
 
   // Rattache à un candidat existant si l'email matche
-  const candidat = await prisma.candidat.findFirst({ where: { email: { equals: data.email.trim(), mode: 'insensitive' } }, select: { id: true } });
+  let candidat = await prisma.candidat.findFirst({ where: { email: { equals: data.email.trim(), mode: 'insensitive' } }, select: { id: true } });
+  // Candidature /careers : la fiche candidat est créée ou complétée avant la résa.
+  if (careers) {
+    try {
+      const rec = await recordCareersApplication({ name: data.name, email: data.email, careers });
+      candidat = { id: rec.candidatId };
+    } catch (e) { console.warn('[Booking] enregistrement candidature careers échoué', (e as Error).message); }
+  }
 
   const host = await prisma.user.findUnique({ where: { id: settings.userId }, select: { prenom: true, nom: true, email: true, telephone: true, avatarUrl: true } as any }) as any;
   const contactName = `${host?.prenom ? host.prenom + ' ' : ''}${host?.nom ?? ''}`.trim() || 'HumanUp';
@@ -343,7 +438,10 @@ export async function createBooking(slug: string, data: {
   const cancelUrl = `${BASE}/annuler-rdv?token=${encodeURIComponent(await signCancelToken(booking.id))}`;
 
   // Titre + description rédigés POUR le client (pas de fiche d'intake interne).
-  const summary = kind === 'QUALIFICATION'
+  const careersRole = careers ? CAREERS_ROLES[careers.role] : null;
+  const summary = careersRole
+    ? `Qualification call: ${data.name.trim()} (${careersRole.short})`
+    : kind === 'QUALIFICATION'
     ? `Échange · HumanUp${data.poste ? ` · ${data.poste}` : ''}`
     : `Échange recrutement · HumanUp${data.societe ? ` & ${data.societe}` : ''}`;
   const intro = kind === 'QUALIFICATION'
@@ -351,7 +449,14 @@ export async function createBooking(slug: string, data: {
         ? `Merci d'avoir réservé cet échange pour le poste de ${data.poste}. On fera le point sur votre parcours, vos attentes et la suite du process.`
         : `Merci d'avoir réservé cet échange avec HumanUp. On fera le point sur votre parcours, vos attentes et la suite du process.`)
     : `Merci d'avoir réservé cet échange avec HumanUp. On fera le point sur votre besoin de recrutement (le poste, le contexte, vos priorités) et sur la façon dont on peut vous aider, concrètement et vite.`;
-  const description = `Bonjour ${firstNameOf(data.name)},
+  const description = careers && careersRole ? `Qualification call for the ${careersRole.title} role at Humanup.
+${settings.durationMin} minutes on Google Meet with ${contactName}. The Meet link is in this invitation.
+
+Candidate: ${data.name.trim()}
+${careersRecap(data.email.trim(), careers)}
+
+To cancel this call:
+${cancelUrl}` : `Bonjour ${firstNameOf(data.name)},
 
 ${intro}
 
@@ -376,7 +481,7 @@ L'équipe HumanUp`;
       description,
       startTime: start.toISOString(),
       endTime: end.toISOString(),
-      attendees: [data.email.trim()],
+      attendees: [data.email.trim(), ...(careers && CAREERS_CC_EMAIL ? [CAREERS_CC_EMAIL] : [])],
       entiteType: candidat ? 'CANDIDAT' : undefined,
       entiteId: candidat?.id,
       withMeet: true,
@@ -395,8 +500,9 @@ L'équipe HumanUp`;
   const { l1: dateL1, l2: dateL2 } = dateLines(start);
   const hostPhotoUrl = typeof host?.avatarUrl === 'string' && host.avatarUrl.startsWith('http') ? host.avatarUrl : null;
   // Récap propre : la note du site est déjà formatée "Label : Valeur" par ligne.
-  const recapNote = (data.note && data.note.includes(':')) ? data.note.trim() : intakeNote;
-  try {
+  const recapNote = careers ? intakeNote : (data.note && data.note.includes(':')) ? data.note.trim() : intakeNote;
+  // Candidature /careers : le candidat reçoit l'invitation Google (en anglais), pas l'email brandé en français.
+  if (!careers) try {
     await sendRawEmail(settings.userId, {
       to: data.email.trim(),
       subject: 'Votre rendez-vous avec HumanUp est confirmé',
