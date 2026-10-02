@@ -304,14 +304,14 @@ export async function getPublicPage(slug: string) {
 }
 
 // ── Recrutement interne HumanUp (pages /careers du site) ──
-// Le candidat répond à 4 questions puis réserve son call de qualification.
+// Le candidat répond à 3 questions puis réserve son call de qualification.
 export interface CareersAnswers {
   role: 'LEAD' | 'TAM';
   english: 'Yes' | 'No';
   tech: 'Yes' | 'No';
   techDetail?: string;
   ambition: string;
-  why: string;
+  why?: string; // question retirée du formulaire (gardée pour compatibilité)
 }
 const CAREERS_ROLES: Record<CareersAnswers['role'], { short: string; title: string }> = {
   LEAD: { short: 'Lead TAM', title: 'Lead Talent Acquisition Manager, US Market' },
@@ -327,13 +327,11 @@ function careersRecap(email: string, c: CareersAnswers): string {
     c.english,
     '',
     '2. Have you recruited for tech roles before?',
-    `${c.tech}${c.techDetail?.trim() ? ` (${c.techDetail.trim()})` : ''}`,
+    `${c.tech}${c.techDetail?.trim() ? `. Roles recruited: ${c.techDetail.trim()}` : ''}`,
     '',
     '3. What is your ambition in 5 years?',
     c.ambition.trim(),
-    '',
-    '4. Why you and not someone else?',
-    c.why.trim(),
+    ...(c.why?.trim() ? ['', '4. Why you and not someone else?', c.why.trim()] : []),
   ].join('\n');
 }
 
