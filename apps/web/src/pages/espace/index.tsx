@@ -6,7 +6,7 @@ import { Page, C, card, h2, chip, TeamCard, Loading, fmtDate, fmtDateTime, espac
 
 export interface ProcessView {
   id: string; title: string; company: string | null; confidential: boolean; location: string | null;
-  stage: string; stageLabel: string; closed: boolean; pending?: boolean; closedAt: string | null; hired: boolean;
+  stage: string; stageLabel: string; closed: boolean; pending?: boolean; slotChoice?: { slots: string[] } | null; closedAt: string | null; hired: boolean;
   next: { kind: string; date: string } | null;
   steps: Array<{ stage: string; label: string; state: 'done' | 'current' | 'todo' | 'stopped'; date: string | null }>;
   feedback: Array<{ date: string; step: string; text: string; author?: string | null }>;
@@ -22,7 +22,7 @@ function Lock() {
 
 export function ProcessRow({ p, first }: { p: ProcessView; first: boolean }) {
   const initial = (p.company || p.title).trim()[0]?.toUpperCase() ?? '?';
-  const dateLine = p.closed ? `Closed · ${fmtDate(p.closedAt)}` : p.next ? fmtDate(p.next.date, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+  const dateLine = p.closed ? `Closed · ${fmtDate(p.closedAt)}` : p.slotChoice ? 'Choose your interview time' : p.next ? fmtDate(p.next.date, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
   return (
     <Link to={`/espace/process/${p.id}`} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', textDecoration: 'none', color: C.body, flexWrap: 'wrap', borderTop: first ? 0 : `1px solid ${C.line}` }}>
       <span aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 9, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, background: p.confidential ? C.soft : p.closed ? C.soft : C.ink, color: p.confidential || p.closed ? C.muted : '#fff' }}>

@@ -307,6 +307,9 @@ export async function create(data: CreateCandidatureInput, createdById: string) 
   return candidature;
 }
 
+// Étapes déjà visibles du client : y revenir n'est pas une nouvelle présentation.
+const PORTAL_SEEN_STAGES = ['ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE'];
+
 export async function update(
   id: string,
   data: UpdateCandidatureInput,
@@ -420,6 +423,12 @@ export async function update(
     import('../candidate-space/candidate-space.service.js')
       .then((m) => m.onStageChanged(history.id, changedById))
       .catch((e) => console.warn('[Candidature] espace candidat', (e as Error).message));
+    // Portail client : première présentation = email aux contacts du portail (Rencontrer / Écarter).
+    if (data.stage === 'ENVOYE_CLIENT' && !PORTAL_SEEN_STAGES.includes(existing.stage)) {
+      import('../portal/portal.service.js')
+        .then((m) => m.notifyNewProfiles([id]))
+        .catch((e) => console.warn('[Candidature] portail client', (e as Error).message));
+    }
 
     // Présentation → crée l'event Google Agenda + stocke googleEventId (best-effort, spec §4).
     if (data.stage === 'ENTRETIEN_CLIENT') {
@@ -551,6 +560,7 @@ export async function bulkUpdateStage(
   }
 
   const results = [];
+  const presentedIds: string[] = [];
   for (const id of ids) {
     const existing = await prisma.candidature.findUnique({ where: { id } });
     if (!existing) continue;
@@ -594,6 +604,13 @@ export async function bulkUpdateStage(
     fireSlackStageNotification(id, stage, null).catch(() => {});
 
     results.push(updated);
+    if (stage === 'ENVOYE_CLIENT' && !PORTAL_SEEN_STAGES.includes(existing.stage)) presentedIds.push(id);
+  }
+  // Portail client : un seul email par contact pour tous les profils présentés d'un coup.
+  if (presentedIds.length > 0) {
+    import('../portal/portal.service.js')
+      .then((m) => m.notifyNewProfiles(presentedIds))
+      .catch((e) => console.warn('[Candidature] portail client', (e as Error).message));
   }
 
   // Email agrege au client si demande (typique : "Présenter au client" =

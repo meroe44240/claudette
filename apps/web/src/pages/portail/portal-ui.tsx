@@ -59,6 +59,18 @@ export const lastMandat = {
   set: (id: string) => portalStore.set('portal_last_mandat', id),
 };
 
+// Page de connexion, en gardant le profil et l'action demandés (liens des emails : ?c=…&a=…).
+export function loginUrl(mandatId?: string | null, expired = false) {
+  const here = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const q = new URLSearchParams();
+  const m = mandatId || lastMandat.get();
+  if (m) q.set('m', m);
+  if (expired) q.set('expired', '1');
+  for (const k of ['c', 'a', 't']) { const v = here.get(k); if (v) q.set(k, v); }
+  const qs = q.toString();
+  return `/portail/login${qs ? `?${qs}` : ''}`;
+}
+
 // ── Petits utilitaires ──
 export function initialsOf(name: string) { return name.split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?'; }
 export function relTime(iso: string | Date) {
@@ -139,11 +151,13 @@ export function PortalTopBar({ active, mandatId }: { active: Tab; mandatId?: str
   const [me, setMe] = useState<Me | null>(null);
   const [menu, setMenu] = useState(false);
   useEffect(() => {
+    // Sans jeton, la page elle-même renvoie vers la connexion (en gardant le lien demandé).
+    if (!portalStore.get('portal_token')) return;
     void portalFetch('/me').then(async (r) => {
-      if (r.status === 401) { portalStore.clear(); navigate(`/portail/login?expired=1${lastMandat.get() ? `&m=${lastMandat.get()}` : ''}`); return; }
+      if (r.status === 401) { const to = loginUrl(mandatId, true); portalStore.clear(); navigate(to); return; }
       if (r.ok) setMe(await r.json());
     });
-  }, [navigate]);
+  }, [navigate, mandatId]);
   const candidaturesHref = `/portail/mandat/${mandatId || lastMandat.get() || me?.homeMandatId || ''}`;
   const items: Array<[Tab, string, string, React.ReactNode]> = [
     ['candidatures', 'Candidatures', candidaturesHref, <Columns3 size={20} aria-hidden />],

@@ -105,6 +105,17 @@ function signatureOf(team: Array<{ firstName: string }>) {
 }
 
 // ── Côté recruteur ───────────────────────────────────
+/** Brouillon de feedback au candidat à partir du retour du client sur le portail (motif d'écart, débrief). À relire avant envoi. */
+function feedbackDraft(c: { motifRefus: unknown; motifRefusDetail: string | null; portalDebrief: unknown }): string | null {
+  const d = (c.portalDebrief ?? null) as { strengths?: string | null; concerns?: string | null } | null;
+  const reason = c.motifRefus === 'CLIENT_REFUSE' ? c.motifRefusDetail?.trim() : null;
+  const parts: string[] = [];
+  if (reason) parts.push(`Le client n'a pas retenu ton profil pour ce poste. Son retour : ${reason}`);
+  if (d?.strengths?.trim()) parts.push(`Ce qu'il a apprécié : ${d.strengths.trim()}`);
+  if (d?.concerns?.trim() && d.concerns.trim() !== reason) parts.push(`Ses réserves : ${d.concerns.trim()}`);
+  return parts.length ? parts.join('\n') : null;
+}
+
 export async function getStatus(candidatId: string) {
   const [candidat, account, cands] = await Promise.all([
     prisma.candidat.findUnique({ where: { id: candidatId }, select: { id: true, email: true } }),
@@ -112,7 +123,7 @@ export async function getStatus(candidatId: string) {
     prisma.candidature.findMany({
       where: { candidatId },
       select: {
-        id: true, stage: true,
+        id: true, stage: true, motifRefus: true, motifRefusDetail: true, portalDebrief: true,
         mandat: { select: { titrePoste: true, entreprise: { select: { nom: true } } } },
         stageHistory: { orderBy: { changedAt: 'desc' }, take: 1, select: { toStage: true, candidateMessage: true } },
       },
@@ -123,7 +134,7 @@ export async function getStatus(candidatId: string) {
   // Refus sans message : invisibles pour le candidat tant que le feedback n'est pas écrit.
   const feedbackMissing = cands
     .filter((c) => c.stage === 'REFUSE' && c.stageHistory[0]?.toStage === 'REFUSE' && !c.stageHistory[0]?.candidateMessage)
-    .map((c) => ({ candidatureId: c.id, titre: c.mandat.titrePoste, entreprise: c.mandat.entreprise?.nom ?? null }));
+    .map((c) => ({ candidatureId: c.id, titre: c.mandat.titrePoste, entreprise: c.mandat.entreprise?.nom ?? null, suggestion: feedbackDraft(c) }));
   return {
     canOpen: !!candidat.email && active.length > 0,
     blocker: !candidat.email ? 'Ajoute un email au candidat.' : active.length === 0 ? 'Il faut au moins un poste en cours (Qualification à Offre).' : null,
@@ -378,7 +389,7 @@ function loadCandidatures(candidatId: string) {
     where: { candidatId, stage: { not: 'SOURCING' as any } },
     orderBy: { updatedAt: 'desc' },
     select: {
-      id: true, stage: true, dateEntretienClient: true, interlocuteurClient: true, updatedAt: true,
+      id: true, stage: true, dateEntretienClient: true, interlocuteurClient: true, updatedAt: true, portalSlots: true,
       mandat: { select: { titrePoste: true, localisation: true, entreprise: { select: { nom: true } } } },
       stageHistory: { orderBy: { changedAt: 'asc' }, select: { id: true, fromStage: true, toStage: true, changedAt: true, changedById: true, candidateMessage: true, candidateMessageEn: true } },
     },
@@ -429,7 +440,13 @@ function viewOf(c: CandidatureView) {
   const next = !st.pending && st.stage === 'ENTRETIEN_CLIENT' && c.dateEntretienClient && c.dateEntretienClient.getTime() > Date.now()
     ? { kind: 'Interview with the company', date: c.dateEntretienClient }
     : null;
+  // Créneaux proposés par l'entreprise : le candidat en choisit un tant qu'aucun n'est retenu.
+  const proposal = (c.portalSlots ?? null) as { slots?: string[]; chosen?: string | null } | null;
+  const openSlots = !st.pending && st.stage === 'ENVOYE_CLIENT' && proposal && !proposal.chosen
+    ? (proposal.slots ?? []).filter((s) => new Date(s).getTime() > Date.now())
+    : [];
   return {
+    slotChoice: openSlots.length > 0 ? { slots: openSlots } : null,
     id: c.id,
     title: c.mandat.titrePoste,
     company: presented ? c.mandat.entreprise?.nom ?? null : null,
@@ -489,6 +506,64 @@ export async function processDetail(candidatId: string, id: string) {
     interviewer: v.next && c.interlocuteurClient ? c.interlocuteurClient : null,
     feedback: v.feedback.map((f) => ({ ...f, author: (() => { const a = authors.find((x) => x.id === f.authorId); return a ? a.prenom || fullName(a) : null; })() })),
   };
+}
+
+/** Le candidat choisit un des créneaux proposés par l'entreprise : l'entretien est planifié. */
+export async function chooseSlot(account: { candidatId: string; invitedById: string | null }, candidatureId: string, slot: string) {
+  const c = await prisma.candidature.findUnique({
+    where: { id: candidatureId },
+    select: {
+      id: true, candidatId: true, stage: true, portalSlots: true,
+      candidat: { select: { prenom: true, nom: true } },
+      mandat: { select: { titrePoste: true, recruteurId: true, assignedToId: true, createdById: true, recruteur: { select: { email: true, prenom: true } }, assignedTo: { select: { email: true, prenom: true } } } },
+    },
+  });
+  if (!c || c.candidatId !== account.candidatId) throw new NotFoundError('Process', candidatureId);
+  const proposal = (c.portalSlots ?? null) as { slots?: string[]; who?: string | null; by?: string; byEmail?: string; chosen?: string | null } | null;
+  const wanted = new Date(slot).getTime();
+  const match = (proposal?.slots ?? []).find((s) => new Date(s).getTime() === wanted);
+  if (c.stage !== 'ENVOYE_CLIENT' || !proposal || proposal.chosen || !match || wanted < Date.now()) {
+    throw new ValidationError('This time is no longer available. Your Humanup team will get back to you.');
+  }
+  const actorId = c.mandat.recruteurId ?? c.mandat.assignedToId ?? c.mandat.createdById;
+  const { update } = await import('../candidatures/candidature.service.js');
+  await update(c.id, { stage: 'ENTRETIEN_CLIENT', dateEntretienClient: match, interlocuteurClient: proposal.who || 'À confirmer' } as any, actorId as string);
+  await prisma.candidature.update({ where: { id: c.id }, data: { portalStage: 'SCREENING', portalSlots: { ...proposal, chosen: match } as any } });
+
+  const when = new Date(match).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  const name = fullName(c.candidat);
+  await prisma.activite.create({
+    data: {
+      type: 'NOTE', titre: `Espace candidat : ${name} a choisi son créneau d'entretien client (${when}, heure de Paris)`,
+      entiteType: 'CANDIDAT', entiteId: c.candidatId, userId: actorId, source: 'SYSTEME', metadata: { candidateSpace: 'slot', candidatureId: c.id },
+    } as any,
+  });
+  const consultant = c.mandat.recruteur ?? c.mandat.assignedTo;
+  const html = (hello: string) => `<p>${hello}</p><p><strong>${esc(name)}</strong> a choisi son créneau pour l'entretien (${esc(c.mandat.titrePoste)}) : <strong>${esc(when)}</strong>, heure de Paris${proposal.who ? `, avec ${esc(proposal.who)}` : ''}.</p>`;
+  if (consultant?.email) sendEmail(consultant.email, `${name} a choisi son créneau : ${when}`, html(`Bonjour ${esc(consultant.prenom ?? '')},`)).catch(() => {});
+  if (proposal.byEmail) sendEmail(proposal.byEmail, `Entretien confirmé avec ${name} : ${when}`, html('Bonjour,')).catch(() => {});
+  return processDetail(account.candidatId, c.id);
+}
+
+/** Prévient le candidat (espace actif) que l'entreprise propose des créneaux d'entretien. */
+export async function notifySlotProposal(candidatureId: string) {
+  const c = await prisma.candidature.findUnique({
+    where: { id: candidatureId },
+    select: { id: true, candidatId: true, candidat: { select: { prenom: true, nom: true } }, mandat: { select: { titrePoste: true } } },
+  });
+  if (!c) return;
+  const account = await prisma.candidateAccount.findUnique({ where: { candidatId: c.candidatId } });
+  if (!account || account.revokedAt || !account.activatedAt) return;
+  const team = await teamFor(c.candidatId, account.invitedById);
+  await sendCandidateEmail(account.invitedById, account.email, 'Choose a time for your interview', {
+    paragraphs: [
+      `Hi ${esc(firstName(c.candidat))},`,
+      `Good news on the <b>${esc(c.mandat.titrePoste)}</b> role: the company would like to meet you and proposed a few times.`,
+      'Pick the one that suits you best in your space. The interview is confirmed as soon as you choose.',
+    ],
+    cta: { label: 'Choose a time', href: `${BASE}/espace/process/${c.id}` },
+    signature: signatureOf(team),
+  }).catch((e) => console.warn('[Espace candidat] email créneaux', (e as Error).message));
 }
 
 export async function getExpectations(account: { profile: string; expectations: unknown; otherProcesses: unknown; updatedAt: Date; email: string }) {

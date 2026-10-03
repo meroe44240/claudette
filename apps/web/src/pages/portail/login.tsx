@@ -24,12 +24,14 @@ export default function PortalLoginPage() {
   const [info, setInfo] = useState<PublicInfo | null>(null);
   const [mode, setMode] = useState<'login' | 'reset' | 'reset-sent'>('login');
   const expired = params.get('expired') === '1';
+  // Lien d'un email (profil + action) : on y revient après la connexion.
+  const next = ['c', 'a', 't'].filter((k) => params.get(k)).map((k) => `${k}=${encodeURIComponent(params.get(k)!)}`).join('&');
   useInterFont();
 
   useEffect(() => {
     document.title = 'Connexion | Humanup';
     // Déjà connecté (ex. lien ouvert depuis un email) : on entre directement.
-    if (hasValidSession(mandatId || null)) { navigate(mandatId ? `/portail/mandat/${mandatId}` : '/portail/offres', { replace: true }); return; }
+    if (hasValidSession(mandatId || null)) { navigate(mandatId ? `/portail/mandat/${mandatId}${next ? `?${next}` : ''}` : '/portail/offres', { replace: true }); return; }
     if (!mandatId) return;
     void fetch(`/api/v1/portal/public/mandat/${mandatId}`).then((r) => (r.ok ? r.json() : null)).then(setInfo).catch(() => {});
   }, [mandatId, navigate]);
@@ -56,7 +58,7 @@ export default function PortalLoginPage() {
       portalStore.set('portal_token', data.token);
       portalStore.set('portal_mandat_id', data.access.mandatId);
       portalStore.set('portal_email', data.access.email);
-      navigate(`/portail/mandat/${data.access.mandatId}`);
+      navigate(`/portail/mandat/${data.access.mandatId}${next ? `?${next}` : ''}`);
     } catch (err) {
       setError((err as Error).message);
     } finally { setLoading(false); }

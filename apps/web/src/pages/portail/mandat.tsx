@@ -10,7 +10,7 @@ import { MessageCircle, ChevronDown, ChevronRight, CalendarClock, Clock, X } fro
 import { portalStore } from './portal-store';
 import {
   BG, BRAND, BTN, BTN_GHOST, CARD, COL_HINT, CompanyLogo, COL_LABELS, CREAM, DECISION_LABEL, FONT, FS, INK, LINE, LOGO, MUTED, SHARED_CSS, SOFT, TEXT,
-  PersonAvatar, Pill, PortalTopBar, lastMandat, portalFetch, useIsMobile, type Col, type Decision,
+  PersonAvatar, Pill, PortalTopBar, lastMandat, loginUrl, portalFetch, useIsMobile, type Col, type Decision,
 } from './portal-ui';
 
 type Stage = 'SOURCING' | 'CONTACTE' | 'ENTRETIEN_1' | 'ENVOYE_CLIENT' | 'ENTRETIEN_CLIENT' | 'PROCESS' | 'OFFRE' | 'PLACE' | 'REFUSE';
@@ -27,13 +27,16 @@ interface Candidature {
   seen?: boolean;
   stageSince?: string;
   hireAnnounced?: boolean;
+  portalSlots?: { slots: string[]; who: string | null; chosen?: string | null } | null;
+  portalDebrief?: { rating: number; strengths: string | null; concerns: string | null; by: string; at: string } | null;
 }
 interface KanbanResponse {
-  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string; logoUrl?: string | null }; client: { nom: string; prenom: string | null }; consultant: Person | null; commercial: Person | null };
+  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string; logoUrl?: string | null }; client: { nom: string; prenom: string | null }; consultant: Person | null; commercial: Person | null; hasBookingLink?: boolean };
   stages: Col[];
   byStage: Record<Col, Candidature[]>;
+  funnel?: { approached: number; qualified: number; presented: number };
 }
-type MoveExtra = { reason?: string; dateEntretienClient?: string; interlocuteurClient?: string };
+type MoveExtra = { reason?: string; dateEntretienClient?: string; interlocuteurClient?: string; slots?: string[] };
 type TeamMember = { name: string; role: string; photo: string | null };
 type PanelTab = 'activite' | 'commentaires';
 
@@ -55,6 +58,14 @@ function daysIn(c: Candidature): string | null {
   return d <= 0 ? 'depuis aujourd’hui' : d === 1 ? 'depuis 1 jour' : `depuis ${d} jours`;
 }
 const needsReview = (c: Candidature) => c.column === 'INBOX' && c.portalDecisions.length === 0;
+const daysWaiting = (c: Candidature) => (c.stageSince ? Math.floor((Date.now() - new Date(c.stageSince).getTime()) / 86400000) : 0);
+// Profil sans avis depuis 3 jours ou plus : mis en avant (et relancé par email côté Humanup).
+const overdue = (c: Candidature) => needsReview(c) && daysWaiting(c) >= 3;
+// Créneaux proposés au candidat, pas encore choisis.
+const slotsPending = (c: Candidature) => c.column === 'INBOX' && !!c.portalSlots && !c.portalSlots.chosen && c.portalSlots.slots.some((x) => new Date(x) > new Date());
+// Entretien passé, débrief pas encore partagé.
+const debriefDue = (c: Candidature) => c.column === 'SCREENING' && !!c.dateEntretienClient && new Date(c.dateEntretienClient) < new Date() && !c.portalDebrief;
+const FINALIST_COLS: Col[] = ['CASE', 'CULTURE_FIT', 'OFFRE'];
 // L'entretien daté est celui du Screening : une fois le profil plus loin, on ne l'affiche plus.
 const upcomingInterview = (c: Candidature) => c.column === 'SCREENING' && !!c.dateEntretienClient && new Date(c.dateEntretienClient) > new Date();
 
@@ -113,6 +124,7 @@ export default function PortalMandatPage() {
   const [panelTab, setPanelTab] = useState<{ tab: PanelTab; prefill?: boolean }>({ tab: 'commentaires' });
   // Un clic ouvre d'abord un aperçu (tiroir) ; la fiche complète s'ouvre depuis l'aperçu.
   const [full, setFull] = useState(false);
+  const [comparing, setComparing] = useState(false);
   const [pendingMove, setPendingMove] = useState<{ c: Candidature; to: Col; fromDecision?: boolean } | null>(null);
   const [dragging, setDragging] = useState<Candidature | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
@@ -120,7 +132,7 @@ export default function PortalMandatPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   useEffect(() => {
-    if (!portalStore.get('portal_token')) { navigate(`/portail/login?m=${mandatId ?? ''}`); return; }
+    if (!portalStore.get('portal_token')) { navigate(loginUrl(mandatId)); return; }
     document.title = 'Candidatures | Humanup';
     setSelectedId(null);
     if (mandatId) lastMandat.set(mandatId);
@@ -132,7 +144,7 @@ export default function PortalMandatPage() {
     if (!silent) setLoading(true);
     try {
       const res = await portalFetch(`/kanban?mandatId=${mandatId ?? ''}`);
-      if (res.status === 401) { portalStore.clear(); navigate(`/portail/login?m=${mandatId ?? ''}&expired=1`); return; }
+      if (res.status === 401) { const to = loginUrl(mandatId, true); portalStore.clear(); navigate(to); return; }
       if (res.status === 403 || res.status === 404) { navigate('/portail/offres', { replace: true }); return; }
       setData((await res.json()) as KanbanResponse);
     } finally { setLoading(false); }
@@ -153,7 +165,13 @@ export default function PortalMandatPage() {
     const cid = params.get('c');
     if (!data || !cid) return;
     const c = allCards().find((x) => x.id === cid);
-    if (c) openCard(c, 'commentaires', false, params.get('t') === 'commentaires');
+    if (c) {
+      openCard(c, 'commentaires', false, params.get('t') === 'commentaires');
+      // Boutons « Rencontrer » / « Écarter » des emails : on enchaîne sur l'action.
+      const action = params.get('a');
+      if (action === 'rencontrer' && needsReview(c)) void decide(c, 'RENCONTRER');
+      if (action === 'ecarter' && c.stage !== 'REFUSE' && c.stage !== 'PLACE') void decide(c, 'ECARTER');
+    }
     setParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
@@ -169,8 +187,20 @@ export default function PortalMandatPage() {
   function requestMove(c: Candidature, to: Col) {
     if (c.column === to) return;
     if (c.stage === 'PLACE') { flash({ msg: `L'embauche de ${fullName(c)} est validée : contactez ${repFirst || 'votre interlocuteur Humanup'} pour la modifier.` }); return; }
+    if (to === 'SCREENING' && c.column === 'INBOX' && data?.mandat.hasBookingLink) { void doMeet(c, {}); return; }
     if (to === 'SCREENING' || to === 'PERDU' || to === 'ENGAGE') { setPendingMove({ c, to }); return; }
     void doMove(c, to, {});
+  }
+
+  // « Rencontrer » un profil de l'Inbox : lien d'agenda du client, un créneau (planifié) ou plusieurs (le candidat choisit).
+  async function doMeet(c: Candidature, extra: MoveExtra) {
+    const res = await portalFetch(`/candidatures/${c.id}/meet`, { method: 'POST', body: JSON.stringify({ slots: extra.slots, interlocuteurClient: extra.interlocuteurClient }) });
+    const out = await res.json().catch(() => null);
+    if (!res.ok) { flash({ msg: out?.message || 'La demande n’a pas pu être enregistrée.' }); return; }
+    flash({ msg: out?.mode === 'booking_link' ? `Demande envoyée : ${repFirst || 'Humanup'} réserve un créneau dans votre agenda.`
+      : out?.mode === 'proposed' ? `Créneaux envoyés : ${fullName(c)} choisit, vous serez prévenu.`
+      : `Entretien planifié avec ${fullName(c)}.` });
+    void reload(true);
   }
   function onDragStart(e: DragStartEvent) { setDragging(allCards().find((x) => x.id === e.active.id) ?? null); }
   function onDragEnd(e: DragEndEvent) {
@@ -215,7 +245,11 @@ export default function PortalMandatPage() {
 
   async function decide(c: Candidature, d: Decision) {
     // Rencontrer depuis Inbox = planifier le Screening ; Écarter = Perdu (avec motif).
-    if (d === 'RENCONTRER' && c.column === 'INBOX') { setPendingMove({ c, to: 'SCREENING', fromDecision: true }); return; }
+    if (d === 'RENCONTRER' && c.column === 'INBOX') {
+      if (data?.mandat.hasBookingLink) { void doMeet(c, {}); return; }
+      setPendingMove({ c, to: 'SCREENING', fromDecision: true });
+      return;
+    }
     if (d === 'ECARTER') { setPendingMove({ c, to: 'PERDU' }); return; }
     const res = await portalFetch(`/candidatures/${c.id}/decision`, { method: 'POST', body: JSON.stringify({ decision: d }) });
     if (!res.ok) { flash({ msg: 'Votre avis n’a pas pu être enregistré.' }); return; }
@@ -248,6 +282,12 @@ export default function PortalMandatPage() {
   const toReview = cards.filter(needsReview);
   const nextInterview = cards.filter(upcomingInterview)
     .sort((a, b) => new Date(a.dateEntretienClient!).getTime() - new Date(b.dateEntretienClient!).getTime())[0];
+  const debriefs = cards.filter(debriefDue);
+  const finalists = cards.filter((c) => FINALIST_COLS.includes(c.column) && c.stage !== 'REFUSE');
+  const f = data.funnel;
+  const context = f && f.approached > f.presented
+    ? `${f.approached} profils approchés · ${f.qualified} qualifiés · ${f.presented} présenté${f.presented > 1 ? 's' : ''}`
+    : `${presented} profil${presented > 1 ? 's' : ''} présenté${presented > 1 ? 's' : ''}`;
   const pad = isMobile ? '18px 16px 0' : '28px 32px 0';
 
   return (
@@ -271,10 +311,11 @@ export default function PortalMandatPage() {
             <CompanyLogo logo={data.mandat.entreprise.logoUrl} text={data.mandat.entreprise.nom} size={isMobile ? 36 : 44} />
             <OfferSwitcher current={data.mandat.id} title={data.mandat.titrePoste} compact={isMobile} />
           </div>
-          <span style={{ fontSize: 14, color: MUTED }}>{data.mandat.entreprise.nom} · {presented} profil{presented > 1 ? 's' : ''} présenté{presented > 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 14, color: MUTED }}>{data.mandat.entreprise.nom} · {context}</span>
         </div>
-        {team.length > 0 && (
+        {(team.length > 0 || finalists.length >= 2) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+            {finalists.length >= 2 && <button onClick={() => setComparing(true)} style={{ ...BTN_GHOST, color: BRAND, borderColor: BRAND, padding: '9px 14px' }}>Comparer les {finalists.length} finalistes</button>}
             {team.map((t) => (
               <div key={t.role} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <PersonAvatar name={t.name} photo={t.photo} size={36} ring />
@@ -289,18 +330,24 @@ export default function PortalMandatPage() {
       </div>
 
       {/* À traiter */}
-      {(toReview.length > 0 || nextInterview) && (
-        <div style={{ padding: isMobile ? '16px 16px 0' : '18px 32px 0' }}>
-          <div role="status" style={{ background: toReview.length > 0 ? CREAM : '#fff', border: toReview.length > 0 ? 'none' : `1px solid ${LINE}`, color: toReview.length > 0 ? BRAND : TEXT, borderRadius: 12, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 14 }}>
-            <span>
-              {toReview.length > 0 && <><span style={{ fontWeight: 700 }}>À traiter :</span> {toReview.length} profil{toReview.length > 1 ? 's attendent' : ' attend'} votre avis</>}
-              {toReview.length > 0 && nextInterview && ' · '}
-              {nextInterview && <>{toReview.length > 0 ? 'prochain entretien' : 'Prochain entretien'} avec {fullName(nextInterview)}, {fmtInterview(nextInterview.dateEntretienClient!)}</>}
-            </span>
-            <button onClick={() => openCard(toReview[0] ?? nextInterview!)} style={{ fontFamily: FONT, fontSize: 14, fontWeight: 700, color: BRAND, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}>Voir</button>
+      {(toReview.length > 0 || debriefs.length > 0 || nextInterview) && (() => {
+        const urgent = toReview.length > 0 || debriefs.length > 0;
+        const late = toReview.filter(overdue).length;
+        const parts = [
+          toReview.length > 0 ? `${toReview.length} profil${toReview.length > 1 ? 's attendent' : ' attend'} votre avis${late > 0 ? ` (${late} depuis plus de 3 jours)` : ''}` : null,
+          debriefs.length > 0 ? `${debriefs.length} débrief${debriefs.length > 1 ? 's' : ''} d’entretien à partager` : null,
+          nextInterview ? `prochain entretien avec ${fullName(nextInterview)}, ${fmtInterview(nextInterview.dateEntretienClient!)}` : null,
+        ].filter(Boolean) as string[];
+        const first = toReview[0] ?? debriefs[0] ?? nextInterview!;
+        return (
+          <div style={{ padding: isMobile ? '16px 16px 0' : '18px 32px 0' }}>
+            <div role="status" style={{ background: urgent ? CREAM : '#fff', border: urgent ? 'none' : `1px solid ${LINE}`, color: urgent ? BRAND : TEXT, borderRadius: 12, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 14 }}>
+              <span>{urgent && <span style={{ fontWeight: 700 }}>À traiter : </span>}{urgent ? parts.join(' · ') : parts.join(' · ').replace(/^./, (ch) => ch.toUpperCase())}</span>
+              <button onClick={() => openCard(first)} style={{ fontFamily: FONT, fontSize: 14, fontWeight: 700, color: BRAND, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}>Voir</button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Tableau (ordinateur) / liste (mobile) */}
       {isMobile ? (
@@ -311,7 +358,7 @@ export default function PortalMandatPage() {
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${data.stages.length}, minmax(220px, 1fr))`, gap: 12, alignItems: 'stretch' }}>
               {data.stages.map(stage => (
                 <StageColumn key={stage} stage={stage} count={(data.byStage[stage] ?? []).length} dragging={!!dragging}>
-                  {(data.byStage[stage] ?? []).map(c => <DraggableCard key={c.id} c={c} active={c.id === selectedId} onOpen={() => openCard(c)} />)}
+                  {(data.byStage[stage] ?? []).map(c => <DraggableCard key={c.id} c={c} active={c.id === selectedId} onOpen={() => openCard(c)} onQuick={(d) => void decide(c, d)} />)}
                 </StageColumn>
               ))}
             </div>
@@ -322,6 +369,10 @@ export default function PortalMandatPage() {
         </main>
       )}
 
+      {comparing && finalists.length >= 2 && (
+        <CompareView cards={finalists} offerTitle={data.mandat.titrePoste} onClose={() => setComparing(false)} onOpen={(c) => { setComparing(false); openCard(c, 'commentaires', false, true); }} />
+      )}
+
       {selected && !full && (
         <ProfileDrawer
           key={`d-${selected.id}`}
@@ -329,6 +380,7 @@ export default function PortalMandatPage() {
           stages={data.stages}
           onClose={() => { setSelectedId(null); void reload(true); }}
           onOpenFull={() => setFull(true)}
+          onSaved={() => void reload(true)}
           onDecision={(d) => void decide(selected, d)}
           onMove={(to) => requestMove(selected, to)}
           frozen={!!pendingMove}
@@ -346,6 +398,7 @@ export default function PortalMandatPage() {
           tab={panelTab.tab}
           prefillMention={panelTab.prefill}
           onTab={(tab) => setPanelTab({ tab })}
+          onSaved={() => void reload(true)}
           onClose={() => { setSelectedId(null); void reload(true); }}
           onDecision={(d) => void decide(selected, d)}
           onMove={(to) => requestMove(selected, to)}
@@ -357,7 +410,11 @@ export default function PortalMandatPage() {
         <MoveDialog
           c={pendingMove.c} to={pendingMove.to} repName={contact} fromDecision={pendingMove.fromDecision}
           onCancel={() => setPendingMove(null)}
-          onConfirm={(extra) => { const m = pendingMove; setPendingMove(null); void doMove(m.c, m.to, extra); }}
+          onConfirm={(extra) => {
+            const m = pendingMove; setPendingMove(null);
+            if (m.to === 'SCREENING' && m.c.column === 'INBOX') void doMeet(m.c, extra);
+            else void doMove(m.c, m.to, m.to === 'SCREENING' ? { dateEntretienClient: extra.slots?.[0], interlocuteurClient: extra.interlocuteurClient } : extra);
+          }}
           onSkip={() => { const m = pendingMove; setPendingMove(null); void decideOnly(m.c, 'RENCONTRER'); }}
         />
       )}
@@ -396,7 +453,7 @@ function StageColumn({ stage, count, dragging, children }: { stage: Col; count: 
   );
 }
 
-function CardBody({ c, lifted, active }: { c: Candidature; lifted?: boolean; active?: boolean }) {
+function CardBody({ c, lifted, active, onQuick }: { c: Candidature; lifted?: boolean; active?: boolean; onQuick?: (d: Decision) => void }) {
   const last = c.portalDecisions[0]?.decision;
   const nbComments = c._count?.portalComments ?? 0;
   const locked = c.stage === 'PLACE';
@@ -406,6 +463,16 @@ function CardBody({ c, lifted, active }: { c: Candidature; lifted?: boolean; act
   const interview = upcomingInterview(c);
   const since = daysIn(c);
   const tag = c.hireAnnounced ? 'Embauche annoncée' : locked ? 'Embauche validée' : last && !lost ? DECISION_LABEL[last] : null;
+  const late = overdue(c);
+  const waitingSlots = slotsPending(c);
+  const toDebrief = debriefDue(c);
+  const alert = late || toDebrief;
+  // Les boutons vivent dans une carte déplaçable : on coupe le glisser-déposer et l'ouverture de l'aperçu.
+  const quick = (d: Decision) => ({
+    onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
+    onKeyDown: (e: React.KeyboardEvent) => e.stopPropagation(),
+    onClick: (e: React.MouseEvent) => { e.stopPropagation(); onQuick?.(d); },
+  });
   return (
     <div
       className={lifted ? undefined : 'pm-card'}
@@ -435,10 +502,16 @@ function CardBody({ c, lifted, active }: { c: Candidature; lifted?: boolean; act
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '9px 14px', borderTop: `1px solid ${SOFT}`, background: interview ? '#FAFAF0' : '#FCFCFD', fontSize: 12.5, color: interview ? BRAND : MUTED, fontWeight: interview ? 600 : 400 }}>
+      {onQuick && needsReview(c) && !lifted && (
+        <div style={{ display: 'flex', gap: 8, padding: '0 14px 12px' }}>
+          <button {...quick('RENCONTRER')} style={{ ...BTN, flex: 1, padding: '8px 10px', fontSize: 13 }}>Rencontrer</button>
+          <button {...quick('ECARTER')} style={{ ...BTN_GHOST, flex: 1, padding: '8px 10px', fontSize: 13 }}>Écarter</button>
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '9px 14px', borderTop: `1px solid ${alert ? '#FDE9B8' : SOFT}`, background: alert ? '#FFF7E0' : interview ? '#FAFAF0' : '#FCFCFD', fontSize: 12.5, color: alert ? '#7A4A00' : interview ? BRAND : MUTED, fontWeight: alert || interview ? 600 : 400 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
           {interview ? <CalendarClock size={14} aria-hidden style={{ flexShrink: 0 }} /> : <Clock size={14} aria-hidden style={{ flexShrink: 0 }} />}
-          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{interview ? `Entretien ${fmtInterview(c.dateEntretienClient!)}` : lost ? `Écarté ${since ?? ''}` : since ? since[0].toUpperCase() + since.slice(1) : 'Dans cette étape'}</span>
+          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{interview ? `Entretien ${fmtInterview(c.dateEntretienClient!)}` : toDebrief ? 'Débrief d’entretien à partager' : late ? `Sans avis depuis ${daysWaiting(c)} jours` : waitingSlots ? 'Créneaux proposés, le candidat choisit' : lost ? `Écarté ${since ?? ''}` : since ? since[0].toUpperCase() + since.slice(1) : 'Dans cette étape'}</span>
         </span>
         {nbComments > 0 && (
           <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, color: MUTED, fontWeight: 600 }}>
@@ -451,7 +524,7 @@ function CardBody({ c, lifted, active }: { c: Candidature; lifted?: boolean; act
   );
 }
 
-function DraggableCard({ c, onOpen, active }: { c: Candidature; onOpen: () => void; active?: boolean }) {
+function DraggableCard({ c, onOpen, active, onQuick }: { c: Candidature; onOpen: () => void; active?: boolean; onQuick?: (d: Decision) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: c.id, disabled: c.stage === 'PLACE' });
   return (
     <div
@@ -463,7 +536,7 @@ function DraggableCard({ c, onOpen, active }: { c: Candidature; onOpen: () => vo
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
       style={{ touchAction: 'none', opacity: isDragging ? 0.35 : 1, borderRadius: 14 }}
     >
-      <CardBody c={c} active={active} />
+      <CardBody c={c} active={active} onQuick={onQuick} />
     </div>
   );
 }
@@ -528,9 +601,9 @@ function ContactBlock({ contact }: { contact: NonNullable<Candidature['candidat'
 }
 
 // ─── Aperçu d'un candidat (tiroir) : l'essentiel, puis « Voir la fiche complète » ──
-function ProfileDrawer({ candidature: c, stages, onClose, onOpenFull, onDecision, onMove, frozen }: {
+function ProfileDrawer({ candidature: c, stages, onClose, onOpenFull, onDecision, onMove, onSaved, frozen }: {
   candidature: Candidature; stages: Col[];
-  onClose: () => void; onOpenFull: () => void;
+  onClose: () => void; onOpenFull: () => void; onSaved: () => void;
   onDecision: (d: Decision) => void;
   onMove: (to: Col) => void;
   frozen?: boolean;
@@ -578,6 +651,9 @@ function ProfileDrawer({ candidature: c, stages, onClose, onOpenFull, onDecision
             </div>
           )}
 
+          <MeetingStatus c={c} />
+          {debriefDue(c) && <DebriefForm c={c} onSaved={onSaved} />}
+
           {c.candidat.aiPitchShort && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <span style={label}>En bref</span>
@@ -624,14 +700,130 @@ function ProfileDrawer({ candidature: c, stages, onClose, onOpenFull, onDecision
   );
 }
 
+// ─── Créneaux proposés au candidat, en attente de son choix ──
+function MeetingStatus({ c }: { c: Candidature }) {
+  if (!slotsPending(c)) return null;
+  return (
+    <div style={{ background: SOFT, borderRadius: 12, padding: '12px 14px', fontSize: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span style={{ fontWeight: 600, color: INK }}>Créneaux proposés, le candidat choisit</span>
+      <span>{c.portalSlots!.slots.map((x) => fmtInterview(x)).join(' · ')}</span>
+    </div>
+  );
+}
+
+// ─── Débrief après un entretien : note, points forts, réserves ──
+function DebriefForm({ c, onSaved }: { c: Candidature; onSaved: () => void }) {
+  const [rating, setRating] = useState(0);
+  const [strengths, setStrengths] = useState('');
+  const [concerns, setConcerns] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const area: React.CSSProperties = { width: '100%', boxSizing: 'border-box', display: 'block', resize: 'vertical', fontFamily: FONT, fontSize: 14, lineHeight: 1.5, padding: '9px 12px', borderRadius: 10, border: '1px solid #D1D5DB', background: '#fff', color: INK };
+  const label: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: INK, display: 'block', marginBottom: 4 };
+  async function send() {
+    setBusy(true); setError('');
+    const res = await portalFetch(`/candidatures/${c.id}/debrief`, { method: 'POST', body: JSON.stringify({ rating, strengths: strengths.trim() || undefined, concerns: concerns.trim() || undefined }) });
+    setBusy(false);
+    if (res.ok) onSaved();
+    else setError('Le débrief n’a pas pu être envoyé.');
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: 16, fontWeight: 700, color: INK }}>Comment s’est passé l’entretien ?</span>
+        <span style={{ fontSize: 14, color: MUTED }}>Entretien du {fmtInterview(c.dateEntretienClient!)}. Votre retour aide Humanup à ajuster la suite.</span>
+      </div>
+      <div role="radiogroup" aria-label="Note sur 5" style={{ display: 'flex', gap: 6 }}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} role="radio" aria-checked={rating === n} aria-label={`${n} sur 5`} onClick={() => setRating(n)}
+            style={{ width: 44, height: 44, borderRadius: 10, fontFamily: FONT, fontSize: 15, fontWeight: 700, cursor: 'pointer', border: `1px solid ${rating === n ? BRAND : '#D1D5DB'}`, background: rating === n ? BRAND : '#fff', color: rating === n ? '#fff' : TEXT }}>{n}</button>
+        ))}
+      </div>
+      <div>
+        <label htmlFor={`pm-str-${c.id}`} style={label}>Points forts</label>
+        <textarea id={`pm-str-${c.id}`} rows={2} value={strengths} onChange={(e) => setStrengths(e.target.value)} style={area} />
+      </div>
+      <div>
+        <label htmlFor={`pm-con-${c.id}`} style={label}>Réserves</label>
+        <textarea id={`pm-con-${c.id}`} rows={2} value={concerns} onChange={(e) => setConcerns(e.target.value)} style={area} />
+      </div>
+      {error && <p role="alert" style={{ fontSize: 13, color: '#B42318', fontWeight: 600 }}>{error}</p>}
+      <button disabled={!rating || busy} onClick={send} style={{ ...BTN, alignSelf: 'flex-start', background: rating ? BRAND : '#9CA3AF', cursor: rating ? 'pointer' : 'default' }}>Partager mon débrief</button>
+    </div>
+  );
+}
+
+// ─── Comparaison des finalistes (Case, Culture Fit, Offre) ──
+function CompareView({ cards, offerTitle, onClose, onOpen }: { cards: Candidature[]; offerTitle: string; onClose: () => void; onOpen: (c: Candidature) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useDialogFocus(ref, onClose);
+  const infosOf = (c: Candidature): Array<{ label: string; value: string }> => (Array.isArray(c.candidat.aiAnonymizedProfile?.infos) ? c.candidat.aiAnonymizedProfile.infos : []);
+  const bulletsOf = (c: Candidature): string[] => {
+    const pr = c.candidat.aiAnonymizedProfile;
+    return Array.isArray(pr?.bulletPoints) ? pr.bulletPoints : Array.isArray(pr?.highlights) ? pr.highlights : [];
+  };
+  const labels = Array.from(new Set(cards.flatMap((c) => infosOf(c).map((i) => i.label)))).slice(0, 6);
+  const cols = `160px repeat(${cards.length}, minmax(220px, 1fr))`;
+  const head: React.CSSProperties = { padding: '14px 16px', fontSize: 13, fontWeight: 600, color: MUTED, borderTop: `1px solid ${SOFT}` };
+  const cell: React.CSSProperties = { padding: '14px 16px', fontSize: 14, borderTop: `1px solid ${SOFT}`, borderLeft: `1px solid ${SOFT}`, minWidth: 0 };
+  const row = (label: string, render: (c: Candidature) => React.ReactNode) => (
+    <>
+      <div style={head}>{label}</div>
+      {cards.map((c) => <div key={c.id} style={cell}>{render(c)}</div>)}
+    </>
+  );
+  const none = <span style={{ color: MUTED }}>Non renseigné</span>;
+  return (
+    <div ref={ref} role="dialog" aria-modal="true" aria-label="Comparer les finalistes" className="pm-page pm-scroll" style={{ position: 'fixed', inset: 0, zIndex: 60, background: BG, overflowY: 'auto', fontFamily: FONT, paddingBottom: 0 }}>
+      <header style={{ position: 'sticky', top: 0, zIndex: 2, background: '#fff', borderBottom: `1px solid ${LINE}`, padding: '0 32px', minHeight: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <img src={LOGO} alt="" style={{ width: 34, height: 34, borderRadius: '50%' }} />
+          <span style={{ fontWeight: 700, color: INK, fontSize: 16 }}>Humanup</span>
+          <span style={{ color: MUTED, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{offerTitle}</span>
+        </div>
+        <button data-autofocus onClick={onClose} style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: BRAND, background: 'none', border: 'none', padding: '8px 0', cursor: 'pointer' }}>Retour au tableau</button>
+      </header>
+      <main style={{ maxWidth: 1280, margin: '0 auto', padding: '28px 32px 48px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <h1 style={{ fontSize: 26, color: INK, letterSpacing: '-0.02em' }}>Comparer les finalistes</h1>
+        <div className="pm-scroll" style={{ ...CARD, overflowX: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: cols, minWidth: 160 + cards.length * 220 }}>
+            <div style={{ ...head, borderTop: 'none' }} />
+            {cards.map((c) => (
+              <div key={c.id} style={{ ...cell, borderTop: 'none', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
+                <PersonAvatar name={fullName(c)} photo={c.candidat.photoUrl} size={56} ring />
+                <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
+                  <span style={{ fontWeight: 700, color: INK, fontSize: 16 }}>{fullName(c)}</span>
+                  {c.candidat.posteActuel && <span style={{ fontSize: 13, color: MUTED }}>{c.candidat.posteActuel}</span>}
+                </span>
+                <button onClick={() => onOpen(c)} style={{ ...BTN_GHOST, padding: '7px 12px', fontSize: 13, color: BRAND, borderColor: BRAND }}>Voir la fiche</button>
+              </div>
+            ))}
+            {row('Étape', (c) => <Pill strong>{COL_LABELS[c.column]}</Pill>)}
+            {row('Votre avis', (c) => (c.portalDecisions[0] ? DECISION_LABEL[c.portalDecisions[0].decision] : none))}
+            {row('Débrief d’entretien', (c) => (c.portalDebrief
+              ? <span><b style={{ color: INK }}>{c.portalDebrief.rating}/5</b>{c.portalDebrief.strengths ? <><br />{c.portalDebrief.strengths}</> : null}{c.portalDebrief.concerns ? <><br /><span style={{ color: MUTED }}>Réserves : {c.portalDebrief.concerns}</span></> : null}</span>
+              : none))}
+            {labels.map((l) => <span key={l} style={{ display: 'contents' }}>{row(l, (c) => infosOf(c).find((i) => i.label === l)?.value ?? none)}</span>)}
+            {row('Points forts', (c) => (bulletsOf(c).length
+              ? <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>{bulletsOf(c).slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul>
+              : none))}
+            {row('Commentaires', (c) => `${c._count?.portalComments ?? 0}`)}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
 // ─── Fiche candidat : page plein écran (dossier + commentaires / activité) ──
-function ProfilePage({ candidature: c, stages, repName, team, offerTitle, tab, prefillMention, onTab, onClose, onDecision, onMove, locked: frozen }: {
+function ProfilePage({ candidature: c, stages, repName, team, offerTitle, tab, prefillMention, onTab, onClose, onDecision, onMove, onSaved, locked: frozen }: {
   candidature: Candidature; stages: Col[]; repName: string; team: TeamMember[]; offerTitle: string;
   tab: PanelTab; prefillMention?: boolean;
   onTab: (t: PanelTab) => void;
   onClose: () => void;
   onDecision: (d: Decision) => void;
   onMove: (to: Col) => void;
+  onSaved: () => void;
   locked?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -720,6 +912,17 @@ function ProfilePage({ candidature: c, stages, repName, team, offerTitle, tab, p
               </div>
             )}
           </section>
+
+          {slotsPending(c) && <MeetingStatus c={c} />}
+          {debriefDue(c) && <section style={{ ...CARD, padding: isMobile ? 18 : 24 }}><DebriefForm c={c} onSaved={onSaved} /></section>}
+          {c.portalDebrief && (
+            <section style={{ ...sectionCard, gap: 10 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: INK }}>Votre débrief d’entretien</h2>
+              <span style={{ fontSize: 14 }}><b style={{ color: INK }}>{c.portalDebrief.rating}/5</b> · {c.portalDebrief.by}</span>
+              {c.portalDebrief.strengths && <p><b style={{ color: INK }}>Points forts :</b> {c.portalDebrief.strengths}</p>}
+              {c.portalDebrief.concerns && <p><b style={{ color: INK }}>Réserves :</b> {c.portalDebrief.concerns}</p>}
+            </section>
+          )}
 
           <section style={sectionCard}>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: INK }}>Le dossier Humanup</h2>
@@ -830,29 +1033,37 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
   const ref = useRef<HTMLDivElement>(null);
   useDialogFocus(ref, onCancel);
   const [reason, setReason] = useState('');
-  const [date, setDate] = useState('');
+  const [dates, setDates] = useState<string[]>(['']);
   const [who, setWho] = useState('');
-  const ok = to === 'PERDU' ? reason.trim().length > 0 : to === 'SCREENING' ? !!date && who.trim().length > 0 : true;
+  // Depuis l'Inbox, le client peut proposer plusieurs créneaux : le candidat choisit.
+  const multi = to === 'SCREENING' && c.column === 'INBOX';
+  const filled = dates.filter(Boolean);
+  const ok = to === 'PERDU' ? reason.trim().length > 0 : to === 'SCREENING' ? filled.length > 0 && who.trim().length > 0 : true;
   const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', fontFamily: FONT, fontSize: 14, padding: '10px 12px', borderRadius: 10, border: '1px solid #D1D5DB', background: '#fff', color: INK };
   const label: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: INK, marginBottom: 4, display: 'block' };
-  const title = to === 'PERDU' ? `Écarter ${fullName(c)} ?` : to === 'ENGAGE' ? `Annoncer l'embauche de ${fullName(c)} ?` : `Planifier le Screening avec ${fullName(c)}`;
+  const title = to === 'PERDU' ? `Écarter ${fullName(c)} ?` : to === 'ENGAGE' ? `Annoncer l'embauche de ${fullName(c)} ?` : `Rencontrer ${fullName(c)}`;
   return (
     <>
       <div onClick={onCancel} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(17,24,39,.45)' }} />
-      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="pm-move-title" className="pm-page" style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', zIndex: 71, width: 440, maxWidth: 'calc(100vw - 32px)', boxSizing: 'border-box', background: '#fff', borderRadius: 14, padding: 24, paddingBottom: 24, boxShadow: '0 24px 60px -24px rgba(17,24,39,.5)', fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="pm-move-title" className="pm-page" style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', zIndex: 71, width: 460, maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', boxSizing: 'border-box', background: '#fff', borderRadius: 14, padding: 24, paddingBottom: 24, boxShadow: '0 24px 60px -24px rgba(17,24,39,.5)', fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <h3 id="pm-move-title" style={{ fontSize: 18, fontWeight: 700, color: INK, lineHeight: 1.3 }}>{title}</h3>
         {to === 'PERDU' && (
           <div>
             <label htmlFor="pm-reason" style={label}>Pourquoi ?</label>
             <textarea id="pm-reason" data-autofocus value={reason} onChange={e => setReason(e.target.value)} placeholder="Exemple : expérience trop éloignée des grands comptes" style={{ ...field, minHeight: 84, resize: 'vertical' }} />
+            <span style={{ display: 'block', fontSize: 13, color: MUTED, marginTop: 6 }}>Votre retour aide {repName || 'Humanup'} à ajuster la recherche et à répondre au candidat.</span>
           </div>
         )}
         {to === 'SCREENING' && (
           <>
-            <div>
-              <label htmlFor="pm-date" style={label}>Date et heure de l'entretien</label>
-              <input id="pm-date" data-autofocus type="datetime-local" value={date} onChange={e => setDate(e.target.value)} style={field} />
-            </div>
+            {multi && <p style={{ fontSize: 14, color: MUTED }}>Proposez un à trois créneaux. Avec un seul, l’entretien est planifié tout de suite. Avec plusieurs, le candidat choisit et vous êtes prévenu.</p>}
+            {dates.map((d, i) => (
+              <div key={i}>
+                <label htmlFor={`pm-date-${i}`} style={label}>{multi ? `Créneau ${i + 1}` : 'Date et heure de l’entretien'}</label>
+                <input id={`pm-date-${i}`} {...(i === 0 ? { 'data-autofocus': true } : {})} type="datetime-local" value={d} onChange={e => setDates(dates.map((x, k) => (k === i ? e.target.value : x)))} style={field} />
+              </div>
+            ))}
+            {multi && dates.length < 3 && <button onClick={() => setDates([...dates, ''])} style={{ alignSelf: 'flex-start', fontFamily: FONT, fontSize: 14, fontWeight: 600, color: BRAND, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>Ajouter un créneau</button>}
             <div>
               <label htmlFor="pm-who" style={label}>Avec qui chez vous ?</label>
               <input id="pm-who" value={who} onChange={e => setWho(e.target.value)} placeholder="Prénom Nom, fonction" style={field} />
@@ -868,9 +1079,9 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
           <button onClick={onCancel} style={{ ...BTN_GHOST, flex: 1 }}>Annuler</button>
           <button
             disabled={!ok}
-            onClick={() => onConfirm(to === 'PERDU' ? { reason: reason.trim() } : to === 'SCREENING' ? { dateEntretienClient: new Date(date).toISOString(), interlocuteurClient: who.trim() } : {})}
+            onClick={() => onConfirm(to === 'PERDU' ? { reason: reason.trim() } : to === 'SCREENING' ? { slots: filled.map((d) => new Date(d).toISOString()), interlocuteurClient: who.trim() } : {})}
             style={{ ...BTN, flex: 1, background: ok ? BRAND : '#9CA3AF', cursor: ok ? 'pointer' : 'default' }}
-          >{to === 'PERDU' ? 'Écarter' : to === 'ENGAGE' ? 'Annoncer' : 'Planifier'}</button>
+          >{to === 'PERDU' ? 'Écarter' : to === 'ENGAGE' ? 'Annoncer' : filled.length > 1 ? 'Proposer ces créneaux' : 'Planifier'}</button>
         </div>
         {to === 'SCREENING' && fromDecision && (
           <button onClick={onSkip} style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, background: 'transparent', color: BRAND, border: 'none', padding: 4, cursor: 'pointer' }}>

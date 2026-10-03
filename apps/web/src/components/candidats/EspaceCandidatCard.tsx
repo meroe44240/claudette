@@ -10,7 +10,7 @@ import Modal from '../ui/Modal';
 interface Status {
   canOpen: boolean; blocker: string | null;
   account: { email: string; profile: 'TECH' | 'SALES'; invitedAt: string | null; activatedAt: string | null; lastLoginAt: string | null; revokedAt: string | null } | null;
-  feedbackMissing: Array<{ candidatureId: string; titre: string; entreprise: string | null }>;
+  feedbackMissing: Array<{ candidatureId: string; titre: string; entreprise: string | null; suggestion?: string | null }>;
 }
 interface Prefill {
   profile: 'TECH' | 'SALES';
@@ -103,13 +103,18 @@ export default function EspaceCandidatCard({ candidatId }: { candidatId: string 
       {active && st.feedbackMissing.length > 0 && (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ fontSize: 12.5, fontWeight: 800, color: '#8A1C1C' }}>Feedback à écrire (le candidat ne voit pas encore ces refus)</div>
-          {st.feedbackMissing.map((f) => (
-            <div key={f.candidatureId} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1A1533' }}>{f.titre}{f.entreprise ? ` · ${f.entreprise}` : ''}</div>
-              <textarea rows={3} value={feedback[f.candidatureId] || ''} onChange={(e) => setFeedback({ ...feedback, [f.candidatureId]: e.target.value })} placeholder="L'update et le feedback, en français : traduits en anglais pour le candidat." style={{ ...inputS, resize: 'vertical' }} />
-              <button disabled={!feedback[f.candidatureId]?.trim() || sendFeedback.isPending} onClick={() => sendFeedback.mutate({ candidatureId: f.candidatureId, message: feedback[f.candidatureId] })} style={{ ...primary, alignSelf: 'flex-start', opacity: feedback[f.candidatureId]?.trim() ? 1 : 0.5 }}>Publier le feedback</button>
-            </div>
-          ))}
+          {st.feedbackMissing.map((f) => {
+            // Brouillon tiré du retour du client (motif d'écart, débrief) tant que le recruteur n'a rien écrit.
+            const value = feedback[f.candidatureId] ?? f.suggestion ?? '';
+            return (
+              <div key={f.candidatureId} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1A1533' }}>{f.titre}{f.entreprise ? ` · ${f.entreprise}` : ''}</div>
+                {f.suggestion && feedback[f.candidatureId] === undefined && <div style={{ fontSize: 12, color: '#4A4568' }}>Brouillon tiré du retour du client sur le portail. À relire et adoucir avant de publier.</div>}
+                <textarea rows={f.suggestion ? 5 : 3} value={value} onChange={(e) => setFeedback({ ...feedback, [f.candidatureId]: e.target.value })} placeholder="L'update et le feedback, en français : traduits en anglais pour le candidat." style={{ ...inputS, resize: 'vertical' }} />
+                <button disabled={!value.trim() || sendFeedback.isPending} onClick={() => sendFeedback.mutate({ candidatureId: f.candidatureId, message: value })} style={{ ...primary, alignSelf: 'flex-start', opacity: value.trim() ? 1 : 0.5 }}>Publier le feedback</button>
+              </div>
+            );
+          })}
         </div>
       )}
 
