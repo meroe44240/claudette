@@ -48,7 +48,7 @@ async function verify<T>(token: string, type: string): Promise<T> {
     if ((payload as any).type !== type) throw new Error('type');
     return payload as unknown as T;
   } catch {
-    throw new UnauthorizedError('Lien invalide ou expiré');
+    throw new UnauthorizedError('This link is invalid or has expired.');
   }
 }
 async function sessionToken(account: { id: string; candidatId: string }) {
@@ -59,7 +59,7 @@ async function sessionToken(account: { id: string; candidatId: string }) {
 export async function authenticateCandidate(token: string) {
   const p = await verify<CandidateSession>(token, 'candidate');
   const account = await prisma.candidateAccount.findUnique({ where: { id: p.sub } });
-  if (!account || account.revokedAt || !account.activatedAt) throw new UnauthorizedError('Session expirée');
+  if (!account || account.revokedAt || !account.activatedAt) throw new UnauthorizedError('Your session has expired. Please sign in again.');
   return account;
 }
 
