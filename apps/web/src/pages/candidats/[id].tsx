@@ -18,6 +18,7 @@ import CandidatureQualif from '../../components/candidats/CandidatureQualif';
 import DossierClientModal from '../../components/candidats/DossierClientModal';
 import SynthesesTab, { type SynthesesTabHandle } from '../../components/candidats/SynthesesTab';
 import PhotoMenu from '../../components/candidats/PhotoMenu';
+import EspaceCandidatCard from '../../components/candidats/EspaceCandidatCard';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Candidature {
@@ -108,6 +109,7 @@ export default function CandidatDetailPage() {
   const [lost, setLost] = useState<{ candId: string; titre: string; company: string } | null>(null);
   const [lostReason, setLostReason] = useState('');
   const [lostNote, setLostNote] = useState('');
+  const [lostMsg, setLostMsg] = useState('');
   const [lostMail, setLostMail] = useState(true);
   const [planOpen, setPlanOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -140,7 +142,7 @@ export default function CandidatDetailPage() {
   };
 
   const stageMut = useMutation({ mutationFn: ({ candId, stage }: { candId: string; stage: string }) => api.put(`/candidatures/${candId}`, { stage }), onSuccess: () => { invalidate(); toast('success', 'Étape mise à jour'); }, onError: (e: any) => toast('error', e?.message || 'Échec') });
-  const loseMut = useMutation({ mutationFn: ({ candId, motifRefus, motifRefusDetail }: { candId: string; motifRefus: string; motifRefusDetail?: string }) => api.put(`/candidatures/${candId}`, { stage: 'REFUSE', motifRefus, motifRefusDetail }), onSuccess: () => { invalidate(); setLost(null); setLostReason(''); setLostNote(''); toast('success', 'Profil archivé (no-go)'); }, onError: (e: any) => toast('error', e?.message || "Échec de l'archivage") });
+  const loseMut = useMutation({ mutationFn: ({ candId, motifRefus, motifRefusDetail, candidateMessage }: { candId: string; motifRefus: string; motifRefusDetail?: string; candidateMessage?: string }) => api.put(`/candidatures/${candId}`, { stage: 'REFUSE', motifRefus, motifRefusDetail, candidateMessage }), onSuccess: () => { invalidate(); setLost(null); setLostReason(''); setLostNote(''); setLostMsg(''); toast('success', 'Profil archivé (no-go)'); }, onError: (e: any) => toast('error', e?.message || "Échec de l'archivage") });
   const removeMut = useMutation({ mutationFn: (candId: string) => api.delete(`/candidatures/${candId}`), onSuccess: () => { invalidate(); toast('success', 'Retiré du mandat'); } });
   const noShowMut = useMutation({ mutationFn: (candId: string) => api.put(`/candidatures/${candId}`, { presentationNoShow: true }), onSuccess: () => { invalidate(); toast('success', 'Présentation marquée no-show'); } });
   const linkMut = useMutation({ mutationFn: (mandatId: string) => api.post('/candidatures', { candidatId: id, mandatId, stage: 'SOURCING' }), onSuccess: () => { invalidate(); setLinkSel(''); toast('success', 'Relié au mandat'); } });
@@ -525,6 +527,8 @@ export default function CandidatDetailPage() {
             </div>
           </div>
 
+          <EspaceCandidatCard candidatId={c.id} />
+
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={h2}>Portail client</div>
@@ -574,13 +578,15 @@ export default function CandidatDetailPage() {
             </div>
             <label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: '#8A8699', margin: '16px 0 7px' }}>Détail (optionnel)</label>
             <textarea value={lostNote} onChange={e => setLostNote(e.target.value)} placeholder="Contexte utile pour la prochaine fois…" style={{ width: '100%', minHeight: 76, resize: 'vertical', fontFamily: "'Manrope',sans-serif", fontSize: 13.5, lineHeight: 1.55, padding: '12px 14px', borderRadius: 12, border: '1.5px solid rgba(34,23,122,.16)', background: '#FCFCF5', outline: 'none' }} />
+            <label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.11em', textTransform: 'uppercase', color: '#8A8699', margin: '16px 0 7px' }}>Message au candidat (espace candidat)</label>
+            <textarea value={lostMsg} onChange={e => setLostMsg(e.target.value)} placeholder="L'update et le feedback, en français : traduits en anglais. Sans message, le candidat ne voit pas le refus dans son espace." style={{ width: '100%', minHeight: 76, resize: 'vertical', fontFamily: "'Manrope',sans-serif", fontSize: 13.5, lineHeight: 1.55, padding: '12px 14px', borderRadius: 12, border: '1.5px solid rgba(34,23,122,.16)', background: '#FCFCF5', outline: 'none' }} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, padding: '12px 14px', background: '#FCFCF5', border: '1px solid rgba(34,23,122,.1)', borderRadius: 12, cursor: 'pointer' }}>
               <span onClick={() => setLostMail(m => !m)} style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: `1.5px solid ${lostMail ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: lostMail ? '#E6E9AF' : '#fff' }}>{lostMail && <CheckSquare size={12} color="#22177A" />}</span>
               <Mail size={15} color="#5B4B9E" /><span style={{ fontSize: 13, color: '#4A4568' }}>Envoyer le <strong style={{ color: '#1A1533' }}>feedback no-go</strong> au candidat</span>
             </label>
             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
               <button onClick={() => setLost(null)} style={{ flex: 1, fontSize: 14, fontWeight: 700, background: '#F5F4EA', color: '#4A4568', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Annuler</button>
-              <button onClick={() => { if (!lostReason) { toast('error', 'Sélectionnez un motif'); return; } loseMut.mutate({ candId: lost.candId, motifRefus: lostReason, motifRefusDetail: lostNote || undefined }); }} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: '#B3261E', color: '#fff', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Archiver le profil</button>
+              <button onClick={() => { if (!lostReason) { toast('error', 'Sélectionnez un motif'); return; } loseMut.mutate({ candId: lost.candId, motifRefus: lostReason, motifRefusDetail: lostNote || undefined, candidateMessage: lostMsg.trim() || undefined }); }} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: '#B3261E', color: '#fff', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Archiver le profil</button>
             </div>
           </div>
         </>

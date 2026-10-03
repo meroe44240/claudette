@@ -51,6 +51,7 @@ import kalentSourcingRouter from './modules/sourcing/kalent-sourcing.router.js';
 import leadRouter from './modules/leads/lead.router.js';
 import jobOfferRouter, { jobOfferPublicRouter } from './modules/job-offers/job-offer.router.js';
 import bookingRouter, { bookingPublicRouter } from './modules/booking/booking.router.js';
+import candidateSpaceRouter from './modules/candidate-space/candidate-space.router.js';
 import postLinkedinRouter from './modules/post-linkedin/post-linkedin.router.js';
 import confirmationRouter, { confirmationPublicRouter } from './modules/confirmation/confirmation.router.js';
 
@@ -180,6 +181,8 @@ async function buildApp() {
   await app.register(recapRouter, { prefix: '/api/v1/recap' });
   await app.register(contractRouter, { prefix: '/api/v1/contracts' });
   await app.register(portalRouter, { prefix: '/api/v1/portal' });
+  // Espace candidat (recruteur, public et candidat)
+  await app.register(candidateSpaceRouter, { prefix: '/api/v1/candidate-space' });
   await app.register(sourcingRouter, { prefix: '/api/v1/sourcing' });
   await app.register(kalentSourcingRouter, { prefix: '/api/v1/sourcing/kalent' });
   await app.register(leadRouter, { prefix: '/api/v1/leads' });

@@ -45,6 +45,8 @@ export function useStageChange(onMoved?: () => void) {
   const [entretienTime, setEntretienTime] = useState('');
   const [entretienInter, setEntretienInter] = useState('');
   const [placement, setPlacement] = useState<Ctx | null>(null);
+  // Espace candidat : message au candidat (français, traduit en anglais)
+  const [candidateMsg, setCandidateMsg] = useState('');
 
   const move = useMutation({
     mutationFn: (p: { candidatureId: string; [k: string]: unknown }) => {
@@ -62,11 +64,24 @@ export function useStageChange(onMoved?: () => void) {
     opts?: { candidatName?: string | null; defaultFee?: number | null },
   ) {
     const ctx: Ctx = { candidatureId, candidatName: opts?.candidatName, defaultFee: opts?.defaultFee };
-    if (targetStage === 'REFUSE') { setMotif(''); setMotifDetail(''); setRefusal(ctx); return; }
-    if (targetStage === 'ENTRETIEN_CLIENT') { setEntretienDate(''); setEntretienTime(''); setEntretienInter(''); setEntretien(ctx); return; }
+    if (targetStage === 'REFUSE') { setMotif(''); setMotifDetail(''); setCandidateMsg(''); setRefusal(ctx); return; }
+    if (targetStage === 'ENTRETIEN_CLIENT') { setEntretienDate(''); setEntretienTime(''); setEntretienInter(''); setCandidateMsg(''); setEntretien(ctx); return; }
     if (targetStage === 'PLACE') { setPlacement(ctx); return; }
     move.mutate({ candidatureId, stage: targetStage });
   }
+
+  const candidateMsgField = (
+    <label className="block text-sm">
+      <span className="mb-1 block font-medium text-text-primary">Message au candidat (optionnel)</span>
+      <textarea
+        value={candidateMsg}
+        onChange={(e) => setCandidateMsg(e.target.value)}
+        rows={3}
+        placeholder="En français : traduit en anglais pour son espace candidat."
+        className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+      />
+    </label>
+  );
 
   const modals = (
     <>
@@ -78,11 +93,12 @@ export function useStageChange(onMoved?: () => void) {
           </p>
           <Select label="Motif de refus" options={MOTIF_REFUS_OPTIONS} value={motif} onChange={setMotif} placeholder="Sélectionner…" />
           <Input label="Précision (optionnel)" value={motifDetail} onChange={(e) => setMotifDetail(e.target.value)} placeholder="Détail du motif…" />
+          {candidateMsgField}
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setRefusal(null)}>Annuler</Button>
             <Button variant="primary" disabled={!motif || move.isPending} onClick={() => {
               if (!refusal) return;
-              move.mutate({ candidatureId: refusal.candidatureId, stage: 'REFUSE', motifRefus: motif, ...(motifDetail.trim() ? { motifRefusDetail: motifDetail.trim() } : {}) });
+              move.mutate({ candidatureId: refusal.candidatureId, stage: 'REFUSE', motifRefus: motif, ...(motifDetail.trim() ? { motifRefusDetail: motifDetail.trim() } : {}), ...(candidateMsg.trim() ? { candidateMessage: candidateMsg.trim() } : {}) });
               setRefusal(null);
             }}>Confirmer</Button>
           </div>
@@ -98,12 +114,13 @@ export function useStageChange(onMoved?: () => void) {
           <Input label="Date" type="date" value={entretienDate} onChange={(e) => setEntretienDate(e.target.value)} />
           <Input label="Heure" type="time" value={entretienTime} onChange={(e) => setEntretienTime(e.target.value)} />
           <Input label="Interlocuteur côté client" value={entretienInter} onChange={(e) => setEntretienInter(e.target.value)} placeholder="Ex. DRH, N+1, dirigeant…" />
+          {candidateMsgField}
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setEntretien(null)}>Annuler</Button>
             <Button variant="primary" disabled={!entretienDate || !entretienTime || !entretienInter.trim() || move.isPending} onClick={() => {
               if (!entretien) return;
               const iso = new Date(`${entretienDate}T${entretienTime}:00`).toISOString();
-              move.mutate({ candidatureId: entretien.candidatureId, stage: 'ENTRETIEN_CLIENT', dateEntretienClient: iso, interlocuteurClient: entretienInter.trim() });
+              move.mutate({ candidatureId: entretien.candidatureId, stage: 'ENTRETIEN_CLIENT', dateEntretienClient: iso, interlocuteurClient: entretienInter.trim(), ...(candidateMsg.trim() ? { candidateMessage: candidateMsg.trim() } : {}) });
               setEntretien(null);
             }}>Confirmer la présentation</Button>
           </div>

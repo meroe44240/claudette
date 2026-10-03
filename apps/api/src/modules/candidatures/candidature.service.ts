@@ -407,14 +407,19 @@ export async function update(
 
   // If stage changed, create StageHistory entry
   if (data.stage && data.stage !== existing.stage) {
-    await prisma.stageHistory.create({
+    const history = await prisma.stageHistory.create({
       data: {
         candidatureId: id,
         fromStage: existing.stage as StageCandidature,
         toStage: data.stage as StageCandidature,
         changedById,
+        candidateMessage: data.candidateMessage?.trim() || null,
       },
     });
+    // Espace candidat : traduction du message, email au candidat, tâche si un refus n'a pas de message.
+    import('../candidate-space/candidate-space.service.js')
+      .then((m) => m.onStageChanged(history.id, changedById))
+      .catch((e) => console.warn('[Candidature] espace candidat', (e as Error).message));
 
     // Présentation → crée l'event Google Agenda + stocke googleEventId (best-effort, spec §4).
     if (data.stage === 'ENTRETIEN_CLIENT') {
@@ -560,7 +565,7 @@ export async function bulkUpdateStage(
       data: updateData,
     });
 
-    await prisma.stageHistory.create({
+    const history = await prisma.stageHistory.create({
       data: {
         candidatureId: id,
         fromStage: existing.stage as StageCandidature,
@@ -568,6 +573,9 @@ export async function bulkUpdateStage(
         changedById,
       },
     });
+    import('../candidate-space/candidate-space.service.js')
+      .then((m) => m.onStageChanged(history.id, changedById))
+      .catch((e) => console.warn('[Candidature] espace candidat', (e as Error).message));
 
     // Auto-create activity for stage change
     await prisma.activite.create({

@@ -226,6 +226,7 @@ model Candidat {
 
   candidatures Candidature[]
   experiences  CandidatExperience[]
+  candidateAccount CandidateAccount?
 
   @@map("candidats")
 }
@@ -631,9 +632,38 @@ model StageHistory {
   toStage       StageCandidature
   changedById   String?           @db.Uuid
   changedAt     DateTime          @default(now()) @db.Timestamptz()
+  // Espace candidat : message au candidat (écrit en français, traduit en anglais)
+  candidateMessage   String?      @map("candidate_message") @db.Text
+  candidateMessageEn String?      @map("candidate_message_en") @db.Text
 
   @@index([candidatureId])
   @@map("stage_history")
+}
+
+// ─── ESPACE CANDIDAT ────────────────────────────────
+// Ouvert par le recruteur après le premier call ; le candidat valide ses attentes
+// pré-remplies et crée son mot de passe. Auth = JWT type 'candidate'.
+model CandidateAccount {
+  id                String    @id @default(uuid()) @db.Uuid
+  candidatId        String    @unique @map("candidat_id") @db.Uuid
+  candidat          Candidat  @relation(fields: [candidatId], references: [id], onDelete: Cascade)
+  email             String    @unique @db.VarChar(255)
+  passwordHash      String?   @map("password_hash") @db.Text
+  profile           String    @default("TECH") @db.VarChar(10) // TECH | SALES
+  expectations      Json      @default("{}")
+  otherProcesses    Json      @default("[]") @map("other_processes")
+  activationVersion Int       @default(1) @map("activation_version")
+  invitedAt         DateTime? @map("invited_at") @db.Timestamptz()
+  invitedById       String?   @map("invited_by_id") @db.Uuid
+  activatedAt       DateTime? @map("activated_at") @db.Timestamptz()
+  consentAt         DateTime? @map("consent_at") @db.Timestamptz()
+  lastLoginAt       DateTime? @map("last_login_at") @db.Timestamptz()
+  notifSeenAt       DateTime? @map("notif_seen_at") @db.Timestamptz()
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz()
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("candidate_accounts")
 }
 
 // ─── ACTIVITÉS (journal polymorphe) ──────────────────
