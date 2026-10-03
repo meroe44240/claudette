@@ -27,6 +27,7 @@ const FEATURE_MODEL_MAP: Record<string, ModelTier> = {
   task_extraction: 'smart', // existing feature
   job_description: 'fast',
   doc_translation: 'fast',
+  candidate_space_dossier: 'smart',
 };
 
 // Cost per million tokens (USD)

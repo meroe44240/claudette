@@ -12,6 +12,7 @@ import DeleteConfirmModal from '../../components/ui/DeleteConfirmModal';
 import { toast } from '../../components/ui/Toast';
 import { useStageChange } from '../../components/mandats/useStageChange';
 import TrameEditor from '../../components/mandats/TrameEditor';
+import DossierEditor from '../../components/mandats/DossierEditor';
 
 // ─── BRAND TOKENS ───────────────────────────────────
 const NAVY = '#22177A';
@@ -346,7 +347,7 @@ export default function MandatDetailPage() {
   // Delete
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   // Rail
-  const [railTab, setRailTab] = useState<'brief' | 'notes' | 'int' | 'cli' | 'trame'>('brief');
+  const [railTab, setRailTab] = useState<'brief' | 'notes' | 'int' | 'cli' | 'trame' | 'dossier'>('brief');
   const [notesDraft, setNotesDraft] = useState('');
   const [refreshTick, setRefreshTick] = useState(0);
   // Team (local demo state)
@@ -777,7 +778,7 @@ export default function MandatDetailPage() {
   ];
 
   const railTabsDef: [typeof railTab, string][] = [
-    ['brief', 'Le brief'], ['trame', 'Trame'], ['notes', 'Notes'], ['int', 'Activité interne'], ['cli', 'Activité client'],
+    ['brief', 'Le brief'], ['trame', 'Trame'], ['dossier', 'Dossier candidat'], ['notes', 'Notes'], ['int', 'Activité interne'], ['cli', 'Activité client'],
   ];
 
   const signedBtnStyle: React.CSSProperties = {
@@ -1064,6 +1065,13 @@ export default function MandatDetailPage() {
           {railTab === 'trame' && id && (
             <div className="rise" style={{ padding: '16px 18px' }}>
               <TrameEditor mandatId={id} />
+            </div>
+          )}
+
+          {/* Dossier de préparation (espace candidat) */}
+          {railTab === 'dossier' && id && (
+            <div className="rise" style={{ padding: '16px 18px' }}>
+              <DossierEditor mandatId={id} />
             </div>
           )}
 

@@ -4,10 +4,11 @@ import { Link, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Page, C, card, h2, btn, TeamCard, Loading, fmtDate, fmtDateTime, espaceFetch, useAuthGuard, type TeamMember } from './espace-ui';
 import type { ProcessView } from './index';
+import Dossier, { type DossierView } from './dossier';
 
 export default function EspaceProcessPage() {
   const { id = '' } = useParams();
-  const q = useQuery({ queryKey: ['espace', 'process', id], queryFn: () => espaceFetch<ProcessView & { interviewer: string | null }>(`/processes/${id}`), retry: false });
+  const q = useQuery({ queryKey: ['espace', 'process', id], queryFn: () => espaceFetch<ProcessView & { interviewer: string | null; dossier: DossierView | null }>(`/processes/${id}`), retry: false });
   const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<{ name: string; team: TeamMember[]; unread: number }>('/me'), retry: false });
   useAuthGuard(q.error || me.error);
   useEffect(() => { if (q.data) document.title = `${q.data.title} | Humanup`; }, [q.data]);
@@ -58,6 +59,7 @@ export default function EspaceProcessPage() {
                 </div>
               ))}
             </section>
+            {p.dossier && <Dossier processId={p.id} dossier={p.dossier} candidateName={me.data.name} />}
           </div>
           <aside className="esp-side">
             {p.next && (
@@ -68,7 +70,7 @@ export default function EspaceProcessPage() {
               </div>
             )}
             <TeamCard team={me.data.team} />
-            <a href={`mailto:${me.data.team.map((t) => t.email).join(',')}?subject=${encodeURIComponent(`Question about ${p.title}`)}`} style={{ ...btn, background: C.card, color: C.accent, border: `1px solid ${C.accent}` }}>Ask a question about this role</a>
+            <a href={`mailto:${me.data.team.map((t) => t.email).join(',')}?subject=${encodeURIComponent(`Question about ${p.title}`)}`} style={{ ...btn, background: C.card, color: C.accent, border: `1px solid ${C.accent}` }}>{p.dossier ? 'Ask a question about the dossier' : 'Ask a question about this role'}</a>
           </aside>
         </div>
       </main>

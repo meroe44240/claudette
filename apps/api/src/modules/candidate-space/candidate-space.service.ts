@@ -8,6 +8,7 @@ import { callClaude } from '../../services/claudeAI.js';
 import { translateTexts } from '../ai/translate.service.js';
 import { sendEmail } from '../../lib/mailer.js';
 import { sendCandidateEmail, escapeHtml as esc } from './candidate-space.emails.js';
+import { candidateDossier, markSectionRead } from './candidate-space.dossier.js';
 import {
   EXPECTATION_FIELDS, SUMMARY_FIELDS, asProfile, cleanExpectations, cleanOtherProcesses,
   type CandidateProfile, type OtherProcess,
@@ -376,7 +377,7 @@ function loadCandidatures(candidatId: string) {
     where: { candidatId, stage: { not: 'SOURCING' as any } },
     orderBy: { updatedAt: 'desc' },
     select: {
-      id: true, stage: true, dateEntretienClient: true, interlocuteurClient: true, updatedAt: true,
+      id: true, stage: true, mandatId: true, dateEntretienClient: true, interlocuteurClient: true, updatedAt: true,
       mandat: { select: { titrePoste: true, localisation: true, entreprise: { select: { nom: true } } } },
       stageHistory: { orderBy: { changedAt: 'asc' }, select: { id: true, fromStage: true, toStage: true, changedAt: true, changedById: true, candidateMessage: true, candidateMessageEn: true } },
     },
@@ -465,15 +466,33 @@ export async function processes(candidatId: string) {
   return { processes: [...open, ...closed], next: next ? { processId: next.id, title: next.title, company: next.company, ...next.next } : null };
 }
 
-export async function processDetail(candidatId: string, id: string) {
-  const list = await loadCandidatures(candidatId);
+/** Dossier de préparation : débloqué une fois le profil présenté, masqué quand le process est clos. */
+function dossierAccess(c: CandidatureView) {
+  const v = viewOf(c);
+  return {
+    open: !v.confidential && !v.closed,
+    // Les noms des interlocuteurs n'apparaissent qu'une fois l'entretien client calé.
+    interviewConfirmed: ['PROCESS', 'OFFRE', 'PLACE'].includes(v.stage) || (v.stage === 'ENTRETIEN_CLIENT' && !!c.dateEntretienClient),
+  };
+}
+
+export async function readDossierSection(account: { id: string; candidatId: string; dossierRead: unknown }, id: string, sectionId: string) {
+  const c = (await loadCandidatures(account.candidatId)).find((x) => x.id === id);
+  if (!c || !dossierAccess(c).open) throw new NotFoundError('Process', id);
+  return markSectionRead(account, c.mandatId, sectionId);
+}
+
+export async function processDetail(account: { candidatId: string; dossierRead: unknown }, id: string) {
+  const list = await loadCandidatures(account.candidatId);
   const c = list.find((x) => x.id === id);
   if (!c) throw new NotFoundError('Process', id);
   const v = viewOf(c);
+  const access = dossierAccess(c);
   const authorIds = [...new Set(v.feedback.map((f) => f.authorId).filter(Boolean))] as string[];
   const authors = await prisma.user.findMany({ where: { id: { in: authorIds } }, select: { id: true, prenom: true, nom: true } });
   return {
     ...v,
+    dossier: access.open ? await candidateDossier(account, c.mandatId, access.interviewConfirmed) : null,
     interviewer: v.next && c.interlocuteurClient ? c.interlocuteurClient : null,
     feedback: v.feedback.map((f) => ({ ...f, author: (() => { const a = authors.find((x) => x.id === f.authorId); return a ? a.prenom || fullName(a) : null; })() })),
   };
