@@ -38,7 +38,7 @@ const DEFAULT_COLUMN: Partial<Record<StageCandidature, PortalColumn>> = {
   ENVOYE_CLIENT: 'INBOX', ENTRETIEN_CLIENT: 'SCREENING', PROCESS: 'CASE', OFFRE: 'OFFRE', PLACE: 'ENGAGE', REFUSE: 'PERDU',
 };
 // Colonne affichée : celle choisie sur le portail si elle correspond encore à
-// l'étape ATS (HumanUp a pu déplacer le candidat entre-temps), sinon la colonne par défaut.
+// l'étape ATS (Humanup a pu déplacer le candidat entre-temps), sinon la colonne par défaut.
 function columnOf(stage: StageCandidature, portalStage?: string | null): PortalColumn | undefined {
   if (portalStage && (PORTAL_COLUMNS as readonly string[]).includes(portalStage) && COLUMN_STAGE[portalStage as PortalColumn] === stage) {
     return portalStage as PortalColumn;
@@ -140,7 +140,7 @@ async function sendInviteEmail(p: { email: string; password: string | null; mand
     ? `${p.nbVisible} profil${p.nbVisible > 1 ? 's' : ''} vous ${p.nbVisible > 1 ? 'attendent' : 'attend'} déjà.`
     : 'Les profils présentés y apparaîtront au fil de l’avancement.';
   const subject = `Votre espace de suivi : ${p.titrePoste}`;
-  const text = `${hello}\n\nVoici votre espace de suivi pour le recrutement « ${p.titrePoste} ». Vous y consultez les profils présentés et donnez votre avis en un clic (rencontrer, à discuter, écarter).\n\n${profils}\n\nAccès : ${link}\nIdentifiant : ${p.email}\nMot de passe : ${p.password ?? 'inchangé (le même que pour vos autres offres)'}\n\nBien à vous,\nL’équipe HumanUp`;
+  const text = `${hello}\n\nVoici votre espace de suivi pour le recrutement « ${p.titrePoste} ». Vous y consultez les profils présentés et donnez votre avis en un clic (rencontrer, à discuter, écarter).\n\n${profils}\n\nAccès : ${link}\nIdentifiant : ${p.email}\nMot de passe : ${p.password ?? 'inchangé (le même que pour vos autres offres)'}\n\nBien à vous,\nL’équipe Humanup`;
 
   const F = 'Arial,Helvetica,sans-serif';
   const html = `<div style="background:#ECECE4;padding:24px 12px;font-family:${F}">
@@ -364,7 +364,7 @@ function withContact<T extends { aiAnonymizedProfile: unknown; email: string | n
   return { ...cand, contact: visible ? { email, telephone, linkedinUrl, cvUrl } : null };
 }
 
-// Interlocuteurs HumanUp affichés au client : consultant (recruteur) et commercial
+// Interlocuteurs Humanup affichés au client : consultant (recruteur) et commercial
 // (sales, sinon le responsable du mandat s'il n'est pas déjà le consultant).
 type Person = { id: string; nom: string; prenom: string | null; avatarUrl?: string | null } | null;
 function humanupContacts(m: { recruteur: Person; sales: Person; assignedTo: Person }) {
@@ -404,13 +404,13 @@ export async function resetPassword(mandatId: string | undefined, emailRaw: stri
   const link = `${PORTAL_BASE}/portail/login?m=${access.mandatId}`;
   const prenom = (access.name || '').trim().split(/\s+/)[0];
   const espace = access.mandat.entreprise?.nom ? `votre espace de suivi ${access.mandat.entreprise.nom}` : 'votre espace de suivi';
-  await sendEmail(email, 'Votre nouveau mot de passe HumanUp', renderBrandedEmail({
+  await sendEmail(email, 'Votre nouveau mot de passe Humanup', renderBrandedEmail({
     title: 'Nouveau mot de passe',
     bodyHtml: `<p>Bonjour${prenom ? ' ' + esc(prenom) : ''},</p><p>Voici votre nouveau mot de passe pour ${esc(espace)} :</p>
       <p style="font-family:monospace;font-size:16px;background:#F2F3D8;border-radius:10px;padding:12px 14px;display:inline-block">${password}</p>
-      <p>Identifiant : <strong>${esc(email)}</strong></p><p>Si vous n’êtes pas à l’origine de cette demande, prévenez votre consultant HumanUp.</p>`,
+      <p>Identifiant : <strong>${esc(email)}</strong></p><p>Si vous n’êtes pas à l’origine de cette demande, prévenez votre consultant Humanup.</p>`,
     cta: { label: 'Me connecter', href: link },
-    signature: 'L’équipe HumanUp',
+    signature: 'L’équipe Humanup',
   }));
   return { ok: true };
 }
@@ -464,7 +464,7 @@ export async function recordDecision(
   return { ok: true };
 }
 
-// Mention dans un commentaire : quelqu'un de l'équipe HumanUp (userId) ou
+// Mention dans un commentaire : quelqu'un de l'équipe Humanup (userId) ou
 // une personne externe (email), côté client en général.
 export type PortalMention =
   | { kind: 'internal'; id: string }
@@ -513,7 +513,7 @@ export async function recordComment(
     for (const r of recent) for (const m of (Array.isArray(r.mentions) ? r.mentions : []) as any[]) if (m?.kind === 'external' && !known.has(m.email)) already.add(m.email);
     const fresh = unknown.filter((u) => !already.has(u.email));
     if (already.size + fresh.length > 5) {
-      throw new ValidationError('Limite atteinte : 5 nouvelles adresses par jour. Demandez à votre consultant HumanUp d’ajouter ce contact.');
+      throw new ValidationError('Limite atteinte : 5 nouvelles adresses par jour. Demandez à votre consultant Humanup d’ajouter ce contact.');
     }
   }
 
@@ -584,7 +584,7 @@ async function notifyMentions(p: {
         title: m.mentioned === false ? 'Nouveau commentaire client' : 'Nouvelle mention',
         bodyHtml: body,
         cta: { label: internal ? 'Ouvrir la fiche candidat' : 'Ouvrir l’espace de suivi', href },
-        signature: 'L’équipe HumanUp',
+        signature: 'L’équipe Humanup',
       }));
     } catch (e) {
       console.error(`[Portal] email mention ${m.email} échoué`, e);
@@ -619,7 +619,7 @@ export async function listComments(mandatId: string, candidatureId: string) {
   }));
 }
 
-// Personnes mentionnables : l'équipe HumanUp du mandat + les contacts connus côté client.
+// Personnes mentionnables : l'équipe Humanup du mandat + les contacts connus côté client.
 export async function getMentionables(mandatId: string) {
   const userSel = { select: { id: true, nom: true, prenom: true, email: true, status: true, avatarUrl: true } } as const;
   const mandat = await prisma.mandat.findUnique({
@@ -636,7 +636,7 @@ export async function getMentionables(mandatId: string) {
   const internal: Array<{ id: string; name: string; email: string; role: string; avatarUrl: string | null }> = [];
   const roles: Array<[U, string]> = [
     [mandat.recruteur, 'Consultant'], [mandat.sales, 'Commercial'], [mandat.sourceur, 'Sourcing'],
-    [mandat.assignedTo, !mandat.recruteur ? 'Consultant' : mandat.sales ? 'HumanUp' : 'Commercial'], [mandat.createdBy, 'HumanUp'],
+    [mandat.assignedTo, !mandat.recruteur ? 'Consultant' : mandat.sales ? 'Humanup' : 'Commercial'], [mandat.createdBy, 'Humanup'],
   ];
   for (const [u, role] of roles) {
     if (!u || u.status === 'ARCHIVED' || internal.some((i) => i.id === u.id)) continue;
@@ -675,7 +675,7 @@ export async function moveCandidature(data: {
   const targetStage = COLUMN_STAGE[data.column];
   if (!fromCol || !targetStage) throw new ForbiddenError('Déplacement non autorisé');
   if (fromCol === data.column) return { ok: true, pending: false };
-  // Placement validé par HumanUp (facture + date) : seul le consultant peut le défaire.
+  // Placement validé par Humanup (facture + date) : seul le consultant peut le défaire.
   if (existing.stage === 'PLACE') throw new ForbiddenError('Cette embauche est validée : contactez votre consultant pour la modifier.');
 
   const [mandat, access] = await Promise.all([
@@ -830,7 +830,7 @@ export async function listActivity(mandatId: string, candidatureId: string) {
     if (byClient) continue;
     const firstPresentation = h.toStage === 'ENVOYE_CLIENT' && (!h.fromStage || !PORTAL_STAGE_ORDER.includes(h.fromStage));
     items.push({
-      kind: 'STAGE', at: h.changedAt, actor: 'HumanUp', stage: DEFAULT_COLUMN[h.toStage],
+      kind: 'STAGE', at: h.changedAt, actor: 'Humanup', stage: DEFAULT_COLUMN[h.toStage],
       text: firstPresentation ? 'a présenté ce profil' : `a passé le profil en « ${labelOf(h.toStage)} »`,
     });
   }
@@ -1044,7 +1044,7 @@ export async function listNotifications(scope: PortalScope) {
     const nom = nameOf(h.candidature.candidat);
     items.push({
       id: `h-${h.id}`, kind: isNew ? 'NEW' : 'STAGE', at: h.changedAt,
-      title: isNew ? `Nouveau profil : ${nom}` : `${nom} → ${labelOf(h.toStage)}`,
+      title: isNew ? `Nouveau profil : ${nom}` : `${nom} : ${labelOf(h.toStage)}`,
       body: titles.get(h.candidature.mandatId) ?? '', who: nom,
       mandatId: h.candidature.mandatId, candidatureId: h.candidature.id, photo: h.candidature.candidat.photoUrl,
       unread: h.changedAt > seenAt,

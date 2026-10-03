@@ -1,15 +1,14 @@
 /**
- * Portail client : offres d'emploi de l'entreprise suivies par HumanUp.
+ * Portail client : offres d'emploi de l'entreprise suivies par Humanup.
  * URL : /portail/offres
  */
 
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { MapPin, BellRing } from 'lucide-react';
 import { portalStore } from './portal-store';
 import {
-  BG, BRAND, COL_ACCENT, COL_LABELS, COL_ORDER, CREAM, DISPLAY, FAINT, FONT, FS, INK, LABEL, LINE, MUTED, SHARED_CSS,
-  CompanyLogo, PersonAvatar, PortalTopBar, portalFetch, relTime, useIsMobile, type Col,
+  BG, CARD, COL_LABELS, COL_ORDER, FONT, INK, LINE, MUTED, SHARED_CSS, TEXT,
+  PersonAvatar, Pill, PortalTopBar, portalFetch, relTime, useIsMobile, type Col,
 } from './portal-ui';
 
 interface Person { nom: string; prenom: string | null; avatarUrl?: string | null }
@@ -29,7 +28,7 @@ export default function PortalOffresPage() {
 
   useEffect(() => {
     if (!portalStore.get('portal_token')) { navigate('/portail/login'); return; }
-    document.title = 'Offres d’emploi | HumanUp';
+    document.title = 'Offres d’emploi | Humanup';
     void portalFetch('/offres').then(async (r) => {
       if (r.status === 401) { portalStore.clear(); navigate('/portail/login?expired=1'); return; }
       setOffres(r.ok ? await r.json() : []);
@@ -40,89 +39,63 @@ export default function PortalOffresPage() {
   const closed = (offres ?? []).filter((o) => !OPEN.includes(o.statut));
 
   return (
-    <div className="pm-page" style={{ background: BG, minHeight: '100vh', fontFamily: FONT, color: INK }}>
+    <div className="pm-page" style={{ background: BG, minHeight: '100vh', fontFamily: FONT }}>
       <style>{SHARED_CSS}{`
-        .pm-offer{ transition:transform .18s cubic-bezier(.16,1,.3,1), box-shadow .2s ease, border-color .18s ease; }
-        .pm-offer:hover{ transform:translateY(-2px); box-shadow:0 16px 30px -22px rgba(26,21,51,.4); border-color:rgba(34,23,122,.2) !important; }
-        .pm-offer:focus-visible{ outline:2.5px solid ${BRAND}; outline-offset:2px; }
+        .pm-offer{ transition:border-color .15s ease, box-shadow .15s ease; }
+        .pm-offer:hover{ border-color:#C7C9D1 !important; box-shadow:0 4px 14px -8px rgba(17,24,39,.25); }
       `}</style>
       <PortalTopBar active="offres" />
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '22px 16px 40px' : '32px 32px 56px' }}>
-        <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 22 : FS.xxl, letterSpacing: '-.025em' }}>Offres d’emploi</h1>
+      <main style={{ maxWidth: 1080, margin: '0 auto', padding: isMobile ? '22px 16px 40px' : '32px 24px 48px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <h1 style={{ fontSize: isMobile ? 22 : 26, color: INK, letterSpacing: '-0.02em' }}>Vos offres avec Humanup</h1>
 
-        {offres === null && <p style={{ marginTop: 28, fontSize: FS.base, color: FAINT }}>Chargement…</p>}
-        {offres?.length === 0 && (
-          <div style={{ marginTop: 28, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, padding: 28, textAlign: 'center', color: MUTED, fontSize: FS.md }}>
-            Aucune offre en cours.
-          </div>
-        )}
+        {offres === null && <p style={{ fontSize: 14, color: MUTED }}>Chargement…</p>}
+        {offres?.length === 0 && <div style={{ ...CARD, padding: 28, color: MUTED, fontSize: 14 }}>Aucune offre en cours.</div>}
 
-        {open.length > 0 && <OfferList title="En cours" offres={open} />}
-        {closed.length > 0 && <OfferList title="Terminées" offres={closed} muted />}
+        {open.map((o) => <OfferCard key={o.id} o={o} />)}
+        {closed.length > 0 && <h2 style={{ fontSize: 16, color: INK, marginTop: 12 }}>Offres terminées</h2>}
+        {closed.map((o) => <OfferCard key={o.id} o={o} closed />)}
       </main>
     </div>
   );
 }
 
-function OfferList({ title, offres, muted }: { title: string; offres: Offre[]; muted?: boolean }) {
-  return (
-    <section style={{ marginTop: 28 }}>
-      <div style={{ ...LABEL, marginBottom: 10 }}>{title} ({offres.length})</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {offres.map((o) => <OfferCard key={o.id} o={o} muted={muted} />)}
-      </div>
-    </section>
-  );
-}
-
-function OfferCard({ o, muted }: { o: Offre; muted?: boolean }) {
-  const cols = COL_ORDER.filter((c) => c in o.byColumn && c !== 'PERDU');
+function OfferCard({ o, closed }: { o: Offre; closed?: boolean }) {
+  const cols = COL_ORDER.filter((c) => c !== 'PERDU');
   const active = cols.reduce((n, c) => n + (o.byColumn[c] ?? 0), 0);
   const people = [o.commercial, o.consultant].filter(Boolean) as Person[];
+  const meta = [o.localisation, `${active} profil${active > 1 ? 's' : ''} en cours`, o.lastActivity ? `mise à jour ${relTime(o.lastActivity)}` : null].filter(Boolean).join(' · ');
   return (
-    <Link to={`/portail/mandat/${o.id}`} className="pm-offer" style={{ display: 'block', textDecoration: 'none', color: INK, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, padding: '16px 18px', opacity: muted ? 0.8 : 1 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14 }}>
-        <CompanyLogo logo={o.entreprise?.logoUrl} text={o.entreprise?.nom || o.titrePoste} size={44} />
-        <div style={{ minWidth: 0, flex: '1 1 260px' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: FS.lg, fontWeight: 800 }}>{o.titrePoste}</span>
-            {o.toReview > 0 && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: FS.sm, fontWeight: 800, color: BRAND, background: '#EDEBFA', borderRadius: 999, padding: '2px 9px' }}>
-                <BellRing size={12} aria-hidden />{o.toReview} à traiter
-              </span>
-            )}
-            {muted && <span style={{ fontSize: FS.sm, fontWeight: 700, color: MUTED, background: 'rgba(26,21,51,.06)', borderRadius: 999, padding: '2px 9px' }}>{o.statut === 'GAGNE' ? 'Pourvue' : 'Terminée'}</span>}
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 4, fontSize: FS.sm, color: MUTED }}>
-            {o.localisation && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={13} aria-hidden />{o.localisation}</span>}
-            <span>{active} profil{active > 1 ? 's' : ''} en cours</span>
-            {o.lastActivity && <span>Mis à jour {relTime(o.lastActivity)}</span>}
-          </div>
-        </div>
-        {people.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center' }} title={people.map(nameOf).join(' · ')}>
-            {people.map((p, i) => (
-              <span key={i} style={{ marginLeft: i ? -8 : 0, border: '2px solid #fff', borderRadius: '50%' }}>
-                <PersonAvatar name={nameOf(p)} photo={p.avatarUrl} size={30} bg={i ? '#F2F3D8' : BRAND} fg={i ? BRAND : CREAM} />
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-      {/* Mini pipeline : nombre de profils par colonne */}
-      {cols.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
-          {cols.map((c) => {
-            const n = o.byColumn[c] ?? 0;
-            return (
-              <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FS.sm, fontWeight: 700, color: n ? INK : FAINT, background: n ? '#F7F6F0' : 'transparent', border: `1px solid ${n ? LINE : 'transparent'}`, borderRadius: 8, padding: '3px 9px' }}>
-                <span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: COL_ACCENT[c], opacity: n ? 1 : 0.45 }} />
-                {COL_LABELS[c]} <strong style={{ fontWeight: 800 }}>{n}</strong>
-              </span>
-            );
-          })}
-        </div>
-      )}
+    <Link to={`/portail/mandat/${o.id}`} className="pm-offer" style={{ ...CARD, padding: '20px 22px', textDecoration: 'none', color: TEXT, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <span style={{ fontWeight: 700, color: INK, fontSize: 17 }}>{o.titrePoste}</span>
+          <span style={{ fontSize: 14, color: MUTED }}>{meta}</span>
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {closed ? <Pill>{o.statut === 'GAGNE' ? 'Pourvue' : 'Terminée'}</Pill> : o.toReview > 0 ? <Pill strong>{o.toReview} à traiter</Pill> : <Pill>À jour</Pill>}
+          {people.length > 0 && (
+            <span style={{ display: 'flex', alignItems: 'center' }} title={people.map(nameOf).join(' · ')}>
+              {people.map((p, i) => (
+                <span key={i} style={{ marginLeft: i ? -8 : 0, border: '2px solid #fff', borderRadius: '50%', display: 'flex' }}>
+                  <PersonAvatar name={nameOf(p)} photo={p.avatarUrl} size={30} />
+                </span>
+              ))}
+            </span>
+          )}
+        </span>
+      </span>
+      {/* Mini pipeline : nombre de profils par étape */}
+      <span style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))', gap: 8 }}>
+        {cols.map((c) => {
+          const n = o.byColumn[c] ?? 0;
+          return (
+            <span key={c} style={{ background: BG, borderRadius: 10, padding: '8px 10px', display: 'flex', flexDirection: 'column', border: `1px solid ${n ? LINE : 'transparent'}` }}>
+              <span style={{ fontSize: 12, color: MUTED }}>{COL_LABELS[c]}</span>
+              <span style={{ fontWeight: 700, color: n ? INK : MUTED }}>{n}</span>
+            </span>
+          );
+        })}
+      </span>
     </Link>
   );
 }

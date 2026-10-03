@@ -1,45 +1,52 @@
 /**
  * Portail client : éléments partagés (charte, libellés des colonnes, appels API,
  * avatars et barre de navigation (Candidatures / Offres d'emploi / Candidats + cloche).
+ * Même DA que l'espace candidat : Inter, fond gris clair, cartes blanches,
+ * indigo pour l'action, vert pâle pour ce qui demande l'attention.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Bell, ChevronDown, LogOut, UserPlus, ArrowRight, MessageCircle, AtSign, Columns3, Briefcase, Users } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Columns3, Briefcase, Users } from 'lucide-react';
 import { portalStore } from './portal-store';
 
 // ── Charte (contrastes ≥ 4,5:1 sur le fond) ──
-export const INK = '#1A1533';
-export const TEXT = '#453F63';
-export const MUTED = '#5C5875';
-export const FAINT = '#6E6A85';
-export const LINE = 'rgba(26,21,51,.09)';
+export const INK = '#111827';
+export const TEXT = '#374151';
+export const MUTED = '#4B5563';
+export const FAINT = '#4B5563';
+export const LINE = '#E5E7EB';
+export const SOFT = '#F3F4F6';
 export const BRAND = '#22177A';
 export const CREAM = '#E6E9AF';
-export const BG = '#F6F5EF';
-export const FS = { xs: 11, sm: 12, base: 13, md: 14, lg: 16, xl: 20, xxl: 28 } as const;
-export const DISPLAY = "'Archivo Black',sans-serif";
-export const FONT = "'Manrope',sans-serif";
-export const LABEL: React.CSSProperties = { fontSize: FS.sm, fontWeight: 700, color: MUTED };
+export const BG = '#F7F7F8';
+export const FS = { xs: 12, sm: 13, base: 14, md: 14, lg: 17, xl: 20, xxl: 26 } as const;
+export const FONT = '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+export const DISPLAY = FONT;
+export const LABEL: React.CSSProperties = { fontSize: FS.sm, fontWeight: 600, color: MUTED };
+export const CARD: React.CSSProperties = { background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14 };
+export const BTN: React.CSSProperties = { fontFamily: FONT, fontSize: 14, fontWeight: 600, background: BRAND, color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', cursor: 'pointer' };
+export const BTN_GHOST: React.CSSProperties = { ...BTN, background: '#fff', color: TEXT, border: '1px solid #D1D5DB' };
+export const LOGO = 'https://humanup.io/careers/logo.png';
 
 // ── Colonnes du portail ──
 export type Col = 'INBOX' | 'SCREENING' | 'CASE' | 'CULTURE_FIT' | 'OFFRE' | 'ENGAGE' | 'PERDU';
 export const COL_LABELS: Record<Col, string> = {
   INBOX: 'Inbox', SCREENING: 'Screening', CASE: 'Case', CULTURE_FIT: 'Culture Fit', OFFRE: 'Offre', ENGAGE: 'Engagé', PERDU: 'Perdu',
 };
-export const COL_ACCENT: Record<Col, string> = {
-  INBOX: '#475467', SCREENING: '#2A6BD8', CASE: '#D97F1E', CULTURE_FIT: '#7A5BD1', OFFRE: '#B8921A', ENGAGE: '#2F8A4A', PERDU: '#8A8699',
-};
-export const COL_TINT: Record<Col, string> = {
-  INBOX: '#EEF0F3', SCREENING: '#EAF1FC', CASE: '#FCF1E4', CULTURE_FIT: '#F1ECFC', OFFRE: '#FAF4DE', ENGAGE: '#E7F3EA', PERDU: '#F0EFF3',
+export const COL_HINT: Record<Col, string> = {
+  INBOX: 'Profils présentés par Humanup', SCREENING: 'Premier échange avec vous', CASE: 'Étude de cas', CULTURE_FIT: 'Rencontre avec l’équipe',
+  OFFRE: 'Proposition en cours', ENGAGE: 'Recrutement signé', PERDU: 'Profils écartés',
 };
 export const COL_ORDER: Col[] = ['INBOX', 'SCREENING', 'CASE', 'CULTURE_FIT', 'OFFRE', 'ENGAGE', 'PERDU'];
 
 export type Decision = 'RENCONTRER' | 'A_DISCUTER' | 'ECARTER';
 export const DECISION_LABEL: Record<Decision, string> = { RENCONTRER: 'À rencontrer', A_DISCUTER: 'À discuter', ECARTER: 'Écarté' };
-export const DECISION_TONE: Record<Decision, { bg: string; fg: string }> = {
-  RENCONTRER: { bg: '#E6F2E9', fg: '#256238' }, A_DISCUTER: { bg: '#FAF0DF', fg: '#7A5A1E' }, ECARTER: { bg: '#F7E8E5', fg: '#9E2F1A' },
-};
+
+// Pastille neutre (étape, avis) : une seule couleur, le libellé porte le sens.
+export function Pill({ children, strong }: { children: React.ReactNode; strong?: boolean }) {
+  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: FS.sm, fontWeight: 600, borderRadius: 999, padding: '2px 10px', whiteSpace: 'nowrap', background: strong ? CREAM : SOFT, color: strong ? BRAND : TEXT }}>{children}</span>;
+}
 
 // ── API ──
 export function portalFetch(path: string, init?: RequestInit) {
@@ -74,38 +81,48 @@ export function useIsMobile(max = 760) {
   }, [q]);
   return m;
 }
+export function useInterFont() {
+  useEffect(() => {
+    if (document.getElementById('espace-inter')) return;
+    const l = document.createElement('link');
+    l.id = 'espace-inter';
+    l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap';
+    document.head.appendChild(l);
+  }, []);
+}
 
 // Logo de l'entreprise, sinon première lettre du texte.
 export function CompanyLogo({ logo, text, size }: { logo?: string | null; text: string; size: number }) {
   const [broken, setBroken] = useState(false);
   const box: React.CSSProperties = { flexShrink: 0, width: size, height: size, borderRadius: Math.round(size * 0.26), overflow: 'hidden', background: '#fff', border: `1px solid ${LINE}` };
   if (logo && !broken) return <img src={logo} alt="" onError={() => setBroken(true)} style={{ ...box, objectFit: 'contain', display: 'block', padding: Math.round(size * 0.12) }} />;
-  return <span aria-hidden style={{ ...box, color: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: DISPLAY, fontSize: Math.round(size * 0.4) }}>{text.trim()[0]?.toUpperCase()}</span>;
+  return <span aria-hidden style={{ ...box, color: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: Math.round(size * 0.4) }}>{text.trim()[0]?.toUpperCase()}</span>;
 }
 
-// Photo (candidat ou membre HumanUp), sinon initiales.
-export function PersonAvatar({ name, photo, size, radius = '50%', bg = BRAND, fg = CREAM }: { name: string; photo?: string | null; size: number; radius?: number | string; bg?: string; fg?: string }) {
+// Photo (candidat ou membre Humanup), sinon initiales sur vert pâle. `ring` = liseré vert pâle (équipe Humanup).
+export function PersonAvatar({ name, photo, size, radius = '50%', bg = CREAM, fg = BRAND, ring }: { name: string; photo?: string | null; size: number; radius?: number | string; bg?: string; fg?: string; ring?: boolean }) {
   const [broken, setBroken] = useState(false);
-  const box: React.CSSProperties = { flexShrink: 0, width: size, height: size, borderRadius: radius, overflow: 'hidden' };
+  const box: React.CSSProperties = { flexShrink: 0, width: size, height: size, borderRadius: radius, overflow: 'hidden', boxSizing: 'border-box', ...(ring ? { border: `3px solid ${CREAM}` } : {}) };
   if (photo && !broken) return <img src={photo} alt="" onError={() => setBroken(true)} style={{ ...box, objectFit: 'cover', display: 'block' }} />;
-  return <span aria-hidden style={{ ...box, background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: DISPLAY, fontSize: Math.max(9, Math.round(size * 0.34)) }}>{initialsOf(name)}</span>;
+  return <span aria-hidden style={{ ...box, background: ring ? BRAND : bg, color: ring ? CREAM : fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: Math.max(10, Math.round(size * 0.36)) }}>{initialsOf(name)}</span>;
 }
 
 export const SHARED_CSS = `
+  .pm-page{ font-size:15px; line-height:1.55; color:${TEXT}; }
+  .pm-page h1, .pm-page h2, .pm-page h3, .pm-page p{ margin:0; }
   .pm-focus:focus{ outline:none; }
-  .pm-focus:focus-visible, .pm-btn:focus-visible, .pm-tab:focus-visible, .pm-chip:focus-visible, .pm-nav:focus-visible, .pm-row:focus-visible{ outline:2.5px solid ${BRAND}; outline-offset:2px; border-radius:12px; }
-  .pm-btn{ transition:transform .15s ease, box-shadow .15s ease, background .15s ease; }
-  .pm-btn:hover:not(:disabled){ transform:translateY(-1px); box-shadow:0 8px 18px -12px rgba(26,21,51,.35); }
+  .pm-page button:focus-visible, .pm-page a:focus-visible, .pm-page input:focus-visible, .pm-page textarea:focus-visible, .pm-page select:focus-visible, .pm-focus:focus-visible{ outline:2px solid #6366F1; outline-offset:2px; }
+  .pm-btn{ transition:background .15s ease, border-color .15s ease; }
   .pm-chip{ transition:background .15s ease, border-color .15s ease; }
-  .pm-chip:hover:not(:disabled){ border-color:rgba(34,23,122,.3) !important; }
-  .pm-nav{ transition:background .15s ease, color .15s ease; }
-  .pm-nav:hover{ background:rgba(34,23,122,.06); color:${INK} !important; }
+  .pm-nav{ transition:color .15s ease; }
+  .pm-nav:hover{ color:${BRAND} !important; }
   .pm-icon{ transition:background .15s ease; }
-  .pm-icon:hover{ background:rgba(34,23,122,.06); }
+  .pm-icon:hover{ background:${SOFT}; }
   .pm-row{ transition:background .12s ease; }
-  .pm-row:hover{ background:#FAFAF6; }
+  .pm-row:hover{ background:#FAFAFB; }
   .pm-scroll::-webkit-scrollbar{ height:8px; width:8px; }
-  .pm-scroll::-webkit-scrollbar-thumb{ background:rgba(26,21,51,.16); border-radius:99px; }
+  .pm-scroll::-webkit-scrollbar-thumb{ background:#D1D5DB; border-radius:99px; }
   @media (max-width: 760px){ .pm-hide-sm{ display:none !important; } .pm-page{ padding-bottom:72px; } }
 `;
 
@@ -116,6 +133,7 @@ interface Me { email: string; name: string; entreprise: string | null; homeManda
 export function PortalTopBar({ active, mandatId }: { active: Tab; mandatId?: string }) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  useInterFont();
   const [me, setMe] = useState<Me | null>(null);
   const [menu, setMenu] = useState(false);
   useEffect(() => {
@@ -126,64 +144,65 @@ export function PortalTopBar({ active, mandatId }: { active: Tab; mandatId?: str
   }, [navigate]);
   const candidaturesHref = `/portail/mandat/${mandatId || lastMandat.get() || me?.homeMandatId || ''}`;
   const items: Array<[Tab, string, string, React.ReactNode]> = [
-    ['candidatures', 'Candidatures', candidaturesHref, <Columns3 size={19} aria-hidden />],
-    ['offres', 'Offres d’emploi', '/portail/offres', <Briefcase size={19} aria-hidden />],
-    ['candidats', 'Candidats', '/portail/candidats', <Users size={19} aria-hidden />],
+    ['candidatures', 'Candidatures', candidaturesHref, <Columns3 size={20} aria-hidden />],
+    ['offres', 'Offres d’emploi', '/portail/offres', <Briefcase size={20} aria-hidden />],
+    ['candidats', 'Candidats', '/portail/candidats', <Users size={20} aria-hidden />],
   ];
   function logout() { const m = lastMandat.get(); portalStore.clear(); navigate(`/portail/login${m ? `?m=${m}` : ''}`); }
 
   return (
-    <header style={{ position: 'sticky', top: 0, zIndex: 40, display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 18, height: 58, padding: isMobile ? '0 12px' : '0 24px', background: '#fff', borderBottom: `1px solid ${LINE}` }}>
-      <Link to="/portail/offres" aria-label="HumanUp, accueil" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-        <span style={{ width: 32, height: 32, borderRadius: 9, background: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <img src="/brand/logo-mark-cream.png" alt="" style={{ width: 19, height: 19 }} />
-        </span>
-      </Link>
-      {isMobile && <span style={{ fontFamily: DISPLAY, fontSize: 15, color: BRAND, letterSpacing: '.01em' }}>HUMANUP</span>}
-      {/* Mobile : barre d'onglets en bas de l'écran */}
-      {isMobile && (
-        <nav aria-label="Navigation principale" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 45, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: '#fff', borderTop: `1px solid ${LINE}`, paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          {items.map(([key, label, href, icon]) => {
+    <header style={{ position: 'sticky', top: 0, zIndex: 40, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, minHeight: 64, padding: isMobile ? '0 16px' : '0 32px', background: '#fff', borderBottom: `1px solid ${LINE}`, fontFamily: FONT }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 28, minWidth: 0 }}>
+        <Link to="/portail/offres" aria-label="Humanup, accueil" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', minWidth: 0 }}>
+          <img src={LOGO} alt="" style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0 }} />
+          <span style={{ fontWeight: 700, color: INK, fontSize: 16 }}>Humanup</span>
+          <span style={{ color: MUTED, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{isMobile ? (me?.entreprise ? `· ${me.entreprise}` : '') : `Espace client${me?.entreprise ? ` · ${me.entreprise}` : ''}`}</span>
+        </Link>
+        <nav aria-label="Navigation principale" className="pm-hide-sm" style={{ display: 'flex', gap: 4, fontSize: 14, fontWeight: 600 }}>
+          {items.map(([key, label, href]) => {
             const on = active === key;
             return (
               <Link key={key} to={href} className="pm-nav" aria-current={on ? 'page' : undefined}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '9px 4px 8px', fontSize: FS.xs, fontWeight: on ? 800 : 600, color: on ? BRAND : MUTED, textDecoration: 'none' }}>
+                style={{ color: on ? BRAND : MUTED, textDecoration: 'none', padding: '21px 10px 19px', borderBottom: `2px solid ${on ? BRAND : 'transparent'}`, whiteSpace: 'nowrap' }}>
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+      {/* Mobile : barre d'onglets en bas de l'écran */}
+      {isMobile && (
+        <nav aria-label="Navigation principale" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 45, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: '#fff', borderTop: `1px solid ${LINE}`, paddingBottom: 'env(safe-area-inset-bottom)', fontSize: 12, fontWeight: 600 }}>
+          {items.map(([key, label, href, icon]) => {
+            const on = active === key;
+            return (
+              <Link key={key} to={href} aria-current={on ? 'page' : undefined}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: '10px 0', color: on ? BRAND : MUTED, textDecoration: 'none' }}>
                 {icon}{label === 'Offres d’emploi' ? 'Offres' : label}
               </Link>
             );
           })}
         </nav>
       )}
-      <nav aria-label="Navigation principale" className="pm-scroll pm-hide-sm" style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', minWidth: 0 }}>
-        {items.map(([key, label, href]) => {
-          const on = active === key;
-          return (
-            <Link key={key} to={href} className="pm-nav" aria-current={on ? 'page' : undefined}
-              style={{ flexShrink: 0, fontSize: FS.md, fontWeight: on ? 800 : 600, color: on ? BRAND : MUTED, background: on ? '#EDEBFA' : 'transparent', borderRadius: 9, padding: '7px 12px', textDecoration: 'none', whiteSpace: 'nowrap' }}>
-              {label}
-            </Link>
-          );
-        })}
-      </nav>
-      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 14, fontSize: 14, flexShrink: 0 }}>
         <NotificationsBell />
         <div style={{ position: 'relative' }}>
-          <button className="pm-icon" onClick={() => setMenu((v) => !v)} aria-haspopup="menu" aria-expanded={menu}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, border: 'none', background: 'transparent', borderRadius: 10, padding: '5px 8px', cursor: 'pointer', color: INK }}>
-            <PersonAvatar name={me?.name || '?'} size={28} radius={8} />
-            {!isMobile && <span style={{ fontSize: FS.base, fontWeight: 700, maxWidth: 160, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{me?.name ?? ''}</span>}
-            <ChevronDown size={15} aria-hidden color={MUTED} />
+          <button className="pm-icon" onClick={() => setMenu((v) => !v)} aria-haspopup="menu" aria-expanded={menu} aria-label={isMobile ? 'Mon compte' : undefined}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, border: 'none', background: 'transparent', borderRadius: 10, padding: '4px 6px', cursor: 'pointer', color: MUTED, fontFamily: FONT, fontSize: 14 }}>
+            {!isMobile && <span style={{ maxWidth: 180, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{me?.name ?? ''}</span>}
+            <PersonAvatar name={me?.name || '?'} size={32} />
+            <ChevronDown size={15} aria-hidden />
           </button>
           {menu && (
             <>
               <div onClick={() => setMenu(false)} style={{ position: 'fixed', inset: 0, zIndex: 50 }} />
-              <div role="menu" style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 51, width: 240, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, boxShadow: '0 18px 40px -20px rgba(26,21,51,.45)', padding: 6 }}>
+              <div role="menu" style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 51, width: 240, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, boxShadow: '0 12px 32px -12px rgba(17,24,39,.25)', padding: 6 }}>
                 <div style={{ padding: '8px 10px 10px', borderBottom: `1px solid ${LINE}`, marginBottom: 4 }}>
-                  <div style={{ fontSize: FS.base, fontWeight: 800, color: INK }}>{me?.name}</div>
-                  <div style={{ fontSize: FS.sm, color: FAINT, marginTop: 2 }}>{me?.email}</div>
+                  <div style={{ fontSize: FS.base, fontWeight: 600, color: INK }}>{me?.name}</div>
+                  <div style={{ fontSize: FS.sm, color: MUTED, marginTop: 2 }}>{me?.email}</div>
                   {me?.entreprise && <div style={{ fontSize: FS.sm, color: MUTED, marginTop: 2 }}>{me.entreprise}</div>}
                 </div>
-                <button role="menuitem" onClick={logout} className="pm-icon" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, fontSize: FS.base, fontWeight: 600, color: INK, background: 'transparent', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer', textAlign: 'left' }}>
+                <button role="menuitem" onClick={logout} className="pm-icon" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, fontFamily: FONT, fontSize: FS.base, fontWeight: 600, color: INK, background: 'transparent', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer', textAlign: 'left' }}>
                   <LogOut size={15} aria-hidden />Déconnexion
                 </button>
               </div>
@@ -227,44 +246,35 @@ export function NotificationsBell() {
     close();
     navigate(`/portail/mandat/${n.mandatId}${n.candidatureId ? `?c=${n.candidatureId}${n.kind === 'COMMENT' || n.kind === 'MENTION' ? '&t=commentaires' : ''}` : ''}`);
   }
-  const icon = (k: Notif['kind']) => (k === 'NEW' ? <UserPlus size={12} /> : k === 'STAGE' ? <ArrowRight size={12} /> : k === 'MENTION' ? <AtSign size={12} /> : <MessageCircle size={12} />);
   const unread = data?.unread ?? 0;
 
   return (
     <div style={{ position: 'relative' }}>
       <button className="pm-icon" onClick={() => (open ? close() : setOpen(true))} aria-haspopup="dialog" aria-expanded={open}
-        aria-label={unread > 0 ? `Notifications, ${unread} non lue${unread > 1 ? 's' : ''}` : 'Notifications'}
-        style={{ position: 'relative', width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: open ? 'rgba(34,23,122,.06)' : 'transparent', borderRadius: 10, cursor: 'pointer', color: INK }}>
-        <Bell size={19} aria-hidden />
-        {unread > 0 && <span aria-hidden style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, borderRadius: 99, background: '#D1356B', color: '#fff', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', border: '2px solid #fff' }}>{unread > 9 ? '9+' : unread}</span>}
+        aria-label={unread > 0 ? `Notifications, ${unread} nouvelle${unread > 1 ? 's' : ''}` : 'Notifications'}
+        style={{ position: 'relative', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${LINE}`, background: open ? SOFT : '#fff', borderRadius: 10, cursor: 'pointer', color: TEXT }}>
+        <Bell size={18} aria-hidden />
+        {unread > 0 && <span aria-hidden style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, borderRadius: 9, background: BRAND, color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', boxSizing: 'border-box' }}>{unread > 9 ? '9+' : unread}</span>}
       </button>
       {open && (
         <>
           <div onClick={close} style={{ position: 'fixed', inset: 0, zIndex: 50 }} />
-          <div ref={panel} role="dialog" aria-label="Notifications" style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 51, width: 380, maxWidth: 'calc(100vw - 24px)', background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, boxShadow: '0 24px 50px -24px rgba(26,21,51,.5)', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: `1px solid ${LINE}` }}>
-              <span style={{ fontSize: FS.md, fontWeight: 800, color: INK }}>Notifications</span>
-              {unread > 0 && <span style={{ fontSize: FS.sm, color: FAINT }}>{unread} nouvelle{unread > 1 ? 's' : ''}</span>}
+          <div ref={panel} role="dialog" aria-label="Notifications" style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 51, width: 400, maxWidth: 'calc(100vw - 24px)', background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, boxShadow: '0 16px 40px -16px rgba(17,24,39,.3)', overflow: 'hidden', fontFamily: FONT }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: `1px solid ${LINE}` }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: INK }}>Notifications</span>
+              {unread > 0 && <span style={{ fontSize: FS.sm, color: MUTED }}>{unread} nouvelle{unread > 1 ? 's' : ''}</span>}
             </div>
             <div className="pm-scroll" style={{ maxHeight: 440, overflowY: 'auto' }}>
-              {!data && <p style={{ padding: 16, fontSize: FS.base, color: FAINT }}>Chargement…</p>}
-              {data?.items.length === 0 && (
-                <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: FS.base, color: FAINT }}>
-                  Aucune notification.
-                </div>
-              )}
-              {data?.items.map((n) => (
-                <button key={n.id} onClick={() => go(n)} className="pm-row" style={{ width: '100%', display: 'flex', gap: 11, alignItems: 'flex-start', textAlign: 'left', padding: '11px 14px', background: n.unread ? '#F7F6FD' : '#fff', border: 'none', borderBottom: `1px solid ${LINE}`, cursor: 'pointer' }}>
-                  <span style={{ position: 'relative', flexShrink: 0 }}>
-                    <PersonAvatar name={n.who || n.title} photo={n.photo} size={34} radius={10} />
-                    <span aria-hidden style={{ position: 'absolute', right: -4, bottom: -4, width: 18, height: 18, borderRadius: 99, background: '#fff', border: `1px solid ${LINE}`, color: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon(n.kind)}</span>
+              {!data && <p style={{ padding: '16px 20px', fontSize: FS.base, color: MUTED }}>Chargement…</p>}
+              {data?.items.length === 0 && <p style={{ padding: '24px 20px', fontSize: FS.base, color: MUTED }}>Aucune notification.</p>}
+              {data?.items.map((n, i) => (
+                <button key={n.id} onClick={() => go(n)} className="pm-row" style={{ width: '100%', display: 'flex', gap: 14, alignItems: 'flex-start', textAlign: 'left', padding: '14px 20px', background: '#fff', border: 'none', borderTop: i ? `1px solid ${SOFT}` : 'none', cursor: 'pointer', fontFamily: FONT, color: TEXT }}>
+                  <span aria-label={n.unread ? 'Non lue' : undefined} style={{ flexShrink: 0, width: 10, height: 10, borderRadius: '50%', marginTop: 6, background: n.unread ? BRAND : LINE }} />
+                  <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: FS.base, fontWeight: 600, color: INK, lineHeight: 1.4 }}>{n.title}</span>
+                    {n.body && <span style={{ fontSize: FS.base, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>{n.body}</span>}
+                    <span style={{ fontSize: FS.sm, color: MUTED }}>{relTime(n.at)}</span>
                   </span>
-                  <span style={{ minWidth: 0, flex: 1 }}>
-                    <span style={{ display: 'block', fontSize: FS.base, fontWeight: n.unread ? 800 : 600, color: INK, lineHeight: 1.35 }}>{n.title}</span>
-                    {n.body && <span style={{ display: 'block', fontSize: FS.sm, color: MUTED, marginTop: 2, lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.body}</span>}
-                    <span style={{ display: 'block', fontSize: FS.xs, color: FAINT, marginTop: 3 }}>{relTime(n.at)}</span>
-                  </span>
-                  {n.unread && <span aria-label="Non lue" style={{ flexShrink: 0, width: 8, height: 8, borderRadius: 99, background: '#D1356B', marginTop: 6 }} />}
                 </button>
               ))}
             </div>
