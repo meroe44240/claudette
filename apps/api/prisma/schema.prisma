@@ -313,6 +313,8 @@ model Mandat {
   // "Aperçu client" du kanban. Par défaut : les étapes où le client a du
   // contexte à voir (Screening, Case, Culture Fit, Offre, Engagé, Perdu).
   visibleStages    StageCandidature[] @default([ENVOYE_CLIENT, ENTRETIEN_CLIENT, PROCESS, OFFRE, PLACE, REFUSE])
+  // Lien de prise de rendez-vous du client (Calendly, etc.) : si renseigné, « Rencontrer » envoie le recruteur réserver un créneau.
+  clientBookingUrl String?      @map("client_booking_url") @db.VarChar(500)
   // Contrat mandat (envoi signature). Placeholder tant qu'aucun provider
   // (DocuSign/Yousign) n'est branché — trace en base seulement.
   contractStatus   ContractStatus @default(DRAFT)
@@ -566,6 +568,11 @@ model Candidature {
   // Intérêt confirmé par le candidat pour ce poste (via l'email de confirmation)
   // Colonne du portail client (Case / Culture Fit partagent l'étape PROCESS)
   portalStage         String?          @map("portal_stage") @db.VarChar(20)
+  // Portail client : créneaux proposés par le client ({ slots, who, by, proposedAt, chosen }),
+  // débrief après entretien ({ rating, strengths, concerns, by, at }) et dernière relance « profil sans avis ».
+  portalSlots         Json?            @map("portal_slots")
+  portalDebrief       Json?            @map("portal_debrief")
+  portalRemindedAt    DateTime?        @map("portal_reminded_at") @db.Timestamptz()
   interetConfirme     Boolean          @default(false) @map("interet_confirme")
   interetConfirmeDate DateTime?        @db.Timestamptz() @map("interet_confirme_date")
   createdById         String?          @db.Uuid

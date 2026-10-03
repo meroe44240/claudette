@@ -116,6 +116,13 @@ export default async function candidateSpaceRouter(fastify: FastifyInstance) {
     schema: { tags: ['Espace candidat'], params: idParams }, preHandler: [candidateAuthenticate],
     handler: (request) => service.processDetail(request.candidateAccount!.candidatId, (request.params as { id: string }).id),
   });
+  fastify.post('/processes/:id/slot', {
+    schema: { tags: ['Espace candidat'], params: idParams }, preHandler: [candidateAuthenticate],
+    handler: (request) => {
+      const body = z.object({ slot: z.string().datetime({ offset: true }) }).parse(request.body);
+      return service.chooseSlot(request.candidateAccount!, (request.params as { id: string }).id, body.slot);
+    },
+  });
   fastify.get('/expectations', {
     schema: { tags: ['Espace candidat'] }, preHandler: [candidateAuthenticate],
     handler: (request) => service.getExpectations(request.candidateAccount!),

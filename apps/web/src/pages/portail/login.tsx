@@ -5,8 +5,9 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Eye, EyeOff, AlertCircle, ArrowLeft, MailCheck } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { portalStore, hasValidSession } from './portal-store';
+import { BG, BRAND, BTN, CARD, CREAM, FONT, INK, LOGO, MUTED, SHARED_CSS, SOFT, PersonAvatar, useInterFont } from './portal-ui';
 
 interface LoginResponse { token: string; access: { id: string; mandatId: string; email: string } }
 interface PublicInfo { titrePoste: string; entreprise: string | null; consultant: string | null; consultantPhoto?: string | null; commercial: string | null; commercialPhoto?: string | null }
@@ -23,11 +24,14 @@ export default function PortalLoginPage() {
   const [info, setInfo] = useState<PublicInfo | null>(null);
   const [mode, setMode] = useState<'login' | 'reset' | 'reset-sent'>('login');
   const expired = params.get('expired') === '1';
+  // Lien d'un email (profil + action) : on y revient après la connexion.
+  const next = ['c', 'a', 't'].filter((k) => params.get(k)).map((k) => `${k}=${encodeURIComponent(params.get(k)!)}`).join('&');
+  useInterFont();
 
   useEffect(() => {
-    document.title = 'Connexion | HumanUp';
+    document.title = 'Connexion | Humanup';
     // Déjà connecté (ex. lien ouvert depuis un email) : on entre directement.
-    if (hasValidSession(mandatId || null)) { navigate(mandatId ? `/portail/mandat/${mandatId}` : '/portail/offres', { replace: true }); return; }
+    if (hasValidSession(mandatId || null)) { navigate(mandatId ? `/portail/mandat/${mandatId}${next ? `?${next}` : ''}` : '/portail/offres', { replace: true }); return; }
     if (!mandatId) return;
     void fetch(`/api/v1/portal/public/mandat/${mandatId}`).then((r) => (r.ok ? r.json() : null)).then(setInfo).catch(() => {});
   }, [mandatId, navigate]);
@@ -54,99 +58,86 @@ export default function PortalLoginPage() {
       portalStore.set('portal_token', data.token);
       portalStore.set('portal_mandat_id', data.access.mandatId);
       portalStore.set('portal_email', data.access.email);
-      navigate(`/portail/mandat/${data.access.mandatId}`);
+      navigate(`/portail/mandat/${data.access.mandatId}${next ? `?${next}` : ''}`);
     } catch (err) {
       setError((err as Error).message);
     } finally { setLoading(false); }
   }
 
-  const field: React.CSSProperties = { width: '100%', fontSize: 14, padding: '11px 13px', borderRadius: 10, border: '1px solid rgba(26,21,51,.16)', background: '#fff', color: '#1A1533' };
-  const label: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 700, color: '#453F63', marginBottom: 6 };
+  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', fontFamily: FONT, fontSize: 14, padding: '10px 12px', borderRadius: 10, border: '1px solid #D1D5DB', background: '#fff', color: INK };
+  const label: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: INK };
+  const link: React.CSSProperties = { fontFamily: FONT, fontSize: 14, fontWeight: 600, color: BRAND, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 };
+  const team = info ? ([[info.commercial, info.commercialPhoto, 'Votre contact Humanup'], [info.consultant, info.consultantPhoto, 'Consultant sur le poste']] as const).filter(([n]) => n) : [];
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F6F5EF', fontFamily: "'Manrope',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 16px' }}>
-      <style>{`
-        .pl-fld{ transition:border-color .15s ease, box-shadow .15s ease; }
-        .pl-fld:focus{ outline:none; border-color:#22177A; box-shadow:0 0 0 3px rgba(34,23,122,.12); }
-        .pl-card button:focus-visible{ outline:2.5px solid #22177A; outline-offset:2px; border-radius:8px; }
-        .pl-cta{ transition:background .15s ease; }
-        .pl-cta:hover:not(:disabled){ background:#1A1260 !important; }
-      `}</style>
-
-      <div className="pl-card" style={{ width: '100%', maxWidth: 400 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 22 }}>
-          <img src="/brand/logo-mark-navy.png" alt="" style={{ width: 28, height: 28 }} />
-          <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, letterSpacing: '.01em', color: '#22177A' }}>HUMANUP</span>
+    <div className="pm-page" style={{ minHeight: '100vh', background: BG, fontFamily: FONT, padding: '56px 20px', boxSizing: 'border-box', display: 'flex', justifyContent: 'center' }}>
+      <style>{SHARED_CSS}</style>
+      <div style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img src={LOGO} alt="" style={{ width: 36, height: 36, borderRadius: '50%' }} />
+          <span style={{ fontWeight: 700, color: INK, fontSize: 16 }}>Humanup</span>
+          <span style={{ color: MUTED, fontSize: 14 }}>Espace client</span>
         </div>
 
-        <form onSubmit={mode === 'login' ? handleSubmit : handleReset} style={{ background: '#fff', border: '1px solid rgba(26,21,51,.09)', borderRadius: 16, padding: 28 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: '#1A1533' }}>{mode === 'login' ? 'Connexion' : 'Mot de passe oublié'}</h1>
-
-          {info && mode === 'login' && (
-            <div style={{ marginTop: 14, paddingBottom: 16, borderBottom: '1px solid rgba(26,21,51,.08)' }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#1A1533' }}>{info.titrePoste}</div>
-              {info.entreprise && <div style={{ fontSize: 13, color: '#5C5875', marginTop: 2 }}>{info.entreprise}</div>}
-              {(info.consultant || info.commercial) && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 12 }}>
-                  {([[info.commercial, info.commercialPhoto, 'Commercial'], [info.consultant, info.consultantPhoto, 'Consultant']] as const).filter(([n]) => n).map(([n, photo, role]) => (
-                    <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {photo
-                        ? <img src={photo} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
-                        : <span aria-hidden style={{ width: 28, height: 28, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>{(n ?? '').split(' ').map((w) => w[0]).slice(0, 2).join('')}</span>}
-                      <div style={{ lineHeight: 1.25 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#1A1533' }}>{n}</div>
-                        <div style={{ fontSize: 12, color: '#5C5875' }}>{role}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {mode === 'reset' && <p style={{ fontSize: 13.5, color: '#5C5875', marginTop: 6 }}>Un nouveau mot de passe vous sera envoyé par email.</p>}
+        <form onSubmit={mode === 'login' ? handleSubmit : handleReset} style={{ ...CARD, padding: 28, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <h1 style={{ fontSize: 22, color: INK, letterSpacing: '-0.02em' }}>{mode === 'login' ? 'Suivez vos recrutements' : 'Mot de passe oublié'}</h1>
+            {mode === 'login' && info && <p style={{ fontSize: 14, color: MUTED }}>{info.titrePoste}{info.entreprise ? ` chez ${info.entreprise}` : ''}</p>}
+            {mode === 'reset' && <p style={{ fontSize: 14, color: MUTED }}>Un nouveau mot de passe vous sera envoyé par email.</p>}
+          </div>
 
           {expired && mode === 'login' && (
-            <div role="status" style={{ marginTop: 14, borderRadius: 10, background: '#EDEBFA', padding: '10px 12px', fontSize: 13, color: '#22177A' }}>
+            <div role="status" style={{ borderRadius: 10, background: CREAM, padding: '10px 12px', fontSize: 14, color: BRAND }}>
               Votre session a expiré, reconnectez-vous.
             </div>
           )}
 
           {mode === 'reset-sent' ? (
-            <div role="status" style={{ display: 'flex', gap: 10, marginTop: 16, borderRadius: 10, background: '#E7F3EA', padding: 12, fontSize: 13.5, lineHeight: 1.5, color: '#256238' }}>
-              <MailCheck size={18} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
-              <span>Si un accès existe pour <strong>{email}</strong>, un nouveau mot de passe vient d’y être envoyé.</span>
+            <div role="status" style={{ borderRadius: 10, background: SOFT, padding: 12, fontSize: 14, lineHeight: 1.5 }}>
+              Si un accès existe pour <strong style={{ color: INK }}>{email}</strong>, un nouveau mot de passe vient d’y être envoyé.
             </div>
           ) : (<>
-            <div style={{ marginTop: 18 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label htmlFor="pl-email" style={label}>Email</label>
-              <input id="pl-email" className="pl-fld" type="email" value={email} onChange={e => { setEmail(e.target.value); setError(''); }} placeholder="prenom@entreprise.com" required autoFocus style={field} />
+              <input id="pl-email" type="email" autoComplete="email" value={email} onChange={e => { setEmail(e.target.value); setError(''); }} required autoFocus style={field} />
             </div>
 
             {mode === 'login' && (
-              <div style={{ marginTop: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                  <label htmlFor="pl-pwd" style={label}>Mot de passe</label>
-                  <button type="button" onClick={() => { setMode('reset'); setError(''); }} style={{ fontSize: 13, fontWeight: 600, color: '#22177A', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}>Mot de passe oublié ?</button>
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label htmlFor="pl-pwd" style={label}>Mot de passe</label>
                 <div style={{ position: 'relative' }}>
-                  <input id="pl-pwd" className="pl-fld" type={show ? 'text' : 'password'} value={password} onChange={e => { setPassword(e.target.value); setError(''); }} required style={{ ...field, paddingRight: 42 }} />
-                  <button type="button" aria-label={show ? 'Masquer le mot de passe' : 'Afficher le mot de passe'} aria-pressed={show} onClick={() => setShow(s => !s)} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', cursor: 'pointer', color: '#5C5875' }}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                  <input id="pl-pwd" type={show ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => { setPassword(e.target.value); setError(''); }} required style={{ ...field, paddingRight: 44 }} />
+                  <button type="button" aria-label={show ? 'Masquer le mot de passe' : 'Afficher le mot de passe'} aria-pressed={show} onClick={() => setShow(s => !s)} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', borderRadius: 8, cursor: 'pointer', color: MUTED }}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
                 </div>
               </div>
             )}
 
-            {error && <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13, color: '#B3261E', fontWeight: 600 }}><AlertCircle size={15} style={{ flexShrink: 0 }} />{error}</div>}
+            {error && <div role="alert" style={{ fontSize: 14, color: '#B42318', fontWeight: 600 }}>{error}</div>}
 
-            <button type="submit" disabled={loading} className="pl-cta" style={{ width: '100%', marginTop: 20, fontWeight: 700, fontSize: 14.5, background: '#22177A', color: '#fff', border: 'none', borderRadius: 10, padding: 12, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.7 : 1 }}>
+            <button type="submit" disabled={loading} style={{ ...BTN, fontSize: 15, padding: '12px 16px', cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.7 : 1 }}>
               {mode === 'login' ? (loading ? 'Connexion…' : 'Se connecter') : (loading ? 'Envoi…' : 'Envoyer')}
             </button>
           </>)}
 
-          {mode !== 'login' && (
-            <button type="button" onClick={() => setMode('login')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 16, fontSize: 13.5, fontWeight: 600, color: '#22177A', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}><ArrowLeft size={15} aria-hidden />Retour</button>
-          )}
+          {mode === 'login'
+            ? <button type="button" onClick={() => { setMode('reset'); setError(''); }} style={{ ...link, alignSelf: 'center' }}>Mot de passe oublié</button>
+            : <button type="button" onClick={() => setMode('login')} style={{ ...link, alignSelf: 'center' }}>Retour à la connexion</button>}
         </form>
+
+        {team.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
+            {team.map(([n, photo, role]) => (
+              <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <PersonAvatar name={n ?? ''} photo={photo} size={36} ring />
+                <span style={{ display: 'flex', flexDirection: 'column', fontSize: 13, lineHeight: 1.3 }}>
+                  <span style={{ fontWeight: 600, color: INK }}>{n}</span>
+                  <span style={{ color: MUTED }}>{role}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <p style={{ fontSize: 14, color: MUTED }}>Un souci pour vous connecter ? Écrivez à <a href="mailto:meroe@humanup.io" style={{ color: BRAND }}>meroe@humanup.io</a></p>
       </div>
     </div>
   );

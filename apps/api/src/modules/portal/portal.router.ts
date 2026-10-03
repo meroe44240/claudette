@@ -258,6 +258,45 @@ export default async function portalRouter(fastify: FastifyInstance) {
     },
   });
 
+  // POST /portal/candidatures/:id/meet : « Rencontrer » (lien d'agenda du client, ou 1 à 3 créneaux)
+  fastify.post('/candidatures/:id/meet', {
+    schema: { tags: ['Portal'], params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } } },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      const input = z.object({
+        slots: z.array(z.string().datetime({ offset: true })).max(3).optional(),
+        interlocuteurClient: z.string().max(255).optional(),
+      }).parse(request.body);
+      return portalService.requestMeeting({
+        portalAccessId: request.portal!.portalAccessId,
+        mandatId: await portalService.scopeCandidature(request.portal!, id),
+        candidatureId: id,
+        ...input,
+      });
+    },
+  });
+
+  // POST /portal/candidatures/:id/debrief : débrief du client après un entretien
+  fastify.post('/candidatures/:id/debrief', {
+    schema: { tags: ['Portal'], params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } } },
+    preHandler: [portalAuthenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      const input = z.object({
+        rating: z.number().int().min(1).max(5),
+        strengths: z.string().max(2000).optional(),
+        concerns: z.string().max(2000).optional(),
+      }).parse(request.body);
+      return portalService.recordDebrief({
+        portalAccessId: request.portal!.portalAccessId,
+        mandatId: await portalService.scopeCandidature(request.portal!, id),
+        candidatureId: id,
+        ...input,
+      });
+    },
+  });
+
   // POST /portal/candidatures/:id/view — log un VIEW_PROFILE
   fastify.post('/candidatures/:id/view', {
     schema: {

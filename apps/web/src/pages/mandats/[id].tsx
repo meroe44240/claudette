@@ -285,6 +285,28 @@ function withCurrent(opts: string[], current: string): string[] {
   return list;
 }
 
+// Lien de prise de rendez-vous du client : s'il est renseigné, « Rencontrer » sur le portail
+// ne demande pas de date et envoie un email au recruteur pour qu'il réserve un créneau.
+function BookingLinkField({ mandatId, initial }: { mandatId: string; initial: string }) {
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState(initial);
+  const save = useMutation({
+    mutationFn: () => api.put(`/mandats/${mandatId}`, { clientBookingUrl: value.trim() || null }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['mandat', mandatId] }); toast('success', value.trim() ? 'Lien d’agenda enregistré' : 'Lien d’agenda retiré'); },
+    onError: (e: any) => toast('error', e?.message || 'Lien invalide (il doit commencer par https://)'),
+  });
+  return (
+    <div style={{ marginTop: 20, padding: '14px 16px', background: '#F7F7EF', borderRadius: 13 }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#1A1533' }}>Lien d'agenda du client</div>
+      <div style={{ fontSize: 12.5, color: '#6E6A85', marginTop: 3 }}>Calendly ou équivalent. S'il est renseigné, quand le client clique « Rencontrer », le recruteur reçoit un email pour réserver un créneau. Sinon, le client propose des créneaux.</div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://calendly.com/…" style={{ flex: 1, minWidth: 0, fontSize: 13.5, border: '1px solid rgba(34,23,122,.15)', borderRadius: 10, padding: '8px 10px' }} />
+        <button onClick={() => save.mutate()} disabled={save.isPending || value.trim() === initial.trim()} style={{ fontSize: 13, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 10, padding: '8px 14px', cursor: 'pointer', opacity: value.trim() === initial.trim() ? 0.5 : 1 }}>Enregistrer</button>
+      </div>
+    </div>
+  );
+}
+
 function genPwd(): string {
   const a = 'abcdefghijkmnpqrstuvwxyz23456789';
   let p = '';
@@ -1209,6 +1231,8 @@ export default function MandatDetailPage() {
               </div>
               <button onClick={() => setAccessOpen(false)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer', flexShrink: 0 }}>✕</button>
             </div>
+
+            <BookingLinkField mandatId={mandat.id} initial={(mandat as any).clientBookingUrl ?? ''} />
 
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8A8699', marginTop: 22 }}>Accès portail{mandat.client ? ` · client ${`${mandat.client.prenom || ''} ${mandat.client.nom}`.trim()}` : ''}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 12 }}>

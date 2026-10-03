@@ -6,16 +6,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { X, Check, MessageSquare, AtSign, Banknote, CalendarClock, ArrowRight, UserPlus, MessageCircle, Lock, BellRing, BadgeCheck, ChevronDown, Mail, Phone, Linkedin, FileText } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronRight, CalendarClock, Clock, X } from 'lucide-react';
 import { portalStore } from './portal-store';
-import { PortalTopBar, lastMandat, SHARED_CSS, CompanyLogo } from './portal-ui';
+import {
+  BG, BRAND, BTN, BTN_GHOST, CARD, COL_HINT, CompanyLogo, COL_LABELS, CREAM, DECISION_LABEL, FONT, FS, INK, LINE, LOGO, MUTED, SHARED_CSS, SOFT, TEXT,
+  PersonAvatar, Pill, PortalTopBar, lastMandat, loginUrl, portalFetch, useIsMobile, type Col, type Decision,
+} from './portal-ui';
 
 type Stage = 'SOURCING' | 'CONTACTE' | 'ENTRETIEN_1' | 'ENVOYE_CLIENT' | 'ENTRETIEN_CLIENT' | 'PROCESS' | 'OFFRE' | 'PLACE' | 'REFUSE';
-type Decision = 'RENCONTRER' | 'A_DISCUTER' | 'ECARTER';
 // Colonnes du portail (Case et Culture Fit = étape PROCESS dans l'ATS).
-type Col = 'INBOX' | 'SCREENING' | 'CASE' | 'CULTURE_FIT' | 'OFFRE' | 'ENGAGE' | 'PERDU';
 const COL_STAGE: Record<Col, Stage> = { INBOX: 'ENVOYE_CLIENT', SCREENING: 'ENTRETIEN_CLIENT', CASE: 'PROCESS', CULTURE_FIT: 'PROCESS', OFFRE: 'OFFRE', ENGAGE: 'PLACE', PERDU: 'REFUSE' };
 
+interface Person { nom: string; prenom: string | null; avatarUrl?: string | null }
 interface Candidature {
   id: string; stage: Stage; column: Col; dateEntretienClient: string | null;
   candidat: { id: string; nom: string; prenom: string | null; posteActuel: string | null; entrepriseActuelle: string | null; salaireSouhaite: number | null; photoUrl: string | null; aiPitchShort: string | null; aiAnonymizedProfile: any;
@@ -25,49 +27,21 @@ interface Candidature {
   seen?: boolean;
   stageSince?: string;
   hireAnnounced?: boolean;
+  portalSlots?: { slots: string[]; who: string | null; chosen?: string | null } | null;
+  portalDebrief?: { rating: number; strengths: string | null; concerns: string | null; by: string; at: string } | null;
 }
 interface KanbanResponse {
-  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string; logoUrl?: string | null }; client: { nom: string; prenom: string | null }; consultant: { nom: string; prenom: string | null; avatarUrl?: string | null } | null; commercial: { nom: string; prenom: string | null; avatarUrl?: string | null } | null };
+  mandat: { id: string; titrePoste: string; visibleStages: Stage[]; entreprise: { nom: string; logoUrl?: string | null }; client: { nom: string; prenom: string | null }; consultant: Person | null; commercial: Person | null; hasBookingLink?: boolean };
   stages: Col[];
   byStage: Record<Col, Candidature[]>;
+  funnel?: { approached: number; qualified: number; presented: number };
 }
-type MoveExtra = { reason?: string; dateEntretienClient?: string; interlocuteurClient?: string };
+type MoveExtra = { reason?: string; dateEntretienClient?: string; interlocuteurClient?: string; slots?: string[] };
+type TeamMember = { name: string; role: string; photo: string | null };
+type PanelTab = 'activite' | 'commentaires';
 
-// Libellés côté client : Inbox / Screening / Case / Culture Fit / Offre / Engagé / Perdu.
-const STAGE_LABELS: Record<Col, string> = {
-  INBOX: 'Inbox', SCREENING: 'Screening', CASE: 'Case', CULTURE_FIT: 'Culture Fit', OFFRE: 'Offre', ENGAGE: 'Engagé', PERDU: 'Perdu',
-};
-const STAGE_ACCENT: Record<Col, string> = {
-  INBOX: '#475467', SCREENING: '#2A6BD8', CASE: '#D97F1E', CULTURE_FIT: '#7A5BD1', OFFRE: '#B8921A', ENGAGE: '#2F8A4A', PERDU: '#8A8699',
-};
-const STAGE_TINT: Record<Col, string> = {
-  INBOX: '#EEF0F3', SCREENING: '#EAF1FC', CASE: '#FCF1E4', CULTURE_FIT: '#F1ECFC', OFFRE: '#FAF4DE', ENGAGE: '#E7F3EA', PERDU: '#F0EFF3',
-};
-const DECISION_LABEL: Record<Decision, string> = { RENCONTRER: 'À rencontrer', A_DISCUTER: 'À discuter', ECARTER: 'Écarté' };
-const DECISION_TONE: Record<Decision, { bg: string; fg: string }> = {
-  RENCONTRER: { bg: '#E6F2E9', fg: '#256238' }, A_DISCUTER: { bg: '#FAF0DF', fg: '#7A5A1E' }, ECARTER: { bg: '#F7E8E5', fg: '#9E2F1A' },
-};
-
-// Palette + échelle typographique (contrastes ≥ 4,5:1 sur le fond).
-const INK = '#1A1533';
-const TEXT = '#453F63';
-const MUTED = '#5C5875';
-const FAINT = '#6E6A85';
-const LINE = 'rgba(26,21,51,.09)';
-const BRAND = '#22177A';
-const CREAM = '#E6E9AF';
-const BG = '#F6F5EF';
-const FS = { xs: 11, sm: 12, base: 13, md: 14, lg: 16, xl: 20, xxl: 28 } as const;
-const DISPLAY = "'Archivo Black',sans-serif";
-const LABEL: React.CSSProperties = { fontSize: FS.sm, fontWeight: 700, color: MUTED };
-
-function portalFetch(path: string, init?: RequestInit) {
-  const token = portalStore.get('portal_token');
-  return fetch(`/api/v1/portal${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers as Record<string, string> | undefined) } });
-}
+const personName = (p: Person | null) => (p ? `${p.prenom ? p.prenom + ' ' : ''}${p.nom}`.trim() : '');
 function fullName(c: Candidature) { return `${c.candidat.prenom || ''} ${c.candidat.nom}`.trim() || '(profil)'; }
-function initials(c: Candidature) { return `${(c.candidat.prenom?.[0] ?? '')}${c.candidat.nom?.[0] ?? ''}`.toUpperCase() || '?'; }
-function initialsOf(name: string) { return name.split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?'; }
 
 // Salaire affiché sur la carte : prétentions / rémunération du debrief, sinon salaire souhaité.
 function salaryOf(c: Candidature): string | null {
@@ -81,27 +55,19 @@ function salaryOf(c: Candidature): string | null {
 function daysIn(c: Candidature): string | null {
   if (!c.stageSince) return null;
   const d = Math.floor((Date.now() - new Date(c.stageSince).getTime()) / 86400000);
-  return d <= 0 ? 'Aujourd’hui' : d === 1 ? 'Depuis 1 j' : `Depuis ${d} j`;
+  return d <= 0 ? 'depuis aujourd’hui' : d === 1 ? 'depuis 1 jour' : `depuis ${d} jours`;
 }
 const needsReview = (c: Candidature) => c.column === 'INBOX' && c.portalDecisions.length === 0;
-
-// Photo du candidat si dispo, sinon initiales.
-function Avatar({ c, size, radius, bg, fg, fontSize }: { c: Candidature; size: number; radius: number | string; bg: string; fg: string; fontSize: number }) {
-  const [broken, setBroken] = useState(false);
-  const box: React.CSSProperties = { flexShrink: 0, width: size, height: size, borderRadius: radius, overflow: 'hidden' };
-  if (c.candidat.photoUrl && !broken) {
-    return <img src={c.candidat.photoUrl} alt="" onError={() => setBroken(true)} style={{ ...box, objectFit: 'cover', display: 'block' }} />;
-  }
-  return <span aria-hidden style={{ ...box, background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: DISPLAY, fontSize }}>{initials(c)}</span>;
-}
-
-// Photo d'un membre de l'équipe HumanUp, sinon initiales.
-function PersonAvatar({ name, photo, size, bg = BRAND, fg = CREAM }: { name: string; photo?: string | null; size: number; bg?: string; fg?: string }) {
-  const [broken, setBroken] = useState(false);
-  const box: React.CSSProperties = { flexShrink: 0, width: size, height: size, borderRadius: '50%', overflow: 'hidden' };
-  if (photo && !broken) return <img src={photo} alt="" onError={() => setBroken(true)} style={{ ...box, objectFit: 'cover', display: 'block' }} />;
-  return <span aria-hidden style={{ ...box, background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: DISPLAY, fontSize: Math.round(size * 0.36) }}>{initialsOf(name)}</span>;
-}
+const daysWaiting = (c: Candidature) => (c.stageSince ? Math.floor((Date.now() - new Date(c.stageSince).getTime()) / 86400000) : 0);
+// Profil sans avis depuis 3 jours ou plus : mis en avant (et relancé par email côté Humanup).
+const overdue = (c: Candidature) => needsReview(c) && daysWaiting(c) >= 3;
+// Créneaux proposés au candidat, pas encore choisis.
+const slotsPending = (c: Candidature) => c.column === 'INBOX' && !!c.portalSlots && !c.portalSlots.chosen && c.portalSlots.slots.some((x) => new Date(x) > new Date());
+// Entretien passé, débrief pas encore partagé.
+const debriefDue = (c: Candidature) => c.column === 'SCREENING' && !!c.dateEntretienClient && new Date(c.dateEntretienClient) < new Date() && !c.portalDebrief;
+const FINALIST_COLS: Col[] = ['CASE', 'CULTURE_FIT', 'OFFRE'];
+// L'entretien daté est celui du Screening : une fois le profil plus loin, on ne l'affiche plus.
+const upcomingInterview = (c: Candidature) => c.column === 'SCREENING' && !!c.dateEntretienClient && new Date(c.dateEntretienClient) > new Date();
 
 function relTime(iso: string | Date) {
   const d = new Date(iso);
@@ -116,17 +82,11 @@ function relTime(iso: string | Date) {
 function fmtInterview(iso: string) {
   return new Date(iso).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
-
-function useIsMobile() {
-  const q = '(max-width: 760px)';
-  const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches);
-  useEffect(() => {
-    const mq = window.matchMedia(q);
-    const on = () => setM(mq.matches);
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
-  return m;
+// Ligne d'information de la carte : l'entretien à venir prime, sinon salaire et ancienneté dans l'étape.
+function metaOf(c: Candidature): string {
+  if (upcomingInterview(c)) return `Entretien ${fmtInterview(c.dateEntretienClient!)}`;
+  if (c.stage === 'REFUSE') return ['Écarté', daysIn(c)].filter(Boolean).join(' ');
+  return [salaryOf(c), daysIn(c)].filter(Boolean).join(' · ');
 }
 
 // Garde le focus clavier dans une fenêtre (dialogue / fiche) + Échap pour fermer.
@@ -139,7 +99,7 @@ function useDialogFocus(ref: React.RefObject<HTMLElement | null>, onClose: () =>
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
       if (e.key !== 'Tab' || !el) return;
-      const f = Array.from(el.querySelectorAll<HTMLElement>('button:not([disabled]), input, textarea, select, [tabindex="0"]')).filter((n) => n.offsetParent !== null);
+      const f = Array.from(el.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input, textarea, select, [tabindex="0"]')).filter((n) => n.offsetParent !== null);
       if (f.length === 0) return;
       const a = f[0], z = f[f.length - 1];
       if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
@@ -161,7 +121,10 @@ export default function PortalMandatPage() {
   const [data, setData] = useState<KanbanResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [drawerTab, setDrawerTab] = useState<{ tab: 'activite' | 'commentaires'; prefill?: boolean }>({ tab: 'activite' });
+  const [panelTab, setPanelTab] = useState<{ tab: PanelTab; prefill?: boolean }>({ tab: 'commentaires' });
+  // Un clic ouvre d'abord un aperçu (tiroir) ; la fiche complète s'ouvre depuis l'aperçu.
+  const [full, setFull] = useState(false);
+  const [comparing, setComparing] = useState(false);
   const [pendingMove, setPendingMove] = useState<{ c: Candidature; to: Col; fromDecision?: boolean } | null>(null);
   const [dragging, setDragging] = useState<Candidature | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
@@ -169,8 +132,8 @@ export default function PortalMandatPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   useEffect(() => {
-    if (!portalStore.get('portal_token')) { navigate(`/portail/login?m=${mandatId ?? ''}`); return; }
-    document.title = 'Candidatures | HumanUp';
+    if (!portalStore.get('portal_token')) { navigate(loginUrl(mandatId)); return; }
+    document.title = 'Candidatures | Humanup';
     setSelectedId(null);
     if (mandatId) lastMandat.set(mandatId);
     void reload();
@@ -181,12 +144,12 @@ export default function PortalMandatPage() {
     if (!silent) setLoading(true);
     try {
       const res = await portalFetch(`/kanban?mandatId=${mandatId ?? ''}`);
-      if (res.status === 401) { portalStore.clear(); navigate(`/portail/login?m=${mandatId ?? ''}&expired=1`); return; }
+      if (res.status === 401) { const to = loginUrl(mandatId, true); portalStore.clear(); navigate(to); return; }
       if (res.status === 403 || res.status === 404) { navigate('/portail/offres', { replace: true }); return; }
       setData((await res.json()) as KanbanResponse);
     } finally { setLoading(false); }
   }
-  // Interlocuteur du client côté HumanUp : le commercial (à défaut le consultant).
+  // Interlocuteur du client côté Humanup : le commercial (à défaut le consultant).
   const contactUser = data?.mandat.commercial ?? data?.mandat.consultant ?? null;
   const repFirst = contactUser?.prenom || contactUser?.nom || '';
   function flash(t: Toast) {
@@ -202,23 +165,42 @@ export default function PortalMandatPage() {
     const cid = params.get('c');
     if (!data || !cid) return;
     const c = allCards().find((x) => x.id === cid);
-    if (c) openCard(c, params.get('t') === 'commentaires' ? 'commentaires' : 'activite');
+    if (c) {
+      openCard(c, 'commentaires', false, params.get('t') === 'commentaires');
+      // Boutons « Rencontrer » / « Écarter » des emails : on enchaîne sur l'action.
+      const action = params.get('a');
+      if (action === 'rencontrer' && needsReview(c)) void decide(c, 'RENCONTRER');
+      if (action === 'ecarter' && c.stage !== 'REFUSE' && c.stage !== 'PLACE') void decide(c, 'ECARTER');
+    }
     setParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
-  function openCard(c: Candidature, tab: 'activite' | 'commentaires' = 'activite', prefill = false) {
+  function openCard(c: Candidature, tab: PanelTab = 'commentaires', prefill = false, asFull = false) {
     setSelectedId(c.id);
-    setDrawerTab({ tab, prefill });
+    setFull(asFull);
+    setPanelTab({ tab, prefill });
     if (!c.seen) void portalFetch(`/candidatures/${c.id}/view`, { method: 'POST', body: '{}' });
   }
 
   // Toute demande de déplacement passe par ici (drag, fiche, boutons d'avis).
   function requestMove(c: Candidature, to: Col) {
     if (c.column === to) return;
-    if (c.stage === 'PLACE') { flash({ msg: `L'embauche de ${fullName(c)} est validée : contactez ${repFirst || 'votre interlocuteur HumanUp'} pour la modifier.` }); return; }
+    if (c.stage === 'PLACE') { flash({ msg: `L'embauche de ${fullName(c)} est validée : contactez ${repFirst || 'votre interlocuteur Humanup'} pour la modifier.` }); return; }
+    if (to === 'SCREENING' && c.column === 'INBOX' && data?.mandat.hasBookingLink) { void doMeet(c, {}); return; }
     if (to === 'SCREENING' || to === 'PERDU' || to === 'ENGAGE') { setPendingMove({ c, to }); return; }
     void doMove(c, to, {});
+  }
+
+  // « Rencontrer » un profil de l'Inbox : lien d'agenda du client, un créneau (planifié) ou plusieurs (le candidat choisit).
+  async function doMeet(c: Candidature, extra: MoveExtra) {
+    const res = await portalFetch(`/candidatures/${c.id}/meet`, { method: 'POST', body: JSON.stringify({ slots: extra.slots, interlocuteurClient: extra.interlocuteurClient }) });
+    const out = await res.json().catch(() => null);
+    if (!res.ok) { flash({ msg: out?.message || 'La demande n’a pas pu être enregistrée.' }); return; }
+    flash({ msg: out?.mode === 'booking_link' ? `Demande envoyée : ${repFirst || 'Humanup'} réserve un créneau dans votre agenda.`
+      : out?.mode === 'proposed' ? `Créneaux envoyés : ${fullName(c)} choisit, vous serez prévenu.`
+      : `Entretien planifié avec ${fullName(c)}.` });
+    void reload(true);
   }
   function onDragStart(e: DragStartEvent) { setDragging(allCards().find((x) => x.id === e.active.id) ?? null); }
   function onDragEnd(e: DragEndEvent) {
@@ -248,13 +230,13 @@ export default function PortalMandatPage() {
     const out = await res.json().catch(() => ({}));
     if (out?.pending) {
       flash({ msg: out.already
-        ? `Embauche déjà signalée à ${repFirst || 'HumanUp'}.`
-        : `Embauche signalée à ${repFirst || 'HumanUp'}.` });
+        ? `Embauche déjà signalée à ${repFirst || 'Humanup'}.`
+        : `Embauche signalée à ${repFirst || 'Humanup'}.` });
     } else if (isUndo) {
       flash({ msg: 'Déplacement annulé.' });
     } else {
       flash({
-        msg: `${fullName(c)} → ${STAGE_LABELS[to]}`,
+        msg: `${fullName(c)} : ${COL_LABELS[to]}`,
         undo: () => { setToast(null); void doMove({ ...c, column: to, stage: COL_STAGE[to] }, from, {}, true); },
       });
     }
@@ -262,17 +244,17 @@ export default function PortalMandatPage() {
   }
 
   async function decide(c: Candidature, d: Decision) {
-    // Rencontrer depuis Screening = planifier le Case ; Écarter = Perdu (avec motif).
-    if (d === 'RENCONTRER' && c.column === 'INBOX') { setPendingMove({ c, to: 'SCREENING', fromDecision: true }); return; }
+    // Rencontrer depuis Inbox = planifier le Screening ; Écarter = Perdu (avec motif).
+    if (d === 'RENCONTRER' && c.column === 'INBOX') {
+      if (data?.mandat.hasBookingLink) { void doMeet(c, {}); return; }
+      setPendingMove({ c, to: 'SCREENING', fromDecision: true });
+      return;
+    }
     if (d === 'ECARTER') { setPendingMove({ c, to: 'PERDU' }); return; }
     const res = await portalFetch(`/candidatures/${c.id}/decision`, { method: 'POST', body: JSON.stringify({ decision: d }) });
     if (!res.ok) { flash({ msg: 'Votre avis n’a pas pu être enregistré.' }); return; }
-    if (d === 'A_DISCUTER') {
-      setDrawerTab({ tab: 'commentaires', prefill: true });
-      flash({ msg: 'Avis enregistré.' });
-    } else {
-      flash({ msg: 'Avis enregistré.' });
-    }
+    if (d === 'A_DISCUTER') { setPanelTab({ tab: 'commentaires', prefill: true }); setFull(true); }
+    flash({ msg: 'Avis enregistré.' });
     void reload(true);
   }
   async function decideOnly(c: Candidature, d: Decision) {
@@ -281,114 +263,102 @@ export default function PortalMandatPage() {
   }
 
   if (loading || !data) return (
-    <div style={{ background: BG, minHeight: '100vh', fontFamily: "'Manrope',sans-serif" }}>
+    <div className="pm-page" style={{ background: BG, minHeight: '100vh', fontFamily: FONT }}>
+      <style>{SHARED_CSS}</style>
       <PortalTopBar active="candidatures" mandatId={mandatId} />
-      <p style={{ padding: 40, textAlign: 'center', color: FAINT }}>Chargement…</p>
+      <p style={{ padding: 40, textAlign: 'center', color: MUTED }}>Chargement…</p>
     </div>
   );
 
-  const consultant = data.mandat.consultant;
-  const rep = consultant ? `${consultant.prenom ? consultant.prenom + ' ' : ''}${consultant.nom}`.trim() : '';
-  const com = data.mandat.commercial;
-  const commercial = com ? `${com.prenom ? com.prenom + ' ' : ''}${com.nom}`.trim() : '';
+  const rep = personName(data.mandat.consultant);
+  const commercial = personName(data.mandat.commercial);
   const contact = commercial || rep;
+  const team: TeamMember[] = [
+    commercial ? { name: commercial, role: 'Votre contact Humanup', photo: data.mandat.commercial?.avatarUrl ?? null } : null,
+    rep && rep !== commercial ? { name: rep, role: 'Consultant sur le poste', photo: data.mandat.consultant?.avatarUrl ?? null } : null,
+  ].filter(Boolean) as TeamMember[];
   const cards = allCards();
-  const enCours = cards.filter((c) => c.stage !== 'REFUSE' && c.stage !== 'PLACE').length;
+  const presented = cards.length;
   const toReview = cards.filter(needsReview);
-  const nextInterview = cards
-    .filter((c) => c.dateEntretienClient && new Date(c.dateEntretienClient) > new Date() && c.stage !== 'REFUSE')
+  const nextInterview = cards.filter(upcomingInterview)
     .sort((a, b) => new Date(a.dateEntretienClient!).getTime() - new Date(b.dateEntretienClient!).getTime())[0];
+  const debriefs = cards.filter(debriefDue);
+  const finalists = cards.filter((c) => FINALIST_COLS.includes(c.column) && c.stage !== 'REFUSE');
+  const f = data.funnel;
+  const context = f && f.approached > f.presented
+    ? `${f.approached} profils approchés · ${f.qualified} qualifiés · ${f.presented} présenté${f.presented > 1 ? 's' : ''}`
+    : `${presented} profil${presented > 1 ? 's' : ''} présenté${presented > 1 ? 's' : ''}`;
+  const pad = isMobile ? '18px 16px 0' : '28px 32px 0';
 
   return (
-    <div className="pm-page" style={{ background: BG, minHeight: '100vh', fontFamily: "'Manrope',sans-serif", display: 'flex', flexDirection: 'column', color: INK }}>
+    <div className="pm-page" style={{ background: BG, minHeight: '100vh', fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       <style>{SHARED_CSS}{`
-        .pm-card{ transition:transform .18s cubic-bezier(.16,1,.3,1), box-shadow .2s ease, border-color .18s ease; }
-        .pm-card:hover{ transform:translateY(-2px); box-shadow:0 14px 28px -18px rgba(26,21,51,.35) !important; border-color:rgba(34,23,122,.2) !important; }
-        .pm-focus:focus{ outline:none; }
-        .pm-focus:focus-visible, .pm-btn:focus-visible, .pm-tab:focus-visible, .pm-chip:focus-visible{ outline:2.5px solid ${BRAND}; outline-offset:2px; border-radius:14px; }
-        .pm-btn{ transition:transform .15s ease, box-shadow .15s ease, background .15s ease; }
-        .pm-btn:hover:not(:disabled){ transform:translateY(-1px); box-shadow:0 8px 18px -12px rgba(26,21,51,.35); }
-        .pm-chip{ transition:background .15s ease, border-color .15s ease; }
-        .pm-chip:hover:not(:disabled){ border-color:rgba(34,23,122,.3) !important; }
-        .pm-scroll::-webkit-scrollbar{ height:8px; width:8px; }
-        .pm-scroll::-webkit-scrollbar-thumb{ background:rgba(26,21,51,.16); border-radius:99px; }
-        @media (max-width: 760px){ .pm-hide-sm{ display:none !important; } }
-        @media (max-width: 860px){
-          .pm-drawer{ width:100vw !important; max-width:100vw !important; }
-          .pm-drawer-body{ display:block !important; overflow-y:auto; }
-          .pm-drawer-main{ overflow:visible !important; }
-          .pm-drawer-side{ border-left:none !important; border-top:1px solid ${LINE}; }
-          .pm-thread-list{ overflow:visible !important; max-height:none !important; }
-        }
+        .pm-card{ transition:border-color .15s ease, box-shadow .15s ease; }
+        .pm-card{ transition:border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+        .pm-card:hover{ border-color:#B9B6DC !important; box-shadow:0 10px 22px -14px rgba(34,23,122,.45) !important; transform:translateY(-1px); }
+        @keyframes pm-slide{ from{ transform:translateX(24px); opacity:0; } to{ transform:none; opacity:1; } }
+        .pm-drawer{ animation:pm-slide .18s ease-out; }
+        @media (prefers-reduced-motion: reduce){ .pm-drawer{ animation:none; } .pm-card:hover{ transform:none; } }
+        .pm-step:hover:not(:disabled) .pm-step-bar{ background:#B9B6DC; }
       `}</style>
 
       <PortalTopBar active="candidatures" mandatId={mandatId} />
 
-      {/* HERO */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, padding: isMobile ? '20px 16px 4px' : '28px 34px 6px' }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: FS.base, color: FAINT, fontWeight: 600 }}>{data.mandat.entreprise.nom}</div>
-          <OfferSwitcher current={data.mandat.id} title={data.mandat.titrePoste} logo={data.mandat.entreprise.logoUrl} company={data.mandat.entreprise.nom} compact={isMobile} />
+      {/* En-tête de l'offre */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, padding: pad }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <CompanyLogo logo={data.mandat.entreprise.logoUrl} text={data.mandat.entreprise.nom} size={isMobile ? 36 : 44} />
+            <OfferSwitcher current={data.mandat.id} title={data.mandat.titrePoste} compact={isMobile} />
+          </div>
+          <span style={{ fontSize: 14, color: MUTED }}>{data.mandat.entreprise.nom} · {context}</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: '9px 14px' }}>
-            <div style={LABEL}>En cours</div>
-            <div style={{ fontFamily: DISPLAY, fontSize: FS.xl, marginTop: 2 }}>{enCours}</div>
+        {(team.length > 0 || finalists.length >= 2) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+            {finalists.length >= 2 && <button onClick={() => setComparing(true)} style={{ ...BTN_GHOST, color: BRAND, borderColor: BRAND, padding: '9px 14px' }}>Comparer les {finalists.length} finalistes</button>}
+            {team.map((t) => (
+              <div key={t.role} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <PersonAvatar name={t.name} photo={t.photo} size={36} ring />
+                <span style={{ display: 'flex', flexDirection: 'column', fontSize: 13, lineHeight: 1.3 }}>
+                  <span style={{ fontWeight: 600, color: INK }}>{t.name}</span>
+                  <span style={{ color: MUTED }}>{t.role}</span>
+                </span>
+              </div>
+            ))}
           </div>
-          {(rep || commercial) && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: '9px 14px' }}>
-              {([[commercial, 'Votre commercial', BRAND, CREAM, com?.avatarUrl ?? null], [rep, 'Votre consultant', '#F2F3D8', BRAND, consultant?.avatarUrl ?? null]] as const).filter(([n]) => n).map(([n, label, bg, fg, photo]) => (
-                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <PersonAvatar name={n} photo={photo} size={38} bg={bg} fg={fg} />
-                  <div>
-                    <div style={LABEL}>{label}</div>
-                    <div style={{ fontSize: FS.md, fontWeight: 800, marginTop: 2 }}>{n}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* À TRAITER */}
-      <div style={{ padding: isMobile ? '12px 16px 0' : '14px 34px 0' }}>
-        {toReview.length > 0 ? (
-          <div role="status" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, background: '#fff', border: `1px solid ${LINE}`, borderLeft: `4px solid ${BRAND}`, borderRadius: 14, padding: '12px 14px' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: FS.md, fontWeight: 800, color: INK }}>
-              <BellRing size={17} color={BRAND} />
-              {toReview.length} profil{toReview.length > 1 ? 's attendent' : ' attend'} votre avis
-            </span>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {toReview.map((c) => (
-                <button key={c.id} className="pm-chip" onClick={() => openCard(c)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: FS.base, fontWeight: 700, color: INK, background: BG, border: `1px solid ${LINE}`, borderRadius: 999, padding: '4px 12px 4px 4px', cursor: 'pointer' }}>
-                  <Avatar c={c} size={24} radius="50%" bg={BRAND} fg={CREAM} fontSize={9} />{fullName(c)}
-                  {!c.seen && <span style={{ fontSize: FS.xs, fontWeight: 800, color: BRAND }}>· Nouveau</span>}
-                </button>
-              ))}
-            </div>
-            {nextInterview && <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: FS.base, color: MUTED }}><CalendarClock size={15} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span>Prochain entretien : <strong style={{ color: INK }}>{fullName(nextInterview)}</strong>, {fmtInterview(nextInterview.dateEntretienClient!)}</span></span>}
-          </div>
-        ) : cards.length > 0 ? (
-          <div role="status" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: FS.base, color: MUTED }}>
-            <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}><Check size={16} color="#2F8A4A" strokeWidth={2.6} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span>Aucun profil en attente d’avis.</span></span>
-            {nextInterview && <span style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}><CalendarClock size={15} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span>Prochain entretien : <strong style={{ color: INK }}>{fullName(nextInterview)}</strong>, {fmtInterview(nextInterview.dateEntretienClient!)}</span></span>}
-          </div>
-        ) : (
-          <div style={{ fontSize: FS.base, color: MUTED }}>Aucun profil pour l’instant.</div>
         )}
       </div>
 
-      {/* BOARD (ordinateur) / LISTE (mobile) */}
+      {/* À traiter */}
+      {(toReview.length > 0 || debriefs.length > 0 || nextInterview) && (() => {
+        const urgent = toReview.length > 0 || debriefs.length > 0;
+        const late = toReview.filter(overdue).length;
+        const parts = [
+          toReview.length > 0 ? `${toReview.length} profil${toReview.length > 1 ? 's attendent' : ' attend'} votre avis${late > 0 ? ` (${late} depuis plus de 3 jours)` : ''}` : null,
+          debriefs.length > 0 ? `${debriefs.length} débrief${debriefs.length > 1 ? 's' : ''} d’entretien à partager` : null,
+          nextInterview ? `prochain entretien avec ${fullName(nextInterview)}, ${fmtInterview(nextInterview.dateEntretienClient!)}` : null,
+        ].filter(Boolean) as string[];
+        const first = toReview[0] ?? debriefs[0] ?? nextInterview!;
+        return (
+          <div style={{ padding: isMobile ? '16px 16px 0' : '18px 32px 0' }}>
+            <div role="status" style={{ background: urgent ? CREAM : '#fff', border: urgent ? 'none' : `1px solid ${LINE}`, color: urgent ? BRAND : TEXT, borderRadius: 12, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 14 }}>
+              <span>{urgent && <span style={{ fontWeight: 700 }}>À traiter : </span>}{urgent ? parts.join(' · ') : parts.join(' · ').replace(/^./, (ch) => ch.toUpperCase())}</span>
+              <button onClick={() => openCard(first)} style={{ fontFamily: FONT, fontSize: 14, fontWeight: 700, color: BRAND, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}>Voir</button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Tableau (ordinateur) / liste (mobile) */}
       {isMobile ? (
         <MobileList data={data} onOpen={openCard} />
       ) : (
-        <main className="pm-scroll" style={{ overflowX: 'auto', padding: '14px 34px 40px' }}>
+        <main className="pm-scroll" style={{ overflowX: 'auto', padding: '18px 32px 40px' }}>
           <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${data.stages.length}, minmax(220px, 1fr))`, gap: 12, alignItems: 'stretch' }}>
               {data.stages.map(stage => (
                 <StageColumn key={stage} stage={stage} count={(data.byStage[stage] ?? []).length} dragging={!!dragging}>
-                  {(data.byStage[stage] ?? []).map(c => <DraggableCard key={c.id} c={c} onOpen={() => openCard(c)} />)}
+                  {(data.byStage[stage] ?? []).map(c => <DraggableCard key={c.id} c={c} active={c.id === selectedId} onOpen={() => openCard(c)} onQuick={(d) => void decide(c, d)} />)}
                 </StageColumn>
               ))}
             </div>
@@ -399,119 +369,162 @@ export default function PortalMandatPage() {
         </main>
       )}
 
+      {comparing && finalists.length >= 2 && (
+        <CompareView cards={finalists} offerTitle={data.mandat.titrePoste} onClose={() => setComparing(false)} onOpen={(c) => { setComparing(false); openCard(c, 'commentaires', false, true); }} />
+      )}
+
+      {selected && !full && (
+        <ProfileDrawer
+          key={`d-${selected.id}`}
+          candidature={selected}
+          stages={data.stages}
+          onClose={() => { setSelectedId(null); void reload(true); }}
+          onOpenFull={() => setFull(true)}
+          onSaved={() => void reload(true)}
+          onDecision={(d) => void decide(selected, d)}
+          onMove={(to) => requestMove(selected, to)}
+          frozen={!!pendingMove}
+        />
+      )}
+
+      {selected && full && (
+        <ProfilePage
+          key={selected.id}
+          candidature={selected}
+          stages={data.stages}
+          repName={contact}
+          team={team}
+          offerTitle={data.mandat.titrePoste}
+          tab={panelTab.tab}
+          prefillMention={panelTab.prefill}
+          onTab={(tab) => setPanelTab({ tab })}
+          onSaved={() => void reload(true)}
+          onClose={() => { setSelectedId(null); void reload(true); }}
+          onDecision={(d) => void decide(selected, d)}
+          onMove={(to) => requestMove(selected, to)}
+          locked={!!pendingMove}
+        />
+      )}
+
       {pendingMove && (
         <MoveDialog
           c={pendingMove.c} to={pendingMove.to} repName={contact} fromDecision={pendingMove.fromDecision}
           onCancel={() => setPendingMove(null)}
-          onConfirm={(extra) => { const m = pendingMove; setPendingMove(null); void doMove(m.c, m.to, extra); }}
+          onConfirm={(extra) => {
+            const m = pendingMove; setPendingMove(null);
+            if (m.to === 'SCREENING' && m.c.column === 'INBOX') void doMeet(m.c, extra);
+            else void doMove(m.c, m.to, m.to === 'SCREENING' ? { dateEntretienClient: extra.slots?.[0], interlocuteurClient: extra.interlocuteurClient } : extra);
+          }}
           onSkip={() => { const m = pendingMove; setPendingMove(null); void decideOnly(m.c, 'RENCONTRER'); }}
         />
       )}
 
       {toast && (
-        <div role="status" aria-live="polite" style={{ position: 'fixed', left: '50%', bottom: isMobile ? 84 : 24, transform: 'translateX(-50%)', zIndex: 90, display: 'flex', alignItems: 'center', gap: 14, background: INK, color: '#F4F4EA', fontSize: FS.md, fontWeight: 600, padding: '12px 14px 12px 18px', borderRadius: 12, boxShadow: '0 18px 40px -18px rgba(26,21,51,.6)', maxWidth: 'calc(100vw - 32px)' }}>
+        <div role="status" aria-live="polite" style={{ position: 'fixed', left: '50%', bottom: isMobile ? 84 : 24, transform: 'translateX(-50%)', zIndex: 90, display: 'flex', alignItems: 'center', gap: 14, background: INK, color: '#fff', fontSize: 14, fontWeight: 500, padding: '12px 14px 12px 18px', borderRadius: 12, boxShadow: '0 16px 40px -16px rgba(17,24,39,.5)', maxWidth: 'calc(100vw - 32px)' }}>
           <span>{toast.msg}</span>
-          {toast.undo && <button className="pm-btn" onClick={toast.undo} style={{ flexShrink: 0, fontSize: FS.base, fontWeight: 800, color: INK, background: CREAM, border: 'none', borderRadius: 8, padding: '6px 11px', cursor: 'pointer' }}>Annuler</button>}
+          {toast.undo && <button onClick={toast.undo} style={{ flexShrink: 0, fontFamily: FONT, fontSize: 14, fontWeight: 600, color: BRAND, background: CREAM, border: 'none', borderRadius: 8, padding: '6px 11px', cursor: 'pointer' }}>Annuler</button>}
         </div>
-      )}
-
-      {selected && (
-        <ProfileDrawer
-          key={selected.id}
-          candidature={selected}
-          stages={data.stages}
-          repName={contact}
-          tab={drawerTab.tab}
-          prefillMention={drawerTab.prefill}
-          onTab={(tab) => setDrawerTab({ tab })}
-          onClose={() => { setSelectedId(null); void reload(true); }}
-          onDecision={(d) => void decide(selected, d)}
-          onMove={(to) => requestMove(selected, to)}
-        />
       )}
     </div>
   );
 }
 
-// ─── BOARD : colonnes + cartes déplaçables ─────────────
+// ─── Tableau : colonnes + cartes déplaçables ─────────────
 function StageColumn({ stage, count, dragging, children }: { stage: Col; count: number; dragging: boolean; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage });
-  const accent = STAGE_ACCENT[stage];
   const empty = count === 0;
   return (
-    <section aria-label={`${STAGE_LABELS[stage]}, ${count} profil${count > 1 ? 's' : ''}`} style={{ flex: empty ? '0 1 170px' : '1 1 250px', minWidth: empty ? 140 : 215, maxWidth: 340, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px 9px' }}>
-        <span aria-hidden style={{ width: 8, height: 8, borderRadius: 99, background: accent }} />
-        <span style={{ fontWeight: 800, fontSize: FS.md, color: INK }}>{STAGE_LABELS[stage]}</span>
-        <span style={{ marginLeft: 'auto', minWidth: 24, textAlign: 'center', fontSize: FS.sm, fontWeight: 800, color: MUTED, background: 'rgba(26,21,51,.06)', borderRadius: 999, padding: '1px 8px' }}>{count}</span>
+    <section ref={setNodeRef} aria-label={`${COL_LABELS[stage]}, ${count} profil${count > 1 ? 's' : ''}`}
+      style={{ background: isOver ? '#E4E5F0' : '#EEEFF2', outline: isOver ? `2px solid ${BRAND}` : 'none', borderRadius: 14, padding: 10, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 520, transition: 'background .15s ease' }}>
+      <div style={{ padding: '4px 6px 0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: INK }}>{COL_LABELS[stage]}</h2>
+          <span style={{ fontSize: 12, fontWeight: 700, color: MUTED, background: '#fff', borderRadius: 999, padding: '1px 8px' }}>{count}</span>
+        </div>
+        <span style={{ display: 'block', fontSize: 12, color: MUTED, marginTop: 2 }}>{COL_HINT[stage]}</span>
       </div>
-      <div
-        ref={setNodeRef}
-        style={{
-          flex: 1, minHeight: 300, display: 'flex', flexDirection: 'column', gap: 10, padding: 10, borderRadius: 16,
-          background: isOver ? STAGE_TINT[stage] : 'rgba(255,255,255,.6)',
-          border: `1.5px ${dragging && !isOver ? 'dashed' : 'solid'} ${isOver ? accent : dragging ? 'rgba(26,21,51,.18)' : LINE}`,
-          transition: 'background .15s ease, border-color .15s ease',
-        }}
-      >
-        {empty && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: FAINT, fontSize: FS.sm, textAlign: 'center', padding: '0 6px' }}>
-            {dragging ? 'Déposez le profil ici' : 'Aucun profil'}
-          </div>
-        )}
-        {children}
-      </div>
+      {children}
+      {empty && (
+        <div style={{ border: '1px dashed #C7C9D1', borderRadius: 12, padding: '18px 10px', textAlign: 'center', fontSize: 13, color: MUTED }}>
+          {dragging ? 'Déposez le profil ici' : 'Aucun profil pour l’instant'}
+        </div>
+      )}
     </section>
   );
 }
 
-function CardBody({ c, lifted }: { c: Candidature; lifted?: boolean }) {
+function CardBody({ c, lifted, active, onQuick }: { c: Candidature; lifted?: boolean; active?: boolean; onQuick?: (d: Decision) => void }) {
   const last = c.portalDecisions[0]?.decision;
-  const salary = salaryOf(c);
   const nbComments = c._count?.portalComments ?? 0;
-  const since = daysIn(c);
   const locked = c.stage === 'PLACE';
-  const isNew = !c.seen && c.stage !== 'REFUSE';
+  const lost = c.stage === 'REFUSE';
+  const isNew = !c.seen && !lost;
+  const salary = lost ? null : salaryOf(c);
+  const interview = upcomingInterview(c);
+  const since = daysIn(c);
+  const tag = c.hireAnnounced ? 'Embauche annoncée' : locked ? 'Embauche validée' : last && !lost ? DECISION_LABEL[last] : null;
+  const late = overdue(c);
+  const waitingSlots = slotsPending(c);
+  const toDebrief = debriefDue(c);
+  const alert = late || toDebrief;
+  // Les boutons vivent dans une carte déplaçable : on coupe le glisser-déposer et l'ouverture de l'aperçu.
+  const quick = (d: Decision) => ({
+    onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
+    onKeyDown: (e: React.KeyboardEvent) => e.stopPropagation(),
+    onClick: (e: React.MouseEvent) => { e.stopPropagation(); onQuick?.(d); },
+  });
   return (
     <div
       className={lifted ? undefined : 'pm-card'}
       style={{
-        position: 'relative', background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: 13,
-        boxShadow: lifted ? '0 26px 50px -20px rgba(26,21,51,.5)' : '0 1px 2px rgba(26,21,51,.05)',
+        position: 'relative', background: '#fff', border: `1px solid ${active ? BRAND : LINE}`, borderRadius: 14, color: TEXT, overflow: 'hidden',
+        boxShadow: lifted ? '0 20px 40px -16px rgba(17,24,39,.4)' : active ? `0 0 0 1px ${BRAND}` : '0 1px 2px rgba(17,24,39,.04)',
         transform: lifted ? 'rotate(1.5deg)' : undefined,
-        cursor: lifted ? 'grabbing' : locked ? 'pointer' : 'grab',
+        cursor: lifted ? 'grabbing' : locked ? 'pointer' : 'grab', opacity: lost ? 0.85 : 1,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
-        <Avatar c={c} size={42} radius={12} bg={BRAND} fg={CREAM} fontSize={13} />
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: FS.md, fontWeight: 800, lineHeight: 1.3, color: INK, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>{fullName(c)}</div>
-          {c.candidat.posteActuel && <div style={{ fontSize: FS.base, lineHeight: 1.4, color: MUTED, marginTop: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>{c.candidat.posteActuel}</div>}
-        </div>
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 11 }}>
-        {salary && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', fontSize: FS.sm, fontWeight: 800, color: BRAND, background: '#F2F3D8', borderRadius: 8, padding: '3px 8px' }}>
-            <Banknote size={13} strokeWidth={2.2} aria-hidden style={{ flexShrink: 0 }} />
-            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{salary}</span>
+      <div style={{ padding: '14px 14px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <span style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
+          <span style={{ position: 'relative', flexShrink: 0, display: 'flex' }}>
+            <PersonAvatar name={fullName(c)} photo={c.candidat.photoUrl} size={44} bg={lost ? LINE : CREAM} fg={lost ? MUTED : BRAND} />
+            {isNew && <span aria-hidden style={{ position: 'absolute', top: -1, right: -1, width: 12, height: 12, borderRadius: '50%', background: BRAND, border: '2px solid #fff' }} />}
+          </span>
+          <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.3, gap: 2 }}>
+            <span style={{ fontWeight: 600, color: INK, fontSize: 15 }}>{fullName(c)}</span>
+            {c.candidat.posteActuel && <span style={{ fontSize: 13, color: MUTED, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>{c.candidat.posteActuel}</span>}
+          </span>
+        </span>
+        {(isNew || tag || salary) && (
+          <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            {isNew && <span style={{ background: BRAND, color: '#fff', borderRadius: 999, padding: '2px 9px', fontSize: 12, fontWeight: 600 }}>Nouveau</span>}
+            {tag && <Pill strong>{tag}</Pill>}
+            {salary && <span style={{ fontSize: 12, fontWeight: 600, color: TEXT, background: SOFT, borderRadius: 999, padding: '2px 9px', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{salary}</span>}
           </span>
         )}
-        {c.hireAnnounced && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: FS.sm, fontWeight: 800, borderRadius: 8, padding: '3px 8px', background: '#E7F3EA', color: '#256238' }}><BadgeCheck size={13} aria-hidden />Embauche annoncée</span>}
-        {locked && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: FS.sm, fontWeight: 800, borderRadius: 8, padding: '3px 8px', background: '#E7F3EA', color: '#256238' }}><Lock size={12} aria-hidden />Embauche validée</span>}
-        {!c.hireAnnounced && !locked && last && <span style={{ fontSize: FS.sm, fontWeight: 800, borderRadius: 8, padding: '3px 8px', background: DECISION_TONE[last].bg, color: DECISION_TONE[last].fg, whiteSpace: 'nowrap' }}>{DECISION_LABEL[last]}</span>}
       </div>
-      {(since || nbComments > 0 || isNew) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, paddingTop: 9, borderTop: `1px solid ${LINE}`, fontSize: FS.sm, color: FAINT }}>
-          {isNew && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 800, color: BRAND }}><span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: BRAND }} />Nouveau</span>}
-          {since && <span>{since}</span>}
-          {nbComments > 0 && <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700 }}><MessageCircle size={13} strokeWidth={2.2} aria-hidden />{nbComments}<span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}> commentaire{nbComments > 1 ? 's' : ''}</span></span>}
+      {onQuick && needsReview(c) && !lifted && (
+        <div style={{ display: 'flex', gap: 8, padding: '0 14px 12px' }}>
+          <button {...quick('RENCONTRER')} style={{ ...BTN, flex: 1, padding: '8px 10px', fontSize: 13 }}>Rencontrer</button>
+          <button {...quick('ECARTER')} style={{ ...BTN_GHOST, flex: 1, padding: '8px 10px', fontSize: 13 }}>Écarter</button>
         </div>
       )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '9px 14px', borderTop: `1px solid ${alert ? '#FDE9B8' : SOFT}`, background: alert ? '#FFF7E0' : interview ? '#FAFAF0' : '#FCFCFD', fontSize: 12.5, color: alert ? '#7A4A00' : interview ? BRAND : MUTED, fontWeight: alert || interview ? 600 : 400 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          {interview ? <CalendarClock size={14} aria-hidden style={{ flexShrink: 0 }} /> : <Clock size={14} aria-hidden style={{ flexShrink: 0 }} />}
+          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{interview ? `Entretien ${fmtInterview(c.dateEntretienClient!)}` : toDebrief ? 'Débrief d’entretien à partager' : late ? `Sans avis depuis ${daysWaiting(c)} jours` : waitingSlots ? 'Créneaux proposés, le candidat choisit' : lost ? `Écarté ${since ?? ''}` : since ? since[0].toUpperCase() + since.slice(1) : 'Dans cette étape'}</span>
+        </span>
+        {nbComments > 0 && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, color: MUTED, fontWeight: 600 }}>
+            <MessageCircle size={14} aria-hidden />{nbComments}
+            <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}> commentaire{nbComments > 1 ? 's' : ''}</span>
+          </span>
+        )}
+      </div>
     </div>
   );
 }
 
-function DraggableCard({ c, onOpen }: { c: Candidature; onOpen: () => void }) {
+function DraggableCard({ c, onOpen, active, onQuick }: { c: Candidature; onOpen: () => void; active?: boolean; onQuick?: (d: Decision) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: c.id, disabled: c.stage === 'PLACE' });
   return (
     <div
@@ -523,36 +536,38 @@ function DraggableCard({ c, onOpen }: { c: Candidature; onOpen: () => void }) {
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
       style={{ touchAction: 'none', opacity: isDragging ? 0.35 : 1, borderRadius: 14 }}
     >
-      <CardBody c={c} />
+      <CardBody c={c} active={active} onQuick={onQuick} />
     </div>
   );
 }
 
 // ─── Liste mobile (pas de glisser-déposer au doigt) ────
 function MobileList({ data, onOpen }: { data: KanbanResponse; onOpen: (c: Candidature) => void }) {
-  const [open, setOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(data.stages.map((s) => [s, (data.byStage[s]?.length ?? 0) > 0 && s !== 'PERDU'])));
+  const groups = data.stages.filter((s) => (data.byStage[s]?.length ?? 0) > 0);
   return (
-    <main style={{ padding: '14px 16px 36px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {data.stages.map((s) => {
+    <main style={{ padding: '16px 16px 36px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {groups.length === 0 && <p style={{ fontSize: 14, color: MUTED }}>Aucun profil pour l’instant.</p>}
+      {groups.map((s) => {
         const items = data.byStage[s] ?? [];
-        const isOpen = !!open[s];
         return (
-          <section key={s} style={{ background: 'rgba(255,255,255,.6)', border: `1px solid ${LINE}`, borderRadius: 14 }}>
-            <button className="pm-tab" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [s]: !o[s] }))} disabled={items.length === 0} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, padding: '12px 14px', background: 'transparent', border: 'none', cursor: items.length ? 'pointer' : 'default', color: INK }}>
-              <span aria-hidden style={{ width: 8, height: 8, borderRadius: 99, background: STAGE_ACCENT[s] }} />
-              <span style={{ fontWeight: 800, fontSize: FS.md }}>{STAGE_LABELS[s]}</span>
-              <span style={{ fontSize: FS.sm, fontWeight: 800, color: MUTED, background: 'rgba(26,21,51,.06)', borderRadius: 999, padding: '1px 8px' }}>{items.length}</span>
-              {items.length > 0 && <ChevronDown size={16} aria-hidden style={{ marginLeft: 'auto', transform: isOpen ? 'rotate(180deg)' : undefined, transition: 'transform .15s ease', color: MUTED }} />}
-            </button>
-            {isOpen && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 10px 10px' }}>
-                {items.map((c) => (
-                  <div key={c.id} role="button" tabIndex={0} className="pm-focus" aria-label={`${fullName(c)}. Ouvrir le dossier`} onClick={() => onOpen(c)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(c); } }} style={{ borderRadius: 14 }}>
-                    <CardBody c={c} />
-                  </div>
-                ))}
-              </div>
-            )}
+          <section key={s} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: INK, display: 'flex', justifyContent: 'space-between' }}>{COL_LABELS[s]} <span style={{ color: MUTED, fontWeight: 600 }}>{items.length}</span></h2>
+            <div style={CARD}>
+              {items.map((c, i) => {
+                const lost = c.stage === 'REFUSE';
+                return (
+                  <button key={c.id} className="pm-row" onClick={() => onOpen(c)} aria-label={`${fullName(c)}. Ouvrir le dossier`}
+                    style={{ width: '100%', display: 'flex', gap: 12, padding: '12px 14px', alignItems: 'center', textAlign: 'left', background: 'transparent', border: 'none', borderTop: i ? `1px solid ${SOFT}` : 'none', cursor: 'pointer', fontFamily: FONT, color: TEXT, minHeight: 48 }}>
+                    <PersonAvatar name={fullName(c)} photo={c.candidat.photoUrl} size={38} bg={lost ? LINE : CREAM} fg={lost ? MUTED : BRAND} />
+                    <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontWeight: 600, color: INK, fontSize: 14 }}>{fullName(c)}</span>
+                      <span style={{ fontSize: 13, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{metaOf(c) || c.candidat.posteActuel}</span>
+                    </span>
+                    {!c.seen && !lost ? <span style={{ background: BRAND, color: '#fff', borderRadius: 999, padding: '1px 8px', fontSize: 12, fontWeight: 600 }}>Nouveau</span> : <ChevronRight size={16} aria-hidden color={MUTED} />}
+                  </button>
+                );
+              })}
+            </div>
           </section>
         );
       })}
@@ -560,176 +575,416 @@ function MobileList({ data, onOpen }: { data: KanbanResponse; onOpen: (c: Candid
   );
 }
 
-// ─── Coordonnées du candidat (si HumanUp les a rendues visibles) ──
+// ─── Coordonnées du candidat (si Humanup les a rendues visibles) ──
 function ContactBlock({ contact }: { contact: NonNullable<Candidature['candidat']['contact']> }) {
   const linkedin = contact.linkedinUrl ? (/^https?:\/\//i.test(contact.linkedinUrl) ? contact.linkedinUrl : `https://${contact.linkedinUrl}`) : null;
   const rows = [
-    contact.email && { Icon: Mail, label: contact.email, href: `mailto:${contact.email}` },
-    contact.telephone && { Icon: Phone, label: contact.telephone, href: `tel:${contact.telephone.replace(/\s+/g, '')}` },
-    linkedin && { Icon: Linkedin, label: 'Profil LinkedIn', href: linkedin, ext: true },
-    contact.cvUrl && { Icon: FileText, label: 'Télécharger le CV', href: contact.cvUrl, ext: true },
-  ].filter(Boolean) as Array<{ Icon: typeof Mail; label: string; href: string; ext?: boolean }>;
+    contact.cvUrl && { label: 'Voir le CV', href: contact.cvUrl, ext: true },
+    linkedin && { label: 'LinkedIn', href: linkedin, ext: true },
+    contact.email && { label: contact.email, href: `mailto:${contact.email}` },
+    contact.telephone && { label: contact.telephone, href: `tel:${contact.telephone.replace(/\s+/g, '')}` },
+  ].filter(Boolean) as Array<{ label: string; href: string; ext?: boolean }>;
   if (rows.length === 0) return null;
   return (
-    <div style={{ marginBottom: 24, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, padding: 16 }}>
-      <div style={LABEL}>Coordonnées</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 8, marginTop: 10 }}>
-        {rows.map(({ Icon, label, href, ext }) => (
-          <a key={href} href={href} {...(ext ? { target: '_blank', rel: 'noopener noreferrer' } : {})} className="pm-btn"
-            style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 11px', borderRadius: 10, background: '#F7F6F0', color: INK, textDecoration: 'none', fontSize: FS.base, fontWeight: 700, minWidth: 0 }}>
-            <Icon size={15} color={BRAND} aria-hidden style={{ flexShrink: 0 }} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-          </a>
+    <div style={{ background: BG, borderRadius: 12, padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <span style={{ display: 'flex', flexDirection: 'column', fontSize: 14 }}>
+        <span style={{ fontWeight: 600, color: INK }}>Coordonnées et CV</span>
+        <span style={{ color: MUTED }}>Partagés avec vous par Humanup</span>
+      </span>
+      <span style={{ display: 'flex', gap: 14, fontSize: 14, fontWeight: 600, flexWrap: 'wrap' }}>
+        {rows.map(({ label, href, ext }) => (
+          <a key={href} href={href} {...(ext ? { target: '_blank', rel: 'noopener noreferrer' } : {})} style={{ color: BRAND }}>{label}</a>
         ))}
-      </div>
+      </span>
     </div>
   );
 }
 
-// ─── FICHE CANDIDAT : dossier + panneau latéral (Activité / Commentaires) ──
-function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, onTab, onClose, onDecision, onMove }: {
-  candidature: Candidature; stages: Col[]; repName: string;
-  tab: 'activite' | 'commentaires'; prefillMention?: boolean;
-  onTab: (t: 'activite' | 'commentaires') => void;
+// ─── Aperçu d'un candidat (tiroir) : l'essentiel, puis « Voir la fiche complète » ──
+function ProfileDrawer({ candidature: c, stages, onClose, onOpenFull, onDecision, onMove, onSaved, frozen }: {
+  candidature: Candidature; stages: Col[];
+  onClose: () => void; onOpenFull: () => void; onSaved: () => void;
+  onDecision: (d: Decision) => void;
+  onMove: (to: Col) => void;
+  frozen?: boolean;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useDialogFocus(ref, () => { if (!frozen) onClose(); });
+  const last = c.portalDecisions[0]?.decision;
+  const hired = c.stage === 'PLACE';
+  const lost = c.stage === 'REFUSE';
+  const profile = c.candidat.aiAnonymizedProfile;
+  const bullets: string[] = Array.isArray(profile?.bulletPoints) ? profile.bulletPoints : Array.isArray(profile?.highlights) ? profile.highlights : [];
+  const infos: Array<{ label: string; value: string }> = Array.isArray(profile?.infos) ? profile.infos : [];
+  const nbComments = c._count?.portalComments ?? 0;
+  const steps: Col[] = stages.filter((s) => s !== 'PERDU');
+  const idx = steps.indexOf(c.column);
+  const next = idx >= 0 && idx < steps.length - 1 ? steps[idx + 1] : null;
+  const interview = upcomingInterview(c);
+  const label: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: INK };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(17,24,39,.35)' }} />
+      <aside ref={ref} role="dialog" aria-modal="true" aria-label={`Aperçu de ${fullName(c)}`} className="pm-page pm-drawer" style={{ position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 61, width: 460, maxWidth: '100vw', background: '#fff', boxShadow: '-20px 0 50px -30px rgba(17,24,39,.5)', display: 'flex', flexDirection: 'column', fontFamily: FONT, paddingBottom: 0 }}>
+        <div style={{ flexShrink: 0, padding: '18px 20px 16px', borderBottom: `1px solid ${LINE}`, display: 'flex', gap: 14, alignItems: 'center' }}>
+          <PersonAvatar name={fullName(c)} photo={c.candidat.photoUrl} size={60} ring />
+          <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <h2 style={{ fontSize: 20, lineHeight: 1.2, color: INK, letterSpacing: '-0.01em' }}>{fullName(c)}</h2>
+            {(c.candidat.posteActuel || c.candidat.entrepriseActuelle) && <span style={{ fontSize: 14, color: MUTED }}>{[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(', ')}</span>}
+          </div>
+          <button className="pm-icon" onClick={onClose} aria-label="Fermer l'aperçu" style={{ alignSelf: 'flex-start', flexShrink: 0, width: 36, height: 36, borderRadius: 10, border: `1px solid ${LINE}`, background: '#fff', color: TEXT, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} aria-hidden /></button>
+        </div>
+
+        <div className="pm-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Pill strong>{COL_LABELS[c.column]}</Pill>
+            {!c.seen && !lost && <span style={{ background: BRAND, color: '#fff', borderRadius: 999, padding: '2px 9px', fontSize: 12, fontWeight: 600 }}>Nouveau</span>}
+            {last && !lost && <Pill>Votre avis : {DECISION_LABEL[last]}</Pill>}
+            {nbComments > 0 && <Pill><MessageCircle size={13} aria-hidden />{nbComments} commentaire{nbComments > 1 ? 's' : ''}</Pill>}
+          </div>
+
+          {interview && (
+            <div style={{ background: BRAND, color: '#fff', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
+              <CalendarClock size={18} aria-hidden color={CREAM} style={{ flexShrink: 0 }} />
+              <span><span style={{ color: CREAM, fontWeight: 600 }}>Entretien prévu</span><br />{fmtInterview(c.dateEntretienClient!)}</span>
+            </div>
+          )}
+
+          <MeetingStatus c={c} />
+          {debriefDue(c) && <DebriefForm c={c} onSaved={onSaved} />}
+
+          {c.candidat.aiPitchShort && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={label}>En bref</span>
+              <p style={{ fontSize: 14, lineHeight: 1.6 }}>{c.candidat.aiPitchShort}</p>
+            </div>
+          )}
+
+          {infos.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+              {infos.slice(0, 4).map((it, i) => (
+                <div key={i} style={{ background: BG, borderRadius: 10, padding: '10px 12px' }}>
+                  <span style={{ display: 'block', fontSize: 12, color: MUTED }}>{it.label}</span>
+                  <span style={{ fontWeight: 600, color: INK, fontSize: 14 }}>{it.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {bullets.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={label}>Pourquoi ce profil</span>
+              <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 5, fontSize: 14 }}>
+                {bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {!c.candidat.aiPitchShort && bullets.length === 0 && infos.length === 0 && <p style={{ fontSize: 14, color: MUTED }}>Le dossier détaillé sera disponible sous peu.</p>}
+        </div>
+
+        <div style={{ flexShrink: 0, padding: '14px 20px 18px', borderTop: `1px solid ${LINE}`, display: 'flex', flexDirection: 'column', gap: 8, background: '#fff' }}>
+          <button data-autofocus onClick={onOpenFull} style={{ ...BTN, padding: '12px 16px', fontSize: 15 }}>Voir la fiche complète</button>
+          {!hired && !lost && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              {c.column === 'INBOX'
+                ? <button onClick={() => onDecision('RENCONTRER')} style={{ ...BTN_GHOST, flex: 1, color: BRAND, borderColor: BRAND }}>Rencontrer</button>
+                : next && <button onClick={() => onMove(next)} style={{ ...BTN_GHOST, flex: 1, color: BRAND, borderColor: BRAND }}>{next === 'ENGAGE' ? 'Annoncer l’embauche' : `Passer en ${COL_LABELS[next]}`}</button>}
+              <button onClick={() => onDecision('ECARTER')} style={{ ...BTN_GHOST, flex: 1 }}>Écarter</button>
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}
+
+// ─── Créneaux proposés au candidat, en attente de son choix ──
+function MeetingStatus({ c }: { c: Candidature }) {
+  if (!slotsPending(c)) return null;
+  return (
+    <div style={{ background: SOFT, borderRadius: 12, padding: '12px 14px', fontSize: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span style={{ fontWeight: 600, color: INK }}>Créneaux proposés, le candidat choisit</span>
+      <span>{c.portalSlots!.slots.map((x) => fmtInterview(x)).join(' · ')}</span>
+    </div>
+  );
+}
+
+// ─── Débrief après un entretien : note, points forts, réserves ──
+function DebriefForm({ c, onSaved }: { c: Candidature; onSaved: () => void }) {
+  const [rating, setRating] = useState(0);
+  const [strengths, setStrengths] = useState('');
+  const [concerns, setConcerns] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const area: React.CSSProperties = { width: '100%', boxSizing: 'border-box', display: 'block', resize: 'vertical', fontFamily: FONT, fontSize: 14, lineHeight: 1.5, padding: '9px 12px', borderRadius: 10, border: '1px solid #D1D5DB', background: '#fff', color: INK };
+  const label: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: INK, display: 'block', marginBottom: 4 };
+  async function send() {
+    setBusy(true); setError('');
+    const res = await portalFetch(`/candidatures/${c.id}/debrief`, { method: 'POST', body: JSON.stringify({ rating, strengths: strengths.trim() || undefined, concerns: concerns.trim() || undefined }) });
+    setBusy(false);
+    if (res.ok) onSaved();
+    else setError('Le débrief n’a pas pu être envoyé.');
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: 16, fontWeight: 700, color: INK }}>Comment s’est passé l’entretien ?</span>
+        <span style={{ fontSize: 14, color: MUTED }}>Entretien du {fmtInterview(c.dateEntretienClient!)}. Votre retour aide Humanup à ajuster la suite.</span>
+      </div>
+      <div role="radiogroup" aria-label="Note sur 5" style={{ display: 'flex', gap: 6 }}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} role="radio" aria-checked={rating === n} aria-label={`${n} sur 5`} onClick={() => setRating(n)}
+            style={{ width: 44, height: 44, borderRadius: 10, fontFamily: FONT, fontSize: 15, fontWeight: 700, cursor: 'pointer', border: `1px solid ${rating === n ? BRAND : '#D1D5DB'}`, background: rating === n ? BRAND : '#fff', color: rating === n ? '#fff' : TEXT }}>{n}</button>
+        ))}
+      </div>
+      <div>
+        <label htmlFor={`pm-str-${c.id}`} style={label}>Points forts</label>
+        <textarea id={`pm-str-${c.id}`} rows={2} value={strengths} onChange={(e) => setStrengths(e.target.value)} style={area} />
+      </div>
+      <div>
+        <label htmlFor={`pm-con-${c.id}`} style={label}>Réserves</label>
+        <textarea id={`pm-con-${c.id}`} rows={2} value={concerns} onChange={(e) => setConcerns(e.target.value)} style={area} />
+      </div>
+      {error && <p role="alert" style={{ fontSize: 13, color: '#B42318', fontWeight: 600 }}>{error}</p>}
+      <button disabled={!rating || busy} onClick={send} style={{ ...BTN, alignSelf: 'flex-start', background: rating ? BRAND : '#9CA3AF', cursor: rating ? 'pointer' : 'default' }}>Partager mon débrief</button>
+    </div>
+  );
+}
+
+// ─── Comparaison des finalistes (Case, Culture Fit, Offre) ──
+function CompareView({ cards, offerTitle, onClose, onOpen }: { cards: Candidature[]; offerTitle: string; onClose: () => void; onOpen: (c: Candidature) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useDialogFocus(ref, onClose);
+  const infosOf = (c: Candidature): Array<{ label: string; value: string }> => (Array.isArray(c.candidat.aiAnonymizedProfile?.infos) ? c.candidat.aiAnonymizedProfile.infos : []);
+  const bulletsOf = (c: Candidature): string[] => {
+    const pr = c.candidat.aiAnonymizedProfile;
+    return Array.isArray(pr?.bulletPoints) ? pr.bulletPoints : Array.isArray(pr?.highlights) ? pr.highlights : [];
+  };
+  const labels = Array.from(new Set(cards.flatMap((c) => infosOf(c).map((i) => i.label)))).slice(0, 6);
+  const cols = `160px repeat(${cards.length}, minmax(220px, 1fr))`;
+  const head: React.CSSProperties = { padding: '14px 16px', fontSize: 13, fontWeight: 600, color: MUTED, borderTop: `1px solid ${SOFT}` };
+  const cell: React.CSSProperties = { padding: '14px 16px', fontSize: 14, borderTop: `1px solid ${SOFT}`, borderLeft: `1px solid ${SOFT}`, minWidth: 0 };
+  const row = (label: string, render: (c: Candidature) => React.ReactNode) => (
+    <>
+      <div style={head}>{label}</div>
+      {cards.map((c) => <div key={c.id} style={cell}>{render(c)}</div>)}
+    </>
+  );
+  const none = <span style={{ color: MUTED }}>Non renseigné</span>;
+  return (
+    <div ref={ref} role="dialog" aria-modal="true" aria-label="Comparer les finalistes" className="pm-page pm-scroll" style={{ position: 'fixed', inset: 0, zIndex: 60, background: BG, overflowY: 'auto', fontFamily: FONT, paddingBottom: 0 }}>
+      <header style={{ position: 'sticky', top: 0, zIndex: 2, background: '#fff', borderBottom: `1px solid ${LINE}`, padding: '0 32px', minHeight: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <img src={LOGO} alt="" style={{ width: 34, height: 34, borderRadius: '50%' }} />
+          <span style={{ fontWeight: 700, color: INK, fontSize: 16 }}>Humanup</span>
+          <span style={{ color: MUTED, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{offerTitle}</span>
+        </div>
+        <button data-autofocus onClick={onClose} style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: BRAND, background: 'none', border: 'none', padding: '8px 0', cursor: 'pointer' }}>Retour au tableau</button>
+      </header>
+      <main style={{ maxWidth: 1280, margin: '0 auto', padding: '28px 32px 48px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <h1 style={{ fontSize: 26, color: INK, letterSpacing: '-0.02em' }}>Comparer les finalistes</h1>
+        <div className="pm-scroll" style={{ ...CARD, overflowX: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: cols, minWidth: 160 + cards.length * 220 }}>
+            <div style={{ ...head, borderTop: 'none' }} />
+            {cards.map((c) => (
+              <div key={c.id} style={{ ...cell, borderTop: 'none', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
+                <PersonAvatar name={fullName(c)} photo={c.candidat.photoUrl} size={56} ring />
+                <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
+                  <span style={{ fontWeight: 700, color: INK, fontSize: 16 }}>{fullName(c)}</span>
+                  {c.candidat.posteActuel && <span style={{ fontSize: 13, color: MUTED }}>{c.candidat.posteActuel}</span>}
+                </span>
+                <button onClick={() => onOpen(c)} style={{ ...BTN_GHOST, padding: '7px 12px', fontSize: 13, color: BRAND, borderColor: BRAND }}>Voir la fiche</button>
+              </div>
+            ))}
+            {row('Étape', (c) => <Pill strong>{COL_LABELS[c.column]}</Pill>)}
+            {row('Votre avis', (c) => (c.portalDecisions[0] ? DECISION_LABEL[c.portalDecisions[0].decision] : none))}
+            {row('Débrief d’entretien', (c) => (c.portalDebrief
+              ? <span><b style={{ color: INK }}>{c.portalDebrief.rating}/5</b>{c.portalDebrief.strengths ? <><br />{c.portalDebrief.strengths}</> : null}{c.portalDebrief.concerns ? <><br /><span style={{ color: MUTED }}>Réserves : {c.portalDebrief.concerns}</span></> : null}</span>
+              : none))}
+            {labels.map((l) => <span key={l} style={{ display: 'contents' }}>{row(l, (c) => infosOf(c).find((i) => i.label === l)?.value ?? none)}</span>)}
+            {row('Points forts', (c) => (bulletsOf(c).length
+              ? <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>{bulletsOf(c).slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul>
+              : none))}
+            {row('Commentaires', (c) => `${c._count?.portalComments ?? 0}`)}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// ─── Fiche candidat : page plein écran (dossier + commentaires / activité) ──
+function ProfilePage({ candidature: c, stages, repName, team, offerTitle, tab, prefillMention, onTab, onClose, onDecision, onMove, onSaved, locked: frozen }: {
+  candidature: Candidature; stages: Col[]; repName: string; team: TeamMember[]; offerTitle: string;
+  tab: PanelTab; prefillMention?: boolean;
+  onTab: (t: PanelTab) => void;
   onClose: () => void;
   onDecision: (d: Decision) => void;
   onMove: (to: Col) => void;
+  onSaved: () => void;
+  locked?: boolean;
 }) {
-  const ref = useRef<HTMLElement>(null);
-  useDialogFocus(ref, onClose);
+  const ref = useRef<HTMLDivElement>(null);
+  useDialogFocus(ref, () => { if (!frozen) onClose(); });
+  const isMobile = useIsMobile();
   const [nbComments, setNbComments] = useState(c._count?.portalComments ?? 0);
   const [activityKey, setActivityKey] = useState(0);
   const last = c.portalDecisions[0]?.decision;
-  const locked = c.stage === 'PLACE';
+  const hired = c.stage === 'PLACE';
+  const lost = c.stage === 'REFUSE';
   const profile = c.candidat.aiAnonymizedProfile;
   const bullets: string[] = Array.isArray(profile?.bulletPoints) ? profile.bulletPoints : Array.isArray(profile?.highlights) ? profile.highlights : [];
   // Debrief structuré (optionnel) : infos clés + sections titrées.
   const infos: Array<{ label: string; value: string }> = Array.isArray(profile?.infos) ? profile.infos : [];
   const sections: Array<{ title: string; items: string[] }> = Array.isArray(profile?.sections) ? profile.sections : [];
   useEffect(() => { setActivityKey((k) => k + 1); }, [c.stage, last]);
-  // Étape actuelle visible dans la barre d'étapes (défile sur mobile).
-  useEffect(() => {
-    const chip = ref.current?.querySelector<HTMLElement>('[aria-current="step"]');
-    const bar = chip?.parentElement;
-    if (chip && bar) bar.scrollLeft = chip.offsetLeft - (bar.clientWidth - chip.clientWidth) / 2;
-  }, [c.column]);
 
-  const decisionBtn = (d: Decision, icon: React.ReactNode, label: string, tone: { bg: string; fg: string }) => (
-    <button className="pm-btn" onClick={() => onDecision(d)} aria-pressed={last === d} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '12px 8px', borderRadius: 12, border: `1.5px solid ${last === d ? tone.fg : 'transparent'}`, background: tone.bg, color: tone.fg, cursor: 'pointer', fontWeight: 800, fontSize: FS.sm }}>{icon}{label}</button>
-  );
+  const steps: Col[] = stages.filter((s) => s !== 'PERDU');
+  const idx = steps.indexOf(c.column);
+  const next = idx >= 0 && idx < steps.length - 1 ? steps[idx + 1] : null;
+  const subtitle = [[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(', '), offerTitle].filter(Boolean).join(' · ');
+  const sectionCard: React.CSSProperties = { ...CARD, padding: isMobile ? 18 : 24, display: 'flex', flexDirection: 'column', gap: 18 };
+  const h3: React.CSSProperties = { fontSize: 15, fontWeight: 700, color: INK };
+  const tabBtn = (on: boolean): React.CSSProperties => ({ fontFamily: FONT, fontSize: 14, fontWeight: 600, background: 'none', border: 0, borderBottom: `2px solid ${on ? BRAND : 'transparent'}`, color: on ? BRAND : MUTED, padding: '14px 10px 12px', cursor: 'pointer' });
 
   return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(26,21,51,.42)' }} />
-      <aside ref={ref} role="dialog" aria-modal="true" aria-label={`Dossier de ${fullName(c)}`} className="pm-drawer" style={{ position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 61, width: 1000, maxWidth: '96vw', background: '#FCFCF7', boxShadow: '-26px 0 70px -30px rgba(26,21,51,.55)', display: 'flex', flexDirection: 'column' }}>
-        {/* En-tête */}
-        <div style={{ flexShrink: 0, background: BRAND, padding: '18px 20px 14px', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <Avatar c={c} size={56} radius={16} bg={CREAM} fg={BRAND} fontSize={18} />
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <h2 style={{ fontWeight: 800, fontSize: FS.xl, color: '#fff', lineHeight: 1.2 }}>{fullName(c)}</h2>
-              {(c.candidat.posteActuel || c.candidat.entrepriseActuelle) && <div style={{ fontSize: FS.base, color: CREAM, fontWeight: 600, marginTop: 3 }}>{[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(' · ')}</div>}
-            </div>
-            <button className="pm-btn" data-autofocus onClick={onClose} aria-label="Fermer le dossier" style={{ alignSelf: 'flex-start', width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(230,233,175,.3)', background: 'transparent', color: CREAM, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} strokeWidth={2.4} /></button>
+    <div ref={ref} role="dialog" aria-modal="true" aria-label={`Dossier de ${fullName(c)}`} className="pm-page pm-scroll" style={{ position: 'fixed', inset: 0, zIndex: 60, background: BG, overflowY: 'auto', fontFamily: FONT, paddingBottom: 0 }}>
+      <header style={{ position: 'sticky', top: 0, zIndex: 2, background: '#fff', borderBottom: `1px solid ${LINE}` }}>
+        <div style={{ padding: isMobile ? '0 16px' : '0 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, minHeight: 64 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <img src={LOGO} alt="" style={{ width: 34, height: 34, borderRadius: '50%' }} />
+            <span style={{ fontWeight: 700, color: INK, fontSize: 16 }}>Humanup</span>
+            {!isMobile && <span style={{ color: MUTED, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{offerTitle}</span>}
           </div>
-          {/* Étapes : cliquer pour faire avancer (alternative au glisser-déposer) */}
-          <div role="group" aria-label="Étape du recrutement" className="pm-scroll" style={{ position: 'relative', display: 'flex', gap: 6, marginTop: 14, overflowX: 'auto', paddingBottom: 2 }}>
-            {stages.map((s) => {
-              const on = c.column === s;
-              return (
-                <button key={s} className="pm-chip" disabled={locked || on} aria-current={on ? 'step' : undefined} onClick={() => onMove(s)}
-                  aria-label={on ? `${STAGE_LABELS[s]}, étape actuelle` : locked ? STAGE_LABELS[s] : `Passer en « ${STAGE_LABELS[s]} »`}
-                  title={locked ? 'Embauche validée' : on ? 'Étape actuelle' : `Passer en « ${STAGE_LABELS[s]} »`}
-                  style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FS.sm, fontWeight: 800, padding: '6px 11px', borderRadius: 999, cursor: locked || on ? 'default' : 'pointer', border: `1px solid ${on ? CREAM : 'rgba(230,233,175,.28)'}`, background: on ? CREAM : 'transparent', color: on ? BRAND : CREAM, opacity: locked && !on ? 0.5 : 1 }}>
-                  <span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: on ? STAGE_ACCENT[s] : 'rgba(230,233,175,.6)' }} />{STAGE_LABELS[s]}
-                </button>
-              );
-            })}
-          </div>
-          {locked && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><Lock size={13} aria-hidden />Embauche validée</div>}
-          {c.hireAnnounced && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><BadgeCheck size={13} aria-hidden />Embauche annoncée, en cours de validation par HumanUp</div>}
+          <button data-autofocus onClick={onClose} style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, color: BRAND, background: 'none', border: 'none', padding: '8px 0', cursor: 'pointer' }}>Retour au tableau</button>
         </div>
+      </header>
 
-        <div className="pm-drawer-body" style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 380px' }}>
-          {/* Dossier */}
-          <div className="pm-drawer-main pm-scroll" style={{ minHeight: 0, overflowY: 'auto', padding: '22px 24px 28px' }}>
-            {/* AVIS — en premier : c'est l'action attendue */}
-            {c.stage !== 'PLACE' && c.stage !== 'REFUSE' && (
-              <div style={{ marginBottom: 24, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, padding: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-                  <div style={LABEL}>Votre avis</div>
-                  {last && <span style={{ fontSize: FS.sm, color: MUTED }}>Actuel : <strong style={{ color: DECISION_TONE[last].fg }}>{DECISION_LABEL[last]}</strong></span>}
+      <main style={{ maxWidth: 1280, margin: '0 auto', padding: isMobile ? '18px 16px 40px' : '28px 32px 48px', display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
+        <div style={{ flex: '999 1 640px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          <section style={{ ...sectionCard, gap: 20 }}>
+            <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+              <PersonAvatar name={fullName(c)} photo={c.candidat.photoUrl} size={isMobile ? 60 : 76} ring />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 220 }}>
+                <h1 style={{ fontSize: isMobile ? 22 : 26, lineHeight: 1.2, color: INK, letterSpacing: '-0.02em' }}>{fullName(c)}</h1>
+                {subtitle && <span style={{ fontSize: 14, color: MUTED }}>{subtitle}</span>}
+              </div>
+              {!hired && !lost && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {c.column === 'INBOX'
+                    ? <button onClick={() => onDecision('RENCONTRER')} style={BTN}>Rencontrer</button>
+                    : next && <button onClick={() => onMove(next)} style={BTN}>{next === 'ENGAGE' ? 'Annoncer l’embauche' : `Passer en ${COL_LABELS[next]}`}</button>}
+                  <button onClick={() => onDecision('A_DISCUTER')} style={BTN_GHOST}>À discuter</button>
+                  <button onClick={() => onDecision('ECARTER')} style={BTN_GHOST}>Écarter</button>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginTop: 10 }}>
-                  {decisionBtn('RENCONTRER', <Check size={17} aria-hidden />, 'Rencontrer', DECISION_TONE.RENCONTRER)}
-                  {decisionBtn('A_DISCUTER', <MessageSquare size={17} aria-hidden />, 'À discuter', DECISION_TONE.A_DISCUTER)}
-                  {decisionBtn('ECARTER', <X size={17} aria-hidden />, 'Écarter', DECISION_TONE.ECARTER)}
-                </div>
+              )}
+            </div>
+
+            {/* Étapes : cliquer pour déplacer (alternative au glisser-déposer) */}
+            <ol aria-label="Étapes du recrutement" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))`, gap: 6 }}>
+              {steps.map((s, i) => {
+                const on = c.column === s;
+                const done = idx >= 0 && i <= idx;
+                const date = on && upcomingInterview(c) ? fmtInterview(c.dateEntretienClient!) : null;
+                return (
+                  <li key={s}>
+                    <button className="pm-step" disabled={hired || on} aria-current={on ? 'step' : undefined} onClick={() => onMove(s)}
+                      aria-label={on ? `${COL_LABELS[s]}, étape actuelle` : hired ? COL_LABELS[s] : `Passer en ${COL_LABELS[s]}`}
+                      style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6, textAlign: 'left', background: 'none', border: 'none', padding: 0, fontFamily: FONT, cursor: hired || on ? 'default' : 'pointer' }}>
+                      <span className="pm-step-bar" style={{ height: 6, borderRadius: 3, background: done ? BRAND : LINE, transition: 'background .15s ease' }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: on ? BRAND : done ? INK : MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{COL_LABELS[s]}</span>
+                      {date && <span style={{ fontSize: 12, color: BRAND }}>{date}</span>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+
+            {(lost || hired || c.hireAnnounced || last) && (
+              <div style={{ background: SOFT, borderRadius: 10, padding: '12px 14px', fontSize: 14 }}>
+                {lost ? <><b style={{ color: INK }}>Profil écarté.</b> Vous pouvez le remettre dans le process en cliquant sur une étape.</>
+                  : hired ? <><b style={{ color: INK }}>Embauche validée.</b> Contactez {repName || 'Humanup'} pour toute modification.</>
+                  : c.hireAnnounced ? <><b style={{ color: INK }}>Embauche annoncée.</b> {repName || 'Humanup'} la finalise avec vous.</>
+                  : <>Votre avis : <b style={{ color: INK }}>{DECISION_LABEL[last!]}</b></>}
               </div>
             )}
+          </section>
 
-            {c.candidat.contact && <ContactBlock contact={c.candidat.contact} />}
+          {slotsPending(c) && <MeetingStatus c={c} />}
+          {debriefDue(c) && <section style={{ ...CARD, padding: isMobile ? 18 : 24 }}><DebriefForm c={c} onSaved={onSaved} /></section>}
+          {c.portalDebrief && (
+            <section style={{ ...sectionCard, gap: 10 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: INK }}>Votre débrief d’entretien</h2>
+              <span style={{ fontSize: 14 }}><b style={{ color: INK }}>{c.portalDebrief.rating}/5</b> · {c.portalDebrief.by}</span>
+              {c.portalDebrief.strengths && <p><b style={{ color: INK }}>Points forts :</b> {c.portalDebrief.strengths}</p>}
+              {c.portalDebrief.concerns && <p><b style={{ color: INK }}>Réserves :</b> {c.portalDebrief.concerns}</p>}
+            </section>
+          )}
 
-            {c.candidat.aiPitchShort && (
-              <>
-                <div style={LABEL}>Synthèse</div>
-                <p style={{ fontSize: FS.md, lineHeight: 1.65, color: TEXT, marginTop: 8 }}>{c.candidat.aiPitchShort}</p>
-              </>
-            )}
+          <section style={sectionCard}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: INK }}>Le dossier Humanup</h2>
+            {c.candidat.aiPitchShort && <p style={{ lineHeight: 1.6 }}>{c.candidat.aiPitchShort}</p>}
             {infos.length > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8, marginTop: 18 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
                 {infos.map((it, i) => (
-                  <div key={i} style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, padding: '10px 12px' }}>
-                    <div style={LABEL}>{it.label}</div>
-                    <div style={{ fontSize: FS.base, fontWeight: 700, color: INK, marginTop: 3, lineHeight: 1.4 }}>{it.value}</div>
+                  <div key={i} style={{ background: BG, borderRadius: 10, padding: 12 }}>
+                    <span style={{ display: 'block', fontSize: 12, color: MUTED }}>{it.label}</span>
+                    <span style={{ fontWeight: 600, color: INK, fontSize: 14 }}>{it.value}</span>
                   </div>
                 ))}
               </div>
             )}
-            {bullets.length > 0 && (sections.length > 0 || infos.length > 0) && <div style={{ ...LABEL, marginTop: 24 }}>Adéquation au poste</div>}
             {bullets.length > 0 && (
-              <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {bullets.slice(0, 8).map((b, i) => (
-                  <li key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-                    <span aria-hidden style={{ flexShrink: 0, width: 18, height: 18, borderRadius: 6, background: '#F2F3D8', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}><Check size={11} color={BRAND} strokeWidth={2.6} /></span>
-                    <span style={{ fontSize: FS.base, lineHeight: 1.55, color: TEXT }}>{b}</span>
-                  </li>
-                ))}
-              </ul>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <h3 style={h3}>Pourquoi ce profil pour votre poste</h3>
+                <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {bullets.slice(0, 8).map((b, i) => <li key={i}>{b}</li>)}
+                </ul>
+              </div>
             )}
             {sections.map((sec, i) => (
-              <div key={i} style={{ marginTop: 24 }}>
-                <div style={LABEL}>{sec.title}</div>
-                <ul style={{ margin: '9px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {sec.items.map((it, j) => <li key={j} style={{ fontSize: FS.base, lineHeight: 1.55, color: TEXT }}>{it}</li>)}
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <h3 style={h3}>{sec.title}</h3>
+                <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {sec.items.map((it, j) => <li key={j}>{it}</li>)}
                 </ul>
               </div>
             ))}
-            {!c.candidat.aiPitchShort && bullets.length === 0 && sections.length === 0 && <p style={{ fontSize: FS.md, color: MUTED }}>Le dossier détaillé sera disponible sous peu.</p>}
-          </div>
+            {!c.candidat.aiPitchShort && bullets.length === 0 && sections.length === 0 && infos.length === 0 && <p style={{ color: MUTED }}>Le dossier détaillé sera disponible sous peu.</p>}
+            {c.candidat.contact && <ContactBlock contact={c.candidat.contact} />}
+          </section>
+        </div>
 
-          {/* Panneau latéral : Activité / Commentaires */}
-          <div className="pm-drawer-side" style={{ minHeight: 0, display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${LINE}`, background: '#F7F6F0' }}>
-            <div role="tablist" aria-label="Suivi du profil" style={{ flexShrink: 0, display: 'flex', gap: 6, padding: '12px 16px', borderBottom: `1px solid ${LINE}`, background: '#FCFCF7' }}>
-              {([['activite', 'Activité'], ['commentaires', 'Commentaires']] as const).map(([k, label]) => {
-                const on = tab === k;
-                return (
-                  <button key={k} role="tab" aria-selected={on} className="pm-tab" onClick={() => onTab(k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FS.md, fontWeight: on ? 800 : 600, padding: '7px 13px', borderRadius: 9, border: 'none', cursor: 'pointer', background: on ? '#EDEBFA' : 'transparent', color: on ? BRAND : MUTED }}>
-                    {label}
-                    {k === 'commentaires' && nbComments > 0 && <span style={{ fontSize: FS.xs, fontWeight: 800, borderRadius: 99, padding: '1px 7px', background: on ? '#fff' : 'rgba(26,21,51,.07)', color: on ? BRAND : MUTED }}>{nbComments}</span>}
-                  </button>
-                );
-              })}
+        <aside style={{ flex: '1 1 360px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <section style={{ ...CARD, display: 'flex', flexDirection: 'column' }}>
+            <div role="tablist" aria-label="Suivi du profil" style={{ display: 'flex', borderBottom: `1px solid ${LINE}`, padding: '0 16px' }}>
+              <button role="tab" aria-selected={tab === 'commentaires'} onClick={() => onTab('commentaires')} style={tabBtn(tab === 'commentaires')}>Commentaires{nbComments > 0 ? ` (${nbComments})` : ''}</button>
+              <button role="tab" aria-selected={tab === 'activite'} onClick={() => onTab('activite')} style={tabBtn(tab === 'activite')}>Activité</button>
             </div>
-            <div role="tabpanel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <div role="tabpanel">
               {tab === 'activite'
                 ? <ActivityFeed key={activityKey} candidatureId={c.id} />
                 : <CommentThread candidatureId={c.id} repName={repName} prefillMention={prefillMention} onCount={setNbComments} onPosted={() => setActivityKey((k) => k + 1)} />}
             </div>
-          </div>
-        </div>
-      </aside>
-    </>
+          </section>
+
+          {team.length > 0 && (
+            <section style={{ ...CARD, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: INK }}>Votre équipe Humanup</span>
+              {team.map((t) => (
+                <div key={t.role} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14 }}>
+                  <PersonAvatar name={t.name} photo={t.photo} size={40} ring />
+                  <span><span style={{ fontWeight: 600, color: INK }}>{t.name}</span><br /><span style={{ color: MUTED }}>{t.role}</span></span>
+                </div>
+              ))}
+            </section>
+          )}
+        </aside>
+      </main>
+    </div>
   );
 }
 
@@ -745,36 +1000,22 @@ function ActivityFeed({ candidatureId }: { candidatureId: string }) {
     })();
   }, [candidatureId]);
 
-  const icon = (it: ActivityItem) => {
-    const s = { size: 14, strokeWidth: 2.3, 'aria-hidden': true } as const;
-    if (it.kind === 'COMMENT') return { el: <MessageCircle {...s} />, bg: '#EDEBFA', fg: BRAND };
-    if (it.kind === 'DECISION') return { el: <Check {...s} />, bg: '#E6F2E9', fg: '#256238' };
-    if (it.kind === 'INTERVIEW') return { el: <CalendarClock {...s} />, bg: '#FCF1E4', fg: '#9A5A12' };
-    if (it.kind === 'STAGE' && it.text.includes('présenté')) return { el: <UserPlus {...s} />, bg: '#EAF1FC', fg: '#1F58B8' };
-    const st: Col = it.stage && STAGE_ACCENT[it.stage] ? it.stage : 'INBOX';
-    return { el: <ArrowRight {...s} />, bg: STAGE_TINT[st], fg: STAGE_ACCENT[st] };
-  };
-
-  if (!items) return <div style={{ padding: 20, fontSize: FS.base, color: FAINT }}>Chargement…</div>;
-  if (items.length === 0) return <div style={{ padding: 20, fontSize: FS.base, color: FAINT }}>Pas encore d’activité sur ce profil.</div>;
+  if (!items) return <p style={{ padding: 16, fontSize: 14, color: MUTED }}>Chargement…</p>;
+  if (items.length === 0) return <p style={{ padding: 16, fontSize: 14, color: MUTED }}>Pas encore d’activité sur ce profil.</p>;
   return (
-    <ol className="pm-scroll pm-thread-list" style={{ listStyle: 'none', margin: 0, flex: 1, overflowY: 'auto', padding: '18px 18px 24px' }}>
+    <ol style={{ listStyle: 'none', margin: 0, padding: 16, display: 'flex', flexDirection: 'column', gap: 14, fontSize: 14 }}>
       {items.map((it, i) => {
-        const ic = icon(it);
-        const lastItem = i === items.length - 1;
         const upcoming = it.kind === 'INTERVIEW' && new Date(it.at) > new Date();
+        // Point indigo : ce qui fait avancer le process ; gris : consultations, avis, commentaires.
+        const strong = it.kind === 'STAGE' || it.kind === 'MOVE' || it.kind === 'INTERVIEW';
         return (
-          <li key={i} style={{ display: 'flex', gap: 12, position: 'relative', paddingBottom: lastItem ? 0 : 18 }}>
-            {!lastItem && <span aria-hidden style={{ position: 'absolute', left: 14, top: 30, bottom: 2, width: 2, background: 'rgba(26,21,51,.08)', borderRadius: 2 }} />}
-            <span style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 10, background: ic.bg, color: ic.fg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{ic.el}</span>
-            <div style={{ minWidth: 0, flex: 1, paddingTop: 2 }}>
-              <div style={{ fontSize: FS.base, lineHeight: 1.45, color: TEXT }}>
-                {it.actor && <strong style={{ color: INK }}>{it.actor} </strong>}{it.text}
-                {it.kind === 'INTERVIEW' && <strong style={{ color: INK }}> · {fmtInterview(it.at)}</strong>}
-              </div>
-              {it.detail && <div style={{ fontSize: FS.base, lineHeight: 1.5, color: MUTED, marginTop: 5, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 10, padding: '7px 10px' }}>{it.detail}</div>}
-              <div style={{ fontSize: FS.sm, color: FAINT, marginTop: 4 }}>{upcoming ? 'À venir' : relTime(it.at)}</div>
-            </div>
+          <li key={i} style={{ display: 'flex', gap: 10 }}>
+            <span aria-hidden style={{ flex: 'none', width: 8, height: 8, borderRadius: '50%', background: strong ? BRAND : '#9CA3AF', marginTop: 8 }} />
+            <span style={{ minWidth: 0 }}>
+              <span>{it.actor && <span style={{ fontWeight: 600, color: INK }}>{it.actor} </span>}{it.text}{it.kind === 'INTERVIEW' && <span style={{ fontWeight: 600, color: INK }}> · {fmtInterview(it.at)}</span>}</span>
+              {it.detail && <span style={{ display: 'block', color: MUTED, marginTop: 2 }}>{it.detail}</span>}
+              <span style={{ display: 'block', color: MUTED, fontSize: 13 }}>{upcoming ? 'À venir' : relTime(it.at)}</span>
+            </span>
           </li>
         );
       })}
@@ -792,47 +1033,58 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
   const ref = useRef<HTMLDivElement>(null);
   useDialogFocus(ref, onCancel);
   const [reason, setReason] = useState('');
-  const [date, setDate] = useState('');
+  const [dates, setDates] = useState<string[]>(['']);
   const [who, setWho] = useState('');
-  const ok = to === 'PERDU' ? reason.trim().length > 0 : to === 'SCREENING' ? !!date && who.trim().length > 0 : true;
-  const field: React.CSSProperties = { width: '100%', marginTop: 6, fontSize: FS.md, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.18)', background: '#fff', outline: 'none', fontFamily: "'Manrope',sans-serif", color: INK };
-  const label: React.CSSProperties = { fontSize: FS.sm, fontWeight: 800, color: MUTED, marginTop: 14, display: 'block' };
-  const title = to === 'PERDU' ? `Écarter ${fullName(c)} ?` : to === 'ENGAGE' ? `Annoncer l'embauche de ${fullName(c)} ?` : `Planifier le Screening avec ${fullName(c)}`;
+  // Depuis l'Inbox, le client peut proposer plusieurs créneaux : le candidat choisit.
+  const multi = to === 'SCREENING' && c.column === 'INBOX';
+  const filled = dates.filter(Boolean);
+  const ok = to === 'PERDU' ? reason.trim().length > 0 : to === 'SCREENING' ? filled.length > 0 && who.trim().length > 0 : true;
+  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', fontFamily: FONT, fontSize: 14, padding: '10px 12px', borderRadius: 10, border: '1px solid #D1D5DB', background: '#fff', color: INK };
+  const label: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: INK, marginBottom: 4, display: 'block' };
+  const title = to === 'PERDU' ? `Écarter ${fullName(c)} ?` : to === 'ENGAGE' ? `Annoncer l'embauche de ${fullName(c)} ?` : `Rencontrer ${fullName(c)}`;
   return (
     <>
-      <div onClick={onCancel} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(26,21,51,.42)' }} />
-      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="pm-move-title" style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', zIndex: 71, width: 440, maxWidth: 'calc(100vw - 32px)', background: '#FCFCF5', borderRadius: 18, padding: 24, boxShadow: '0 30px 80px -30px rgba(26,21,51,.6)', fontFamily: "'Manrope',sans-serif" }}>
-        <h3 id="pm-move-title" style={{ fontFamily: DISPLAY, fontSize: FS.lg + 2, color: INK, letterSpacing: '-.01em', lineHeight: 1.25 }}>{title}</h3>
+      <div onClick={onCancel} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(17,24,39,.45)' }} />
+      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="pm-move-title" className="pm-page" style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', zIndex: 71, width: 460, maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto', boxSizing: 'border-box', background: '#fff', borderRadius: 14, padding: 24, paddingBottom: 24, boxShadow: '0 24px 60px -24px rgba(17,24,39,.5)', fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <h3 id="pm-move-title" style={{ fontSize: 18, fontWeight: 700, color: INK, lineHeight: 1.3 }}>{title}</h3>
         {to === 'PERDU' && (
-          <>
+          <div>
             <label htmlFor="pm-reason" style={label}>Pourquoi ?</label>
-            <textarea id="pm-reason" data-autofocus value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex. : expérience trop éloignée des grands comptes…" style={{ ...field, minHeight: 84, resize: 'vertical' }} />
-          </>
+            <textarea id="pm-reason" data-autofocus value={reason} onChange={e => setReason(e.target.value)} placeholder="Exemple : expérience trop éloignée des grands comptes" style={{ ...field, minHeight: 84, resize: 'vertical' }} />
+            <span style={{ display: 'block', fontSize: 13, color: MUTED, marginTop: 6 }}>Votre retour aide {repName || 'Humanup'} à ajuster la recherche et à répondre au candidat.</span>
+          </div>
         )}
         {to === 'SCREENING' && (
           <>
-            <label htmlFor="pm-date" style={label}>Date et heure de l'entretien</label>
-            <input id="pm-date" data-autofocus type="datetime-local" value={date} onChange={e => setDate(e.target.value)} style={field} />
-            <label htmlFor="pm-who" style={label}>Avec qui chez vous ?</label>
-            <input id="pm-who" value={who} onChange={e => setWho(e.target.value)} placeholder="Prénom Nom, fonction" style={field} />
+            {multi && <p style={{ fontSize: 14, color: MUTED }}>Proposez un à trois créneaux. Avec un seul, l’entretien est planifié tout de suite. Avec plusieurs, le candidat choisit et vous êtes prévenu.</p>}
+            {dates.map((d, i) => (
+              <div key={i}>
+                <label htmlFor={`pm-date-${i}`} style={label}>{multi ? `Créneau ${i + 1}` : 'Date et heure de l’entretien'}</label>
+                <input id={`pm-date-${i}`} {...(i === 0 ? { 'data-autofocus': true } : {})} type="datetime-local" value={d} onChange={e => setDates(dates.map((x, k) => (k === i ? e.target.value : x)))} style={field} />
+              </div>
+            ))}
+            {multi && dates.length < 3 && <button onClick={() => setDates([...dates, ''])} style={{ alignSelf: 'flex-start', fontFamily: FONT, fontSize: 14, fontWeight: 600, color: BRAND, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>Ajouter un créneau</button>}
+            <div>
+              <label htmlFor="pm-who" style={label}>Avec qui chez vous ?</label>
+              <input id="pm-who" value={who} onChange={e => setWho(e.target.value)} placeholder="Prénom Nom, fonction" style={field} />
+            </div>
           </>
         )}
         {to === 'ENGAGE' && (
-          <p style={{ fontSize: FS.md, lineHeight: 1.6, color: TEXT, marginTop: 12 }}>
-            {repName || 'HumanUp'} finalise l’embauche avec vous (date de démarrage, contrat). La carte passera en « Engagé » une fois validée.
+          <p style={{ fontSize: 14, lineHeight: 1.6 }}>
+            {repName || 'Humanup'} finalise l’embauche avec vous (date de démarrage, contrat). La carte passera en « Engagé » une fois validée.
           </p>
         )}
-        <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-          <button className="pm-btn" onClick={onCancel} style={{ flex: 1, fontSize: FS.md, fontWeight: 700, background: 'transparent', color: MUTED, border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 11, padding: 11, cursor: 'pointer' }}>Annuler</button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onCancel} style={{ ...BTN_GHOST, flex: 1 }}>Annuler</button>
           <button
-            className="pm-btn"
             disabled={!ok}
-            onClick={() => onConfirm(to === 'PERDU' ? { reason: reason.trim() } : to === 'SCREENING' ? { dateEntretienClient: new Date(date).toISOString(), interlocuteurClient: who.trim() } : {})}
-            style={{ flex: 1, fontSize: FS.md, fontWeight: 800, background: ok ? BRAND : '#C4C1D0', color: CREAM, border: 'none', borderRadius: 11, padding: 11, cursor: ok ? 'pointer' : 'default' }}
-          >{to === 'PERDU' ? 'Écarter' : to === 'ENGAGE' ? 'Annoncer' : 'Planifier'}</button>
+            onClick={() => onConfirm(to === 'PERDU' ? { reason: reason.trim() } : to === 'SCREENING' ? { slots: filled.map((d) => new Date(d).toISOString()), interlocuteurClient: who.trim() } : {})}
+            style={{ ...BTN, flex: 1, background: ok ? BRAND : '#9CA3AF', cursor: ok ? 'pointer' : 'default' }}
+          >{to === 'PERDU' ? 'Écarter' : to === 'ENGAGE' ? 'Annoncer' : filled.length > 1 ? 'Proposer ces créneaux' : 'Planifier'}</button>
         </div>
         {to === 'SCREENING' && fromDecision && (
-          <button className="pm-btn" onClick={onSkip} style={{ width: '100%', marginTop: 10, fontSize: FS.base, fontWeight: 700, background: 'transparent', color: BRAND, border: 'none', padding: 8, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}>
+          <button onClick={onSkip} style={{ fontFamily: FONT, fontSize: 14, fontWeight: 600, background: 'transparent', color: BRAND, border: 'none', padding: 4, cursor: 'pointer' }}>
             Je n’ai pas encore de date
           </button>
         )}
@@ -855,14 +1107,12 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
   const [error, setError] = useState('');
   const { mandatId: mandatIdParam } = useParams<{ mandatId: string }>();
   const ta = useRef<HTMLTextAreaElement>(null);
-  const listEnd = useRef<HTMLDivElement>(null);
 
   async function load() {
     const res = await portalFetch(`/candidatures/${candidatureId}/comments`);
     const list: PortalCommentRow[] = res.ok ? await res.json() : [];
     setRows(list);
     onCount(list.length);
-    window.setTimeout(() => listEnd.current?.scrollIntoView({ block: 'nearest' }), 0);
   }
   useEffect(() => {
     void load();
@@ -871,7 +1121,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
       if (!res.ok) return;
       const m = await res.json() as { internal: Array<{ id: string; name: string; role: string; avatarUrl?: string | null }>; external: Array<{ email: string; name: string }> };
       const list: Mentionable[] = [
-        ...m.internal.map((u) => ({ key: u.id, label: u.name, sub: `HumanUp · ${u.role}`, photo: u.avatarUrl, mention: { kind: 'internal' as const, id: u.id } })),
+        ...m.internal.map((u) => ({ key: u.id, label: u.name, sub: `Humanup · ${u.role}`, photo: u.avatarUrl, mention: { kind: 'internal' as const, id: u.id } })),
         ...m.external.map((x) => ({ key: x.email, label: x.name, sub: x.email, mention: { kind: 'external' as const, email: x.email, name: x.name } })),
       ];
       setPeople(list);
@@ -884,7 +1134,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candidatureId]);
+  }, [candidatureId, prefillMention]);
 
   // Suggestions pour le mot en cours après « @ ».
   const suggestions = useMemo(() => {
@@ -896,6 +1146,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
     }
     return list;
   }, [query, people]);
+  const photoOf = (author: string) => people.find((p) => p.label === author)?.photo ?? null;
 
   function onChange(v: string) {
     setText(v); setError('');
@@ -932,74 +1183,64 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
     if (names.length === 0) return content;
     const re = new RegExp(`(${names.map((n) => '@' + n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'g');
     return content.split(re).map((part, i) => names.some((n) => part === '@' + n)
-      ? <span key={i} style={{ color: BRAND, fontWeight: 800, background: '#F2F3D8', borderRadius: 5, padding: '0 3px' }}>{part}</span>
+      ? <span key={i} style={{ color: BRAND, fontWeight: 600 }}>{part}</span>
       : <span key={i}>{part}</span>);
   };
 
   return (
-    <>
-      <div className="pm-scroll pm-thread-list" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 16px 8px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {rows === null && <p style={{ fontSize: FS.base, color: FAINT }}>Chargement…</p>}
-        {rows?.length === 0 && (
-          <div style={{ margin: 'auto 0', textAlign: 'center', color: FAINT, fontSize: FS.base, lineHeight: 1.6, padding: '24px 8px' }}>
-            Aucun commentaire.
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {rows === null && <p style={{ fontSize: 14, color: MUTED }}>Chargement…</p>}
+      {rows?.length === 0 && <p style={{ fontSize: 14, color: MUTED }}>Aucun commentaire pour l’instant.</p>}
+      {rows?.map((r) => (
+        <div key={r.id} style={{ display: 'flex', gap: 10 }}>
+          <PersonAvatar name={r.author} photo={photoOf(r.author)} size={32} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 14, minWidth: 0 }}>
+            <span><span style={{ fontWeight: 600, color: INK }}>{r.author}</span> <span style={{ color: MUTED, fontSize: 13 }}>· {relTime(r.createdAt)}</span></span>
+            <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{renderContent(r.content, r.mentions)}</span>
           </div>
-        )}
-        {rows?.map((r) => (
-          <div key={r.id} style={{ display: 'flex', gap: 10 }}>
-            <span aria-hidden style={{ flexShrink: 0, width: 30, height: 30, borderRadius: '50%', background: BRAND, color: CREAM, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: FS.xs, fontWeight: 800 }}>{initialsOf(r.author)}</span>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: FS.base, fontWeight: 800, color: INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.author}</span>
-                <span style={{ fontSize: FS.sm, color: FAINT, whiteSpace: 'nowrap' }}>{relTime(r.createdAt)}</span>
-              </div>
-              <div style={{ fontSize: FS.base, lineHeight: 1.55, color: TEXT, marginTop: 4, whiteSpace: 'pre-wrap', background: '#fff', border: `1px solid ${LINE}`, borderRadius: '4px 12px 12px 12px', padding: '8px 11px' }}>{renderContent(r.content, r.mentions)}</div>
-            </div>
-          </div>
-        ))}
-        <div ref={listEnd} />
-      </div>
+        </div>
+      ))}
 
-      <div style={{ flexShrink: 0, padding: '12px 16px 16px', borderTop: `1px solid ${LINE}`, background: '#FCFCF7' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <label htmlFor="pm-comment" style={{ fontSize: 13, fontWeight: 600, color: INK }}>Votre commentaire</label>
         <div style={{ position: 'relative' }}>
-          <label htmlFor="pm-comment" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Écrire un commentaire</label>
           <textarea
-            id="pm-comment" ref={ta} value={text}
+            id="pm-comment" ref={ta} value={text} rows={3}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Escape' && query !== null) { setQuery(null); e.stopPropagation(); }
               if (e.key === 'Enter' && suggestions.length > 0 && query !== null) { e.preventDefault(); pick(suggestions[0]); return; }
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); }
             }}
-            placeholder="Écrire un commentaire, @ pour mentionner"
-            style={{ width: '100%', minHeight: 76, resize: 'vertical', fontFamily: "'Manrope',sans-serif", fontSize: FS.md, lineHeight: 1.5, padding: '11px 13px', borderRadius: 12, border: '1.5px solid rgba(34,23,122,.18)', background: '#fff', outline: 'none', color: INK }}
+            placeholder="Écrivez @ pour mentionner un collègue ou l'équipe Humanup"
+            style={{ width: '100%', boxSizing: 'border-box', display: 'block', resize: 'vertical', fontFamily: FONT, fontSize: 14, lineHeight: 1.5, padding: '10px 12px', borderRadius: 10, border: '1px solid #D1D5DB', background: '#fff', color: INK }}
           />
           {query !== null && suggestions.length > 0 && (
-            <div role="listbox" aria-label="Personnes à identifier" style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', marginBottom: 6, background: '#fff', border: '1px solid rgba(34,23,122,.14)', borderRadius: 12, boxShadow: '0 18px 40px -20px rgba(26,21,51,.45)', overflow: 'hidden', zIndex: 5 }}>
-              {suggestions.map((p) => (
-                <button key={p.key} role="option" aria-selected={false} onMouseDown={(e) => { e.preventDefault(); pick(p); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '9px 12px', background: 'transparent', border: 'none', borderBottom: '1px solid rgba(34,23,122,.06)', cursor: 'pointer' }}>
-                  <PersonAvatar name={p.label} photo={p.photo} size={28} bg={p.mention.kind === 'internal' ? BRAND : '#F2F3D8'} fg={p.mention.kind === 'internal' ? CREAM : BRAND} />
+            <div role="listbox" aria-label="Personnes à mentionner" style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', marginBottom: 6, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, boxShadow: '0 12px 32px -12px rgba(17,24,39,.3)', overflow: 'hidden', zIndex: 5 }}>
+              {suggestions.map((p, i) => (
+                <button key={p.key} role="option" aria-selected={false} onMouseDown={(e) => { e.preventDefault(); pick(p); }} className="pm-row" style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '9px 12px', background: '#fff', border: 'none', borderTop: i ? `1px solid ${SOFT}` : 'none', cursor: 'pointer', fontFamily: FONT }}>
+                  <PersonAvatar name={p.label} photo={p.photo} size={28} />
                   <span style={{ minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: FS.base, fontWeight: 700, color: INK }}>{p.label}</span>
-                    <span style={{ display: 'block', fontSize: FS.sm, color: FAINT }}>{p.sub}</span>
+                    <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: INK }}>{p.label}</span>
+                    <span style={{ display: 'block', fontSize: 13, color: MUTED }}>{p.sub}</span>
                   </span>
                 </button>
               ))}
             </div>
           )}
         </div>
-        {error && <p role="alert" style={{ fontSize: FS.sm, color: '#9E2F1A', fontWeight: 700, marginTop: 8 }}>{error}</p>}
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button className="pm-btn" onClick={startMention} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FS.base, fontWeight: 700, background: '#F2F3D8', color: BRAND, border: 'none', borderRadius: 11, padding: '0 14px', cursor: 'pointer' }}><AtSign size={14} aria-hidden />Mentionner</button>
-          <button className="pm-btn" disabled={busy || !text.trim()} onClick={send} style={{ flex: 1, fontSize: FS.md, fontWeight: 800, background: text.trim() ? BRAND : '#C4C1D0', color: CREAM, border: 'none', borderRadius: 11, padding: 11, cursor: text.trim() ? 'pointer' : 'default' }}>Envoyer</button>
+        {error && <p role="alert" style={{ fontSize: 13, color: '#B42318', fontWeight: 600 }}>{error}</p>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={startMention} style={{ ...BTN_GHOST, padding: '9px 14px' }}>Mentionner</button>
+          <button disabled={busy || !text.trim()} onClick={send} style={{ ...BTN, padding: '9px 16px', background: text.trim() ? BRAND : '#9CA3AF', cursor: text.trim() ? 'pointer' : 'default' }}>Envoyer</button>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
 // ─── Titre de l'offre + changement d'offre ───
-function OfferSwitcher({ current, title, logo, company, compact }: { current: string; title: string; logo?: string | null; company: string; compact?: boolean }) {
+function OfferSwitcher({ current, title, compact }: { current: string; title: string; compact?: boolean }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [offres, setOffres] = useState<Array<{ id: string; titrePoste: string; statut: string; toReview: number }> | null>(null);
@@ -1008,29 +1249,28 @@ function OfferSwitcher({ current, title, logo, company, compact }: { current: st
     void portalFetch('/offres').then(async (r) => setOffres(r.ok ? await r.json() : []));
   }, [open, offres]);
   return (
-    <div style={{ position: 'relative', marginTop: 6 }}>
-      <button className="pm-chip" onClick={() => setOpen((v) => !v)} aria-haspopup="listbox" aria-expanded={open}
-        style={{ display: 'flex', alignItems: 'center', gap: 12, maxWidth: '100%', background: 'transparent', border: '1px solid transparent', borderRadius: 12, padding: '4px 8px 4px 4px', marginLeft: -4, cursor: 'pointer', color: INK, textAlign: 'left' }}>
-        <CompanyLogo logo={logo} text={company || title} size={compact ? 34 : 40} />
-        <h1 style={{ fontFamily: DISPLAY, fontSize: compact ? 20 : 26, lineHeight: 1.15, letterSpacing: '-.025em', minWidth: 0 }}>{title}</h1>
-        <ChevronDown size={18} aria-hidden style={{ flexShrink: 0, color: MUTED, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .15s ease' }} />
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setOpen((v) => !v)} aria-haspopup="listbox" aria-expanded={open}
+        style={{ fontFamily: FONT, display: 'flex', alignItems: 'center', gap: 8, maxWidth: '100%', background: 'none', border: 0, padding: 0, cursor: 'pointer', color: INK, textAlign: 'left' }}>
+        <h1 style={{ fontSize: compact ? 22 : 26, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2, minWidth: 0 }}>{title}</h1>
+        <ChevronDown size={18} aria-hidden style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .15s ease' }} />
       </button>
       {open && (
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 50 }} />
-          <div role="listbox" aria-label="Changer d'offre" style={{ position: 'absolute', left: 0, top: 'calc(100% + 6px)', zIndex: 51, width: 360, maxWidth: 'calc(100vw - 32px)', background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, boxShadow: '0 18px 40px -20px rgba(26,21,51,.45)', padding: 6 }}>
-            {!offres && <p style={{ padding: 10, fontSize: FS.base, color: FAINT }}>Chargement…</p>}
+          <div role="listbox" aria-label="Changer d'offre" style={{ position: 'absolute', left: 0, top: 'calc(100% + 8px)', zIndex: 51, width: 360, maxWidth: 'calc(100vw - 32px)', background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, boxShadow: '0 12px 32px -12px rgba(17,24,39,.3)', padding: 6 }}>
+            {!offres && <p style={{ padding: 10, fontSize: 14, color: MUTED }}>Chargement…</p>}
             {offres?.map((o) => (
-              <button key={o.id} role="option" aria-selected={o.id === current} onClick={() => { setOpen(false); if (o.id !== current) navigate(`/portail/mandat/${o.id}`); }}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', background: o.id === current ? '#EDEBFA' : 'transparent', border: 'none', borderRadius: 8, padding: '9px 10px', cursor: 'pointer' }}>
+              <button key={o.id} role="option" aria-selected={o.id === current} className="pm-row" onClick={() => { setOpen(false); if (o.id !== current) navigate(`/portail/mandat/${o.id}`); }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', background: o.id === current ? SOFT : '#fff', border: 'none', borderRadius: 8, padding: '9px 10px', cursor: 'pointer', fontFamily: FONT }}>
                 <span style={{ minWidth: 0, flex: 1 }}>
-                  <span style={{ display: 'block', fontSize: FS.base, fontWeight: 800, color: o.id === current ? BRAND : INK }}>{o.titrePoste}</span>
-                  {!['OUVERT', 'EN_COURS'].includes(o.statut) && <span style={{ display: 'block', fontSize: FS.sm, color: FAINT }}>{o.statut === 'GAGNE' ? 'Pourvue' : 'Terminée'}</span>}
+                  <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: o.id === current ? BRAND : INK }}>{o.titrePoste}</span>
+                  {!['OUVERT', 'EN_COURS'].includes(o.statut) && <span style={{ display: 'block', fontSize: 13, color: MUTED }}>{o.statut === 'GAGNE' ? 'Pourvue' : 'Terminée'}</span>}
                 </span>
-                {o.toReview > 0 && <span style={{ fontSize: FS.xs, fontWeight: 800, color: BRAND, background: '#EDEBFA', borderRadius: 99, padding: '2px 8px' }}>{o.toReview}</span>}
+                {o.toReview > 0 && <Pill strong>{o.toReview} à traiter</Pill>}
               </button>
             ))}
-            <button onClick={() => { setOpen(false); navigate('/portail/offres'); }} style={{ width: '100%', textAlign: 'left', fontSize: FS.base, fontWeight: 700, color: BRAND, background: 'transparent', border: 'none', borderTop: `1px solid ${LINE}`, marginTop: 4, padding: '10px 10px 6px', cursor: 'pointer' }}>Voir toutes les offres</button>
+            <button onClick={() => { setOpen(false); navigate('/portail/offres'); }} style={{ width: '100%', textAlign: 'left', fontFamily: FONT, fontSize: 14, fontWeight: 600, color: BRAND, background: 'transparent', border: 'none', borderTop: `1px solid ${LINE}`, marginTop: 4, padding: '10px 10px 6px', cursor: 'pointer' }}>Voir toutes les offres</button>
           </div>
         </>
       )}

@@ -1,12 +1,15 @@
 // Espace candidat : page d'un process (étapes, prochain entretien, feedback).
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Page, C, card, h2, btn, TeamCard, Loading, fmtDate, fmtDateTime, espaceFetch, useAuthGuard, type TeamMember } from './espace-ui';
 import type { ProcessView } from './index';
 
 export default function EspaceProcessPage() {
   const { id = '' } = useParams();
+  const qc = useQueryClient();
+  const [choosing, setChoosing] = useState('');
+  const [slotError, setSlotError] = useState('');
   const q = useQuery({ queryKey: ['espace', 'process', id], queryFn: () => espaceFetch<ProcessView & { interviewer: string | null }>(`/processes/${id}`), retry: false, staleTime: 0 });
   const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<{ name: string; team: TeamMember[]; unread: number }>('/me'), retry: false, staleTime: 0 });
   useAuthGuard(q.error || me.error);
@@ -17,6 +20,15 @@ export default function EspaceProcessPage() {
   }
   if (!q.data || !me.data) return <Page><Loading /></Page>;
   const p = q.data;
+  async function chooseSlot(slot: string) {
+    setChoosing(slot); setSlotError('');
+    try {
+      await espaceFetch(`/processes/${id}/slot`, { method: 'POST', body: JSON.stringify({ slot }) });
+      await qc.invalidateQueries({ queryKey: ['espace'] });
+    } catch (e: any) {
+      setSlotError(e?.message || 'Something went wrong. Please try again.');
+    } finally { setChoosing(''); }
+  }
 
   return (
     <Page unread={me.data.unread} name={me.data.name}>
@@ -61,6 +73,17 @@ export default function EspaceProcessPage() {
             </section>
           </div>
           <aside className="esp-side">
+            {p.slotChoice && (
+              <div style={{ ...card, padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 10, borderColor: C.accent }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>Choose a time for your interview</span>
+                <span style={{ fontSize: 14, color: C.muted }}>The company would like to meet you. Times are shown in your time zone. The interview is confirmed as soon as you choose.</span>
+                {p.slotChoice.slots.map((s) => (
+                  <button key={s} disabled={!!choosing} onClick={() => chooseSlot(s)} style={{ ...btn, background: C.card, color: C.accent, border: `1px solid ${C.accent}`, opacity: choosing && choosing !== s ? 0.5 : 1 }}>{choosing === s ? 'Confirming' : fmtDateTime(s)}</button>
+                ))}
+                {slotError && <span role="alert" style={{ fontSize: 14, color: C.error }}>{slotError}</span>}
+                <span style={{ fontSize: 13, color: C.muted }}>None of these work? Message your Humanup team.</span>
+              </div>
+            )}
             {p.next && (
               <div style={{ background: C.accent, color: '#fff', borderRadius: 14, padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <span style={{ fontSize: 13, color: C.green, fontWeight: 600 }}>Your next interview</span>

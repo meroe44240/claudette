@@ -18,6 +18,7 @@ let lastSlackReportDate = '';
 let lastBatchEnrichDate = '';
 let lastRecapDate = '';
 let lastStandupDate = '';
+let lastPortalReminderDate = '';
 
 // ─── HELPERS ────────────────────────────────────────
 
@@ -327,6 +328,23 @@ async function checkStandupReport(): Promise<void> {
   }
 }
 
+// ─── PORTAIL CLIENT : relance des profils sans avis ─────────────
+
+async function checkPortalReminders(): Promise<void> {
+  try {
+    const { hours, minutes, dayOfWeek, dateKey } = getParisTime();
+    if (!isWeekday(dayOfWeek)) return;
+    if (lastPortalReminderDate === dateKey) return; // une fois/jour
+    if (hours !== 9 || minutes < 30 || minutes > 40) return; // ~09:30 Paris
+    lastPortalReminderDate = dateKey;
+    const { sendPendingReviewReminders } = await import('../modules/portal/portal.service.js');
+    const res = await sendPendingReviewReminders();
+    console.log(`[Cron] Relances portail : ${res.profils} profil(s) sur ${res.mandats} offre(s), ${res.emails} email(s)`);
+  } catch (err) {
+    console.error('[Cron] Portal reminders failed:', (err as Error).message);
+  }
+}
+
 export function startCronJobs(): void {
   if (cronStarted) {
     console.log('[Cron] Already started, skipping...');
@@ -395,6 +413,8 @@ export function startCronJobs(): void {
   // Recap bi-hebdo check every 60 seconds (runs Mon/Fri 08:00 ICT only)
   const standupInterval = setInterval(checkStandupReport, 60 * 1000);
   intervals.push(standupInterval);
+
+  intervals.push(setInterval(checkPortalReminders, 60 * 1000));
 
   const recapInterval = setInterval(checkRecap, 60 * 1000);
   intervals.push(recapInterval);

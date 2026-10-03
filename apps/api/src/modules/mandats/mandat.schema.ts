@@ -42,6 +42,7 @@ export const updateMandatSchema = z.object({
   visibleStages: z
     .array(z.enum(['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE', 'REFUSE']))
     .optional(),
+  clientBookingUrl: z.string().url().max(500).nullable().optional(),
   transcript: z.string().nullable().optional(),
   ficheDePoste: z.string().nullable().optional(),
   scorecard: z.any().optional(),
