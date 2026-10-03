@@ -7,8 +7,8 @@ import type { ProcessView } from './index';
 
 export default function EspaceProcessPage() {
   const { id = '' } = useParams();
-  const q = useQuery({ queryKey: ['espace', 'process', id], queryFn: () => espaceFetch<ProcessView & { interviewer: string | null }>(`/processes/${id}`), retry: false });
-  const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<{ name: string; team: TeamMember[]; unread: number }>('/me'), retry: false });
+  const q = useQuery({ queryKey: ['espace', 'process', id], queryFn: () => espaceFetch<ProcessView & { interviewer: string | null }>(`/processes/${id}`), retry: false, staleTime: 0 });
+  const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<{ name: string; team: TeamMember[]; unread: number }>('/me'), retry: false, staleTime: 0 });
   useAuthGuard(q.error || me.error);
   useEffect(() => { if (q.data) document.title = `${q.data.title} | Humanup`; }, [q.data]);
 

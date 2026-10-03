@@ -12,8 +12,8 @@ interface Expectations {
 
 export default function EspaceExpectationsPage() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['espace', 'expectations'], queryFn: () => espaceFetch<Expectations>('/expectations'), retry: false });
-  const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<{ name: string; unread: number }>('/me'), retry: false });
+  const q = useQuery({ queryKey: ['espace', 'expectations'], queryFn: () => espaceFetch<Expectations>('/expectations'), retry: false, staleTime: 0 });
+  const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<{ name: string; unread: number }>('/me'), retry: false, staleTime: 0 });
   useAuthGuard(q.error || me.error);
   const [exp, setExp] = useState<Record<string, string>>({});
   const [others, setOthers] = useState<OtherProcess[]>([]);

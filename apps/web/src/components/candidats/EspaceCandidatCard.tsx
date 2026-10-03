@@ -61,7 +61,7 @@ export default function EspaceCandidatCard({ candidatId }: { candidatId: string 
   });
   const revoke = useMutation({
     mutationFn: () => api.post(`/candidate-space/candidats/${candidatId}/revoke`),
-    onSuccess: () => { toast('success', 'Accès coupé'); qc.invalidateQueries({ queryKey: key }); },
+    onSuccess: () => { toast('success', 'Accès coupé'); setManualLink(null); qc.invalidateQueries({ queryKey: key }); },
   });
   const sendFeedback = useMutation({
     mutationFn: (p: { candidatureId: string; message: string }) => api.post(`/candidate-space/candidatures/${p.candidatureId}/message`, { message: p.message }),

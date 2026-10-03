@@ -42,8 +42,8 @@ export function ProcessRow({ p, first }: { p: ProcessView; first: boolean }) {
 }
 
 export default function EspaceHomePage() {
-  const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<Me>('/me'), retry: false });
-  const pr = useQuery({ queryKey: ['espace', 'processes'], queryFn: () => espaceFetch<{ processes: ProcessView[]; next: (ProcessView['next'] & { processId: string; title: string; company: string | null }) | null }>('/processes'), retry: false });
+  const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<Me>('/me'), retry: false, staleTime: 0 });
+  const pr = useQuery({ queryKey: ['espace', 'processes'], queryFn: () => espaceFetch<{ processes: ProcessView[]; next: (ProcessView['next'] & { processId: string; title: string; company: string | null }) | null }>('/processes'), retry: false, staleTime: 0 });
   useAuthGuard(me.error || pr.error);
   useEffect(() => { document.title = 'Your space | Humanup'; }, []);
 

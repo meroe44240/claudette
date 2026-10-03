@@ -139,6 +139,7 @@ export default function CandidatDetailPage() {
     qc.invalidateQueries({ queryKey: ['candidat', id] });
     qc.invalidateQueries({ queryKey: ['activites', 'candidat', id] });
     qc.invalidateQueries({ queryKey: ['candidat-portail', id] });
+    qc.invalidateQueries({ queryKey: ['espace-candidat', id] });
   };
 
   const stageMut = useMutation({ mutationFn: ({ candId, stage }: { candId: string; stage: string }) => api.put(`/candidatures/${candId}`, { stage }), onSuccess: () => { invalidate(); toast('success', 'Étape mise à jour'); }, onError: (e: any) => toast('error', e?.message || 'Échec') });

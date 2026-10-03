@@ -31,6 +31,8 @@ export const CANDIDATE_STEPS: Array<{ stage: string; label: string }> = [
   { stage: 'PLACE', label: 'Hired' },
 ];
 const STEP_LABEL: Record<string, string> = Object.fromEntries(CANDIDATE_STEPS.map((s) => [s.stage, s.label]));
+// Libellé d'étape en milieu de phrase : minuscules, sauf le nom Humanup.
+const lowerStep = (label: string) => label.toLowerCase().replace('humanup', 'Humanup');
 
 const fullName = (u: { prenom?: string | null; nom?: string | null } | null | undefined) =>
   `${u?.prenom ? u.prenom + ' ' : ''}${u?.nom ?? ''}`.trim();
@@ -504,7 +506,7 @@ async function notificationsFor(account: { candidatId: string; notifSeenAt: Date
     for (const h of c.stageHistory) {
       const visible = h.toStage === 'REFUSE' ? !!h.candidateMessage : !!STEP_LABEL[h.toStage];
       if (!visible) continue;
-      const step = h.toStage === 'REFUSE' ? 'process closed' : STEP_LABEL[h.toStage].toLowerCase();
+      const step = h.toStage === 'REFUSE' ? 'process closed' : lowerStep(STEP_LABEL[h.toStage]);
       items.push({
         id: h.id,
         title: `${roleName}, ${step}`,
@@ -592,7 +594,7 @@ export async function onStageChanged(historyId: string, changedById: string) {
         ]
       : [
           `Hi ${esc(firstName(c ?? {}))},`,
-          `News on the <b>${role}</b> role${company ? ` at <b>${esc(company)}</b>` : ''}: ${esc((STEP_LABEL[h.toStage] ?? 'new step').toLowerCase())}.`,
+          `News on the <b>${role}</b> role${company ? ` at <b>${esc(company)}</b>` : ''}: ${esc(lowerStep(STEP_LABEL[h.toStage] ?? 'new step'))}.`,
           quote,
         ],
     cta: { label: isClosed ? 'Open my space' : 'See the update', href: `${BASE}/espace/process/${h.candidature.id}` },
