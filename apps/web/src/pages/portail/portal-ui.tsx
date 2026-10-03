@@ -111,6 +111,8 @@ export function PersonAvatar({ name, photo, size, radius = '50%', bg = CREAM, fg
 export const SHARED_CSS = `
   .pm-page{ font-size:15px; line-height:1.55; color:${TEXT}; }
   .pm-page h1, .pm-page h2, .pm-page h3, .pm-page p{ margin:0; }
+  .pm-page h1, .pm-page h2, .pm-page h3{ font-family:inherit; font-weight:700; }
+  .pm-page ul{ list-style:disc; }
   .pm-focus:focus{ outline:none; }
   .pm-page button:focus-visible, .pm-page a:focus-visible, .pm-page input:focus-visible, .pm-page textarea:focus-visible, .pm-page select:focus-visible, .pm-focus:focus-visible{ outline:2px solid #6366F1; outline-offset:2px; }
   .pm-btn{ transition:background .15s ease, border-color .15s ease; }
