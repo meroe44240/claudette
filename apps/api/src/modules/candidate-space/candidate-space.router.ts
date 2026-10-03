@@ -11,6 +11,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '../../middleware/auth.js';
 import * as service from './candidate-space.service.js';
+import * as dossier from './candidate-space.dossier.js';
 
 type Account = Awaited<ReturnType<typeof service.authenticateCandidate>>;
 declare module 'fastify' {
@@ -65,6 +66,34 @@ export default async function candidateSpaceRouter(fastify: FastifyInstance) {
     },
   });
 
+  // Dossier de préparation d'un mandat (brouillon, rédaction IA, publication).
+  fastify.get('/mandats/:id/dossier', {
+    schema: { tags: ['Espace candidat'], params: idParams }, preHandler: [authenticate],
+    handler: (request) => dossier.getDossier((request.params as { id: string }).id),
+  });
+  fastify.put('/mandats/:id/dossier', {
+    schema: { tags: ['Espace candidat'], params: idParams }, preHandler: [authenticate],
+    handler: (request) => {
+      const body = z.object({ sections: z.array(z.any()).max(20), photos: z.array(z.any()).max(6).default([]) }).parse(request.body);
+      return dossier.saveDossier((request.params as { id: string }).id, body);
+    },
+  });
+  fastify.post('/mandats/:id/dossier/generate', {
+    schema: { tags: ['Espace candidat'], params: idParams }, preHandler: [authenticate],
+    handler: (request) => {
+      const body = z.object({ brief: z.string().max(80000).optional(), profile: z.enum(['TECH', 'SALES']).default('TECH') }).parse(request.body ?? {});
+      return dossier.generateDossier((request.params as { id: string }).id, request.userId, body);
+    },
+  });
+  fastify.post('/mandats/:id/dossier/publish', {
+    schema: { tags: ['Espace candidat'], params: idParams }, preHandler: [authenticate],
+    handler: (request) => dossier.publishDossier((request.params as { id: string }).id, request.userId),
+  });
+  fastify.post('/mandats/:id/dossier/unpublish', {
+    schema: { tags: ['Espace candidat'], params: idParams }, preHandler: [authenticate],
+    handler: (request) => dossier.unpublishDossier((request.params as { id: string }).id),
+  });
+
   // ── Public ─────────────────────────────────────────
   fastify.get('/public/activation', {
     schema: { tags: ['Espace candidat'] },
@@ -114,7 +143,14 @@ export default async function candidateSpaceRouter(fastify: FastifyInstance) {
   });
   fastify.get('/processes/:id', {
     schema: { tags: ['Espace candidat'], params: idParams }, preHandler: [candidateAuthenticate],
-    handler: (request) => service.processDetail(request.candidateAccount!.candidatId, (request.params as { id: string }).id),
+    handler: (request) => service.processDetail(request.candidateAccount!, (request.params as { id: string }).id),
+  });
+  fastify.post('/processes/:id/dossier/read', {
+    schema: { tags: ['Espace candidat'], params: idParams }, preHandler: [candidateAuthenticate],
+    handler: (request) => {
+      const { sectionId } = z.object({ sectionId: z.string().min(1).max(40) }).parse(request.body);
+      return service.readDossierSection(request.candidateAccount!, (request.params as { id: string }).id, sectionId);
+    },
   });
   fastify.get('/expectations', {
     schema: { tags: ['Espace candidat'] }, preHandler: [candidateAuthenticate],

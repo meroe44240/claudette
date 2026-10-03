@@ -329,6 +329,7 @@ model Mandat {
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionMandat")
   contractApprovals   ContractApproval[]
   portalAccesses      PortalAccess[]         @relation("PortalAccessMandat")
+  dossier             MandatDossier?
 
   @@map("mandats")
 }
@@ -660,10 +661,28 @@ model CandidateAccount {
   lastLoginAt       DateTime? @map("last_login_at") @db.Timestamptz()
   notifSeenAt       DateTime? @map("notif_seen_at") @db.Timestamptz()
   revokedAt         DateTime? @map("revoked_at") @db.Timestamptz()
+  dossierRead       Json      @default("{}") @map("dossier_read") // { [mandatId]: [sectionId] }
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
 
   @@map("candidate_accounts")
+}
+
+// Dossier de préparation d'un mandat, partagé par ses candidats (espace candidat).
+// sections/photos = brouillon du recruteur ; published = version vue par les candidats.
+model MandatDossier {
+  id            String    @id @default(uuid()) @db.Uuid
+  mandatId      String    @unique @map("mandat_id") @db.Uuid
+  mandat        Mandat    @relation(fields: [mandatId], references: [id], onDelete: Cascade)
+  sections      Json      @default("[]")
+  photos        Json      @default("[]")
+  published     Json?
+  publishedAt   DateTime? @map("published_at") @db.Timestamptz()
+  publishedById String?   @map("published_by_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("mandat_dossiers")
 }
 
 // ─── ACTIVITÉS (journal polymorphe) ──────────────────
