@@ -7,8 +7,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { portalStore } from './portal-store';
 import {
-  BG, CARD, COL_LABELS, COL_ORDER, FONT, INK, LINE, MUTED, SHARED_CSS, TEXT,
-  PersonAvatar, Pill, PortalTopBar, portalFetch, relTime, useIsMobile, type Col,
+  BG, BRAND, CARD, COL_LABELS, COL_ORDER, FONT, INK, LINE, MUTED, SHARED_CSS, TEXT,
+  CompanyLogo, PersonAvatar, Pill, PortalTopBar, portalFetch, relTime, useIsMobile, type Col,
 } from './portal-ui';
 
 interface Person { nom: string; prenom: string | null; avatarUrl?: string | null }
@@ -65,11 +65,12 @@ function OfferCard({ o, closed }: { o: Offre; closed?: boolean }) {
   const people = [o.commercial, o.consultant].filter(Boolean) as Person[];
   const meta = [o.localisation, `${active} profil${active > 1 ? 's' : ''} en cours`, o.lastActivity ? `mise à jour ${relTime(o.lastActivity)}` : null].filter(Boolean).join(' · ');
   return (
-    <Link to={`/portail/mandat/${o.id}`} className="pm-offer" style={{ ...CARD, padding: '20px 22px', textDecoration: 'none', color: TEXT, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <span style={{ fontWeight: 700, color: INK, fontSize: 17 }}>{o.titrePoste}</span>
-          <span style={{ fontSize: 14, color: MUTED }}>{meta}</span>
+    <Link to={`/portail/mandat/${o.id}`} className="pm-offer" style={{ ...CARD, padding: '20px 22px', textDecoration: 'none', color: TEXT, display: 'flex', flexDirection: 'column', gap: 16, opacity: closed ? 0.85 : 1 }}>
+      <span style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+        <CompanyLogo logo={o.entreprise?.logoUrl} text={o.entreprise?.nom || o.titrePoste} size={48} />
+        <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: '1 1 240px' }}>
+          <span style={{ fontWeight: 700, color: INK, fontSize: 17, lineHeight: 1.3 }}>{o.titrePoste}</span>
+          <span style={{ fontSize: 14, color: MUTED }}>{[o.entreprise?.nom, meta].filter(Boolean).join(' · ')}</span>
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {closed ? <Pill>{o.statut === 'GAGNE' ? 'Pourvue' : 'Terminée'}</Pill> : o.toReview > 0 ? <Pill strong>{o.toReview} à traiter</Pill> : <Pill>À jour</Pill>}
@@ -77,21 +78,21 @@ function OfferCard({ o, closed }: { o: Offre; closed?: boolean }) {
             <span style={{ display: 'flex', alignItems: 'center' }} title={people.map(nameOf).join(' · ')}>
               {people.map((p, i) => (
                 <span key={i} style={{ marginLeft: i ? -8 : 0, border: '2px solid #fff', borderRadius: '50%', display: 'flex' }}>
-                  <PersonAvatar name={nameOf(p)} photo={p.avatarUrl} size={30} />
+                  <PersonAvatar name={nameOf(p)} photo={p.avatarUrl} size={32} />
                 </span>
               ))}
             </span>
           )}
         </span>
       </span>
-      {/* Mini pipeline : nombre de profils par étape */}
+      {/* Mini pipeline : nombre de profils par étape, les étapes occupées ressortent */}
       <span style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))', gap: 8 }}>
         {cols.map((c) => {
           const n = o.byColumn[c] ?? 0;
           return (
-            <span key={c} style={{ background: BG, borderRadius: 10, padding: '8px 10px', display: 'flex', flexDirection: 'column', border: `1px solid ${n ? LINE : 'transparent'}` }}>
-              <span style={{ fontSize: 12, color: MUTED }}>{COL_LABELS[c]}</span>
-              <span style={{ fontWeight: 700, color: n ? INK : MUTED }}>{n}</span>
+            <span key={c} style={{ position: 'relative', background: n ? '#fff' : BG, borderRadius: 10, padding: '9px 12px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, border: `1px solid ${n ? '#C9C6E6' : 'transparent'}` }}>
+              <span style={{ fontSize: 13, color: n ? INK : MUTED, fontWeight: n ? 600 : 400 }}>{COL_LABELS[c]}</span>
+              <span style={{ fontWeight: 700, fontSize: 16, color: n ? BRAND : MUTED }}>{n}</span>
             </span>
           );
         })}

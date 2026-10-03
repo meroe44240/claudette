@@ -6,10 +6,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { MessageCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronRight, CalendarClock, Clock, X } from 'lucide-react';
 import { portalStore } from './portal-store';
 import {
-  BG, BRAND, BTN, BTN_GHOST, CARD, COL_HINT, COL_LABELS, CREAM, DECISION_LABEL, FONT, FS, INK, LINE, LOGO, MUTED, SHARED_CSS, SOFT, TEXT,
+  BG, BRAND, BTN, BTN_GHOST, CARD, COL_HINT, CompanyLogo, COL_LABELS, CREAM, DECISION_LABEL, FONT, FS, INK, LINE, LOGO, MUTED, SHARED_CSS, SOFT, TEXT,
   PersonAvatar, Pill, PortalTopBar, lastMandat, portalFetch, useIsMobile, type Col, type Decision,
 } from './portal-ui';
 
@@ -111,6 +111,8 @@ export default function PortalMandatPage() {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelTab, setPanelTab] = useState<{ tab: PanelTab; prefill?: boolean }>({ tab: 'commentaires' });
+  // Un clic ouvre d'abord un aperçu (tiroir) ; la fiche complète s'ouvre depuis l'aperçu.
+  const [full, setFull] = useState(false);
   const [pendingMove, setPendingMove] = useState<{ c: Candidature; to: Col; fromDecision?: boolean } | null>(null);
   const [dragging, setDragging] = useState<Candidature | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
@@ -151,13 +153,14 @@ export default function PortalMandatPage() {
     const cid = params.get('c');
     if (!data || !cid) return;
     const c = allCards().find((x) => x.id === cid);
-    if (c) openCard(c);
+    if (c) openCard(c, 'commentaires', false, params.get('t') === 'commentaires');
     setParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
-  function openCard(c: Candidature, tab: PanelTab = 'commentaires', prefill = false) {
+  function openCard(c: Candidature, tab: PanelTab = 'commentaires', prefill = false, asFull = false) {
     setSelectedId(c.id);
+    setFull(asFull);
     setPanelTab({ tab, prefill });
     if (!c.seen) void portalFetch(`/candidatures/${c.id}/view`, { method: 'POST', body: '{}' });
   }
@@ -216,7 +219,7 @@ export default function PortalMandatPage() {
     if (d === 'ECARTER') { setPendingMove({ c, to: 'PERDU' }); return; }
     const res = await portalFetch(`/candidatures/${c.id}/decision`, { method: 'POST', body: JSON.stringify({ decision: d }) });
     if (!res.ok) { flash({ msg: 'Votre avis n’a pas pu être enregistré.' }); return; }
-    if (d === 'A_DISCUTER') setPanelTab({ tab: 'commentaires', prefill: true });
+    if (d === 'A_DISCUTER') { setPanelTab({ tab: 'commentaires', prefill: true }); setFull(true); }
     flash({ msg: 'Avis enregistré.' });
     void reload(true);
   }
@@ -251,7 +254,11 @@ export default function PortalMandatPage() {
     <div className="pm-page" style={{ background: BG, minHeight: '100vh', fontFamily: FONT, display: 'flex', flexDirection: 'column' }}>
       <style>{SHARED_CSS}{`
         .pm-card{ transition:border-color .15s ease, box-shadow .15s ease; }
-        .pm-card:hover{ border-color:#C7C9D1 !important; box-shadow:0 4px 14px -8px rgba(17,24,39,.25); }
+        .pm-card{ transition:border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+        .pm-card:hover{ border-color:#B9B6DC !important; box-shadow:0 10px 22px -14px rgba(34,23,122,.45) !important; transform:translateY(-1px); }
+        @keyframes pm-slide{ from{ transform:translateX(24px); opacity:0; } to{ transform:none; opacity:1; } }
+        .pm-drawer{ animation:pm-slide .18s ease-out; }
+        @media (prefers-reduced-motion: reduce){ .pm-drawer{ animation:none; } .pm-card:hover{ transform:none; } }
         .pm-step:hover:not(:disabled) .pm-step-bar{ background:#B9B6DC; }
       `}</style>
 
@@ -260,7 +267,10 @@ export default function PortalMandatPage() {
       {/* En-tête de l'offre */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, padding: pad }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-          <OfferSwitcher current={data.mandat.id} title={data.mandat.titrePoste} compact={isMobile} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <CompanyLogo logo={data.mandat.entreprise.logoUrl} text={data.mandat.entreprise.nom} size={isMobile ? 36 : 44} />
+            <OfferSwitcher current={data.mandat.id} title={data.mandat.titrePoste} compact={isMobile} />
+          </div>
           <span style={{ fontSize: 14, color: MUTED }}>{data.mandat.entreprise.nom} · {presented} profil{presented > 1 ? 's' : ''} présenté{presented > 1 ? 's' : ''}</span>
         </div>
         {team.length > 0 && (
@@ -301,7 +311,7 @@ export default function PortalMandatPage() {
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${data.stages.length}, minmax(220px, 1fr))`, gap: 12, alignItems: 'stretch' }}>
               {data.stages.map(stage => (
                 <StageColumn key={stage} stage={stage} count={(data.byStage[stage] ?? []).length} dragging={!!dragging}>
-                  {(data.byStage[stage] ?? []).map(c => <DraggableCard key={c.id} c={c} onOpen={() => openCard(c)} />)}
+                  {(data.byStage[stage] ?? []).map(c => <DraggableCard key={c.id} c={c} active={c.id === selectedId} onOpen={() => openCard(c)} />)}
                 </StageColumn>
               ))}
             </div>
@@ -312,7 +322,20 @@ export default function PortalMandatPage() {
         </main>
       )}
 
-      {selected && (
+      {selected && !full && (
+        <ProfileDrawer
+          key={`d-${selected.id}`}
+          candidature={selected}
+          stages={data.stages}
+          onClose={() => { setSelectedId(null); void reload(true); }}
+          onOpenFull={() => setFull(true)}
+          onDecision={(d) => void decide(selected, d)}
+          onMove={(to) => requestMove(selected, to)}
+          frozen={!!pendingMove}
+        />
+      )}
+
+      {selected && full && (
         <ProfilePage
           key={selected.id}
           candidature={selected}
@@ -373,49 +396,62 @@ function StageColumn({ stage, count, dragging, children }: { stage: Col; count: 
   );
 }
 
-function CardBody({ c, lifted }: { c: Candidature; lifted?: boolean }) {
+function CardBody({ c, lifted, active }: { c: Candidature; lifted?: boolean; active?: boolean }) {
   const last = c.portalDecisions[0]?.decision;
   const nbComments = c._count?.portalComments ?? 0;
   const locked = c.stage === 'PLACE';
   const lost = c.stage === 'REFUSE';
   const isNew = !c.seen && !lost;
-  const meta = metaOf(c);
+  const salary = lost ? null : salaryOf(c);
+  const interview = upcomingInterview(c);
+  const since = daysIn(c);
   const tag = c.hireAnnounced ? 'Embauche annoncée' : locked ? 'Embauche validée' : last && !lost ? DECISION_LABEL[last] : null;
   return (
     <div
       className={lifted ? undefined : 'pm-card'}
       style={{
-        background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, padding: 12, display: 'flex', flexDirection: 'column', gap: 8, color: TEXT,
-        boxShadow: lifted ? '0 20px 40px -16px rgba(17,24,39,.4)' : 'none',
+        position: 'relative', background: '#fff', border: `1px solid ${active ? BRAND : LINE}`, borderRadius: 14, color: TEXT, overflow: 'hidden',
+        boxShadow: lifted ? '0 20px 40px -16px rgba(17,24,39,.4)' : active ? `0 0 0 1px ${BRAND}` : '0 1px 2px rgba(17,24,39,.04)',
         transform: lifted ? 'rotate(1.5deg)' : undefined,
-        cursor: lifted ? 'grabbing' : locked ? 'pointer' : 'grab',
+        cursor: lifted ? 'grabbing' : locked ? 'pointer' : 'grab', opacity: lost ? 0.85 : 1,
       }}
     >
-      <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <PersonAvatar name={fullName(c)} photo={c.candidat.photoUrl} size={36} bg={lost ? LINE : CREAM} fg={lost ? MUTED : BRAND} />
-        <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.3 }}>
-          <span style={{ fontWeight: 600, color: INK, fontSize: 14 }}>{fullName(c)}</span>
-          {c.candidat.posteActuel && <span style={{ fontSize: 13, color: MUTED, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>{c.candidat.posteActuel}</span>}
+      <div style={{ padding: '14px 14px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <span style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
+          <span style={{ position: 'relative', flexShrink: 0, display: 'flex' }}>
+            <PersonAvatar name={fullName(c)} photo={c.candidat.photoUrl} size={44} bg={lost ? LINE : CREAM} fg={lost ? MUTED : BRAND} />
+            {isNew && <span aria-hidden style={{ position: 'absolute', top: -1, right: -1, width: 12, height: 12, borderRadius: '50%', background: BRAND, border: '2px solid #fff' }} />}
+          </span>
+          <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.3, gap: 2 }}>
+            <span style={{ fontWeight: 600, color: INK, fontSize: 15 }}>{fullName(c)}</span>
+            {c.candidat.posteActuel && <span style={{ fontSize: 13, color: MUTED, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as React.CSSProperties}>{c.candidat.posteActuel}</span>}
+          </span>
         </span>
-      </span>
-      {meta && <span style={{ fontSize: 13, color: MUTED }}>{meta}</span>}
-      {(isNew || tag || nbComments > 0) && (
-        <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {isNew && <span style={{ background: BRAND, color: '#fff', borderRadius: 999, padding: '1px 8px', fontSize: 12, fontWeight: 600 }}>Nouveau</span>}
-          {tag && <Pill strong={c.hireAnnounced || locked}>{tag}</Pill>}
-          {nbComments > 0 && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: MUTED }}>
-              <MessageCircle size={13} aria-hidden />{nbComments}
-              <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}> commentaire{nbComments > 1 ? 's' : ''}</span>
-            </span>
-          )}
+        {(isNew || tag || salary) && (
+          <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            {isNew && <span style={{ background: BRAND, color: '#fff', borderRadius: 999, padding: '2px 9px', fontSize: 12, fontWeight: 600 }}>Nouveau</span>}
+            {tag && <Pill strong>{tag}</Pill>}
+            {salary && <span style={{ fontSize: 12, fontWeight: 600, color: TEXT, background: SOFT, borderRadius: 999, padding: '2px 9px', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{salary}</span>}
+          </span>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '9px 14px', borderTop: `1px solid ${SOFT}`, background: interview ? '#FAFAF0' : '#FCFCFD', fontSize: 12.5, color: interview ? BRAND : MUTED, fontWeight: interview ? 600 : 400 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          {interview ? <CalendarClock size={14} aria-hidden style={{ flexShrink: 0 }} /> : <Clock size={14} aria-hidden style={{ flexShrink: 0 }} />}
+          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{interview ? `Entretien ${fmtInterview(c.dateEntretienClient!)}` : lost ? `Écarté ${since ?? ''}` : since ? since[0].toUpperCase() + since.slice(1) : 'Dans cette étape'}</span>
         </span>
-      )}
+        {nbComments > 0 && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, color: MUTED, fontWeight: 600 }}>
+            <MessageCircle size={14} aria-hidden />{nbComments}
+            <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}> commentaire{nbComments > 1 ? 's' : ''}</span>
+          </span>
+        )}
+      </div>
     </div>
   );
 }
 
-function DraggableCard({ c, onOpen }: { c: Candidature; onOpen: () => void }) {
+function DraggableCard({ c, onOpen, active }: { c: Candidature; onOpen: () => void; active?: boolean }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: c.id, disabled: c.stage === 'PLACE' });
   return (
     <div
@@ -425,9 +461,9 @@ function DraggableCard({ c, onOpen }: { c: Candidature; onOpen: () => void }) {
       className="pm-focus"
       onClick={onOpen}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
-      style={{ touchAction: 'none', opacity: isDragging ? 0.35 : 1, borderRadius: 12 }}
+      style={{ touchAction: 'none', opacity: isDragging ? 0.35 : 1, borderRadius: 14 }}
     >
-      <CardBody c={c} />
+      <CardBody c={c} active={active} />
     </div>
   );
 }
@@ -488,6 +524,103 @@ function ContactBlock({ contact }: { contact: NonNullable<Candidature['candidat'
         ))}
       </span>
     </div>
+  );
+}
+
+// ─── Aperçu d'un candidat (tiroir) : l'essentiel, puis « Voir la fiche complète » ──
+function ProfileDrawer({ candidature: c, stages, onClose, onOpenFull, onDecision, onMove, frozen }: {
+  candidature: Candidature; stages: Col[];
+  onClose: () => void; onOpenFull: () => void;
+  onDecision: (d: Decision) => void;
+  onMove: (to: Col) => void;
+  frozen?: boolean;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useDialogFocus(ref, () => { if (!frozen) onClose(); });
+  const last = c.portalDecisions[0]?.decision;
+  const hired = c.stage === 'PLACE';
+  const lost = c.stage === 'REFUSE';
+  const profile = c.candidat.aiAnonymizedProfile;
+  const bullets: string[] = Array.isArray(profile?.bulletPoints) ? profile.bulletPoints : Array.isArray(profile?.highlights) ? profile.highlights : [];
+  const infos: Array<{ label: string; value: string }> = Array.isArray(profile?.infos) ? profile.infos : [];
+  const nbComments = c._count?.portalComments ?? 0;
+  const steps: Col[] = stages.filter((s) => s !== 'PERDU');
+  const idx = steps.indexOf(c.column);
+  const next = idx >= 0 && idx < steps.length - 1 ? steps[idx + 1] : null;
+  const interview = upcomingInterview(c);
+  const label: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: INK };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(17,24,39,.35)' }} />
+      <aside ref={ref} role="dialog" aria-modal="true" aria-label={`Aperçu de ${fullName(c)}`} className="pm-page pm-drawer" style={{ position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 61, width: 460, maxWidth: '100vw', background: '#fff', boxShadow: '-20px 0 50px -30px rgba(17,24,39,.5)', display: 'flex', flexDirection: 'column', fontFamily: FONT, paddingBottom: 0 }}>
+        <div style={{ flexShrink: 0, padding: '18px 20px 16px', borderBottom: `1px solid ${LINE}`, display: 'flex', gap: 14, alignItems: 'center' }}>
+          <PersonAvatar name={fullName(c)} photo={c.candidat.photoUrl} size={60} ring />
+          <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <h2 style={{ fontSize: 20, lineHeight: 1.2, color: INK, letterSpacing: '-0.01em' }}>{fullName(c)}</h2>
+            {(c.candidat.posteActuel || c.candidat.entrepriseActuelle) && <span style={{ fontSize: 14, color: MUTED }}>{[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(', ')}</span>}
+          </div>
+          <button className="pm-icon" onClick={onClose} aria-label="Fermer l'aperçu" style={{ alignSelf: 'flex-start', flexShrink: 0, width: 36, height: 36, borderRadius: 10, border: `1px solid ${LINE}`, background: '#fff', color: TEXT, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} aria-hidden /></button>
+        </div>
+
+        <div className="pm-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Pill strong>{COL_LABELS[c.column]}</Pill>
+            {!c.seen && !lost && <span style={{ background: BRAND, color: '#fff', borderRadius: 999, padding: '2px 9px', fontSize: 12, fontWeight: 600 }}>Nouveau</span>}
+            {last && !lost && <Pill>Votre avis : {DECISION_LABEL[last]}</Pill>}
+            {nbComments > 0 && <Pill><MessageCircle size={13} aria-hidden />{nbComments} commentaire{nbComments > 1 ? 's' : ''}</Pill>}
+          </div>
+
+          {interview && (
+            <div style={{ background: BRAND, color: '#fff', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
+              <CalendarClock size={18} aria-hidden color={CREAM} style={{ flexShrink: 0 }} />
+              <span><span style={{ color: CREAM, fontWeight: 600 }}>Entretien prévu</span><br />{fmtInterview(c.dateEntretienClient!)}</span>
+            </div>
+          )}
+
+          {c.candidat.aiPitchShort && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={label}>En bref</span>
+              <p style={{ fontSize: 14, lineHeight: 1.6 }}>{c.candidat.aiPitchShort}</p>
+            </div>
+          )}
+
+          {infos.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+              {infos.slice(0, 4).map((it, i) => (
+                <div key={i} style={{ background: BG, borderRadius: 10, padding: '10px 12px' }}>
+                  <span style={{ display: 'block', fontSize: 12, color: MUTED }}>{it.label}</span>
+                  <span style={{ fontWeight: 600, color: INK, fontSize: 14 }}>{it.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {bullets.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={label}>Pourquoi ce profil</span>
+              <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 5, fontSize: 14 }}>
+                {bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {!c.candidat.aiPitchShort && bullets.length === 0 && infos.length === 0 && <p style={{ fontSize: 14, color: MUTED }}>Le dossier détaillé sera disponible sous peu.</p>}
+        </div>
+
+        <div style={{ flexShrink: 0, padding: '14px 20px 18px', borderTop: `1px solid ${LINE}`, display: 'flex', flexDirection: 'column', gap: 8, background: '#fff' }}>
+          <button data-autofocus onClick={onOpenFull} style={{ ...BTN, padding: '12px 16px', fontSize: 15 }}>Voir la fiche complète</button>
+          {!hired && !lost && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              {c.column === 'INBOX'
+                ? <button onClick={() => onDecision('RENCONTRER')} style={{ ...BTN_GHOST, flex: 1, color: BRAND, borderColor: BRAND }}>Rencontrer</button>
+                : next && <button onClick={() => onMove(next)} style={{ ...BTN_GHOST, flex: 1, color: BRAND, borderColor: BRAND }}>{next === 'ENGAGE' ? 'Annoncer l’embauche' : `Passer en ${COL_LABELS[next]}`}</button>}
+              <button onClick={() => onDecision('ECARTER')} style={{ ...BTN_GHOST, flex: 1 }}>Écarter</button>
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
   );
 }
 
