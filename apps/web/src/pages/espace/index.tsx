@@ -6,9 +6,9 @@ import { Page, C, card, h2, chip, TeamCard, Loading, fmtDate, fmtDateTime, espac
 
 export interface ProcessView {
   id: string; title: string; company: string | null; confidential: boolean; location: string | null;
-  stage: string; stageLabel: string; closed: boolean; closedAt: string | null; hired: boolean;
+  stage: string; stageLabel: string; closed: boolean; pending?: boolean; closedAt: string | null; hired: boolean;
   next: { kind: string; date: string } | null;
-  steps: Array<{ stage: string; label: string; state: 'done' | 'current' | 'todo'; date: string | null }>;
+  steps: Array<{ stage: string; label: string; state: 'done' | 'current' | 'todo' | 'stopped'; date: string | null }>;
   feedback: Array<{ date: string; step: string; text: string; author?: string | null }>;
 }
 interface Me {

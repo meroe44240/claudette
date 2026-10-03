@@ -106,7 +106,7 @@ export function useStageChange(onMoved?: () => void) {
       </Modal>
 
       {/* Présentation client → date + heure + interlocuteur obligatoires */}
-      <Modal isOpen={!!entretien} onClose={() => setEntretien(null)} title="Présentation client — date & interlocuteur" size="sm">
+      <Modal isOpen={!!entretien} onClose={() => setEntretien(null)} title="Présentation client : date et interlocuteur" size="sm">
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
             {entretien?.candidatName ? `Planifie la présentation de ${entretien.candidatName} au client.` : 'Planifie la présentation au client.'}

@@ -385,16 +385,20 @@ function loadCandidatures(candidatId: string) {
   });
 }
 
-/** Étape vue par le candidat : un refus sans message validé reste invisible. */
+/**
+ * Étape vue par le candidat. Un refus sans message validé n'est pas annoncé : le process
+ * reste sur sa dernière étape, mais « pending » retire l'entretien à venir et annonce
+ * une mise à jour, pour ne pas laisser croire qu'un entretien aura lieu.
+ */
 function candidateState(c: CandidatureView) {
   const last = c.stageHistory[c.stageHistory.length - 1];
   if (c.stage === 'REFUSE') {
     const refusal = [...c.stageHistory].reverse().find((h) => h.toStage === 'REFUSE');
-    if (refusal?.candidateMessage) return { stage: 'REFUSE', closed: true, closedAt: refusal.changedAt };
     const prev = refusal?.fromStage && refusal.fromStage !== 'SOURCING' ? refusal.fromStage : 'CONTACTE';
-    return { stage: prev, closed: false, closedAt: null };
+    if (refusal?.candidateMessage) return { stage: 'REFUSE', closed: true, closedAt: refusal.changedAt, pending: false, lastStage: prev };
+    return { stage: prev, closed: false, closedAt: null, pending: true, lastStage: prev };
   }
-  return { stage: c.stage, closed: false, closedAt: last?.changedAt ?? null };
+  return { stage: c.stage, closed: false, closedAt: last?.changedAt ?? null, pending: false, lastStage: c.stage };
 }
 
 function viewOf(c: CandidatureView) {
@@ -402,11 +406,16 @@ function viewOf(c: CandidatureView) {
   const presented = PRESENTED_STAGES.includes(st.stage) || c.stageHistory.some((h) => PRESENTED_STAGES.includes(h.toStage));
   const reached = new Map<string, Date>();
   for (const h of c.stageHistory) if (STEP_LABEL[h.toStage] && !reached.has(h.toStage)) reached.set(h.toStage, h.changedAt);
+  // Date affichée pour une étape terminée : le jour où le candidat en est sorti, pas celui où il y est entré.
+  const left = new Map<string, Date>();
+  for (const h of c.stageHistory) if (h.fromStage && h.toStage !== 'REFUSE' && !left.has(h.fromStage)) left.set(h.fromStage, h.changedAt);
   const currentIdx = CANDIDATE_STEPS.findIndex((s) => s.stage === st.stage);
+  const lastIdx = CANDIDATE_STEPS.findIndex((s) => s.stage === st.lastStage);
   const steps = CANDIDATE_STEPS.filter((s) => s.stage !== 'PLACE' || st.stage === 'PLACE').map((s, i) => ({
     stage: s.stage, label: s.label,
-    state: st.closed ? (reached.has(s.stage) ? 'done' : 'todo') : i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'todo',
-    date: reached.get(s.stage) ?? null,
+    // Process clos : l'étape où il s'est arrêté n'est pas « faite », elle est « stopped ».
+    state: st.closed ? (i === lastIdx ? 'stopped' : i < lastIdx ? 'done' : 'todo') : i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'todo',
+    date: st.closed && i >= lastIdx ? (i === lastIdx ? st.closedAt : null) : reached.has(s.stage) ? left.get(s.stage) ?? reached.get(s.stage)! : null,
   }));
   const feedback = c.stageHistory
     .filter((h) => h.candidateMessage)
@@ -417,7 +426,7 @@ function viewOf(c: CandidatureView) {
       authorId: h.changedById,
     }))
     .reverse();
-  const next = st.stage === 'ENTRETIEN_CLIENT' && c.dateEntretienClient && c.dateEntretienClient.getTime() > Date.now()
+  const next = !st.pending && st.stage === 'ENTRETIEN_CLIENT' && c.dateEntretienClient && c.dateEntretienClient.getTime() > Date.now()
     ? { kind: 'Interview with the company', date: c.dateEntretienClient }
     : null;
   return {
@@ -427,8 +436,9 @@ function viewOf(c: CandidatureView) {
     confidential: !presented,
     location: c.mandat.localisation,
     stage: st.stage,
-    stageLabel: st.closed ? 'Closed' : STEP_LABEL[st.stage] ?? 'In progress',
+    stageLabel: st.closed ? 'Closed' : st.pending ? 'Update coming' : STEP_LABEL[st.stage] ?? 'In progress',
     closed: st.closed,
+    pending: st.pending,
     closedAt: st.closedAt,
     hired: st.stage === 'PLACE',
     next,
