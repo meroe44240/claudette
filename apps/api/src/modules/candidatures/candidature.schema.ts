@@ -31,6 +31,8 @@ export const updateCandidatureSchema = z.object({
   notifyCandidate: z.boolean().optional(),
   notifyClient: z.boolean().optional(),
   messageToClient: z.string().max(2000).optional(),
+  // Espace candidat : message au candidat (français, traduit en anglais), attaché au changement d'étape
+  candidateMessage: z.string().max(2000).optional(),
 });
 
 export type CreateCandidatureInput = z.infer<typeof createCandidatureSchema>;

@@ -14,6 +14,14 @@ const ChangePasswordPage = lazy(() => import('./pages/change-password'));
 // Public pages
 const DocsMcpPage = lazy(() => import('./pages/docs/mcp'));
 
+// Espace candidat — public, hors MainLayout
+const EspaceLoginPage = lazy(() => import('./pages/espace/login'));
+const EspaceActivatePage = lazy(() => import('./pages/espace/activer'));
+const EspaceResetPage = lazy(() => import('./pages/espace/reinitialiser'));
+const EspaceHomePage = lazy(() => import('./pages/espace/index'));
+const EspaceProcessPage = lazy(() => import('./pages/espace/process'));
+const EspaceExpectationsPage = lazy(() => import('./pages/espace/attentes'));
+const EspaceNotificationsPage = lazy(() => import('./pages/espace/notifications'));
 // Portail client (public, hors MainLayout)
 const PortalLoginPage = lazy(() => import('./pages/portail/login'));
 const PortalMandatPage = lazy(() => import('./pages/portail/mandat'));
@@ -94,6 +102,13 @@ export default function App() {
         <Route path="/portail/offres" element={<PortalOffresPage />} />
         <Route path="/portail/candidats" element={<PortalCandidatsPage />} />
         <Route path="/portail" element={<Navigate to="/portail/offres" replace />} />
+        <Route path="/espace/login" element={<EspaceLoginPage />} />
+        <Route path="/espace/activer" element={<EspaceActivatePage />} />
+        <Route path="/espace/reinitialiser" element={<EspaceResetPage />} />
+        <Route path="/espace/process/:id" element={<EspaceProcessPage />} />
+        <Route path="/espace/attentes" element={<EspaceExpectationsPage />} />
+        <Route path="/espace/notifications" element={<EspaceNotificationsPage />} />
+        <Route path="/espace" element={<EspaceHomePage />} />
         <Route path="/confirmer" element={<ConfirmerPage />} />
         <Route path="/annuler-rdv" element={<AnnulerRdvPage />} />
         <Route
