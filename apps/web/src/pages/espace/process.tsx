@@ -7,8 +7,8 @@ import type { ProcessView } from './index';
 
 export default function EspaceProcessPage() {
   const { id = '' } = useParams();
-  const q = useQuery({ queryKey: ['espace', 'process', id], queryFn: () => espaceFetch<ProcessView & { interviewer: string | null }>(`/processes/${id}`), retry: false });
-  const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<{ name: string; team: TeamMember[]; unread: number }>('/me'), retry: false });
+  const q = useQuery({ queryKey: ['espace', 'process', id], queryFn: () => espaceFetch<ProcessView & { interviewer: string | null }>(`/processes/${id}`), retry: false, staleTime: 0 });
+  const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<{ name: string; team: TeamMember[]; unread: number }>('/me'), retry: false, staleTime: 0 });
   useAuthGuard(q.error || me.error);
   useEffect(() => { if (q.data) document.title = `${q.data.title} | Humanup`; }, [q.data]);
 
@@ -33,13 +33,14 @@ export default function EspaceProcessPage() {
             {p.steps.map((s) => (
               <li key={s.stage} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span style={{ height: 6, borderRadius: 3, background: s.state === 'todo' ? C.line : C.accent, opacity: s.state === 'current' ? 0.85 : 1 }} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: s.state === 'current' ? C.accent : s.state === 'done' ? C.ink : C.muted }}>{s.label}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: s.state === 'current' ? C.accent : s.state === 'done' || s.state === 'stopped' ? C.ink : C.muted }}>{s.label}</span>
                 <span style={{ fontSize: 13, color: s.state === 'current' ? C.accent : C.muted }}>
-                  {s.state === 'done' && s.date ? `Done, ${fmtDate(s.date)}` : s.state === 'current' ? (p.next && s.stage === p.stage ? `Upcoming, ${fmtDate(p.next.date)}` : 'In progress') : ''}
+                  {s.state === 'done' && s.date ? `Done, ${fmtDate(s.date)}` : s.state === 'stopped' ? `Closed here${s.date ? `, ${fmtDate(s.date)}` : ''}` : s.state === 'current' ? (p.pending ? 'Update coming' : p.next && s.stage === p.stage ? `Upcoming, ${fmtDate(p.next.date)}` : 'In progress') : ''}
                 </span>
               </li>
             ))}
           </ol>
+          {p.pending && <div style={{ background: C.soft, borderRadius: 10, padding: '12px 14px', fontSize: 14 }}><b style={{ color: C.ink }}>An update is on its way.</b> Your Humanup team is preparing news on this role and will share it here shortly.</div>}
           {p.closed && <div style={{ background: C.soft, borderRadius: 10, padding: '12px 14px', fontSize: 14 }}><b style={{ color: C.ink }}>This process is closed</b> since {fmtDate(p.closedAt, { month: 'long', day: 'numeric' })}. The update and the feedback are below.</div>}
         </section>
 

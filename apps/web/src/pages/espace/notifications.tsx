@@ -1,16 +1,19 @@
 // Espace candidat : fil des mises à jour (les ouvrir les marque comme lues).
 import { useEffect } from 'react';
 import { Link } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Page, C, Loading, fmtDate, espaceFetch, useAuthGuard } from './espace-ui';
 
 interface Item { id: string; title: string; text: string; date: string; processId: string; unread: boolean }
 
 export default function EspaceNotificationsPage() {
-  const q = useQuery({ queryKey: ['espace', 'notifications'], queryFn: () => espaceFetch<{ items: Item[] }>('/notifications'), retry: false });
-  const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<{ name: string }>('/me'), retry: false });
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['espace', 'notifications'], queryFn: () => espaceFetch<{ items: Item[] }>('/notifications'), retry: false, staleTime: 0 });
+  const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<{ name: string }>('/me'), retry: false, staleTime: 0 });
   useAuthGuard(q.error || me.error);
   useEffect(() => { document.title = 'Updates | Humanup'; }, []);
+  // Ouvrir le fil marque tout comme lu côté serveur : la pastille de l'en-tête doit suivre.
+  useEffect(() => { if (q.dataUpdatedAt) qc.invalidateQueries({ queryKey: ['espace', 'me'] }); }, [q.dataUpdatedAt, qc]);
   if (!q.data) return <Page><Loading /></Page>;
 
   return (

@@ -6,9 +6,9 @@ import { Page, C, card, h2, chip, TeamCard, Loading, fmtDate, fmtDateTime, espac
 
 export interface ProcessView {
   id: string; title: string; company: string | null; confidential: boolean; location: string | null;
-  stage: string; stageLabel: string; closed: boolean; closedAt: string | null; hired: boolean;
+  stage: string; stageLabel: string; closed: boolean; pending?: boolean; closedAt: string | null; hired: boolean;
   next: { kind: string; date: string } | null;
-  steps: Array<{ stage: string; label: string; state: 'done' | 'current' | 'todo'; date: string | null }>;
+  steps: Array<{ stage: string; label: string; state: 'done' | 'current' | 'todo' | 'stopped'; date: string | null }>;
   feedback: Array<{ date: string; step: string; text: string; author?: string | null }>;
 }
 interface Me {
@@ -42,8 +42,8 @@ export function ProcessRow({ p, first }: { p: ProcessView; first: boolean }) {
 }
 
 export default function EspaceHomePage() {
-  const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<Me>('/me'), retry: false });
-  const pr = useQuery({ queryKey: ['espace', 'processes'], queryFn: () => espaceFetch<{ processes: ProcessView[]; next: (ProcessView['next'] & { processId: string; title: string; company: string | null }) | null }>('/processes'), retry: false });
+  const me = useQuery({ queryKey: ['espace', 'me'], queryFn: () => espaceFetch<Me>('/me'), retry: false, staleTime: 0 });
+  const pr = useQuery({ queryKey: ['espace', 'processes'], queryFn: () => espaceFetch<{ processes: ProcessView[]; next: (ProcessView['next'] & { processId: string; title: string; company: string | null }) | null }>('/processes'), retry: false, staleTime: 0 });
   useAuthGuard(me.error || pr.error);
   useEffect(() => { document.title = 'Your space | Humanup'; }, []);
 

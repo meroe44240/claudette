@@ -978,6 +978,24 @@ export default function MandatDetailPage() {
               })}
             </div>
           </div>
+
+          {/* Perdu : zone de dépôt (ouvre la modale motif + message au candidat) */}
+          {(() => {
+            const lostCount = mandat.candidatures.filter((c) => c.stage === 'REFUSE').length;
+            return (
+              <div
+                onDragOver={(e) => { if (draggedCandId) e.preventDefault(); }}
+                onDrop={() => handlePipelineDrop('REFUSE')}
+                style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderRadius: 12, padding: '11px 14px', background: draggedCandId ? '#FBEDEB' : 'rgba(252,252,245,.5)', border: `1px dashed ${draggedCandId ? 'rgba(179,38,30,.45)' : 'rgba(34,23,122,.14)'}`, transition: 'background .15s, border-color .15s' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: stageColors.REFUSE }} />
+                  <span style={{ fontFamily: MANROPE, fontSize: 12, fontWeight: 800, color: draggedCandId ? '#B3261E' : TERTIARY }}>Perdu</span>
+                  <span style={{ fontSize: 12, color: '#8A8699' }}>{draggedCandId ? 'Déposer ici pour marquer ce candidat comme perdu' : 'Glisser un candidat ici pour le marquer comme perdu'}</span>
+                </span>
+                <span style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 13, color: lostCount ? INK : '#C4C1D0' }}>{lostCount}</span>
+              </div>
+            );
+          })()}
         </div>
       </main>
 

@@ -19,6 +19,7 @@ import DossierClientModal from '../../components/candidats/DossierClientModal';
 import SynthesesTab, { type SynthesesTabHandle } from '../../components/candidats/SynthesesTab';
 import PhotoMenu from '../../components/candidats/PhotoMenu';
 import EspaceCandidatCard from '../../components/candidats/EspaceCandidatCard';
+import { useStageChange } from '../../components/mandats/useStageChange';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Candidature {
@@ -139,8 +140,11 @@ export default function CandidatDetailPage() {
     qc.invalidateQueries({ queryKey: ['candidat', id] });
     qc.invalidateQueries({ queryKey: ['activites', 'candidat', id] });
     qc.invalidateQueries({ queryKey: ['candidat-portail', id] });
+    qc.invalidateQueries({ queryKey: ['espace-candidat', id] });
   };
 
+  // « Entretien client » exige date, heure et interlocuteur : même modale que sur la fiche mandat.
+  const { requestMove: requestStageMove, modals: stageModals } = useStageChange(() => invalidate());
   const stageMut = useMutation({ mutationFn: ({ candId, stage }: { candId: string; stage: string }) => api.put(`/candidatures/${candId}`, { stage }), onSuccess: () => { invalidate(); toast('success', 'Étape mise à jour'); }, onError: (e: any) => toast('error', e?.message || 'Échec') });
   const loseMut = useMutation({ mutationFn: ({ candId, motifRefus, motifRefusDetail, candidateMessage }: { candId: string; motifRefus: string; motifRefusDetail?: string; candidateMessage?: string }) => api.put(`/candidatures/${candId}`, { stage: 'REFUSE', motifRefus, motifRefusDetail, candidateMessage }), onSuccess: () => { invalidate(); setLost(null); setLostReason(''); setLostNote(''); setLostMsg(''); toast('success', 'Profil archivé (no-go)'); }, onError: (e: any) => toast('error', e?.message || "Échec de l'archivage") });
   const removeMut = useMutation({ mutationFn: (candId: string) => api.delete(`/candidatures/${candId}`), onSuccess: () => { invalidate(); toast('success', 'Retiré du mandat'); } });
@@ -173,6 +177,7 @@ export default function CandidatDetailPage() {
   const changeStage = (cand: Candidature, stage: string) => {
     if (stage === cand.stage) return;
     if (stage === 'REFUSE') { setLost({ candId: cand.id, titre: cand.mandat.titrePoste, company: cand.mandat.entreprise.nom }); return; }
+    if (stage === 'ENTRETIEN_CLIENT') { requestStageMove(cand.id, stage, { candidatName: c ? `${c.prenom || ''} ${c.nom}`.trim() : null }); return; }
     stageMut.mutate({ candId: cand.id, stage });
   };
   const addSynthese = () => { setTab('entretiens'); setTimeout(() => synthRef.current?.pick(), 50); };
@@ -558,6 +563,8 @@ export default function CandidatDetailPage() {
           </div>
         </aside>
       </div>
+
+      {stageModals}
 
       {/* LOST MODAL */}
       {lost && (
