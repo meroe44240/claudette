@@ -596,7 +596,10 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
   onMove: (to: Col) => void;
 }) {
   const ref = useRef<HTMLElement>(null);
-  useDialogFocus(ref, onClose);
+  // Un commentaire écrit mais pas envoyé : on prévient avant de fermer (le brouillon est conservé).
+  const [confirmClose, setConfirmClose] = useState(false);
+  const requestClose = () => { if (readDraft(c.id)) setConfirmClose(true); else onClose(); };
+  useDialogFocus(ref, requestClose);
   const [nbComments, setNbComments] = useState(c._count?.portalComments ?? 0);
   const [activityKey, setActivityKey] = useState(0);
   const last = c.portalDecisions[0]?.decision;
@@ -620,7 +623,19 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(26,21,51,.42)' }} />
+      <div onClick={requestClose} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(26,21,51,.42)' }} />
+      {confirmClose && (
+        <div role="alertdialog" aria-modal="true" aria-labelledby="pm-draft-title" style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(26,21,51,.5)' }}>
+          <div style={{ width: 420, maxWidth: '100%', background: '#fff', borderRadius: 16, padding: 22, boxShadow: '0 30px 70px -30px rgba(26,21,51,.6)', fontFamily: "'Manrope',sans-serif" }}>
+            <h3 id="pm-draft-title" style={{ fontSize: FS.lg, fontWeight: 800, color: INK }}>Commentaire non envoyé</h3>
+            <p style={{ fontSize: FS.md, lineHeight: 1.5, color: TEXT, marginTop: 8 }}>Votre commentaire sur {fullName(c)} n’a pas été envoyé. Il reste enregistré en brouillon.</p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+              <button className="pm-btn" onClick={() => { setConfirmClose(false); onClose(); }} style={{ flex: 1, fontSize: FS.md, fontWeight: 700, background: '#F2F3D8', color: BRAND, border: 'none', borderRadius: 11, padding: 11, cursor: 'pointer' }}>Fermer</button>
+              <button className="pm-btn" autoFocus onClick={() => { setConfirmClose(false); onTab('commentaires'); }} style={{ flex: 1.4, fontSize: FS.md, fontWeight: 800, background: BRAND, color: CREAM, border: 'none', borderRadius: 11, padding: 11, cursor: 'pointer' }}>Revenir au commentaire</button>
+            </div>
+          </div>
+        </div>
+      )}
       <aside ref={ref} role="dialog" aria-modal="true" aria-label={`Dossier de ${fullName(c)}`} className="pm-drawer" style={{ position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 61, width: 1000, maxWidth: '96vw', background: '#FCFCF7', boxShadow: '-26px 0 70px -30px rgba(26,21,51,.55)', display: 'flex', flexDirection: 'column' }}>
         {/* En-tête */}
         <div style={{ flexShrink: 0, background: BRAND, padding: '18px 20px 14px', position: 'relative', overflow: 'hidden' }}>
@@ -630,7 +645,7 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
               <h2 style={{ fontWeight: 800, fontSize: FS.xl, color: '#fff', lineHeight: 1.2 }}>{fullName(c)}</h2>
               {(c.candidat.posteActuel || c.candidat.entrepriseActuelle) && <div style={{ fontSize: FS.base, color: CREAM, fontWeight: 600, marginTop: 3 }}>{[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(' · ')}</div>}
             </div>
-            <button className="pm-btn" data-autofocus onClick={onClose} aria-label="Fermer le dossier" style={{ alignSelf: 'flex-start', width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(230,233,175,.3)', background: 'transparent', color: CREAM, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} strokeWidth={2.4} /></button>
+            <button className="pm-btn" data-autofocus onClick={requestClose} aria-label="Fermer le dossier" style={{ alignSelf: 'flex-start', width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(230,233,175,.3)', background: 'transparent', color: CREAM, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} strokeWidth={2.4} /></button>
           </div>
           {/* Étapes : cliquer pour faire avancer (alternative au glisser-déposer) */}
           <div role="group" aria-label="Étape du recrutement" className="pm-scroll" style={{ position: 'relative', display: 'flex', gap: 6, marginTop: 14, overflowX: 'auto', paddingBottom: 2 }}>
@@ -845,14 +860,33 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
 type Mentionable = { key: string; label: string; sub: string; photo?: string | null; mention: { kind: 'internal'; id: string } | { kind: 'external'; email: string; name?: string } };
 interface PortalCommentRow { id: string; content: string; createdAt: string; author: string; mentions: Array<{ name: string; kind: string }> }
 
+// Brouillon de commentaire : conservé par candidat tant qu'il n'est pas envoyé
+// (fiche fermée, changement d'onglet, page rechargée).
+type CommentDraft = { text: string; picked: Mentionable[] };
+const draftKey = (candidatureId: string) => `portal_draft_${candidatureId}`;
+function readDraft(candidatureId: string): CommentDraft | null {
+  try {
+    const d = JSON.parse(localStorage.getItem(draftKey(candidatureId)) || 'null');
+    return typeof d?.text === 'string' && d.text.trim() ? { text: d.text, picked: Array.isArray(d.picked) ? d.picked : [] } : null;
+  } catch { return null; }
+}
+function writeDraft(candidatureId: string, d: CommentDraft) {
+  try {
+    if (d.text.trim()) localStorage.setItem(draftKey(candidatureId), JSON.stringify(d));
+    else localStorage.removeItem(draftKey(candidatureId));
+  } catch { /* stockage bloqué : pas de brouillon */ }
+}
+
 function CommentThread({ candidatureId, repName, prefillMention, onCount, onPosted }: { candidatureId: string; repName: string; prefillMention?: boolean; onCount: (n: number) => void; onPosted: () => void }) {
   const [rows, setRows] = useState<PortalCommentRow[] | null>(null);
   const [people, setPeople] = useState<Mentionable[]>([]);
-  const [text, setText] = useState('');
-  const [picked, setPicked] = useState<Mentionable[]>([]);
+  const [text, setText] = useState(() => readDraft(candidatureId)?.text ?? '');
+  const [picked, setPicked] = useState<Mentionable[]>(() => readDraft(candidatureId)?.picked ?? []);
+  const [restored, setRestored] = useState(() => !!readDraft(candidatureId));
   const [query, setQuery] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  useEffect(() => { writeDraft(candidatureId, { text, picked }); }, [candidatureId, text, picked]);
   const { mandatId: mandatIdParam } = useParams<{ mandatId: string }>();
   const ta = useRef<HTMLTextAreaElement>(null);
   const listEnd = useRef<HTMLDivElement>(null);
@@ -877,7 +911,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
       setPeople(list);
       // « À discuter » : on prépare le message pour le consultant.
       const target = list.find((p) => p.label === repName) ?? list.find((p) => p.mention.kind === 'internal');
-      if (prefillMention && target) {
+      if (prefillMention && target && !readDraft(candidatureId)) {
         const v = `@${target.label} `;
         setText(v); setPicked([target]);
         window.setTimeout(() => { ta.current?.focus(); ta.current?.setSelectionRange(v.length, v.length); }, 0);
@@ -923,7 +957,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
     setBusy(true);
     const res = await portalFetch(`/candidatures/${candidatureId}/comment`, { method: 'POST', body: JSON.stringify({ content, mentions }) });
     setBusy(false);
-    if (res.ok) { setText(''); setPicked([]); setQuery(null); void load(); onPosted(); }
+    if (res.ok) { setText(''); setPicked([]); setQuery(null); setRestored(false); void load(); onPosted(); }
     else { const err = await res.json().catch(() => null); setError(err?.message || 'Le commentaire n’a pas pu être envoyé.'); }
   }
 
@@ -989,6 +1023,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
           )}
         </div>
         {error && <p role="alert" style={{ fontSize: FS.sm, color: '#9E2F1A', fontWeight: 700, marginTop: 8 }}>{error}</p>}
+        {restored && text.trim() && !error && <p style={{ fontSize: FS.sm, color: MUTED, fontWeight: 700, marginTop: 8 }}>Brouillon non envoyé</p>}
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button className="pm-btn" onClick={startMention} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FS.base, fontWeight: 700, background: '#F2F3D8', color: BRAND, border: 'none', borderRadius: 11, padding: '0 14px', cursor: 'pointer' }}><AtSign size={14} aria-hidden />Mentionner</button>
           <button className="pm-btn" disabled={busy || !text.trim()} onClick={send} style={{ flex: 1, fontSize: FS.md, fontWeight: 800, background: text.trim() ? BRAND : '#C4C1D0', color: CREAM, border: 'none', borderRadius: 11, padding: 11, cursor: text.trim() ? 'pointer' : 'default' }}>Envoyer</button>
