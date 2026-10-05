@@ -461,7 +461,47 @@ export async function recordDecision(
     }),
   ]);
 
+  void notifyDecision(data).catch((e) => console.error('[Portal] email avis échoué', e));
+
   return { ok: true };
+}
+
+const DECISION_LIBELLE: Record<string, string> = { RENCONTRER: 'À rencontrer', A_DISCUTER: 'À discuter', ECARTER: 'Écarté' };
+
+// Avis donné par le client sur un profil : l'interlocuteur du client (le commercial,
+// à défaut le consultant) est prévenu par email, comme pour un déplacement de carte.
+async function notifyDecision(data: { portalAccessId: string; mandatId: string; candidatureId: string; decision: PortalDecisionType; reason?: string }) {
+  const [mandat, access, candidature] = await Promise.all([
+    prisma.mandat.findUnique({
+      where: { id: data.mandatId },
+      select: {
+        titrePoste: true, recruteurId: true,
+        recruteur: { select: { id: true, email: true, prenom: true } },
+        assignedTo: { select: { id: true, email: true, prenom: true } },
+        sales: { select: { id: true, email: true, prenom: true } },
+      },
+    }),
+    prisma.portalAccess.findUnique({ where: { id: data.portalAccessId }, select: { email: true, name: true, client: { select: { nom: true, prenom: true, email: true } } } }),
+    prisma.candidature.findUnique({ where: { id: data.candidatureId }, select: { candidat: { select: { id: true, prenom: true, nom: true } } } }),
+  ]);
+  if (!mandat || !candidature) return;
+  const commercial = mandat.sales ?? (mandat.assignedTo && mandat.assignedTo.id !== mandat.recruteurId ? mandat.assignedTo : null);
+  const contact = commercial ?? mandat.recruteur ?? mandat.assignedTo;
+  if (!contact?.email) return;
+
+  const auteur = access ? portalAuthorName(access) : 'Le client';
+  const candidatNom = `${candidature.candidat.prenom ?? ''} ${candidature.candidat.nom}`.trim();
+  const avis = DECISION_LIBELLE[data.decision] ?? data.decision;
+  const raison = data.reason?.trim();
+  const body = `<p>Bonjour ${esc(contact.prenom ?? '')},</p>
+    <p>Sur le portail client, <strong>${esc(auteur)}</strong> a donné son avis sur <strong>${esc(candidatNom)}</strong> : <strong>${esc(avis)}</strong>.</p>
+    ${raison ? `<p style="border-left:3px solid #E6E9AF;padding-left:12px;color:#4a4568;">${esc(raison).replace(/\n/g, '<br>')}</p>` : ''}`;
+  await sendEmail(contact.email, `${auteur} a donné son avis sur ${candidatNom} : ${avis} · ${mandat.titrePoste}`, renderBrandedEmail({
+    title: 'Avis client',
+    bodyHtml: body,
+    cta: { label: 'Ouvrir la fiche candidat', href: `${PORTAL_BASE}/candidats/${candidature.candidat.id}` },
+    signature: 'Propium',
+  }));
 }
 
 // Mention dans un commentaire : quelqu'un de l'équipe HumanUp (userId) ou
