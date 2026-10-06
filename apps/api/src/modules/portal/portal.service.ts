@@ -356,12 +356,13 @@ export async function getKanban(mandatId: string, portalAccessId?: string) {
   };
 }
 
-// Coordonnées + CV : masqués par défaut, visibles seulement si le recruteur l'a
-// activé sur le dossier client du candidat (aiAnonymizedProfile.coordonneesVisibles).
+// Le CV est toujours téléchargeable par le client. Les coordonnées (email, téléphone,
+// LinkedIn) restent masquées par défaut, visibles seulement si le recruteur l'a activé
+// sur le dossier client du candidat (aiAnonymizedProfile.coordonneesVisibles).
 function withContact<T extends { aiAnonymizedProfile: unknown; email: string | null; telephone: string | null; linkedinUrl: string | null; cvUrl: string | null }>(c: T) {
   const { email, telephone, linkedinUrl, cvUrl, ...cand } = c;
   const visible = (c.aiAnonymizedProfile as any)?.coordonneesVisibles === true;
-  return { ...cand, contact: visible ? { email, telephone, linkedinUrl, cvUrl } : null };
+  return { ...cand, cvUrl, contact: visible ? { email, telephone, linkedinUrl } : null };
 }
 
 // Interlocuteurs HumanUp affichés au client : consultant (recruteur) et commercial
