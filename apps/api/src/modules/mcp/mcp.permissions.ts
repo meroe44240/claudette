@@ -67,6 +67,10 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   add_lead_interaction:          { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   lose_lead:                     { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   convert_lead:                  { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  // ═══ PORTAIL CLIENT (acces par mandat) ═══
+  list_portal_accesses:          { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  grant_portal_access:           { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  revoke_portal_access:          { level: 'confirm', roles: ['ADMIN'] },
 
   // ═══ PUSHES ═══
 
