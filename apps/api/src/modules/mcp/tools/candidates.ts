@@ -232,7 +232,7 @@ export function registerCandidateTools(server: McpServer) {
       sections: z.array(z.object({ title: z.string(), items: z.array(z.string()) })).optional()
         .describe('Sections titrees, ex. [{title:"Parcours",items:["Depuis 03.2026 : ... · Agicap"]}]'),
       photo_url: z.string().optional().describe("URL http(s) d'une photo (JPG/PNG/WebP) : elle est telechargee et hebergee par l'ATS. Chaine vide pour retirer la photo."),
-      show_contact: z.boolean().optional().describe("Montrer au client l'email, le telephone, le LinkedIn et le CV du candidat sur le portail. A activer seulement si le candidat a donne son accord."),
+      show_contact: z.boolean().optional().describe("Montrer au client l'email, le telephone et le LinkedIn du candidat sur le portail (le CV, lui, est toujours telechargeable). A activer seulement si le candidat a donne son accord."),
       protect: z.boolean().optional().default(true).describe("Proteger le dossier : un nouveau CV importe ne l'ecrasera pas (defaut true)"),
     },
     wrapTool('update_candidate_dossier', async (args) => {

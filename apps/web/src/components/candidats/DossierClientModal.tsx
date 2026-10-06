@@ -205,9 +205,9 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 24, padding: '12px 14px', borderRadius: 12, background: '#F6F5EC', cursor: 'pointer' }}>
                 <input type="checkbox" checked={coordonnees} onChange={(e) => setCoordonnees(e.target.checked)} style={{ marginTop: 3 }} />
                 <span>
-                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: INK }}>Montrer les coordonnées et le CV au client</span>
+                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: INK }}>Montrer les coordonnées au client</span>
                   <span style={{ display: 'block', fontSize: 12.5, color: MUTED, marginTop: 2 }}>
-                    {[data.contact.email, data.contact.telephone, data.contact.linkedinUrl ? 'LinkedIn' : null, data.contact.cvUrl ? 'CV' : null].filter(Boolean).join(' · ') || 'Aucune coordonnée sur la fiche'}
+                    {[data.contact.email, data.contact.telephone, data.contact.linkedinUrl ? 'LinkedIn' : null].filter(Boolean).join(' · ') || 'Aucune coordonnée sur la fiche'}
                   </span>
                 </span>
               </label>
@@ -235,13 +235,13 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
                   </div>
                 </div>
                 <div style={{ padding: '16px 18px 20px' }}>
-                  {coordonnees && (data.contact.email || data.contact.telephone || data.contact.linkedinUrl || data.contact.cvUrl) && (
+                  {((coordonnees && (data.contact.email || data.contact.telephone || data.contact.linkedinUrl)) || data.contact.cvUrl) && (
                     <div style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 11, padding: '9px 11px', marginBottom: 14 }}>
-                      <div style={PREVIEW_LABEL}>Coordonnées</div>
+                      <div style={PREVIEW_LABEL}>{coordonnees ? 'Coordonnées' : 'CV'}</div>
                       <div style={{ fontSize: 12.5, color: INK, fontWeight: 600, marginTop: 4, lineHeight: 1.6 }}>
-                        {data.contact.email && <div>{data.contact.email}</div>}
-                        {data.contact.telephone && <div>{data.contact.telephone}</div>}
-                        {data.contact.linkedinUrl && <div>Profil LinkedIn</div>}
+                        {coordonnees && data.contact.email && <div>{data.contact.email}</div>}
+                        {coordonnees && data.contact.telephone && <div>{data.contact.telephone}</div>}
+                        {coordonnees && data.contact.linkedinUrl && <div>Profil LinkedIn</div>}
                         {data.contact.cvUrl && <div>Télécharger le CV</div>}
                       </div>
                     </div>

@@ -541,7 +541,7 @@ export default function CandidatDetailPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: portail?.coordonneesVisibles ? '#2C6B3F' : '#8A8699', marginTop: 8 }}>
               {portail?.coordonneesVisibles ? <Eye size={14} /> : <EyeOff size={14} />}
-              {portail?.coordonneesVisibles ? 'Coordonnées et CV montrés au client' : 'Coordonnées et CV masqués'}
+              {portail?.coordonneesVisibles ? 'Coordonnées montrées au client' : 'Coordonnées masquées, CV téléchargeable'}
             </div>
             {(portail?.mandats ?? []).length === 0 && <div style={{ fontSize: 13, color: '#8A8699', marginTop: 10 }}>Aucun mandat.</div>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
