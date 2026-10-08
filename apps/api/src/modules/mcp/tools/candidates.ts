@@ -221,6 +221,25 @@ export function registerCandidateTools(server: McpServer) {
     }),
   );
 
+  // ─── get_cv_upload_link ───────────────────────────────
+  server.tool(
+    'get_cv_upload_link',
+    "A utiliser quand le recruteur veut deposer / uploader un CV qu'il a sous la main (fichier joint a la conversation, fichier sur son ordinateur ou son telephone). Un fichier joint a la conversation ne peut PAS etre transmis a l'ATS par un outil : cet outil renvoie un lien de depot valable 2 heures. Donne upload_page_url au recruteur pour qu'il y glisse son PDF. Si un outil local d'envoi de fichier est disponible (upload_cv_file) et que tu connais le chemin du fichier sur l'ordinateur, appelle-le avec ce meme lien au lieu de le montrer. Avec candidate_id, le CV est attache a cette fiche (remplace le precedent) ; sans, un nouveau candidat est cree depuis le CV. Si le CV est dans un email ou derriere un lien, utiliser plutot upload_candidate_cv.",
+    {
+      candidate_id: z.string().optional().describe('UUID du candidat qui recoit le CV. Absent : le candidat sera cree depuis le CV depose.'),
+    },
+    wrapTool('get_cv_upload_link', async (args, user) => {
+      const link = await cvUploadService.createDepotLink(user.userId, (args.candidate_id as string | undefined) || null);
+      return {
+        upload_page_url: link.pageUrl,
+        expires_at: link.expiresAt.toISOString(),
+        accepts: 'PDF, 10 Mo maximum',
+        target: args.candidate_id ? 'fiche du candidat indique' : 'nouveau candidat cree depuis le CV',
+        message: 'Donne ce lien au recruteur : il y glisse le PDF. Lien personnel, valable 2 heures.',
+      };
+    }),
+  );
+
   // ─── upload_candidate_cv ──────────────────────────────
   server.tool(
     'upload_candidate_cv',

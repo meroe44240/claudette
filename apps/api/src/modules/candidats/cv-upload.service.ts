@@ -9,6 +9,7 @@ import { NotFoundError, ValidationError } from '../../lib/errors.js';
 import * as documentService from '../documents/document.service.js';
 import * as photoService from './photo.service.js';
 import { getValidAccessToken } from '../integrations/gmail.service.js';
+import { SignJWT, jwtVerify } from 'jose';
 
 const MAX_SIZE = 10 * 1024 * 1024;
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
@@ -136,4 +137,72 @@ export async function attachCv(candidatId: string, userId: string, file: CvFile)
   await prisma.candidat.update({ where: { id: candidatId }, data: { cvUrl: doc.url } });
   void photoService.autoFromCv(candidatId, userId);
   return { candidat, cvUrl: doc.url, filename: doc.originalName, size: doc.size, replaced: !!candidat.cvUrl };
+}
+
+// ─── Lien de dépôt (glisser un PDF depuis le navigateur ou l'appli de bureau) ──
+// Claude ne peut pas transmettre un fichier joint à un connecteur : l'outil MCP
+// renvoie donc un lien à durée limitée, lié au recruteur et (si connu) au candidat.
+
+const BASE = process.env.PORTAL_BASE_URL || 'https://ats.propium.co';
+const depotSecret = new TextEncoder().encode(process.env.JWT_ACCESS_SECRET || 'dev-access-secret');
+const DEPOT_TTL_HOURS = 2;
+
+export async function createDepotLink(userId: string, candidatId: string | null) {
+  if (candidatId) {
+    const c = await prisma.candidat.findUnique({ where: { id: candidatId }, select: { id: true } });
+    if (!c) throw new NotFoundError('Candidat', candidatId);
+  }
+  const token = await new SignJWT({ sub: userId, cid: candidatId, type: 'cv_depot' })
+    .setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime(`${DEPOT_TTL_HOURS}h`).sign(depotSecret);
+  return {
+    pageUrl: `${BASE}/depot-cv?token=${token}`,
+    expiresAt: new Date(Date.now() + DEPOT_TTL_HOURS * 3600 * 1000),
+  };
+}
+
+async function readDepotToken(token: string): Promise<{ userId: string; candidatId: string | null }> {
+  try {
+    const { payload } = await jwtVerify(token, depotSecret);
+    if (payload.type !== 'cv_depot' || typeof payload.sub !== 'string') throw new Error('type');
+    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+    if (!user || (user as any).status === 'ARCHIVED') throw new Error('user');
+    return { userId: payload.sub, candidatId: (payload.cid as string | null) ?? null };
+  } catch {
+    throw new ValidationError('Ce lien de dépôt a expiré ou est invalide. Demandez-en un nouveau à Claude.');
+  }
+}
+
+export async function depotContext(token: string) {
+  const { userId, candidatId } = await readDepotToken(token);
+  const [user, candidat] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { prenom: true, nom: true } }),
+    candidatId ? prisma.candidat.findUnique({ where: { id: candidatId }, select: { prenom: true, nom: true, posteActuel: true, cvUrl: true } }) : null,
+  ]);
+  if (candidatId && !candidat) throw new ValidationError("Ce candidat n'existe plus.");
+  return {
+    recruteur: `${user?.prenom ?? ''} ${user?.nom ?? ''}`.trim(),
+    candidat: candidat ? { nom: `${candidat.prenom ?? ''} ${candidat.nom}`.trim(), poste: candidat.posteActuel, hasCv: !!candidat.cvUrl } : null,
+  };
+}
+
+/** Dépôt d'un PDF via le lien : attache à la fiche visée, ou crée le candidat depuis le CV s'il n'y en a pas. */
+export async function depotUpload(token: string, buffer: Buffer, filename: string, updateProfile: boolean) {
+  const { userId, candidatId } = await readDepotToken(token);
+  assertPdf(buffer);
+  const file: CvFile = { buffer, filename: safeName(filename, 'cv.pdf'), origin: 'base64' };
+  const cvParsing = await import('../ai/cv-parsing.service.js');
+  let id = candidatId;
+  let created = false;
+  if (!id) {
+    id = (await cvParsing.createCandidatFromCv(buffer, file.filename, userId)).candidat.id as string;
+    created = true;
+  }
+  const out = await attachCv(id, userId, file);
+  if (!created && updateProfile) await cvParsing.updateCandidatFromCv(buffer, file.filename, userId, id);
+  const c = await prisma.candidat.findUnique({ where: { id }, select: { prenom: true, nom: true } });
+  return {
+    candidatId: id, candidat: `${c?.prenom ?? ''} ${c?.nom ?? ''}`.trim(), created,
+    filename: out.filename, replaced: out.replaced, profileUpdated: created || updateProfile,
+    ficheUrl: `${BASE}/candidats/${id}`,
+  };
 }
