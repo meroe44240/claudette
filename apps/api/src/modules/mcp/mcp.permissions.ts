@@ -51,6 +51,7 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   add_note:                      { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   update_candidate:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   update_candidate_dossier:      { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  upload_candidate_cv:           { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   add_candidate_debrief:         { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   apply_candidate_debrief:       { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   update_client:                 { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
