@@ -29,6 +29,7 @@ const PortalOffresPage = lazy(() => import('./pages/portail/offres'));
 const PortalCandidatsPage = lazy(() => import('./pages/portail/candidats'));
 // Confirmation candidat (public)
 const ConfirmerPage = lazy(() => import('./pages/confirmer'));
+const DepotCvPage = lazy(() => import('./pages/depot-cv'));
 // Annulation de RDV (public)
 const AnnulerRdvPage = lazy(() => import('./pages/annuler-rdv'));
 
@@ -110,6 +111,7 @@ export default function App() {
         <Route path="/espace/notifications" element={<EspaceNotificationsPage />} />
         <Route path="/espace" element={<EspaceHomePage />} />
         <Route path="/confirmer" element={<ConfirmerPage />} />
+        <Route path="/depot-cv" element={<DepotCvPage />} />
         <Route path="/annuler-rdv" element={<AnnulerRdvPage />} />
         <Route
           element={
