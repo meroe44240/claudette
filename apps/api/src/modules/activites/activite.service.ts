@@ -154,22 +154,22 @@ async function mentionContext(entiteType: string, entiteId: string): Promise<str
   try {
     if (entiteType === 'CANDIDAT') {
       const c = await prisma.candidat.findUnique({ where: { id: entiteId }, select: { prenom: true, nom: true } });
-      return c ? `le candidat ${[c.prenom, c.nom].filter(Boolean).join(' ')}` : 'un candidat';
+      return c ? `candidate ${[c.prenom, c.nom].filter(Boolean).join(' ')}` : 'a candidate';
     }
     if (entiteType === 'CLIENT') {
       const c = await prisma.client.findUnique({ where: { id: entiteId }, select: { prenom: true, nom: true } });
-      return c ? `le client ${[c.prenom, c.nom].filter(Boolean).join(' ')}` : 'un client';
+      return c ? `client ${[c.prenom, c.nom].filter(Boolean).join(' ')}` : 'a client';
     }
     if (entiteType === 'ENTREPRISE') {
       const e = await prisma.entreprise.findUnique({ where: { id: entiteId }, select: { nom: true } });
-      return e ? `la société ${e.nom}` : 'une société';
+      return e ? `company ${e.nom}` : 'a company';
     }
     if (entiteType === 'MANDAT') {
       const m = await prisma.mandat.findUnique({ where: { id: entiteId }, select: { titrePoste: true } });
-      return m ? `le mandat ${m.titrePoste}` : 'un mandat';
+      return m ? `mandate ${m.titrePoste}` : 'a mandate';
     }
   } catch { /* ignore */ }
-  return 'une fiche';
+  return 'a record';
 }
 
 export async function update(id: string, data: UpdateActiviteInput) {

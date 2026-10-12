@@ -105,7 +105,7 @@ function getYesterdayRangeParis(): { start: Date; end: Date } {
   };
 }
 
-/** Format the last reported day's date as "DD mois" in French.
+/** Format the last reported day's date as "DD Month" in English.
  * On Monday this returns Friday's date. */
 function formatYesterdayFr(): string {
   const offset = getParisOffsetMs();
@@ -120,12 +120,12 @@ function formatYesterdayFr(): string {
     timeZone: 'Europe/Paris',
   };
   const yesterdayUtc = new Date(nowParis.getTime() - offset);
-  return yesterdayUtc.toLocaleDateString('fr-FR', options);
+  return yesterdayUtc.toLocaleDateString('en-GB', options);
 }
 
-/** Format a Date to a short French date string (DD/MM/YYYY) */
+/** Format a Date to a short date string (DD/MM/YYYY) */
 function formatShortDateFr(d: Date): string {
-  return d.toLocaleDateString('fr-FR', {
+  return d.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -467,10 +467,10 @@ async function gatherDailyData(): Promise<DailyReportData> {
     if (top.score > 0) {
       const name = top.prenom ? `${top.prenom} ${top.nom}` : top.nom;
       const parts: string[] = [];
-      if (top.appels > 0) parts.push(`${top.appels} appels`);
-      if (top.rdv > 0) parts.push(`${top.rdv} RDV`);
-      if (top.interviews > 0) parts.push(`${top.interviews} interviews`);
-      if (top.pushes > 0) parts.push(`${top.pushes} pushes`);
+      if (top.appels > 0) parts.push(`${top.appels} call${top.appels > 1 ? 's' : ''}`);
+      if (top.rdv > 0) parts.push(`${top.rdv} client meeting${top.rdv > 1 ? 's' : ''}`);
+      if (top.interviews > 0) parts.push(`${top.interviews} interview${top.interviews > 1 ? 's' : ''}`);
+      if (top.pushes > 0) parts.push(`${top.pushes} push${top.pushes > 1 ? 'es' : ''}`);
       topPerformer = {
         name,
         metric: parts.join(', '),
@@ -519,16 +519,20 @@ async function gatherDailyData(): Promise<DailyReportData> {
   };
 }
 
-// Map stage enum to short French label
+// Map stage enum to short English label
 const STAGE_LABELS: Record<string, string> = {
   SOURCING: 'sourcing',
   CONTACTE: 'qualification',
-  ENTRETIEN_1: 'entretien interne',
-  ENVOYE_CLIENT: 'envoi client',
-  ENTRETIEN_CLIENT: 'entretien client',
+  ENTRETIEN_1: 'internal interview',
+  ENVOYE_CLIENT: 'sent to client',
+  ENTRETIEN_CLIENT: 'client interview',
   PROCESS: 'process',
-  OFFRE: 'offre',
+  OFFRE: 'offer',
+  PLACE: 'won',
+  REFUSE: 'lost',
 };
+// Pipeline line of the daily report: open stages only
+const PIPELINE_STAGES = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE'];
 
 // Daily objectives per metric
 const DAILY_OBJECTIVES: Record<string, number> = {
@@ -586,7 +590,7 @@ function buildSlackBlocks(data: DailyReportData): object {
 
     // Add interviews as info line (no objective)
     if (user.interviews > 0) {
-      objLines.push(`🎯 ${user.interviews} entretien${user.interviews > 1 ? 's' : ''}`);
+      objLines.push(`🎯 ${user.interviews} interview${user.interviews > 1 ? 's' : ''}`);
     }
 
     let sectionText = `👤 *${displayName}*\n${objLines.join('\n')}`;
@@ -594,14 +598,14 @@ function buildSlackBlocks(data: DailyReportData): object {
     // Highlights — positive news from yesterday
     const highlights: string[] = [];
     for (const p of user.nouvellesPresentations) {
-      highlights.push(`🤝 *Nouvelle présentation* — ${p.candidat} → ${p.mandat}`);
+      highlights.push(`🤝 *New presentation* — ${p.candidat} → ${p.mandat}`);
     }
     for (const m of user.nouveauxMeets) {
-      highlights.push(`🎯 *Nouveau meet* — ${m.candidat} → ${m.mandat}`);
+      highlights.push(`🎯 *New interview* — ${m.candidat} → ${m.mandat}`);
     }
     for (const m of user.nouveauxMandats) {
       const clientStr = m.clientNom ? ` (${m.clientNom})` : '';
-      highlights.push(`📋 *Nouveau mandat rentré* — ${m.titre}${clientStr}`);
+      highlights.push(`📋 *New mandate* — ${m.titre}${clientStr}`);
     }
     if (highlights.length > 0) {
       sectionText += `\n\n${highlights.join('\n')}`;
@@ -611,17 +615,17 @@ function buildSlackBlocks(data: DailyReportData): object {
     for (const m of user.mandats) {
       // Build condensed pipeline: only stages > 0
       const pipelineParts: string[] = [];
-      for (const [stage, label] of Object.entries(STAGE_LABELS)) {
+      for (const stage of PIPELINE_STAGES) {
         const count = m.stages[stage as keyof typeof m.stages];
-        if (count > 0) pipelineParts.push(`${count} ${label}`);
+        if (count > 0) pipelineParts.push(`${count} ${STAGE_LABELS[stage]}`);
       }
       const pipelineStr = pipelineParts.length > 0 ? ` · ${pipelineParts.join(' · ')}` : '';
 
       const clientStr = m.clientNom ? ` (${m.clientNom})` : '';
       const sentStr = m.profilsEnvoyesHier > 0
-        ? ` · 📤 ${m.profilsEnvoyesHier} profil${m.profilsEnvoyesHier > 1 ? 's' : ''} envoyé${m.profilsEnvoyesHier > 1 ? 's' : ''} hier`
+        ? ` · 📤 ${m.profilsEnvoyesHier} profile${m.profilsEnvoyesHier > 1 ? 's' : ''} sent yesterday`
         : '';
-      sectionText += `\n• ${m.titre}${clientStr} — ${m.candidatsActifs} actif${m.candidatsActifs > 1 ? 's' : ''}${pipelineStr}${sentStr}`;
+      sectionText += `\n• ${m.titre}${clientStr} — ${m.candidatsActifs} active${pipelineStr}${sentStr}`;
     }
 
     blocks.push({ type: 'divider' });
@@ -635,19 +639,19 @@ function buildSlackBlocks(data: DailyReportData): object {
 
   // Top performer + alerts — compact footer
   const topLine = data.topPerformer
-    ? `🏆 *Top performer :* ${data.topPerformer.name} (${data.topPerformer.metric})`
-    : `🏆 *Top performer :* _aucune activité hier_`;
+    ? `🏆 *Top performer:* ${data.topPerformer.name} (${data.topPerformer.metric})`
+    : `🏆 *Top performer:* _no activity yesterday_`;
 
   const alertParts: string[] = [];
   if (data.alerts.dormantMandats.length > 0) {
-    alertParts.push(`${data.alerts.dormantMandats.length} mandats sans mouvement +7j`);
+    alertParts.push(`${data.alerts.dormantMandats.length} mandate${data.alerts.dormantMandats.length > 1 ? 's' : ''} with no movement for 7+ days`);
   }
   if (data.alerts.pushesSansReponse > 0) {
-    alertParts.push(`${data.alerts.pushesSansReponse} pushes sans réponse +5j`);
+    alertParts.push(`${data.alerts.pushesSansReponse} push${data.alerts.pushesSansReponse > 1 ? 'es' : ''} with no reply for 5+ days`);
   }
 
   const alertLine = alertParts.length > 0
-    ? `\n⚠️ *Alertes :* ${alertParts.join(' · ')}`
+    ? `\n⚠️ *Alerts:* ${alertParts.join(' · ')}`
     : '';
 
   blocks.push({
@@ -755,7 +759,7 @@ export async function sendTestReport(
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `🧪 *Message de test* — Ceci est un aperçu du rapport quotidien.`,
+        text: `🧪 *Test message* — This is a preview of the daily report.`,
       },
     });
 
@@ -788,11 +792,11 @@ export async function notifyPresentation(data: {
   if (!config || !config.enabled) return;
 
   const candidatName = [data.candidatPrenom, data.candidatNom].filter(Boolean).join(' ');
-  const recruteur = data.recruteurPrenom || 'Non assigné';
-  const contact = data.contactNom || 'Non renseigné';
+  const recruteur = data.recruteurPrenom || 'Unassigned';
+  const contact = data.contactNom || 'Not specified';
 
   const date = data.date || new Date();
-  const dateStr = date.toLocaleDateString('fr-FR', {
+  const dateStr = date.toLocaleDateString('en-GB', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -806,13 +810,13 @@ export async function notifyPresentation(data: {
         text: {
           type: 'mrkdwn',
           text: [
-            `🤝 *Nouvelle présentation*`,
+            `🤝 *New presentation*`,
             ``,
             `📅 ${dateStr}`,
             `👤 ${candidatName}`,
             `🏢 ${data.entrepriseNom} — ${contact}`,
-            `📋 Mandat : ${data.mandatTitre}`,
-            `👔 Recruteur : ${recruteur}`,
+            `📋 Mandate: ${data.mandatTitre}`,
+            `👔 Recruiter: ${recruteur}`,
           ].join('\n'),
         },
       },
@@ -839,10 +843,10 @@ export async function notifyNouvelleOpportunite(data: {
   const config = await getSlackConfig();
   if (!config || !config.enabled) return;
 
-  const recruteur = data.recruteurPrenom || 'Non assigné';
+  const recruteur = data.recruteurPrenom || 'Unassigned';
   const feeLine = data.feeMontantEstime
-    ? `💰 Fee estimé : ${data.feeMontantEstime.toLocaleString('fr-FR')} €`
-    : `💰 Fee estimé : _Non renseigné_`;
+    ? `💰 Estimated fee: €${data.feeMontantEstime.toLocaleString('en-GB')}`
+    : `💰 Estimated fee: _Not specified_`;
 
   const payload = {
     blocks: [
@@ -851,11 +855,11 @@ export async function notifyNouvelleOpportunite(data: {
         text: {
           type: 'mrkdwn',
           text: [
-            `🌟 *Nouvelle opportunité*`,
+            `🌟 *New opportunity*`,
             ``,
             `📋 ${data.mandatTitre}`,
             `🏢 ${data.entrepriseNom}`,
-            `👔 Recruteur assigné : ${recruteur}`,
+            `👔 Assigned recruiter: ${recruteur}`,
             feeLine,
           ].join('\n'),
         },
@@ -885,13 +889,13 @@ export async function notifyJobBoardApplication(data: {
   if (!config || !config.enabled) return;
 
   const lines = [
-    `📥 *Nouvelle candidature — job board*`,
+    `📥 *New application — job board*`,
     ``,
     `👤 ${data.candidatNom}`,
-    data.offreTitre ? `📋 Offre : ${data.offreTitre}` : `📋 Candidature spontanée`,
+    data.offreTitre ? `📋 Job: ${data.offreTitre}` : `📋 Unsolicited application`,
     `✉️ ${data.email}`,
     data.telephone ? `📞 ${data.telephone}` : null,
-    data.cvUrl ? `📎 <${data.cvUrl}|Télécharger le CV>` : null,
+    data.cvUrl ? `📎 <${data.cvUrl}|Download the CV>` : null,
   ].filter(Boolean) as string[];
 
   const payload = {
@@ -919,7 +923,7 @@ export async function notifyAssignation(data: {
   if (!config || !config.enabled || !data.changes.length) return;
 
   const lignes = data.changes.map((c) =>
-    `${c.role === 'Recruteur' ? '👔' : '🧭'} ${c.role} → *${c.personne}*`,
+    `${c.role === 'Recruteur' ? '👔 Recruiter' : '🧭 Sales'} → *${c.personne}*`,
   );
 
   const payload = {
@@ -930,7 +934,7 @@ export async function notifyAssignation(data: {
         text: {
           type: 'mrkdwn',
           text: [
-            `🤝 *Mandat assigné*`,
+            `🤝 *Mandate assigned*`,
             ``,
             `📋 ${data.mandatTitre}`,
             ...(data.entrepriseNom ? [`🏢 ${data.entrepriseNom}`] : []),
@@ -968,8 +972,8 @@ export async function notifyMention(data: {
         text: {
           type: 'mrkdwn',
           text: [
-            `💬 *${data.byName || 'Quelqu\'un'}* a mentionné ${data.mentionedNames.map((n) => `*${n}*`).join(', ')}`,
-            `sur ${data.contextLabel}`,
+            `💬 *${data.byName || 'Someone'}* mentioned ${data.mentionedNames.map((n) => `*${n}*`).join(', ')}`,
+            `on ${data.contextLabel}`,
             data.excerpt ? `> ${data.excerpt.slice(0, 240)}` : '',
           ].filter(Boolean).join('\n'),
         },
@@ -1006,11 +1010,11 @@ export async function notifyNewCandidate(data: {
         text: {
           type: 'mrkdwn',
           text: [
-            `🆕 *Nouveau candidat au pipeline*`,
+            `🆕 *New candidate in the pipeline*`,
             ``,
-            `👤 *${data.candidatNom}*  ·  étape ${data.stageLabel}`,
+            `👤 *${data.candidatNom}*  ·  stage: ${STAGE_LABELS[data.stageLabel] ?? data.stageLabel}`,
             `📋 ${data.mandatTitre}${data.entrepriseNom ? ` — ${data.entrepriseNom}` : ''}`,
-            `➕ Ajouté par ${data.byPrenom || 'un recruteur'}${data.salesPrenom ? `  ·  Sales : *${data.salesPrenom}*` : ''}`,
+            `➕ Added by ${data.byPrenom || 'a recruiter'}${data.salesPrenom ? `  ·  Sales: *${data.salesPrenom}*` : ''}`,
           ].join('\n'),
         },
       },
@@ -1045,21 +1049,21 @@ export async function notifyCloseWon(data: {
   if (!config || !config.enabled) return;
 
   const candidatName = [data.candidatPrenom, data.candidatNom].filter(Boolean).join(' ');
-  const recruteur = data.recruteurPrenom || 'Non assigné';
+  const recruteur = data.recruteurPrenom || 'Unassigned';
   const feeLine = data.feeMontant
-    ? `💰 Fee : ${data.feePct ? `${Number(data.feePct)}% = ` : ''}${data.feeMontant.toLocaleString('fr-FR')} €`
-    : `💰 Fee : _À confirmer_`;
+    ? `💰 Fee: ${data.feePct ? `${Number(data.feePct)}% = ` : ''}€${data.feeMontant.toLocaleString('en-GB')}`
+    : `💰 Fee: _To be confirmed_`;
   const startLine = data.dateDemarrage
-    ? `🚀 Date d'intégration : ${formatShortDateFr(new Date(data.dateDemarrage))}`
+    ? `🚀 Start date: ${formatShortDateFr(new Date(data.dateDemarrage))}`
     : null;
   const contactLine = data.contactNom
-    ? `🤝 Client : ${data.contactNom} (${data.entrepriseNom})`
-    : `🏢 Client : ${data.entrepriseNom}`;
+    ? `🤝 Client: ${data.contactNom} (${data.entrepriseNom})`
+    : `🏢 Client: ${data.entrepriseNom}`;
   const sourcePlacementLine = data.sourcePlacement
-    ? `🎯 Source profil : ${data.sourcePlacement}`
+    ? `🎯 Candidate source: ${data.sourcePlacement}`
     : null;
   const sourceLeadLine = data.sourceLead
-    ? `📥 Source lead : ${data.sourceLead}`
+    ? `📥 Lead source: ${data.sourceLead}`
     : null;
 
   const payload = {
@@ -1069,18 +1073,18 @@ export async function notifyCloseWon(data: {
         text: {
           type: 'mrkdwn',
           text: [
-            `🎉 *NOUVEAU PLACEMENT*`,
+            `🎉 *NEW PLACEMENT*`,
             ``,
-            `👤 Candidat : ${candidatName}`,
+            `👤 Candidate: ${candidatName}`,
             contactLine,
-            `📋 Mandat : ${data.mandatTitre}`,
+            `📋 Mandate: ${data.mandatTitre}`,
             feeLine,
             ...(startLine ? [startLine] : []),
             ...(sourcePlacementLine ? [sourcePlacementLine] : []),
             ...(sourceLeadLine ? [sourceLeadLine] : []),
-            `👔 Recruteur : ${recruteur}`,
+            `👔 Recruiter: ${recruteur}`,
             ``,
-            `Félicitations ! 🎉`,
+            `Congratulations! 🎉`,
           ].join('\n'),
         },
       },
@@ -1113,20 +1117,20 @@ export async function notifyNewMeeting(data: {
   const config = await getSlackConfig();
   if (!config || !config.enabled) return;
 
-  const recruteur = data.recruteurPrenom || 'Non assigné';
-  const lines = [`📅 *Nouveau RDV client*`, ``];
+  const recruteur = data.recruteurPrenom || 'Unassigned';
+  const lines = [`📅 *New client meeting*`, ``];
   lines.push(`📋 ${data.titre}`);
-  if (data.clientNom) lines.push(`👤 Contact : ${data.clientNom}`);
-  else if (data.interlocuteurs) lines.push(`👤 Avec : ${data.interlocuteurs}`);
+  if (data.clientNom) lines.push(`👤 Contact: ${data.clientNom}`);
+  else if (data.interlocuteurs) lines.push(`👤 With: ${data.interlocuteurs}`);
   if (data.entrepriseNom) lines.push(`🏢 ${data.entrepriseNom}`);
   if (data.date) {
     const d = new Date(data.date);
-    const datePart = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Paris' });
-    const timePart = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
-    lines.push(`🕐 ${datePart} à ${timePart}`);
+    const datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Paris' });
+    const timePart = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+    lines.push(`🕐 ${datePart} at ${timePart}`);
   }
   if (data.lieu) lines.push(`📍 ${data.lieu}`);
-  lines.push(`👔 Recruteur : ${recruteur}`);
+  lines.push(`👔 Recruiter: ${recruteur}`);
 
   const payload = {
     blocks: [{ type: 'section', text: { type: 'mrkdwn', text: lines.join('\n') } }],
@@ -1158,7 +1162,7 @@ export async function notifyContractApprovalRequest(data: {
   const config = await getSlackConfig();
   if (!config || !config.enabled) return;
 
-  const asker = data.requestedByPrenom || 'Un recruteur';
+  const asker = data.requestedByPrenom || 'A recruiter';
   const payload = {
     blocks: [
       {
@@ -1166,14 +1170,14 @@ export async function notifyContractApprovalRequest(data: {
         text: {
           type: 'mrkdwn',
           text: [
-            `⚠️ *Validation contrat requise*`,
+            `⚠️ *Contract approval required*`,
             ``,
-            `${asker} demande un fee de *${data.feeRequested}%* (sous le plancher 18%).`,
+            `${asker} is requesting a fee of *${data.feeRequested}%* (below the 18% floor).`,
             `📋 ${data.entrepriseNom} — ${data.mandatTitre}`,
             ``,
-            `_Raison_ : ${data.reason}`,
+            `_Reason_: ${data.reason}`,
             ``,
-            `À valider dans l'ATS (Admin > Demandes de contrat).`,
+            `To approve in the ATS (Admin > Demandes de contrat).`,
           ].join('\n'),
         },
       },

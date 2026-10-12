@@ -375,7 +375,7 @@ export async function recordCareersApplication(data: { name: string; email: stri
 
   void notifyJobBoardApplication({
     candidatNom: data.name.trim(),
-    offreTitre: `${role.title} (recrutement interne HumanUp)`,
+    offreTitre: `${role.title} (HumanUp internal hiring)`,
     email,
     telephone: phone,
   });
@@ -448,7 +448,7 @@ export async function recordJobPageApplication(slug: string, data: { name: strin
   }
 
   if (!alreadyNoted) {
-    void notifyJobBoardApplication({ candidatNom: data.name.trim(), offreTitre: `${data.intake.label} (page de poste)`, email, telephone: phone });
+    void notifyJobBoardApplication({ candidatNom: data.name.trim(), offreTitre: `${data.intake.label} (job page)`, email, telephone: phone });
   }
   return { candidatId: candidat.id, created: !existing };
 }
