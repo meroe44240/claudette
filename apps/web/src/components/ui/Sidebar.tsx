@@ -3,6 +3,7 @@ import { NavLink } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar, Wrench, Megaphone, CalendarClock, Plug, Linkedin, UserSearch } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
+import { t } from '../../lib/i18n';
 
 interface NavItem {
   to: string;
@@ -18,41 +19,41 @@ interface NavSection {
 const navSections: NavSection[] = [
   {
     items: [
-      { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+      { to: '/', icon: LayoutDashboard, label: t('Dashboard') },
     ],
   },
   {
-    label: 'CRM',
+    label: t('CRM'),
     items: [
-      { to: '/candidats', icon: Users, label: 'Candidats' },
-      { to: '/clients', icon: Briefcase, label: 'Clients' },
-      { to: '/entreprises', icon: Building2, label: 'Entreprises' },
+      { to: '/candidats', icon: Users, label: t('Candidats') },
+      { to: '/clients', icon: Briefcase, label: t('Clients') },
+      { to: '/entreprises', icon: Building2, label: t('Entreprises') },
     ],
   },
   {
-    label: 'RECRUTEMENT',
+    label: t('RECRUTEMENT'),
     items: [
-      { to: '/leads', icon: Activity, label: 'Leads' },
-      { to: '/mandats', icon: FileText, label: 'Mandats' },
-      { to: '/booking', icon: CalendarClock, label: 'Rendez-vous' },
-      { to: '/calendrier-linkedin', icon: Linkedin, label: 'Calendrier LinkedIn' },
-      { to: '/outils', icon: Wrench, label: 'Outil Recruteurs' },
-      { to: '/offres', icon: Megaphone, label: 'Job board' },
-      { to: '/list-push', icon: Radar, label: 'List Push' },
-      { to: '/sourcing', icon: UserSearch, label: 'Sourcing Kalent' },
+      { to: '/leads', icon: Activity, label: t('Leads') },
+      { to: '/mandats', icon: FileText, label: t('Mandats') },
+      { to: '/booking', icon: CalendarClock, label: t('Rendez-vous') },
+      { to: '/calendrier-linkedin', icon: Linkedin, label: t('Calendrier LinkedIn') },
+      { to: '/outils', icon: Wrench, label: t('Outil Recruteurs') },
+      { to: '/offres', icon: Megaphone, label: t('Job board') },
+      { to: '/list-push', icon: Radar, label: t('List Push') },
+      { to: '/sourcing', icon: UserSearch, label: t('Sourcing Kalent') },
     ],
   },
   {
-    label: 'PILOTAGE',
+    label: t('PILOTAGE'),
     items: [
-      { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
+      { to: '/admin/analytics', icon: BarChart3, label: t('Analytics') },
     ],
   },
 ];
 
 // Bas du bandeau : "Mes intégrations" (tous) + Paramètres (admin only)
-const integrationsItem: NavItem = { to: '/settings/integrations', icon: Plug, label: 'Mes intégrations' };
-const paramItem: NavItem = { to: '/settings', icon: Settings, label: 'Paramètres' };
+const integrationsItem: NavItem = { to: '/settings/integrations', icon: Plug, label: t('Mes intégrations') };
+const paramItem: NavItem = { to: '/settings', icon: Settings, label: t('Paramètres') };
 
 const SHORTCUT_HINTS: Record<string, string> = {
   '/': 'd',
@@ -291,7 +292,7 @@ export default function Sidebar({ collapsed = false, onToggleCollapse, isOpen = 
                   {user?.prenom || ''} {user?.nom || ''}
                 </div>
                 <div className="text-[11px] truncate leading-tight" style={{ color: 'rgba(230,233,175,0.6)' }}>
-                  {user?.role === 'ADMIN' ? 'Administrateur' : 'Recruteur'}
+                  {user?.role === 'ADMIN' ? t('Administrateur') : t('Recruteur')}
                 </div>
               </div>
               <ChevronDown size={16} className="shrink-0" style={{ color: 'rgba(230,233,175,0.6)' }} />

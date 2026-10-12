@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ChevronDown, X, RotateCcw, Check } from 'lucide-react';
+import { t } from '../../lib/i18n';
 
 // ── Types ────────────────────────────────────────────────────────
 export interface FilterOption {
@@ -320,7 +321,7 @@ export default function FilterBar({
         {/* Active filters count badge */}
         {activeCount > 0 && (
           <span className="inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-md bg-[#f6f5fa] px-2.5 text-xs font-semibold text-[#6D28D9] border border-[#C4B5FD]">
-            {activeCount} filtre{activeCount > 1 ? 's' : ''}
+            {t(activeCount > 1 ? '{n} filtres' : '{n} filtre', { n: activeCount })}
           </span>
         )}
 
@@ -331,14 +332,14 @@ export default function FilterBar({
             className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-xs font-medium text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
           >
             <RotateCcw size={12} />
-            Reinitialiser
+            {t('Reinitialiser')}
           </button>
         )}
 
         {/* Result counter */}
         {resultCount !== undefined && totalCount !== undefined && (
           <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-neutral-500">
-            {resultCount} {resultCount <= 1 ? 'resultat' : 'resultats'} sur {totalCount}
+            {t(resultCount <= 1 ? '{n} resultat sur {total}' : '{n} resultats sur {total}', { n: resultCount, total: totalCount })}
           </span>
         )}
       </div>

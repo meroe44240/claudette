@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Building2 } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { t } from '../../lib/i18n';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
 import Input, { Textarea } from '../../components/ui/Input';
@@ -15,11 +16,11 @@ import { useAutosave } from '../../hooks/useAutosave';
 import PappersAutocomplete, { type PappersSuggestionData } from '../../components/entreprises/PappersAutocomplete';
 
 const tailleOptions = [
-  { value: '', label: 'Sélectionner...' },
+  { value: '', label: t('Sélectionner...') },
   { value: 'STARTUP', label: 'Startup' },
-  { value: 'PME', label: 'PME' },
-  { value: 'ETI', label: 'ETI' },
-  { value: 'GRAND_GROUPE', label: 'Grand groupe' },
+  { value: 'PME', label: t('PME') },
+  { value: 'ETI', label: t('ETI') },
+  { value: 'GRAND_GROUPE', label: t('Grand groupe') },
 ];
 
 interface FormData {
@@ -75,7 +76,7 @@ export default function EntrepriseNewPage() {
   useEffect(() => {
     if (restoredData) {
       setForm(restoredData);
-      toast('success', 'Brouillon restauré');
+      toast('success', t('Brouillon restauré'));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -137,7 +138,7 @@ export default function EntrepriseNewPage() {
       capitalSocial: data.capitalSocial || '',
     }));
     setPappersUsed(true);
-    toast('success', `Données Pappers importées pour ${data.nom}`);
+    toast('success', t('Données Pappers importées pour {nom}', { nom: data.nom }));
   };
 
   const mutation = useMutation({
@@ -145,7 +146,7 @@ export default function EntrepriseNewPage() {
       api.post<{ id: string }>('/entreprises', payload),
     onSuccess: (created) => {
       clearDraft();
-      toast('success', 'Entreprise créée');
+      toast('success', t('Entreprise créée'));
       navigate(`/entreprises/${created.id}`);
     },
     onError: (error: any) => {
@@ -156,7 +157,7 @@ export default function EntrepriseNewPage() {
         }
         setErrors(errs);
       } else {
-        toast('error', error.message || 'Erreur lors de la création');
+        toast('error', error.message || t('Erreur lors de la création'));
       }
     },
   });
@@ -165,7 +166,7 @@ export default function EntrepriseNewPage() {
     e.preventDefault();
 
     if (!form.nom.trim()) {
-      setErrors({ nom: 'Le nom est requis' });
+      setErrors({ nom: t('Le nom est requis') });
       return;
     }
 
@@ -191,10 +192,10 @@ export default function EntrepriseNewPage() {
   return (
     <div>
       <PageHeader
-        title="Nouvelle entreprise"
+        title={t('Nouvelle entreprise')}
         breadcrumbs={[
-          { label: 'Entreprises', href: '/entreprises' },
-          { label: 'Nouvelle' },
+          { label: t('Entreprises'), href: '/entreprises' },
+          { label: t('Nouvelle') },
         ]}
       />
 
@@ -202,7 +203,7 @@ export default function EntrepriseNewPage() {
       <Card className="mb-6">
         <div className="flex items-center gap-2 mb-3">
           <Building2 size={16} className="text-amber-600" />
-          <h3 className="text-sm font-semibold text-neutral-900">Rechercher via Pappers</h3>
+          <h3 className="text-sm font-semibold text-neutral-900">{t('Rechercher via Pappers')}</h3>
         </div>
         <PappersAutocomplete onSelect={handlePappersSelect} />
         <div className="relative mt-5">
@@ -210,7 +211,7 @@ export default function EntrepriseNewPage() {
             <div className="w-full border-t border-neutral-200" />
           </div>
           <div className="relative flex justify-center text-xs">
-            <span className="bg-white px-3 text-neutral-400">ou remplir manuellement</span>
+            <span className="bg-white px-3 text-neutral-400">{t('ou remplir manuellement')}</span>
           </div>
         </div>
       </Card>
@@ -220,51 +221,51 @@ export default function EntrepriseNewPage() {
         <Card>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <Input
-              label="Nom *"
+              label={t('Nom *')}
               value={form.nom}
               onChange={set('nom')}
-              placeholder="Nom de l'entreprise"
+              placeholder={t("Nom de l'entreprise")}
               required
               error={errors.nom}
             />
             <Select
-              label="Secteur"
+              label={t('Secteur')}
               options={[
-                { value: '', label: 'Sélectionner...' },
+                { value: '', label: t('Sélectionner...') },
                 { value: 'Tech / SaaS', label: 'Tech / SaaS' },
-                { value: 'Finance / Banque', label: 'Finance / Banque' },
-                { value: 'Conseil', label: 'Conseil' },
-                { value: 'Industrie', label: 'Industrie' },
-                { value: 'Santé / Pharma', label: 'Santé / Pharma' },
+                { value: 'Finance / Banque', label: t('Finance / Banque') },
+                { value: 'Conseil', label: t('Conseil') },
+                { value: 'Industrie', label: t('Industrie') },
+                { value: 'Santé / Pharma', label: t('Santé / Pharma') },
                 { value: 'E-commerce / Retail', label: 'E-commerce / Retail' },
-                { value: 'Immobilier', label: 'Immobilier' },
-                { value: 'Énergie', label: 'Énergie' },
-                { value: 'Média / Communication', label: 'Média / Communication' },
-                { value: 'Assurance', label: 'Assurance' },
-                { value: 'Autre', label: 'Autre' },
+                { value: 'Immobilier', label: t('Immobilier') },
+                { value: 'Énergie', label: t('Énergie') },
+                { value: 'Média / Communication', label: t('Média / Communication') },
+                { value: 'Assurance', label: t('Assurance') },
+                { value: 'Autre', label: t('Autre') },
               ]}
               value={form.secteur}
               onChange={(val) => setForm((prev) => ({ ...prev, secteur: val }))}
-              placeholder="Sélectionner un secteur"
+              placeholder={t('Sélectionner un secteur')}
               searchable
             />
 
             <Input
-              label="Site web"
+              label={t('Site web')}
               value={form.siteWeb}
               onChange={set('siteWeb')}
-              placeholder="https://www.exemple.com"
+              placeholder={t('https://www.exemple.com')}
             />
             <Select
-              label="Taille"
+              label={t('Taille')}
               options={tailleOptions}
               value={form.taille}
               onChange={(val) => setForm((prev) => ({ ...prev, taille: val }))}
-              placeholder="Sélectionner une taille"
+              placeholder={t('Sélectionner une taille')}
             />
 
             <Input
-              label="Localisation"
+              label={t('Localisation')}
               value={form.localisation}
               onChange={set('localisation')}
               placeholder="Paris, France"
@@ -281,7 +282,7 @@ export default function EntrepriseNewPage() {
                 label="Notes"
                 value={form.notes}
                 onChange={set('notes')}
-                placeholder="Notes sur l'entreprise..."
+                placeholder={t("Notes sur l'entreprise...")}
               />
             </div>
           </div>
@@ -292,7 +293,7 @@ export default function EntrepriseNewPage() {
               <div className="mb-3 flex items-center gap-2">
                 <Building2 size={14} className="text-amber-600" />
                 <span className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                  Données Pappers
+                  {t('Données Pappers')}
                 </span>
               </div>
               <div className="grid grid-cols-1 gap-3 rounded-lg border border-amber-100 bg-amber-50/50 p-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -310,13 +311,13 @@ export default function EntrepriseNewPage() {
                 )}
                 {form.formeJuridique && (
                   <div>
-                    <span className="block text-[11px] font-medium uppercase text-neutral-500">Forme juridique</span>
+                    <span className="block text-[11px] font-medium uppercase text-neutral-500">{t('Forme juridique')}</span>
                     <span className="text-sm text-neutral-900">{form.formeJuridique}</span>
                   </div>
                 )}
                 {form.codeNAF && (
                   <div>
-                    <span className="block text-[11px] font-medium uppercase text-neutral-500">Code NAF</span>
+                    <span className="block text-[11px] font-medium uppercase text-neutral-500">{t('Code NAF')}</span>
                     <span className="text-sm font-mono text-neutral-900">{form.codeNAF}</span>
                     {form.libelleNAF && (
                       <span className="ml-1 text-xs text-neutral-500">({form.libelleNAF})</span>
@@ -325,19 +326,19 @@ export default function EntrepriseNewPage() {
                 )}
                 {form.effectif && (
                   <div>
-                    <span className="block text-[11px] font-medium uppercase text-neutral-500">Effectif</span>
+                    <span className="block text-[11px] font-medium uppercase text-neutral-500">{t('Effectif')}</span>
                     <span className="text-sm text-neutral-900">{form.effectif}</span>
                   </div>
                 )}
                 {form.capitalSocial && (
                   <div>
-                    <span className="block text-[11px] font-medium uppercase text-neutral-500">Capital social</span>
+                    <span className="block text-[11px] font-medium uppercase text-neutral-500">{t('Capital social')}</span>
                     <span className="text-sm text-neutral-900">{form.capitalSocial}</span>
                   </div>
                 )}
                 {form.adresseComplete && (
                   <div className="sm:col-span-2 lg:col-span-3">
-                    <span className="block text-[11px] font-medium uppercase text-neutral-500">Adresse</span>
+                    <span className="block text-[11px] font-medium uppercase text-neutral-500">{t('Adresse')}</span>
                     <span className="text-sm text-neutral-900">{form.adresseComplete}</span>
                   </div>
                 )}
@@ -349,7 +350,7 @@ export default function EntrepriseNewPage() {
             <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
               <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-500" />
               <div className="text-sm text-amber-800">
-                <span>Une entreprise avec ce nom existe d&eacute;j&agrave; : </span>
+                <span>{t('Une entreprise avec ce nom existe déjà : ')}</span>
                 <Link
                   to={`/entreprises/${duplicateMatch.id}`}
                   className="font-medium underline hover:text-amber-900"
@@ -362,10 +363,10 @@ export default function EntrepriseNewPage() {
 
           <div className="mt-6 flex items-center justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => navigate('/entreprises')}>
-              Annuler
+              {t('Annuler')}
             </Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Création...' : 'Créer'}
+              {mutation.isPending ? t('Création...') : t('Créer')}
             </Button>
           </div>
         </Card>

@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useStageChange } from '../../components/mandats/useStageChange';
 import { useNavigate } from 'react-router';
 import { format, differenceInMinutes, isToday as isTodayFn } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { fr, enGB } from 'date-fns/locale';
+import { t, LOCALE, isEn } from '../../lib/i18n';
 import {
   DollarSign, Phone, Calendar, Users, Building2,
   Plus, AlertTriangle, ArrowRight, ChevronDown, Video, Send, Zap,
@@ -81,34 +82,34 @@ const TARGETS = { appels: 40, rdv: 2, mandats: 2, presentations: 4, ca: 20000 };
 
 // 7 étapes du pipeline (ordre + libellé court + couleur pastille), calées sur la maquette.
 const STAGES = [
-  { key: 'SOURCING', label: 'Sourcing', dot: '#8E7CC3' },
-  { key: 'CONTACTE', label: 'Qualification', dot: '#8E7CC3' },
-  { key: 'ENTRETIEN_1', label: 'Entr. interne', dot: '#22177A' },
-  { key: 'ENVOYE_CLIENT', label: 'Envoi client', dot: '#2A6BD8' },
-  { key: 'ENTRETIEN_CLIENT', label: 'Entr. client', dot: '#E08A2B' },
-  { key: 'PROCESS', label: 'Process', dot: '#D9A441' },
-  { key: 'OFFRE', label: 'Offre', dot: '#C9A227' },
-  { key: 'PLACE', label: 'Gagné', dot: '#3B9A54' },
+  { key: 'SOURCING', label: t('Sourcing'), dot: '#8E7CC3' },
+  { key: 'CONTACTE', label: t('Qualification'), dot: '#8E7CC3' },
+  { key: 'ENTRETIEN_1', label: t('Entr. interne'), dot: '#22177A' },
+  { key: 'ENVOYE_CLIENT', label: t('Envoi client'), dot: '#2A6BD8' },
+  { key: 'ENTRETIEN_CLIENT', label: t('Entr. client'), dot: '#E08A2B' },
+  { key: 'PROCESS', label: t('Process'), dot: '#D9A441' },
+  { key: 'OFFRE', label: t('Offre'), dot: '#C9A227' },
+  { key: 'PLACE', label: t('Gagné'), dot: '#3B9A54' },
 ];
 
 const STATUT_MAP: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
-  SOURCING: { label: 'Sourcing', bg: '#F3F0FA', fg: '#5B4B9E', dot: '#8E7CC3' },
-  CONTACTE: { label: 'Qualification', bg: '#F3F0FA', fg: '#5B4B9E', dot: '#8E7CC3' },
-  ENTRETIEN_1: { label: 'Entretien interne', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
-  ENVOYE_CLIENT: { label: 'Envoi client', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
-  ENTRETIEN_CLIENT: { label: 'Entr. client', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
-  PROCESS: { label: 'Process', bg: '#FDF3D3', fg: '#8A6A2E', dot: '#D9A441' },
-  OFFRE: { label: 'Offre', bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
-  PLACE: { label: 'Gagné', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  SOURCING: { label: t('Sourcing'), bg: '#F3F0FA', fg: '#5B4B9E', dot: '#8E7CC3' },
+  CONTACTE: { label: t('Qualification'), bg: '#F3F0FA', fg: '#5B4B9E', dot: '#8E7CC3' },
+  ENTRETIEN_1: { label: t('Entretien interne'), bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  ENVOYE_CLIENT: { label: t('Envoi client'), bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  ENTRETIEN_CLIENT: { label: t('Entr. client'), bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
+  PROCESS: { label: t('Process'), bg: '#FDF3D3', fg: '#8A6A2E', dot: '#D9A441' },
+  OFFRE: { label: t('Offre'), bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
+  PLACE: { label: t('Gagné'), bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
 };
 
 // Palette d'avatars (fond / encre)
 const AV: Array<[string, string]> = [['#22177A', '#E6E9AF'], ['#E6E9AF', '#22177A'], ['#8E7CC3', '#fff']];
 
 const RANGES = [
-  { label: 'Semaine', period: 'week' as const },
-  { label: 'Mois', period: 'month' as const },
-  { label: 'Trimestre', period: 'month' as const }, // trimestre = mois pour l'instant (pas de bornes trimestre côté API)
+  { label: t('Semaine'), period: 'week' as const },
+  { label: t('Mois'), period: 'month' as const },
+  { label: t('Trimestre'), period: 'month' as const }, // trimestre = mois pour l'instant (pas de bornes trimestre côté API)
 ];
 
 // ─── HELPERS ────────────────────────────────────────
@@ -126,15 +127,15 @@ function initials(name: string) {
 function agendaMeta(type: CategorizedEvent['meetingType']) {
   switch (type) {
     case 'presentation':
-      return { label: 'Présentation candidat', accent: '#22177A', tagBg: 'rgba(34,23,122,.09)', tagFg: '#22177A', avBg: '#E6E9AF', avFg: '#22177A', Icon: Send };
+      return { label: t('Présentation candidat'), accent: '#22177A', tagBg: 'rgba(34,23,122,.09)', tagFg: '#22177A', avBg: '#E6E9AF', avFg: '#22177A', Icon: Send };
     case 'entretien':
-      return { label: 'Interview', accent: '#3B9A54', tagBg: '#EAF3EC', tagFg: '#2C6B3F', avBg: '#8E7CC3', avFg: '#fff', Icon: Zap };
+      return { label: t('Interview'), accent: '#3B9A54', tagBg: '#EAF3EC', tagFg: '#2C6B3F', avBg: '#8E7CC3', avFg: '#fff', Icon: Zap };
     case 'weekly_client':
     case 'nouveau_client':
     case 'commercial':
-      return { label: 'Meeting client', accent: '#2A6BD8', tagBg: '#E8EEF9', tagFg: '#2A4A8A', avBg: '#22177A', avFg: '#E6E9AF', Icon: Users };
+      return { label: t('Meeting client'), accent: '#2A6BD8', tagBg: '#E8EEF9', tagFg: '#2A4A8A', avBg: '#22177A', avFg: '#E6E9AF', Icon: Users };
     default:
-      return { label: 'Rendez-vous', accent: '#8E7CC3', tagBg: '#F2F3D8', tagFg: '#6E6A85', avBg: '#8E7CC3', avFg: '#fff', Icon: Calendar };
+      return { label: isEn ? 'Meeting' : 'Rendez-vous', accent: '#8E7CC3', tagBg: '#F2F3D8', tagFg: '#6E6A85', avBg: '#8E7CC3', avFg: '#fff', Icon: Calendar };
   }
 }
 
@@ -210,22 +211,22 @@ export default function DashboardPage() {
     if (!bandeau) return [];
     const items: string[] = [];
     if (bandeau.mandatsDormants.count > 0)
-      items.push(`${bandeau.mandatsDormants.count} mandat${bandeau.mandatsDormants.count > 1 ? 's' : ''} dormant${bandeau.mandatsDormants.count > 1 ? 's' : ''}`);
+      items.push(t(bandeau.mandatsDormants.count > 1 ? '{n} mandats dormants' : '{n} mandat dormant', { n: bandeau.mandatsDormants.count }));
     if (bandeau.tachesEnRetard > 0)
-      items.push(`${bandeau.tachesEnRetard} tâche${bandeau.tachesEnRetard > 1 ? 's' : ''} en retard`);
+      items.push(t(bandeau.tachesEnRetard > 1 ? '{n} tâches en retard' : '{n} tâche en retard', { n: bandeau.tachesEnRetard }));
     return items;
   }, [bandeau]);
 
   // KPI (5 cartes avec cible + barre)
   const kpiCards = useMemo(() => {
     if (!kpis) return [];
-    const rangeWord = rangeIdx === 0 ? 'cette semaine' : 'ce mois';
+    const rangeWord = rangeIdx === 0 ? t('cette semaine') : t('ce mois');
     return [
-      { label: 'Appels', raw: kpis.appels.today, display: <AnimatedCounter value={kpis.appels.today} />, target: TARGETS.appels, targetLabel: String(TARGETS.appels), period: "aujourd'hui", Icon: Phone, iconBg: '#F2F3D8', bar: '#C9A227', pctColor: '#B47814' },
-      { label: 'RDV', raw: kpis.rdv.today, display: <AnimatedCounter value={kpis.rdv.today} />, target: TARGETS.rdv, targetLabel: String(TARGETS.rdv), period: "aujourd'hui", Icon: Calendar, iconBg: '#F2F3D8', bar: '#8E7CC3', pctColor: '#9A96AE' },
-      { label: 'Nouveaux mandats', raw: kpis.nouveauxMandats, display: <AnimatedCounter value={kpis.nouveauxMandats} />, target: TARGETS.mandats, targetLabel: String(TARGETS.mandats), period: rangeWord, Icon: Building2, iconBg: '#F2F3D8', bar: '#2A6BD8', pctColor: '#9A96AE' },
-      { label: 'Présentations', raw: kpis.presentationsMois, display: <AnimatedCounter value={kpis.presentationsMois} />, target: TARGETS.presentations, targetLabel: String(TARGETS.presentations), period: 'ce mois', Icon: Users, iconBg: '#F2F3D8', bar: '#3B9A54', pctColor: '#9A96AE' },
-      { label: 'CA mois', raw: kpis.caMois.value, display: <AnimatedCounter value={kpis.caMois.value} formatFn={formatCurrency} />, target: TARGETS.ca, targetLabel: formatCurrency(TARGETS.ca), period: 'ce mois', Icon: DollarSign, iconBg: '#E6E9AF', bar: '#22177A', pctColor: '#9A96AE' },
+      { label: t('Appels'), raw: kpis.appels.today, display: <AnimatedCounter value={kpis.appels.today} />, target: TARGETS.appels, targetLabel: String(TARGETS.appels), period: t("aujourd'hui"), Icon: Phone, iconBg: '#F2F3D8', bar: '#C9A227', pctColor: '#B47814' },
+      { label: t('RDV'), raw: kpis.rdv.today, display: <AnimatedCounter value={kpis.rdv.today} />, target: TARGETS.rdv, targetLabel: String(TARGETS.rdv), period: t("aujourd'hui"), Icon: Calendar, iconBg: '#F2F3D8', bar: '#8E7CC3', pctColor: '#9A96AE' },
+      { label: t('Nouveaux mandats'), raw: kpis.nouveauxMandats, display: <AnimatedCounter value={kpis.nouveauxMandats} />, target: TARGETS.mandats, targetLabel: String(TARGETS.mandats), period: rangeWord, Icon: Building2, iconBg: '#F2F3D8', bar: '#2A6BD8', pctColor: '#9A96AE' },
+      { label: t('Présentations'), raw: kpis.presentationsMois, display: <AnimatedCounter value={kpis.presentationsMois} />, target: TARGETS.presentations, targetLabel: String(TARGETS.presentations), period: t('ce mois'), Icon: Users, iconBg: '#F2F3D8', bar: '#3B9A54', pctColor: '#9A96AE' },
+      { label: t('CA mois'), raw: kpis.caMois.value, display: <AnimatedCounter value={kpis.caMois.value} formatFn={formatCurrency} />, target: TARGETS.ca, targetLabel: formatCurrency(TARGETS.ca), period: t('ce mois'), Icon: DollarSign, iconBg: '#E6E9AF', bar: '#22177A', pctColor: '#9A96AE' },
     ].map(k => {
       const p = k.target > 0 ? Math.round((k.raw / k.target) * 100) : 0;
       return { ...k, pct: p, pctBar: Math.min(100, p) };
@@ -234,10 +235,10 @@ export default function DashboardPage() {
 
   // Bande "Mon activité" (chiffres perso)
   const monActivite = kpis ? [
-    { label: 'Mon CA', value: formatCurrency(kpis.caMois.value) },
-    { label: 'Mes mandats actifs', value: String(mandats.length) },
-    { label: 'Mes candidats en process', value: String(kpis.candidatsEnProcess) },
-    { label: 'Mon pipe', value: formatCurrency(kpis.pipePondere.value) },
+    { label: t('Mon CA'), value: formatCurrency(kpis.caMois.value) },
+    { label: t('Mes mandats actifs'), value: String(mandats.length) },
+    { label: t('Mes candidats en process'), value: String(kpis.candidatsEnProcess) },
+    { label: t('Mon pipe'), value: formatCurrency(kpis.pipePondere.value) },
   ] : [];
 
   const hasAlerts = alertItems.length > 0;
@@ -249,13 +250,13 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '12px 16px', background: '#F2F3D8', border: '1px solid rgba(34,23,122,0.18)', borderRadius: 14, marginBottom: 14 }}>
           <span style={{ fontSize: 19, flexShrink: 0 }}>🔌</span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 800, color: '#22177A' }}>Connecte tes outils pour tout synchroniser</div>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: '#22177A' }}>{t('Connecte tes outils pour tout synchroniser')}</div>
             <div style={{ fontSize: 12.5, color: '#4A4568', marginTop: 1 }}>
-              Non connecté : <strong>{missingTools.join(' · ')}</strong>. Mails, RDV (+ lien Meet auto) et appels seront synchronisés dans l'ATS.
+              {t('Non connecté :')} <strong>{missingTools.join(' · ')}</strong>. {t("Mails, RDV (+ lien Meet auto) et appels seront synchronisés dans l'ATS.")}
             </div>
           </div>
-          <button onClick={() => navigate('/settings/integrations/guide')} style={{ flexShrink: 0, fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 12.5, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }}>Connecter</button>
-          <button onClick={() => setToolsBannerHidden(true)} title="Masquer" style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', color: '#8A8699', cursor: 'pointer', fontSize: 14 }}>✕</button>
+          <button onClick={() => navigate('/settings/integrations/guide')} style={{ flexShrink: 0, fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 12.5, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }}>{t('Connecter')}</button>
+          <button onClick={() => setToolsBannerHidden(true)} title={t('Masquer')} style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', color: '#8A8699', cursor: 'pointer', fontSize: 14 }}>✕</button>
         </div>
       )}
       {/* Styles locaux (classes non présentes globalement) */}
@@ -283,10 +284,10 @@ export default function DashboardPage() {
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9A96AE' }}>
-            Dashboard · {format(new Date(), 'EEEE d MMMM yyyy', { locale: fr })}
+            Dashboard · {format(new Date(), 'EEEE d MMMM yyyy', { locale: isEn ? enGB : fr })}
           </div>
           <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 32, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 9, lineHeight: 1 }}>
-            Bonjour, {user?.prenom || 'Meroe'}.
+            {t('Bonjour, {prenom}.', { prenom: user?.prenom || 'Meroe' })}
           </h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
@@ -312,7 +313,7 @@ export default function DashboardPage() {
             className="rangebtn"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 13.5, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: '11px 17px', cursor: 'pointer' }}
           >
-            <Plus size={14} strokeWidth={2.4} />Nouveau mandat
+            <Plus size={14} strokeWidth={2.4} />{t('Nouveau mandat')}
           </button>
         </div>
       </div>
@@ -331,12 +332,12 @@ export default function DashboardPage() {
             <div style={{ fontSize: 14, fontWeight: 800, color: '#1A1533' }}>{alertItems.join(' · ')}</div>
             <div style={{ fontSize: 12.5, color: '#8A6A2E', marginTop: 2 }}>
               {bandeau?.mandatsDormants.worst
-                ? `« ${bandeau.mandatsDormants.worst.titre} » sans action depuis ${bandeau.mandatsDormants.worst.jours} jours.`
-                : 'Aucune action enregistrée depuis plus de 7 jours sur ces mandats.'}
+                ? t('« {titre} » sans action depuis {jours} jours.', { titre: bandeau.mandatsDormants.worst.titre, jours: bandeau.mandatsDormants.worst.jours })
+                : t('Aucune action enregistrée depuis plus de 7 jours sur ces mandats.')}
             </div>
           </div>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A6A2E' }}>
-            Traiter<ArrowRight className="a-arrow" size={15} strokeWidth={2.4} style={{ transition: 'transform .22s cubic-bezier(.16,1,.3,1)' }} />
+            {t('Traiter')}<ArrowRight className="a-arrow" size={15} strokeWidth={2.4} style={{ transition: 'transform .22s cubic-bezier(.16,1,.3,1)' }} />
           </span>
         </div>
       )}
@@ -372,18 +373,18 @@ export default function DashboardPage() {
       {spaData?.objectif && (
         <div className="rise" style={{ marginTop: 16, background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 16, padding: '20px 24px', boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
-            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9A96AE' }}>Objectif financier</span>
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9A96AE' }}>{t('Objectif financier')}</span>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', borderRadius: 999, padding: '3px 11px' }}>{spaData.objectif.periode}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: spaData.objectif.agence ? '1fr 1fr' : '1fr', gap: 26, marginTop: 12 }}>
             {([
-              { label: 'Mon CA', g: spaData.objectif.perso },
-              ...(spaData.objectif.agence ? [{ label: 'CA agence', g: spaData.objectif.agence }] : []),
+              { label: t('Mon CA'), g: spaData.objectif.perso },
+              ...(spaData.objectif.agence ? [{ label: t('CA agence'), g: spaData.objectif.agence }] : []),
             ]).map(({ label, g }) => {
               const pct = g.pct;
               const reached = pct !== null && pct >= 100;
               const barW = pct === null ? 0 : Math.min(pct, 100);
-              const eur = (n: number) => n.toLocaleString('fr-FR') + ' €';
+              const eur = (n: number) => n.toLocaleString(LOCALE) + ' €';
               const overage = reached && g.cible !== null ? g.ca - g.cible : 0;
               const remaining = pct !== null && !reached && g.cible !== null ? g.cible - g.ca : 0;
               return (
@@ -391,9 +392,9 @@ export default function DashboardPage() {
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
                     <span style={{ fontSize: 12.5, fontWeight: 700, color: '#4A4568' }}>{label}</span>
                     {pct === null
-                      ? <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 14, color: '#C4C1D0' }}>objectif à définir</span>
+                      ? <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 14, color: '#C4C1D0' }}>{t('objectif à définir')}</span>
                       : reached
-                        ? <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 12.5, color: '#2C6B3F', background: '#EAF3EC', borderRadius: 999, padding: '3px 10px' }}>{pct}% de l'objectif</span>
+                        ? <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 12.5, color: '#2C6B3F', background: '#EAF3EC', borderRadius: 999, padding: '3px 10px' }}>{t("{pct}% de l'objectif", { pct })}</span>
                         : <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 14, color: '#22177A' }}>{pct}%</span>}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
@@ -404,9 +405,9 @@ export default function DashboardPage() {
                     <div className="bar-fill" style={{ width: `${barW}%`, height: '100%', borderRadius: 999, background: reached ? '#2C6B3F' : '#22177A' }} />
                   </div>
                   {reached
-                    ? <div style={{ fontSize: 11.5, fontWeight: 700, color: '#2C6B3F', marginTop: 8 }}>🎯 Objectif dépassé — +{eur(overage)}</div>
+                    ? <div style={{ fontSize: 11.5, fontWeight: 700, color: '#2C6B3F', marginTop: 8 }}>{t('🎯 Objectif dépassé — +{montant}', { montant: eur(overage) })}</div>
                     : pct !== null
-                      ? <div style={{ fontSize: 11.5, color: '#9A96AE', marginTop: 8 }}>Reste {eur(remaining)} pour l'objectif</div>
+                      ? <div style={{ fontSize: 11.5, color: '#9A96AE', marginTop: 8 }}>{t("Reste {montant} pour l'objectif", { montant: eur(remaining) })}</div>
                       : null}
                 </div>
               );
@@ -424,7 +425,7 @@ export default function DashboardPage() {
             <span style={{ width: 30, height: 30, borderRadius: 9, background: 'rgba(230,233,175,.16)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Building2 size={15} color="#E6E9AF" />
             </span>
-            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#E6E9AF' }}>Mon activité</span>
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#E6E9AF' }}>{t('Mon activité')}</span>
           </div>
           <div style={{ position: 'relative', flex: 1, display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))' }}>
             {monActivite.map((s, i) => (
@@ -444,23 +445,23 @@ export default function DashboardPage() {
             <span style={{ width: 30, height: 30, borderRadius: 9, background: '#F2F3D8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Calendar size={15} color="#22177A" />
             </span>
-            <span style={{ fontWeight: 800, fontSize: 16.5, letterSpacing: '-0.015em', color: '#1A1533' }}>Agenda du jour</span>
+            <span style={{ fontWeight: 800, fontSize: 16.5, letterSpacing: '-0.015em', color: '#1A1533' }}>{t('Agenda du jour')}</span>
             <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 11.5, color: '#22177A', background: '#E6E9AF', borderRadius: 999, padding: '3px 10px' }}>{todayEvents.length}</span>
           </div>
           {minutesUntilNext != null && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#B3261E' }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#B3261E', animation: 'atsPulse 2s ease-in-out infinite' }} />
-              Prochain dans {minutesUntilNext < 60 ? `${minutesUntilNext} min` : `${Math.floor(minutesUntilNext / 60)}h${String(minutesUntilNext % 60).padStart(2, '0')}`}
+              {t('Prochain dans {duree}', { duree: minutesUntilNext < 60 ? `${minutesUntilNext} min` : `${Math.floor(minutesUntilNext / 60)}h${String(minutesUntilNext % 60).padStart(2, '0')}` })}
             </span>
           )}
         </div>
 
         {todayEvents.length === 0 ? (
           <div style={{ marginTop: 16, border: '1px dashed rgba(34,23,122,.18)', borderRadius: 14, padding: '28px 20px', textAlign: 'center' }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#6E6A85' }}>Aucun rendez-vous aujourd'hui</div>
-            <div style={{ fontSize: 12.5, color: '#9A96AE', marginTop: 4 }}>Profitez-en pour avancer votre pipeline.</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#6E6A85' }}>{t("Aucun rendez-vous aujourd'hui")}</div>
+            <div style={{ fontSize: 12.5, color: '#9A96AE', marginTop: 4 }}>{t('Profitez-en pour avancer votre pipeline.')}</div>
             <button onClick={() => navigate('/mandats/kanban')} style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 800, color: '#22177A', background: 'rgba(34,23,122,.06)', border: '1px solid rgba(34,23,122,.12)', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }}>
-              Voir le pipeline<ArrowRight size={14} strokeWidth={2.4} />
+              {t('Voir le pipeline')}<ArrowRight size={14} strokeWidth={2.4} />
             </button>
           </div>
         ) : (
@@ -469,7 +470,7 @@ export default function DashboardPage() {
               const meta = agendaMeta(e.meetingType);
               const durMin = (() => { try { return Math.max(0, differenceInMinutes(new Date(e.endTime), new Date(e.startTime))); } catch { return 0; } })();
               const isNext = e.id === nextEventId;
-              const where = e.location || 'Visioconférence';
+              const where = e.location || t('Visioconférence');
               const ctx = (e.participants && e.participants.length > 0) ? e.participants.slice(0, 2).join(', ') : meta.label;
               return (
                 <div key={e.id} className="agcard" style={{ position: 'relative', background: '#FCFCF5', border: '1px solid rgba(34,23,122,.09)', borderRadius: 14, padding: '14px 16px', overflow: 'hidden' }}>
@@ -503,10 +504,10 @@ export default function DashboardPage() {
       <div className="rise" style={{ marginTop: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 13 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.015em', color: '#1A1533' }}>Mes mandats en cours</span>
+            <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.015em', color: '#1A1533' }}>{t('Mes mandats en cours')}</span>
             <span style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 11.5, color: '#22177A', background: '#E6E9AF', borderRadius: 999, padding: '3px 10px' }}>{mandats.length}</span>
           </div>
-          <a onClick={() => navigate('/mandats')} style={{ fontSize: 13, fontWeight: 700, color: '#22177A', cursor: 'pointer' }}>Voir tous ›</a>
+          <a onClick={() => navigate('/mandats')} style={{ fontSize: 13, fontWeight: 700, color: '#22177A', cursor: 'pointer' }}>{t('Voir tous ›')}</a>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -514,7 +515,7 @@ export default function DashboardPage() {
             [1, 2].map(i => <Skeleton key={i} className="h-[92px] rounded-2xl" />)
           ) : mandats.length === 0 ? (
             <div style={{ border: '1px dashed rgba(34,23,122,.18)', borderRadius: 16, padding: '28px 20px', textAlign: 'center', color: '#6E6A85', fontSize: 14 }}>
-              Aucun mandat en cours pour l'instant.
+              {t("Aucun mandat en cours pour l'instant.")}
             </div>
           ) : mandats.map((m, idx) => {
             const isOpen = expanded[m.id] ?? (idx === 0);
@@ -534,7 +535,7 @@ export default function DashboardPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 3 }}>
                       <a onClick={() => navigate(`/entreprises/${m.entreprise.id}`)} className="clink" style={{ fontSize: 12.5, color: '#6E6A85', cursor: 'pointer' }}>{m.entreprise.nom}</a>
                       <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#C4C1D0' }} />
-                      <span style={{ fontSize: 12, color: '#9A96AE' }}>ouvert depuis {m.ouvertDepuisJours} j</span>
+                      <span style={{ fontSize: 12, color: '#9A96AE' }}>{t('ouvert depuis {n} j', { n: m.ouvertDepuisJours })}</span>
                     </div>
                   </div>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0, fontSize: 11.5, fontWeight: 800, borderRadius: 999, padding: '5px 12px', background: statut.bg, color: statut.fg }}>
@@ -544,7 +545,7 @@ export default function DashboardPage() {
                     <Users size={13} />{visibleTotal}
                   </span>
                   <a onClick={() => navigate(`/mandats/${m.id}`)} className="m-open" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 800, color: '#22177A', opacity: 0, transform: 'translateX(-6px)', transition: 'opacity .24s ease, transform .24s cubic-bezier(.16,1,.3,1)', cursor: 'pointer' }}>
-                    Ouvrir<ArrowRight size={14} strokeWidth={2.4} />
+                    {t('Ouvrir')}<ArrowRight size={14} strokeWidth={2.4} />
                   </a>
                   <button onClick={() => setExpanded(prev => ({ ...prev, [m.id]: !isOpen }))} className="m-chev" style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 9, border: '1px solid rgba(34,23,122,.14)', background: '#fff', color: '#22177A', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .18s ease, transform .26s cubic-bezier(.16,1,.3,1)', transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
                     <ChevronDown size={15} strokeWidth={2.4} />
@@ -591,7 +592,7 @@ export default function DashboardPage() {
                                 </a>
                               );
                             })}
-                            {more > 0 && <span style={{ fontSize: 10, fontWeight: 800, color: '#8A8699', paddingLeft: 3 }}>+{more} autres</span>}
+                            {more > 0 && <span style={{ fontSize: 10, fontWeight: 800, color: '#8A8699', paddingLeft: 3 }}>{t('+{n} autres', { n: more })}</span>}
                             {!active && <span style={{ display: 'block', height: 26, border: '1px dashed rgba(34,23,122,.14)', borderRadius: 8 }} />}
                           </div>
                         </div>

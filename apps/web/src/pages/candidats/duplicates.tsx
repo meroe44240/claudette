@@ -11,6 +11,7 @@ import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import Skeleton from '../../components/ui/Skeleton';
 import { toast } from '../../components/ui/Toast';
+import { t } from '../../lib/i18n';
 
 interface DuplicateCandidat {
   id: string;
@@ -31,7 +32,7 @@ interface DuplicateGroup {
 }
 
 export default function DuplicatesPage() {
-  usePageTitle('Doublons candidats');
+  usePageTitle(t('Doublons candidats'));
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
@@ -46,10 +47,10 @@ export default function DuplicatesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['candidats', 'duplicates'] });
       queryClient.invalidateQueries({ queryKey: ['candidats'] });
-      toast('success', 'Candidats fusionnés avec succès');
+      toast('success', t('Candidats fusionnés avec succès'));
     },
     onError: () => {
-      toast('error', 'Erreur lors de la fusion');
+      toast('error', t('Erreur lors de la fusion'));
     },
   });
 
@@ -58,11 +59,11 @@ export default function DuplicatesPage() {
   return (
     <div>
       <PageHeader
-        title="Doublons candidats"
-        subtitle={groups.length > 0 ? `${groups.length} groupes détectés` : undefined}
+        title={t('Doublons candidats')}
+        subtitle={groups.length > 0 ? t('{n} groupes détectés', { n: groups.length }) : undefined}
         breadcrumbs={[
-          { label: 'Candidats', href: '/candidats' },
-          { label: 'Doublons' },
+          { label: t('Candidats'), href: '/candidats' },
+          { label: t('Doublons') },
         ]}
       />
 
@@ -77,8 +78,8 @@ export default function DuplicatesPage() {
       {!isLoading && groups.length === 0 && (
         <EmptyState
           icon={<Users size={48} className="text-green-400" />}
-          title="Aucun doublon détecté"
-          description="Tous vos candidats sont uniques. Revenez vérifier ultérieurement."
+          title={t('Aucun doublon détecté')}
+          description={t('Tous vos candidats sont uniques. Revenez vérifier ultérieurement.')}
         />
       )}
 
@@ -98,14 +99,14 @@ export default function DuplicatesPage() {
                     <div className="flex items-center gap-2 mb-3">
                       <AlertTriangle size={16} className="text-amber-500" />
                       <span className="text-sm font-semibold text-neutral-800">
-                        {group.duplicates.length + 1} candidats similaires
+                        {t('{n} candidats similaires', { n: group.duplicates.length + 1 })}
                       </span>
                     </div>
 
                     {/* Primary */}
                     <div className="flex items-center gap-2 mb-2">
                       <span className="inline-flex items-center rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-semibold text-primary-700">
-                        Principal
+                        {t('Principal')}
                       </span>
                       <Link
                         to={`/candidats/${group.primary.id}`}
@@ -160,7 +161,7 @@ export default function DuplicatesPage() {
                     ) : (
                       <GitMerge size={14} />
                     )}
-                    Fusionner
+                    {t('Fusionner')}
                   </Button>
                 </div>
               </Card>

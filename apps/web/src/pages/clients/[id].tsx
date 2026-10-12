@@ -7,6 +7,7 @@ import {
   FileText, MessageSquare, CheckSquare, Briefcase, Banknote,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { t, LOCALE } from '../../lib/i18n';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
 import NoteContent from '../../components/activity/NoteContent';
@@ -35,28 +36,28 @@ interface Activite {
 // ─── META ───────────────────────────────────────────
 const STATUT_META: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
   LEAD: { label: 'Lead', bg: 'rgba(34,23,122,.06)', fg: '#22177A', dot: '#8E7CC3' },
-  PREMIER_CONTACT: { label: 'Premier contact', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
-  BESOIN_QUALIFIE: { label: 'Besoin qualifié', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
-  PROPOSITION_ENVOYEE: { label: 'Proposition', bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
-  MANDAT_SIGNE: { label: 'Client actif', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
-  RECURRENT: { label: 'Récurrent', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
-  INACTIF: { label: 'Inactif', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
+  PREMIER_CONTACT: { label: t('Premier contact'), bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  BESOIN_QUALIFIE: { label: t('Besoin qualifié'), bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
+  PROPOSITION_ENVOYEE: { label: t('Proposition'), bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
+  MANDAT_SIGNE: { label: t('Client actif'), bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  RECURRENT: { label: t('Récurrent'), bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  INACTIF: { label: t('Inactif'), bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
 };
 const MANDAT_STATUT: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
-  OUVERT: { label: 'Ouvert', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
-  EN_COURS: { label: 'En cours', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
-  GAGNE: { label: 'Gagné', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
-  PERDU: { label: 'Perdu', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
-  ANNULE: { label: 'Annulé', bg: 'rgba(34,23,122,.06)', fg: '#8A8699', dot: '#C4C1D0' },
-  CLOTURE: { label: 'Clôturé', bg: 'rgba(34,23,122,.06)', fg: '#6E6A85', dot: '#8E7CC3' },
+  OUVERT: { label: t('Ouvert'), bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  EN_COURS: { label: t('En cours'), bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
+  GAGNE: { label: t('Gagné'), bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  PERDU: { label: t('Perdu'), bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
+  ANNULE: { label: t('Annulé'), bg: 'rgba(34,23,122,.06)', fg: '#8A8699', dot: '#C4C1D0' },
+  CLOTURE: { label: t('Clôturé'), bg: 'rgba(34,23,122,.06)', fg: '#6E6A85', dot: '#8E7CC3' },
 };
-const ROLE_LABELS: Record<string, string> = { HIRING_MANAGER: 'Hiring Manager', DRH: 'DRH', PROCUREMENT: 'Procurement', CEO: 'CEO', AUTRE: 'Autre' };
+const ROLE_LABELS: Record<string, string> = { HIRING_MANAGER: 'Hiring Manager', DRH: t('DRH'), PROCUREMENT: 'Procurement', CEO: 'CEO', AUTRE: t('Autre') };
 
 function initials(prenom: string | null, nom: string) { return `${(prenom?.[0] ?? '')}${nom?.[0] ?? ''}`.toUpperCase() || '?'; }
 function relTime(iso: string) {
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (d <= 0) return "aujourd'hui"; if (d === 1) return 'hier'; if (d < 30) return `il y a ${d} j`;
-  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+  if (d <= 0) return t("aujourd'hui"); if (d === 1) return t('hier'); if (d < 30) return t('il y a {n} j', { n: d });
+  return new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 function fmtEur(n: number) { return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k€` : `${n}€`; }
 
@@ -66,7 +67,7 @@ export default function ClientDetailPage() {
   const navigate = useNavigate();
   const { goBack, hasHistory } = useGoBack('/clients');
   const qc = useQueryClient();
-  usePageTitle('Fiche client');
+  usePageTitle(t('Fiche client'));
 
   const [detOpen, setDetOpen] = useState(true);
   const [railTab, setRailTab] = useState<'act' | 'com' | 'task' | 'opp'>('act');
@@ -95,28 +96,28 @@ export default function ClientDetailPage() {
     };
   }, [c]);
 
-  if (isLoading || !c) return <div style={{ padding: 40, color: '#8A8699' }}>Chargement…</div>;
+  if (isLoading || !c) return <div style={{ padding: 40, color: '#8A8699' }}>{t('Chargement…')}</div>;
 
   const fullName = `${c.prenom ? c.prenom + ' ' : ''}${c.nom}`.trim();
   const st = STATUT_META[c.statutClient] ?? STATUT_META.LEAD;
-  const submitComment = () => { const t = comment.trim(); if (!t) return; actMut.mutate({ type: 'NOTE', contenu: t }); setComment(''); };
-  const submitTask = () => { const t = taskText.trim(); if (!t) return; actMut.mutate({ type: 'TACHE', isTache: true, titre: t }); setTaskText(''); };
+  const submitComment = () => { const txt = comment.trim(); if (!txt) return; actMut.mutate({ type: 'NOTE', contenu: txt }); setComment(''); };
+  const submitTask = () => { const txt = taskText.trim(); if (!txt) return; actMut.mutate({ type: 'TACHE', isTache: true, titre: txt }); setTaskText(''); };
 
   const details: { label: string; Icon: typeof Mail; value: string | null; href?: string }[] = [
-    { label: 'E-mail', Icon: Mail, value: c.email, href: c.email ? `mailto:${c.email}` : undefined },
-    { label: 'Téléphone', Icon: Phone, value: c.telephone, href: c.telephone ? `tel:${c.telephone}` : undefined },
+    { label: t('E-mail'), Icon: Mail, value: c.email, href: c.email ? `mailto:${c.email}` : undefined },
+    { label: t('Téléphone'), Icon: Phone, value: c.telephone, href: c.telephone ? `tel:${c.telephone}` : undefined },
     { label: 'LinkedIn', Icon: Linkedin, value: c.linkedinUrl, href: c.linkedinUrl ?? undefined },
-    { label: 'Rôle', Icon: Briefcase, value: c.roleContact ? (ROLE_LABELS[c.roleContact] ?? c.roleContact) : null },
-    { label: 'Société', Icon: Building2, value: c.entreprise?.nom ?? null },
-    { label: 'Secteur', Icon: MapPin, value: c.entreprise?.secteur ?? null },
+    { label: t('Rôle'), Icon: Briefcase, value: c.roleContact ? (ROLE_LABELS[c.roleContact] ?? c.roleContact) : null },
+    { label: t('Société'), Icon: Building2, value: c.entreprise?.nom ?? null },
+    { label: t('Secteur'), Icon: MapPin, value: c.entreprise?.secteur ?? null },
   ];
 
   const actions = [
-    { label: 'Appeler', Icon: Phone, run: () => { if (c.telephone) window.location.href = `tel:${c.telephone}`; else toast('error', 'Pas de numéro'); } },
-    { label: 'Email', Icon: Mail, run: () => { if (c.email) window.location.href = `mailto:${c.email}`; else toast('error', "Pas d'email"); } },
-    { label: 'Commentaire', Icon: MessageSquare, run: () => setRailTab('com') },
-    { label: 'Tâche', Icon: CheckSquare, run: () => setRailTab('task') },
-    { label: 'Nouveau mandat', Icon: Plus, run: () => navigate(`/mandats/new?clientId=${c.id}`) },
+    { label: t('Appeler'), Icon: Phone, run: () => { if (c.telephone) window.location.href = `tel:${c.telephone}`; else toast('error', t('Pas de numéro')); } },
+    { label: 'Email', Icon: Mail, run: () => { if (c.email) window.location.href = `mailto:${c.email}`; else toast('error', t("Pas d'email")); } },
+    { label: t('Commentaire'), Icon: MessageSquare, run: () => setRailTab('com') },
+    { label: t('Tâche'), Icon: CheckSquare, run: () => setRailTab('task') },
+    { label: t('Nouveau mandat'), Icon: Plus, run: () => navigate(`/mandats/new?clientId=${c.id}`) },
   ];
 
   return (
@@ -133,8 +134,8 @@ export default function ClientDetailPage() {
 
       {/* TOPBAR */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
-        <button onClick={goBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#4A4568', border: '1px solid rgba(34,23,122,.14)', background: '#fff', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}><ArrowLeft size={14} strokeWidth={2.4} />{hasHistory ? 'Retour' : 'Clients'}</button>
-        {c.entreprise && <button onClick={() => navigate(`/entreprises/${c.entreprise!.id}`)} style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#22177A', border: '1px solid rgba(34,23,122,.16)', background: '#fff', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }}><Building2 size={14} />Voir la société</button>}
+        <button onClick={goBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#4A4568', border: '1px solid rgba(34,23,122,.14)', background: '#fff', borderRadius: 10, padding: '8px 13px', cursor: 'pointer' }}><ArrowLeft size={14} strokeWidth={2.4} />{hasHistory ? t('Retour') : t('Clients')}</button>
+        {c.entreprise && <button onClick={() => navigate(`/entreprises/${c.entreprise!.id}`)} style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#22177A', border: '1px solid rgba(34,23,122,.16)', background: '#fff', borderRadius: 10, padding: '8px 14px', cursor: 'pointer' }}><Building2 size={14} />{t('Voir la société')}</button>}
       </div>
 
       <div className="fc-grid">
@@ -151,11 +152,11 @@ export default function ClientDetailPage() {
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11.5, fontWeight: 800, borderRadius: 999, padding: '5px 12px', background: st.bg, color: st.fg }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: st.dot }} />{st.label}</span>
               </div>
               <div style={{ fontSize: 15, color: '#4A4568', marginTop: 5 }}>
-                {c.poste || c.roleContact ? `${c.poste || ROLE_LABELS[c.roleContact!] || ''}` : 'Contact'}
-                {c.entreprise && <> chez <span onClick={() => navigate(`/entreprises/${c.entreprise!.id}`)} style={{ color: '#22177A', fontWeight: 700, borderBottom: '1.5px solid rgba(34,23,122,.25)', cursor: 'pointer' }}>{c.entreprise.nom}</span></>}
+                {c.poste || c.roleContact ? `${c.poste || ROLE_LABELS[c.roleContact!] || ''}` : t('Contact')}
+                {c.entreprise && <> {t('chez')} <span onClick={() => navigate(`/entreprises/${c.entreprise!.id}`)} style={{ color: '#22177A', fontWeight: 700, borderBottom: '1.5px solid rgba(34,23,122,.25)', cursor: 'pointer' }}>{c.entreprise.nom}</span></>}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 15, flexWrap: 'wrap' }}>
-                <button onClick={() => navigate(`/mandats/new?clientId=${c.id}`)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 9, padding: '9px 15px', cursor: 'pointer' }}><Plus size={14} strokeWidth={2.2} />Nouveau mandat</button>
+                <button onClick={() => navigate(`/mandats/new?clientId=${c.id}`)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 9, padding: '9px 15px', cursor: 'pointer' }}><Plus size={14} strokeWidth={2.2} />{t('Nouveau mandat')}</button>
                 {c.email && <a href={`mailto:${c.email}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 14px', textDecoration: 'none' }}><Mail size={14} />Email</a>}
               </div>
             </div>
@@ -163,7 +164,7 @@ export default function ClientDetailPage() {
 
           {/* KPIs */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginTop: 24 }}>
-            {[{ label: 'CA cumulé', value: fmtEur(revenue), Icon: Banknote, color: '#2C6B3F' }, { label: 'Mandats actifs', value: String(actifs), Icon: Briefcase, color: '#22177A' }, { label: 'Total mandats', value: String(c.mandats.length), Icon: FileText, color: '#1A1533' }].map(k => (
+            {[{ label: t('CA cumulé'), value: fmtEur(revenue), Icon: Banknote, color: '#2C6B3F' }, { label: t('Mandats actifs'), value: String(actifs), Icon: Briefcase, color: '#22177A' }, { label: t('Total mandats'), value: String(c.mandats.length), Icon: FileText, color: '#1A1533' }].map(k => (
               <div key={k.label} style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 14, padding: '15px 18px', boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9A96AE' }}><k.Icon size={13} color="#22177A" />{k.label}</div>
                 <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 24, letterSpacing: '-.03em', color: k.color, marginTop: 9 }}>{k.value}</div>
@@ -175,7 +176,7 @@ export default function ClientDetailPage() {
           <div style={{ marginTop: 26 }}>
             <div onClick={() => setDetOpen(o => !o)} className="sec-h" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               <ChevronDown className="chev" size={14} color="#8A8699" strokeWidth={2.6} style={{ transform: detOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .3s' }} />
-              <span style={{ fontWeight: 800, fontSize: 17, color: '#1A1533' }}>Coordonnées</span>
+              <span style={{ fontWeight: 800, fontSize: 17, color: '#1A1533' }}>{t('Coordonnées')}</span>
             </div>
             {detOpen && (
               <div style={{ marginTop: 12 }}>
@@ -183,12 +184,12 @@ export default function ClientDetailPage() {
                   <div key={d.label} style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 16, alignItems: 'center', padding: '9px 12px' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 11, fontSize: 13.5, color: '#6E6A85' }}><d.Icon size={15} color="#8A8699" />{d.label}</span>
                     {d.value ? (d.href ? <a href={d.href} target={d.label === 'LinkedIn' ? '_blank' : undefined} rel="noreferrer" style={{ fontSize: 13.5, color: '#22177A', fontWeight: 600, wordBreak: 'break-all' }}>{d.value}</a> : <span style={{ fontSize: 13.5, color: '#1A1533', fontWeight: 600 }}>{d.value}</span>)
-                      : <span style={{ display: 'block', maxWidth: 420, fontSize: 13.5, color: '#B4B0C4', background: '#F7F7F0', border: '1px solid rgba(34,23,122,.09)', borderRadius: 8, padding: '8px 12px' }}>Vide</span>}
+                      : <span style={{ display: 'block', maxWidth: 420, fontSize: 13.5, color: '#B4B0C4', background: '#F7F7F0', border: '1px solid rgba(34,23,122,.09)', borderRadius: 8, padding: '8px 12px' }}>{t('Vide')}</span>}
                   </div>
                 ))}
                 {c.entreprise?.siteWeb && (
                   <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 16, alignItems: 'center', padding: '9px 12px' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 11, fontSize: 13.5, color: '#6E6A85' }}><Globe size={15} color="#8A8699" />Site web</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 11, fontSize: 13.5, color: '#6E6A85' }}><Globe size={15} color="#8A8699" />{t('Site web')}</span>
                     <a href={c.entreprise.siteWeb.startsWith('http') ? c.entreprise.siteWeb : `https://${c.entreprise.siteWeb}`} target="_blank" rel="noreferrer" style={{ fontSize: 13.5, color: '#22177A', fontWeight: 600 }}>{c.entreprise.siteWeb}</a>
                   </div>
                 )}
@@ -200,11 +201,11 @@ export default function ClientDetailPage() {
           {/* MANDATS */}
           <div style={{ marginTop: 26 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-              <span style={{ fontWeight: 800, fontSize: 17, color: '#1A1533' }}>Mandats</span>
+              <span style={{ fontWeight: 800, fontSize: 17, color: '#1A1533' }}>{t('Mandats')}</span>
               <span style={{ fontSize: 11, fontWeight: 800, color: '#22177A', background: '#E6E9AF', borderRadius: 999, padding: '3px 10px' }}>{c.mandats.length}</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {c.mandats.length === 0 && <div style={{ border: '1.5px dashed rgba(34,23,122,.2)', borderRadius: 15, padding: 20, textAlign: 'center', color: '#8A8699', fontSize: 13.5 }}>Aucun mandat pour ce client.</div>}
+              {c.mandats.length === 0 && <div style={{ border: '1.5px dashed rgba(34,23,122,.2)', borderRadius: 15, padding: 20, textAlign: 'center', color: '#8A8699', fontSize: 13.5 }}>{t('Aucun mandat pour ce client.')}</div>}
               {[...activeMandats, ...pastMandats].map(m => {
                 const ms = MANDAT_STATUT[m.statut] ?? MANDAT_STATUT.OUVERT;
                 const fee = m.feeMontantFacture ?? m.feeMontantEstime;
@@ -213,7 +214,7 @@ export default function ClientDetailPage() {
                     <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 11, background: '#F2F3D8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Briefcase size={17} color="#22177A" /></span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14.5, fontWeight: 800, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.titrePoste}</div>
-                      <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>ouvert {relTime(m.createdAt)}{fee ? ` · fee ${fmtEur(fee)}` : ''}</div>
+                      <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{t('ouvert {quand}', { quand: relTime(m.createdAt) })}{fee ? ` · fee ${fmtEur(fee)}` : ''}</div>
                     </div>
                     <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11.5, fontWeight: 800, color: ms.fg, background: ms.bg, borderRadius: 999, padding: '5px 12px' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: ms.dot }} />{ms.label}</span>
                   </div>
@@ -235,18 +236,18 @@ export default function ClientDetailPage() {
         {/* RAIL */}
         <aside className="fc-rail" style={{ position: 'sticky', top: 12, alignSelf: 'start', maxHeight: 'calc(100vh - 90px)', background: '#fff', border: '1px solid rgba(34,23,122,.1)', borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ flexShrink: 0, display: 'flex', gap: 5, padding: '14px 16px 12px', borderBottom: '1px solid rgba(34,23,122,.09)', overflowX: 'auto' }}>
-            {([['act', 'Activité'], ['com', 'Commentaires'], ['task', 'Tâches'], ['opp', 'Opportunités']] as const).map(([k, l]) => (
+            {([['act', t('Activité')], ['com', t('Commentaires')], ['task', t('Tâches')], ['opp', t('Opportunités')]] as const).map(([k, l]) => (
               <button key={k} onClick={() => setRailTab(k)} style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 700, padding: '7px 12px', borderRadius: 9, border: 'none', cursor: 'pointer', background: railTab === k ? '#22177A' : 'transparent', color: railTab === k ? '#E6E9AF' : '#8A8699' }}>{l}</button>
             ))}
           </div>
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 18px 22px' }}>
-            {railTab === 'act' && (feed.length === 0 ? <div style={{ color: '#9A96AE', fontSize: 13, textAlign: 'center', padding: 20 }}>Aucune activité.</div> :
+            {railTab === 'act' && (feed.length === 0 ? <div style={{ color: '#9A96AE', fontSize: 13, textAlign: 'center', padding: 20 }}>{t('Aucune activité.')}</div> :
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {feed.map(f => (
                   <div key={f.id} style={{ display: 'flex', gap: 11, padding: '10px 8px' }}>
                     <span style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 9, background: '#E6E9AF', color: '#22177A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: 10 }}>{initials(f.user?.prenom ?? null, f.user?.nom ?? '?')}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap' }}><span style={{ fontSize: 13, fontWeight: 800, color: '#1A1533' }}>{`${f.user?.prenom ?? ''} ${f.user?.nom ?? ''}`.trim() || 'Système'}</span><span style={{ fontSize: 12.5, color: '#6E6A85' }}>· {f.type.toLowerCase()}</span><span style={{ fontSize: 11.5, color: '#B4B0C4' }}>{relTime(f.createdAt)}</span></div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap' }}><span style={{ fontSize: 13, fontWeight: 800, color: '#1A1533' }}>{`${f.user?.prenom ?? ''} ${f.user?.nom ?? ''}`.trim() || t('Système')}</span><span style={{ fontSize: 12.5, color: '#6E6A85' }}>· {f.type.toLowerCase()}</span><span style={{ fontSize: 11.5, color: '#B4B0C4' }}>{relTime(f.createdAt)}</span></div>
                       {(f.titre || f.contenu) && (
                         <div style={{ marginTop: 4 }}>
                           {f.titre && <div style={{ fontSize: 13, fontWeight: 700, color: '#1A1533' }}>{f.titre}</div>}
@@ -260,40 +261,40 @@ export default function ClientDetailPage() {
             )}
             {railTab === 'com' && (
               <>
-                {comments.length === 0 && <div style={{ color: '#9A96AE', fontSize: 13, textAlign: 'center', padding: 14 }}>Aucun commentaire.</div>}
+                {comments.length === 0 && <div style={{ color: '#9A96AE', fontSize: 13, textAlign: 'center', padding: 14 }}>{t('Aucun commentaire.')}</div>}
                 {comments.map(cm => (
                   <div key={cm.id} style={{ background: '#FBFBF3', border: '1px solid rgba(34,23,122,.08)', borderRadius: 12, padding: '13px 15px', marginBottom: 9 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 12.5, fontWeight: 800, color: '#1A1533' }}>{`${cm.user?.prenom ?? ''} ${cm.user?.nom ?? ''}`.trim() || 'Vous'}</span><span style={{ fontSize: 11.5, color: '#B4B0C4' }}>{relTime(cm.createdAt)}</span></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: 12.5, fontWeight: 800, color: '#1A1533' }}>{`${cm.user?.prenom ?? ''} ${cm.user?.nom ?? ''}`.trim() || t('Vous')}</span><span style={{ fontSize: 11.5, color: '#B4B0C4' }}>{relTime(cm.createdAt)}</span></div>
                     <div style={{ fontSize: 13, lineHeight: 1.55, color: '#4A4568', marginTop: 6 }}>{cm.contenu}</div>
                   </div>
                 ))}
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                  <input value={comment} onChange={e => setComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitComment()} placeholder="Écrire un commentaire…" style={{ flex: 1, fontSize: 13, padding: '10px 13px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
-                  <button onClick={submitComment} style={{ flexShrink: 0, fontSize: 13, fontWeight: 700, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 10, padding: '10px 15px', cursor: 'pointer' }}>Envoyer</button>
+                  <input value={comment} onChange={e => setComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitComment()} placeholder={t('Écrire un commentaire…')} style={{ flex: 1, fontSize: 13, padding: '10px 13px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
+                  <button onClick={submitComment} style={{ flexShrink: 0, fontSize: 13, fontWeight: 700, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 10, padding: '10px 15px', cursor: 'pointer' }}>{t('Envoyer')}</button>
                 </div>
               </>
             )}
             {railTab === 'task' && (
               <>
-                {tasks.length === 0 && <div style={{ color: '#9A96AE', fontSize: 13, textAlign: 'center', padding: 14 }}>Aucune tâche.</div>}
-                {tasks.map(t => {
-                  const late = t.tacheDueDate && !t.tacheCompleted && new Date(t.tacheDueDate) < new Date();
+                {tasks.length === 0 && <div style={{ color: '#9A96AE', fontSize: 13, textAlign: 'center', padding: 14 }}>{t('Aucune tâche.')}</div>}
+                {tasks.map(task => {
+                  const late = task.tacheDueDate && !task.tacheCompleted && new Date(task.tacheDueDate) < new Date();
                   return (
-                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', border: '1px solid rgba(34,23,122,.1)', borderRadius: 11, marginBottom: 8 }}>
-                      <span onClick={() => toggleTaskMut.mutate({ actId: t.id, done: !t.tacheCompleted })} style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${t.tacheCompleted ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: t.tacheCompleted ? '#E6E9AF' : '#fff' }}>{t.tacheCompleted && <CheckSquare size={12} color="#22177A" />}</span>
-                      <div style={{ flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 600, color: t.tacheCompleted ? '#B4B0C4' : '#1A1533', textDecoration: t.tacheCompleted ? 'line-through' : 'none' }}>{t.titre || t.contenu}</div><div style={{ fontSize: 11.5, color: late ? '#B3261E' : '#9A96AE', marginTop: 2 }}>{t.tacheDueDate ? new Date(t.tacheDueDate).toLocaleDateString('fr-FR') : 'Sans échéance'}</div></div>
+                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', border: '1px solid rgba(34,23,122,.1)', borderRadius: 11, marginBottom: 8 }}>
+                      <span onClick={() => toggleTaskMut.mutate({ actId: task.id, done: !task.tacheCompleted })} style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${task.tacheCompleted ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: task.tacheCompleted ? '#E6E9AF' : '#fff' }}>{task.tacheCompleted && <CheckSquare size={12} color="#22177A" />}</span>
+                      <div style={{ flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 600, color: task.tacheCompleted ? '#B4B0C4' : '#1A1533', textDecoration: task.tacheCompleted ? 'line-through' : 'none' }}>{task.titre || task.contenu}</div><div style={{ fontSize: 11.5, color: late ? '#B3261E' : '#9A96AE', marginTop: 2 }}>{task.tacheDueDate ? new Date(task.tacheDueDate).toLocaleDateString(LOCALE) : t('Sans échéance')}</div></div>
                     </div>
                   );
                 })}
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                  <input value={taskText} onChange={e => setTaskText(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitTask()} placeholder="Nouvelle tâche…" style={{ flex: 1, fontSize: 13, padding: '10px 13px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
+                  <input value={taskText} onChange={e => setTaskText(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitTask()} placeholder={t('Nouvelle tâche…')} style={{ flex: 1, fontSize: 13, padding: '10px 13px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
                   <button onClick={submitTask} style={{ flexShrink: 0, fontSize: 15, fontWeight: 700, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 10, padding: '10px 16px', cursor: 'pointer' }}>+</button>
                 </div>
               </>
             )}
             {railTab === 'opp' && (
               <>
-                {activeMandats.length === 0 && <div style={{ color: '#9A96AE', fontSize: 13, textAlign: 'center', padding: 14 }}>Aucun mandat en cours.</div>}
+                {activeMandats.length === 0 && <div style={{ color: '#9A96AE', fontSize: 13, textAlign: 'center', padding: 14 }}>{t('Aucun mandat en cours.')}</div>}
                 {activeMandats.map(m => {
                   const ms = MANDAT_STATUT[m.statut] ?? MANDAT_STATUT.OUVERT;
                   return (

@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { WifiOff } from 'lucide-react';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { t } from '../../lib/i18n';
 
 export default function OfflineBanner() {
   const isOnline = useOnlineStatus();
@@ -17,7 +18,7 @@ export default function OfflineBanner() {
         >
           <div className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-sm font-medium text-white">
             <WifiOff size={16} />
-            <span>Vous êtes hors ligne. Les modifications seront synchronisées à la reconnexion.</span>
+            <span>{t('Vous êtes hors ligne. Les modifications seront synchronisées à la reconnexion.')}</span>
           </div>
         </motion.div>
       )}

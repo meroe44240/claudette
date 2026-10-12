@@ -10,6 +10,7 @@ import Button from '../../components/ui/Button';
 import Skeleton from '../../components/ui/Skeleton';
 import Badge from '../../components/ui/Badge';
 import { toast } from '../../components/ui/Toast';
+import { t } from '../../lib/i18n';
 
 interface AlertItem {
   type: 'stagnant_candidature' | 'dormant_mandat' | 'overdue_task' | 'placement_followup' | 'cold_candidat';
@@ -21,17 +22,17 @@ interface AlertItem {
 }
 
 const severityConfig = {
-  critical: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', icon: AlertOctagon, label: 'Critique' },
-  warning: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', icon: AlertTriangle, label: 'Attention' },
-  info: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', icon: Info, label: 'Info' },
+  critical: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', icon: AlertOctagon, label: t('Critique') },
+  warning: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', icon: AlertTriangle, label: t('Attention') },
+  info: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', icon: Info, label: t('Info') },
 };
 
 const typeConfig: Record<string, { icon: typeof Users; label: string }> = {
-  stagnant_candidature: { icon: Users, label: 'Candidature stagnante' },
-  dormant_mandat: { icon: Briefcase, label: 'Mandat dormant' },
-  overdue_task: { icon: Clock, label: 'Tache en retard' },
-  placement_followup: { icon: UserCheck, label: 'Follow-up placement' },
-  cold_candidat: { icon: Users, label: 'Candidat froid' },
+  stagnant_candidature: { icon: Users, label: t('Candidature stagnante') },
+  dormant_mandat: { icon: Briefcase, label: t('Mandat dormant') },
+  overdue_task: { icon: Clock, label: t('Tache en retard') },
+  placement_followup: { icon: UserCheck, label: t('Follow-up placement') },
+  cold_candidat: { icon: Users, label: t('Candidat froid') },
 };
 
 export default function AlertsPage() {
@@ -45,11 +46,11 @@ export default function AlertsPage() {
   const createTasksMutation = useMutation({
     mutationFn: () => api.post('/dashboard/alerts/create-tasks'),
     onSuccess: (res: any) => {
-      toast('success', res.data?.message || 'Taches creees');
+      toast('success', res.data?.message || t('Taches creees'));
       queryClient.invalidateQueries({ queryKey: ['dashboard-alerts'] });
       queryClient.invalidateQueries({ queryKey: ['taches'] });
     },
-    onError: () => toast('error', 'Erreur lors de la creation des taches'),
+    onError: () => toast('error', t('Erreur lors de la creation des taches')),
   });
 
   const alerts = data?.alerts || [];
@@ -61,14 +62,14 @@ export default function AlertsPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <PageHeader
-          title="Centre d'alertes"
-          subtitle="Candidatures stagnantes, mandats dormants, taches en retard"
-          breadcrumbs={[{ label: 'Dashboard', href: '/' }, { label: 'Alertes' }]}
+          title={t("Centre d'alertes")}
+          subtitle={t('Candidatures stagnantes, mandats dormants, taches en retard')}
+          breadcrumbs={[{ label: t('Dashboard'), href: '/' }, { label: t('Alertes') }]}
         />
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => refetch()} disabled={isLoading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            Actualiser
+            {t('Actualiser')}
           </Button>
           {criticalCount > 0 && (
             <Button
@@ -76,7 +77,7 @@ export default function AlertsPage() {
               disabled={createTasksMutation.isPending}
             >
               <Wand2 className="mr-2 h-4 w-4" />
-              Creer les taches ({criticalCount})
+              {t('Creer les taches ({n})', { n: criticalCount })}
             </Button>
           )}
         </div>
@@ -85,9 +86,9 @@ export default function AlertsPage() {
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-3">
         {[
-          { label: 'Critiques', count: criticalCount, config: severityConfig.critical },
-          { label: 'Attention', count: warningCount, config: severityConfig.warning },
-          { label: 'Informations', count: infoCount, config: severityConfig.info },
+          { label: t('Critiques'), count: criticalCount, config: severityConfig.critical },
+          { label: t('Attention'), count: warningCount, config: severityConfig.warning },
+          { label: t('Informations'), count: infoCount, config: severityConfig.info },
         ].map((card, i) => (
           <motion.div
             key={card.label}
@@ -112,8 +113,8 @@ export default function AlertsPage() {
         <div className="space-y-3">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
       ) : alerts.length === 0 ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-12 text-center">
-          <p className="text-lg font-semibold text-emerald-700">Aucune alerte</p>
-          <p className="mt-1 text-sm text-emerald-600">Tout est en ordre dans votre pipeline</p>
+          <p className="text-lg font-semibold text-emerald-700">{t('Aucune alerte')}</p>
+          <p className="mt-1 text-sm text-emerald-600">{t('Tout est en ordre dans votre pipeline')}</p>
         </div>
       ) : (
         <div className="space-y-3">

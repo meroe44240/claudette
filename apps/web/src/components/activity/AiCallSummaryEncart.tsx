@@ -12,6 +12,7 @@ import {
   Quote,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { t } from '../../lib/i18n';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Skeleton from '../../components/ui/Skeleton';
@@ -70,21 +71,21 @@ interface AiCallSummaryEncartProps {
 const sentimentConfig: Record<string, { emoji: string; label: string; colorClass: string; bgClass: string; borderClass: string }> = {
   positive_interested: {
     emoji: '\u{1F60A}',
-    label: 'Interesse',
+    label: t('Interesse'),
     colorClass: 'text-emerald-700',
     bgClass: 'bg-emerald-50',
     borderClass: 'border-emerald-200',
   },
   positive_cautious: {
     emoji: '\u{1F642}',
-    label: 'Prudemment positif',
+    label: t('Prudemment positif'),
     colorClass: 'text-lime-700',
     bgClass: 'bg-lime-50',
     borderClass: 'border-lime-200',
   },
   neutral: {
     emoji: '\u{1F610}',
-    label: 'Neutre',
+    label: t('Neutre'),
     colorClass: 'text-amber-700',
     bgClass: 'bg-amber-50',
     borderClass: 'border-amber-200',
@@ -98,7 +99,7 @@ const sentimentConfig: Record<string, { emoji: string; label: string; colorClass
   },
   negative_not_interested: {
     emoji: '\u{1F61E}',
-    label: 'Pas interesse',
+    label: t('Pas interesse'),
     colorClass: 'text-red-700',
     bgClass: 'bg-red-50',
     borderClass: 'border-red-200',
@@ -108,9 +109,9 @@ const sentimentConfig: Record<string, { emoji: string; label: string; colorClass
 // ─── Priority Config ────────────────────────────────
 
 const priorityConfig: Record<string, { variant: 'error' | 'warning' | 'default'; label: string }> = {
-  high: { variant: 'error', label: 'Haute' },
-  medium: { variant: 'warning', label: 'Moyenne' },
-  low: { variant: 'default', label: 'Basse' },
+  high: { variant: 'error', label: t('Haute') },
+  medium: { variant: 'warning', label: t('Moyenne') },
+  low: { variant: 'default', label: t('Basse') },
 };
 
 // ─── Component ──────────────────────────────────────
@@ -137,10 +138,10 @@ export default function AiCallSummaryEncart({ activiteId, entiteType, entiteId }
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-call-summary', activiteId] });
       setIsExpanded(true);
-      toast('success', 'Resume IA genere avec succes');
+      toast('success', t('Resume IA genere avec succes'));
     },
     onError: (error: any) => {
-      const message = error?.data?.message || error?.message || 'Erreur lors de la generation du resume';
+      const message = error?.data?.message || error?.message || t('Erreur lors de la generation du resume');
       toast('error', message);
     },
   });
@@ -152,10 +153,10 @@ export default function AiCallSummaryEncart({ activiteId, entiteType, entiteId }
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-call-summary', activiteId] });
       queryClient.invalidateQueries({ queryKey: ['activites'] });
-      toast('success', 'Tache creee avec succes');
+      toast('success', t('Tache creee avec succes'));
     },
     onError: () => {
-      toast('error', 'Erreur lors de la creation de la tache');
+      toast('error', t('Erreur lors de la creation de la tache'));
     },
   });
 
@@ -166,10 +167,10 @@ export default function AiCallSummaryEncart({ activiteId, entiteType, entiteId }
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-call-summary', activiteId] });
       setSelectedUpdates([]);
-      toast('success', 'Fiche mise a jour avec succes');
+      toast('success', t('Fiche mise a jour avec succes'));
     },
     onError: () => {
-      toast('error', 'Erreur lors de la mise a jour');
+      toast('error', t('Erreur lors de la mise a jour'));
     },
   });
 
@@ -206,12 +207,12 @@ export default function AiCallSummaryEncart({ activiteId, entiteType, entiteId }
           {generateMutation.isPending ? (
             <>
               <Loader2 size={15} className="animate-spin" />
-              <span>Analyse en cours...</span>
+              <span>{t('Analyse en cours...')}</span>
             </>
           ) : (
             <>
               <Bot size={15} />
-              <span>Generer le resume IA</span>
+              <span>{t('Generer le resume IA')}</span>
             </>
           )}
         </button>
@@ -234,7 +235,7 @@ export default function AiCallSummaryEncart({ activiteId, entiteType, entiteId }
         <div className="flex items-center gap-2">
           <Bot size={16} className="text-violet-600" />
           <span className="text-[13px] font-semibold text-violet-800">
-            Resume IA
+            {t('Resume IA')}
           </span>
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${sentiment.bgClass} ${sentiment.colorClass} border ${sentiment.borderClass}`}>
             {sentiment.emoji} {sentiment.label}
@@ -282,7 +283,7 @@ export default function AiCallSummaryEncart({ activiteId, entiteType, entiteId }
                 <div>
                   <h4 className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-neutral-500">
                     <Sparkles size={13} />
-                    Actions suggerees
+                    {t('Actions suggerees')}
                   </h4>
                   <div className="space-y-2">
                     {summaryJson.action_items.map((action, idx) => {
@@ -327,7 +328,7 @@ export default function AiCallSummaryEncart({ activiteId, entiteType, entiteId }
                               {acceptActionMutation.isPending ? (
                                 <Loader2 size={14} className="animate-spin" />
                               ) : (
-                                'Accepter'
+                                t('Accepter')
                               )}
                             </Button>
                           )}
@@ -343,7 +344,7 @@ export default function AiCallSummaryEncart({ activiteId, entiteType, entiteId }
                 <div>
                   <h4 className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-neutral-500">
                     <AlertCircle size={13} />
-                    Mettre a jour la fiche
+                    {t('Mettre a jour la fiche')}
                   </h4>
                   <div className="space-y-2">
                     {summaryJson.info_updates.map((update, idx) => {
@@ -409,7 +410,7 @@ export default function AiCallSummaryEncart({ activiteId, entiteType, entiteId }
                         disabled={selectedUpdates.length === 0 || applyUpdatesMutation.isPending}
                         loading={applyUpdatesMutation.isPending}
                       >
-                        Appliquer les mises a jour ({selectedUpdates.length})
+                        {t('Appliquer les mises a jour ({n})', { n: selectedUpdates.length })}
                       </Button>
                     </div>
                   )}
@@ -421,7 +422,7 @@ export default function AiCallSummaryEncart({ activiteId, entiteType, entiteId }
                 <div>
                   <h4 className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-neutral-500">
                     <Quote size={13} />
-                    Citations cles
+                    {t('Citations cles')}
                   </h4>
                   <div className="space-y-2">
                     {summaryJson.key_quotes.map((kq, idx) => (

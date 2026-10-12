@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Send, ChevronDown, Variable } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { t } from '../../lib/i18n';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import { Textarea } from '../ui/Input';
@@ -21,14 +22,14 @@ interface EmailComposerProps {
 }
 
 const VARIABLES = [
-  { label: 'Nom candidat', value: '{{candidat_nom}}' },
-  { label: 'Prénom candidat', value: '{{candidat_prenom}}' },
-  { label: 'Email candidat', value: '{{candidat_email}}' },
-  { label: 'Poste candidat', value: '{{candidat_poste}}' },
-  { label: 'Nom client', value: '{{client_nom}}' },
-  { label: 'Prénom client', value: '{{client_prenom}}' },
-  { label: 'Entreprise', value: '{{entreprise_nom}}' },
-  { label: 'Titre du mandat', value: '{{mandat_titre}}' },
+  { label: t('Nom candidat'), value: '{{candidat_nom}}' },
+  { label: t('Prénom candidat'), value: '{{candidat_prenom}}' },
+  { label: t('Email candidat'), value: '{{candidat_email}}' },
+  { label: t('Poste candidat'), value: '{{candidat_poste}}' },
+  { label: t('Nom client'), value: '{{client_nom}}' },
+  { label: t('Prénom client'), value: '{{client_prenom}}' },
+  { label: t('Entreprise'), value: '{{entreprise_nom}}' },
+  { label: t('Titre du mandat'), value: '{{mandat_titre}}' },
 ];
 
 export default function EmailComposer({
@@ -81,11 +82,11 @@ export default function EmailComposer({
       clientId?: string;
     }) => api.post('/emails/send', payload),
     onSuccess: () => {
-      toast('success', 'Email envoyé avec succès');
+      toast('success', t('Email envoyé avec succès'));
       handleClose();
     },
     onError: (error: Error & { data?: { message?: string } }) => {
-      const message = (error as any).data?.message || "Erreur lors de l'envoi de l'email";
+      const message = (error as any).data?.message || t("Erreur lors de l'envoi de l'email");
       toast('error', message);
     },
   });
@@ -109,11 +110,11 @@ export default function EmailComposer({
 
   const handleSend = () => {
     if (!to.trim()) {
-      toast('warning', 'Veuillez saisir un destinataire');
+      toast('warning', t('Veuillez saisir un destinataire'));
       return;
     }
     if (!subject.trim()) {
-      toast('warning', 'Veuillez saisir un sujet');
+      toast('warning', t('Veuillez saisir un sujet'));
       return;
     }
     sendMutation.mutate({
@@ -129,12 +130,12 @@ export default function EmailComposer({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Composer un email" size="lg">
+    <Modal isOpen={isOpen} onClose={handleClose} title={t('Composer un email')} size="lg">
       <div className="space-y-4">
         <Input
-          label="Destinataire"
+          label={t('Destinataire')}
           type="email"
-          placeholder="email@exemple.com"
+          placeholder={t('email@exemple.com')}
           value={to}
           onChange={(e) => setTo(e.target.value)}
         />
@@ -142,14 +143,14 @@ export default function EmailComposer({
         <Input
           label="Cc"
           type="email"
-          placeholder="cc@exemple.com (optionnel)"
+          placeholder={t('cc@exemple.com (optionnel)')}
           value={cc}
           onChange={(e) => setCc(e.target.value)}
         />
 
         <Input
-          label="Sujet"
-          placeholder="Objet de l'email..."
+          label={t('Sujet')}
+          placeholder={t("Objet de l'email...")}
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
         />
@@ -187,7 +188,7 @@ export default function EmailComposer({
           </div>
           <Textarea
             ref={bodyRef}
-            placeholder="Votre message..."
+            placeholder={t('Votre message...')}
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={8}
@@ -196,11 +197,11 @@ export default function EmailComposer({
 
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" onClick={handleClose}>
-            Annuler
+            {t('Annuler')}
           </Button>
           <Button onClick={handleSend} disabled={sendMutation.isPending}>
             <Send size={16} />
-            {sendMutation.isPending ? 'Envoi...' : 'Envoyer'}
+            {sendMutation.isPending ? t('Envoi...') : t('Envoyer')}
           </Button>
         </div>
       </div>

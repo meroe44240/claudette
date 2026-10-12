@@ -7,6 +7,7 @@ import Button from '../ui/Button';
 import { api } from '../../lib/api-client';
 import { toast } from '../ui/Toast';
 import { useAuthStore } from '../../stores/auth-store';
+import { t } from '../../lib/i18n';
 
 interface OnboardingWizardProps {
   onComplete: () => void;
@@ -17,33 +18,33 @@ const steps = [
     id: 'welcome',
     icon: Sparkles,
     iconColor: 'text-violet-500',
-    title: 'Bienvenue sur HumanUp !',
-    description: 'Votre espace de recrutement intelligent. En quelques étapes, configurez votre environnement pour commencer à recruter efficacement.',
+    title: t('Bienvenue sur HumanUp !'),
+    description: t('Votre espace de recrutement intelligent. En quelques étapes, configurez votre environnement pour commencer à recruter efficacement.'),
   },
   {
     id: 'client',
     icon: Building2,
     iconColor: 'text-blue-500',
-    title: 'Créez votre premier client',
-    description: 'Ajoutez une entreprise cliente pour laquelle vous recrutez. Vous pourrez en ajouter d\'autres plus tard.',
+    title: t('Créez votre premier client'),
+    description: t("Ajoutez une entreprise cliente pour laquelle vous recrutez. Vous pourrez en ajouter d'autres plus tard."),
     action: '/clients/new',
-    actionLabel: 'Créer un client',
+    actionLabel: t('Créer un client'),
   },
   {
     id: 'mandat',
     icon: Briefcase,
     iconColor: 'text-emerald-500',
-    title: 'Ouvrez votre premier mandat',
-    description: 'Un mandat représente un poste à pourvoir. Définissez le profil recherché et commencez à sourcer.',
+    title: t('Ouvrez votre premier mandat'),
+    description: t('Un mandat représente un poste à pourvoir. Définissez le profil recherché et commencez à sourcer.'),
     action: '/mandats/new',
-    actionLabel: 'Créer un mandat',
+    actionLabel: t('Créer un mandat'),
   },
   {
     id: 'done',
     icon: Rocket,
     iconColor: 'text-amber-500',
-    title: 'Vous êtes prêt !',
-    description: 'Votre espace est configuré. Explorez le tableau de bord, importez des candidats, et lancez vos recrutements.',
+    title: t('Vous êtes prêt !'),
+    description: t('Votre espace est configuré. Explorez le tableau de bord, importez des candidats, et lancez vos recrutements.'),
   },
 ];
 
@@ -97,7 +98,7 @@ export default function OnboardingWizard({ onComplete }: OnboardingWizardProps) 
       // Non-blocking
     }
     onComplete();
-    toast('success', 'Bienvenue ! 🎉');
+    toast('success', t('Bienvenue ! 🎉'));
   };
 
   const StepIcon = step.icon;
@@ -114,7 +115,7 @@ export default function OnboardingWizard({ onComplete }: OnboardingWizardProps) 
         <button
           onClick={handleSkip}
           className="absolute right-4 top-4 rounded-lg p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors z-10"
-          title="Passer"
+          title={t('Passer')}
         >
           <X size={18} />
         </button>
@@ -166,7 +167,7 @@ export default function OnboardingWizard({ onComplete }: OnboardingWizardProps) 
             className="flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-600 disabled:opacity-0 transition-all"
           >
             <ChevronLeft size={16} />
-            Précédent
+            {t('Précédent')}
           </button>
 
           <div className="flex gap-1.5">
@@ -187,11 +188,11 @@ export default function OnboardingWizard({ onComplete }: OnboardingWizardProps) 
             {isLast ? (
               <>
                 <Check size={16} />
-                Terminer
+                {t('Terminer')}
               </>
             ) : (
               <>
-                Suivant
+                {t('Suivant')}
                 <ChevronRight size={16} />
               </>
             )}

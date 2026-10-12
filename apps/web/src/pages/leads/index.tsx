@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { Plus, Phone, X, ArrowRight, Send, PhoneCall, SkipForward, Check, Mail } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { t } from '../../lib/i18n';
 import { toast } from '../../components/ui/Toast';
 
 const NAVY = '#22177A';
@@ -15,17 +16,17 @@ const ARCHIVO = "'Archivo Black', sans-serif";
 
 // Étapes du pipeline (clés = valeurs stage côté back-end)
 const STAGES: { key: string; title: string; accent: string; bg: string }[] = [
-  { key: 'nouveau', title: 'Nouveau', accent: '#8E7CC3', bg: '#F6F4FB' },
-  { key: 'contacte', title: 'Contacté', accent: '#3B6FE0', bg: '#F2F5FC' },
-  { key: 'r1', title: 'Relance 1', accent: '#C9A227', bg: '#FBF9EE' },
-  { key: 'r2', title: 'Relance 2', accent: '#C9A227', bg: '#FBF9EE' },
-  { key: 'r3', title: 'Relance 3', accent: '#D9901F', bg: '#FCF6EE' },
-  { key: 'r4', title: 'Relance 4', accent: '#D9901F', bg: '#FCF6EE' },
-  { key: 'r5', title: 'Relance 5', accent: '#E0781B', bg: '#FCF4EB' },
-  { key: 'r6', title: 'Relance 6', accent: '#E0781B', bg: '#FCF4EB' },
-  { key: 'r7', title: 'Relance 7', accent: '#D7671A', bg: '#FBF1E9' },
-  { key: 'rdv', title: 'RDV obtenu', accent: '#2C9A47', bg: '#F0F7F2' },
-  { key: 'perdu', title: 'Perdu', accent: '#B3261E', bg: '#FBF1EF' },
+  { key: 'nouveau', title: t('Nouveau'), accent: '#8E7CC3', bg: '#F6F4FB' },
+  { key: 'contacte', title: t('Contacté'), accent: '#3B6FE0', bg: '#F2F5FC' },
+  { key: 'r1', title: t('Relance {n}', { n: 1 }), accent: '#C9A227', bg: '#FBF9EE' },
+  { key: 'r2', title: t('Relance {n}', { n: 2 }), accent: '#C9A227', bg: '#FBF9EE' },
+  { key: 'r3', title: t('Relance {n}', { n: 3 }), accent: '#D9901F', bg: '#FCF6EE' },
+  { key: 'r4', title: t('Relance {n}', { n: 4 }), accent: '#D9901F', bg: '#FCF6EE' },
+  { key: 'r5', title: t('Relance {n}', { n: 5 }), accent: '#E0781B', bg: '#FCF4EB' },
+  { key: 'r6', title: t('Relance {n}', { n: 6 }), accent: '#E0781B', bg: '#FCF4EB' },
+  { key: 'r7', title: t('Relance {n}', { n: 7 }), accent: '#D7671A', bg: '#FBF1E9' },
+  { key: 'rdv', title: t('RDV obtenu'), accent: '#2C9A47', bg: '#F0F7F2' },
+  { key: 'perdu', title: t('Perdu'), accent: '#B3261E', bg: '#FBF1EF' },
 ];
 
 const LOST_REASONS = ['Pas de besoin actuellement', 'Travaille déjà avec un cabinet', 'Recrute en direct', 'Budget insuffisant', 'Jamais de retour', 'Mauvais interlocuteur', 'Autre'];
@@ -74,34 +75,34 @@ export default function LeadsPage() {
   const current = sessionOpen ? queue[sessionIdx] : null;
   const startSession = () => {
     const q = leads.filter((l) => l.stage !== 'rdv' && l.stage !== 'perdu');
-    if (!q.length) { toast('info', 'Aucun lead à traiter'); return; }
+    if (!q.length) { toast('info', t('Aucun lead à traiter')); return; }
     setQueue(q); setSessionIdx(0); setNote(''); setSessionOpen(true);
   };
   const advance = () => {
     setNote('');
-    if (sessionIdx + 1 >= queue.length) { setSessionOpen(false); toast('success', 'Session terminée 🎉'); }
+    if (sessionIdx + 1 >= queue.length) { setSessionOpen(false); toast('success', t('Session terminée 🎉')); }
     else setSessionIdx((i) => i + 1);
   };
 
   const moveMutation = useMutation({
     mutationFn: (p: { id: string; stage: string }) => api.put(`/leads/${p.id}`, { stage: p.stage }),
     onSuccess: invalidate,
-    onError: () => { toast('error', 'Déplacement impossible'); invalidate(); },
+    onError: () => { toast('error', t('Déplacement impossible')); invalidate(); },
   });
   const createMutation = useMutation({
     mutationFn: () => api.post('/leads', { company: form.company.trim(), contact: form.contact.trim(), email: form.email.trim() || null, phone: form.phone.trim() || null, role: form.role.trim() || null, src: 'cold' }),
-    onSuccess: () => { toast('success', 'Lead créé'); setCreateOpen(false); setForm({ company: '', contact: '', email: '', phone: '', role: '' }); invalidate(); },
-    onError: () => toast('error', 'Création impossible'),
+    onSuccess: () => { toast('success', t('Lead créé')); setCreateOpen(false); setForm({ company: '', contact: '', email: '', phone: '', role: '' }); invalidate(); },
+    onError: () => toast('error', t('Création impossible')),
   });
   const convertMutation = useMutation({
     mutationFn: (id: string) => api.post(`/leads/${id}/convert`, {}),
-    onSuccess: () => { toast('success', 'Lead converti en client 🎉'); invalidate(); },
-    onError: () => toast('error', 'Conversion impossible'),
+    onSuccess: () => { toast('success', t('Lead converti en client 🎉')); invalidate(); },
+    onError: () => toast('error', t('Conversion impossible')),
   });
   const loseMutation = useMutation({
     mutationFn: (p: { id: string; lostReason: string }) => api.post(`/leads/${p.id}/lose`, { lostReason: p.lostReason }),
-    onSuccess: () => { toast('info', 'Lead marqué perdu'); setLoseFor(null); invalidate(); if (sessionOpen) advance(); },
-    onError: () => toast('error', 'Action impossible'),
+    onSuccess: () => { toast('info', t('Lead marqué perdu')); setLoseFor(null); invalidate(); if (sessionOpen) advance(); },
+    onError: () => toast('error', t('Action impossible')),
   });
   // Traiter le lead courant en session : log l'interaction + avance l'étape, puis suivant
   const treat = useMutation({
@@ -110,8 +111,8 @@ export default function LeadsPage() {
       const stage = p.action === 'rdv' ? 'rdv' : nextRelanceStage(p.lead.stage);
       if (stage !== p.lead.stage) await api.put(`/leads/${p.lead.id}`, { stage });
     },
-    onSuccess: (_d, v) => { toast('success', v.action === 'rdv' ? 'RDV obtenu 🎯' : 'Relance enregistrée'); invalidate(); advance(); },
-    onError: () => toast('error', 'Action impossible'),
+    onSuccess: (_d, v) => { toast('success', v.action === 'rdv' ? t('RDV obtenu 🎯') : t('Relance enregistrée')); invalidate(); advance(); },
+    onError: () => toast('error', t('Action impossible')),
   });
 
   const columns = useMemo(() => {
@@ -136,25 +137,25 @@ export default function LeadsPage() {
     <div style={{ fontFamily: MANROPE, color: INK }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 18 }}>
         <div>
-          <div style={{ fontSize: 12, color: FAINT, fontWeight: 600 }}>Prospection commerciale</div>
+          <div style={{ fontSize: 12, color: FAINT, fontWeight: 600 }}>{t('Prospection commerciale')}</div>
           <h1 style={{ fontFamily: ARCHIVO, fontSize: 28, letterSpacing: '-0.02em', color: INK, marginTop: 4 }}>Leads</h1>
-          <div style={{ fontSize: 13, color: '#8A8699', marginTop: 4 }}>{leads.length} leads · glisse une carte pour relancer, jusqu'à « RDV obtenu »</div>
+          <div style={{ fontSize: 13, color: '#8A8699', marginTop: 4 }}>{t("{n} leads · glisse une carte pour relancer, jusqu'à « RDV obtenu »", { n: leads.length })}</div>
         </div>
         <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
           <button onClick={() => navigate('/import?entity=leads')} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: MANROPE, fontWeight: 700, fontSize: 13, background: '#fff', color: NAVY, border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 11, padding: '10px 16px', cursor: 'pointer' }}>
-            <ArrowRight size={15} style={{ transform: 'rotate(90deg)' }} /> Importer CSV
+            <ArrowRight size={15} style={{ transform: 'rotate(90deg)' }} /> {t('Importer CSV')}
           </button>
           <button onClick={startSession} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: MANROPE, fontWeight: 700, fontSize: 13, background: '#fff', color: NAVY, border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 11, padding: '10px 16px', cursor: 'pointer' }}>
-            <PhoneCall size={15} /> Session d'appels
+            <PhoneCall size={15} /> {t("Session d'appels")}
           </button>
           <button onClick={() => setCreateOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: MANROPE, fontWeight: 700, fontSize: 13, background: NAVY, color: LIME, border: 'none', borderRadius: 11, padding: '10px 16px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,.7)' }}>
-            <Plus size={15} /> Nouveau lead
+            <Plus size={15} /> {t('Nouveau lead')}
           </button>
         </div>
       </div>
 
       {isLoading ? (
-        <div style={{ color: FAINT, padding: 40 }}>Chargement…</div>
+        <div style={{ color: FAINT, padding: 40 }}>{t('Chargement…')}</div>
       ) : (
         <DragDropContext onDragEnd={onDragEnd}>
           <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
@@ -192,7 +193,7 @@ export default function LeadsPage() {
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 8 }}>
                                     {l.phone ? <a href={`tel:${l.phone}`} onClick={(e) => e.stopPropagation()} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: NAVY, textDecoration: 'none' }}><Phone size={11} /> {l.phone}</a> : <span style={{ fontSize: 10.5, color: FAINT }}>{l.source || '—'}</span>}
                                     {stage.key === 'rdv' && (
-                                      <button onClick={(e) => { e.stopPropagation(); convertMutation.mutate(l.id); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, color: '#fff', background: '#2C9A47', border: 'none', borderRadius: 8, padding: '3px 8px', cursor: 'pointer' }}>Client <ArrowRight size={10} /></button>
+                                      <button onClick={(e) => { e.stopPropagation(); convertMutation.mutate(l.id); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, color: '#fff', background: '#2C9A47', border: 'none', borderRadius: 8, padding: '3px 8px', cursor: 'pointer' }}>{t('Client')} <ArrowRight size={10} /></button>
                                     )}
                                   </div>
                                 </div>
@@ -217,19 +218,19 @@ export default function LeadsPage() {
         <div onClick={() => setCreateOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(26,21,51,.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: 440, maxWidth: '100%', background: '#fff', borderRadius: 20, boxShadow: '0 40px 90px -40px rgba(26,21,51,0.6)', padding: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div style={{ fontFamily: ARCHIVO, fontSize: 19, color: INK }}>Nouveau lead</div>
+              <div style={{ fontFamily: ARCHIVO, fontSize: 19, color: INK }}>{t('Nouveau lead')}</div>
               <button onClick={() => setCreateOpen(false)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer' }}>✕</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <input value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))} placeholder="Entreprise *" style={input} />
-              <input value={form.contact} onChange={(e) => setForm((f) => ({ ...f, contact: e.target.value }))} placeholder="Contact (nom & prénom) *" style={input} />
-              <input value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} placeholder="Fonction" style={input} />
+              <input value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))} placeholder={t('Entreprise *')} style={input} />
+              <input value={form.contact} onChange={(e) => setForm((f) => ({ ...f, contact: e.target.value }))} placeholder={t('Contact (nom & prénom) *')} style={input} />
+              <input value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} placeholder={t('Fonction')} style={input} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="Email" style={input} />
-                <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="Téléphone" style={input} />
+                <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder={t('Téléphone')} style={input} />
               </div>
             </div>
-            <button onClick={() => { if (!form.company.trim() || !form.contact.trim()) { toast('error', 'Entreprise et contact requis'); return; } createMutation.mutate(); }} disabled={createMutation.isPending} style={{ width: '100%', marginTop: 16, fontFamily: MANROPE, fontWeight: 700, fontSize: 15, background: NAVY, color: LIME, border: 'none', borderRadius: 12, padding: 13, cursor: 'pointer', opacity: createMutation.isPending ? 0.6 : 1 }}>{createMutation.isPending ? 'Création…' : 'Créer le lead'}</button>
+            <button onClick={() => { if (!form.company.trim() || !form.contact.trim()) { toast('error', t('Entreprise et contact requis')); return; } createMutation.mutate(); }} disabled={createMutation.isPending} style={{ width: '100%', marginTop: 16, fontFamily: MANROPE, fontWeight: 700, fontSize: 15, background: NAVY, color: LIME, border: 'none', borderRadius: 12, padding: 13, cursor: 'pointer', opacity: createMutation.isPending ? 0.6 : 1 }}>{createMutation.isPending ? t('Création…') : t('Créer le lead')}</button>
           </div>
         </div>
       )}
@@ -239,15 +240,15 @@ export default function LeadsPage() {
         <div onClick={() => setLoseFor(null)} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(26,21,51,.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: 420, maxWidth: '100%', background: '#fff', borderRadius: 20, boxShadow: '0 40px 90px -40px rgba(26,21,51,0.6)', padding: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <div style={{ fontFamily: ARCHIVO, fontSize: 18, color: INK }}>Lead perdu</div>
+              <div style={{ fontFamily: ARCHIVO, fontSize: 18, color: INK }}>{t('Lead perdu')}</div>
               <button onClick={() => setLoseFor(null)} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer' }}><X size={15} /></button>
             </div>
             <div style={{ fontSize: 13, color: '#8A8699', marginBottom: 14 }}>{loseFor.company} · {loseFor.contact}</div>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#8A8699', marginBottom: 8 }}>Pourquoi ?</div>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#8A8699', marginBottom: 8 }}>{t('Pourquoi ?')}</div>
             <select value={loseReason} onChange={(e) => setLoseReason(e.target.value)} style={{ ...input, cursor: 'pointer' }}>
-              {LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              {LOST_REASONS.map((r) => <option key={r} value={r}>{t(r)}</option>)}
             </select>
-            <button onClick={() => loseMutation.mutate({ id: loseFor.id, lostReason: loseReason })} disabled={loseMutation.isPending} style={{ width: '100%', marginTop: 16, fontFamily: MANROPE, fontWeight: 700, fontSize: 15, background: '#B3261E', color: '#fff', border: 'none', borderRadius: 12, padding: 13, cursor: 'pointer', opacity: loseMutation.isPending ? 0.6 : 1 }}>Marquer perdu</button>
+            <button onClick={() => loseMutation.mutate({ id: loseFor.id, lostReason: loseReason })} disabled={loseMutation.isPending} style={{ width: '100%', marginTop: 16, fontFamily: MANROPE, fontWeight: 700, fontSize: 15, background: '#B3261E', color: '#fff', border: 'none', borderRadius: 12, padding: 13, cursor: 'pointer', opacity: loseMutation.isPending ? 0.6 : 1 }}>{t('Marquer perdu')}</button>
           </div>
         </div>
       )}
@@ -258,7 +259,7 @@ export default function LeadsPage() {
           <div style={{ width: 560, maxWidth: '100%', background: '#fff', borderRadius: 22, boxShadow: '0 40px 90px -40px rgba(26,21,51,.6)', overflow: 'hidden' }}>
             <div style={{ background: NAVY, color: '#fff', padding: '16px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: LIME }}>Session d'appels</div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: LIME }}>{t("Session d'appels")}</div>
                 <div style={{ fontFamily: ARCHIVO, fontSize: 18, marginTop: 2 }}>{sessionIdx + 1} / {queue.length}</div>
               </div>
               <button onClick={() => setSessionOpen(false)} style={{ width: 32, height: 32, borderRadius: 9, border: 'none', background: 'rgba(255,255,255,.15)', color: '#fff', cursor: 'pointer' }}><X size={16} /></button>
@@ -273,15 +274,15 @@ export default function LeadsPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-                {current.phone && <a href={`tel:${current.phone}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 14, fontWeight: 700, color: '#fff', background: '#2C9A47', borderRadius: 11, padding: '10px 16px', textDecoration: 'none' }}><Phone size={15} /> Appeler {current.phone}</a>}
+                {current.phone && <a href={`tel:${current.phone}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 14, fontWeight: 700, color: '#fff', background: '#2C9A47', borderRadius: 11, padding: '10px 16px', textDecoration: 'none' }}><Phone size={15} /> {t('Appeler {numero}', { numero: current.phone })}</a>}
                 {current.email && <a href={`mailto:${current.email}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: NAVY, background: '#F5F4EA', borderRadius: 11, padding: '10px 14px', textDecoration: 'none' }}><Mail size={14} /> {current.email}</a>}
               </div>
-              <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note d'appel — ce qui s'est dit, objection, prochaine étape…" style={{ ...input, minHeight: 90, resize: 'vertical', marginTop: 16 }} />
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("Note d'appel — ce qui s'est dit, objection, prochaine étape…")} style={{ ...input, minHeight: 90, resize: 'vertical', marginTop: 16 }} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9, marginTop: 14 }}>
-                <button onClick={() => treat.mutate({ lead: current, action: 'relance', note })} disabled={treat.isPending} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontWeight: 800, fontSize: 14, color: NAVY, background: '#F2F3D8', border: 'none', borderRadius: 12, padding: 13, cursor: 'pointer' }}><ArrowRight size={15} /> Relancer & suivant</button>
-                <button onClick={() => treat.mutate({ lead: current, action: 'rdv', note })} disabled={treat.isPending} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontWeight: 800, fontSize: 14, color: '#fff', background: '#2C9A47', border: 'none', borderRadius: 12, padding: 13, cursor: 'pointer' }}><Check size={15} /> RDV obtenu</button>
-                <button onClick={() => setLoseFor(current)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontWeight: 800, fontSize: 13, color: '#B3261E', background: '#FBF1EF', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}><X size={14} /> Perdu</button>
-                <button onClick={advance} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontWeight: 700, fontSize: 13, color: '#6E6A85', background: '#fff', border: '1.5px solid rgba(34,23,122,.14)', borderRadius: 12, padding: 12, cursor: 'pointer' }}><SkipForward size={14} /> Passer</button>
+                <button onClick={() => treat.mutate({ lead: current, action: 'relance', note })} disabled={treat.isPending} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontWeight: 800, fontSize: 14, color: NAVY, background: '#F2F3D8', border: 'none', borderRadius: 12, padding: 13, cursor: 'pointer' }}><ArrowRight size={15} /> {t('Relancer & suivant')}</button>
+                <button onClick={() => treat.mutate({ lead: current, action: 'rdv', note })} disabled={treat.isPending} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontWeight: 800, fontSize: 14, color: '#fff', background: '#2C9A47', border: 'none', borderRadius: 12, padding: 13, cursor: 'pointer' }}><Check size={15} /> {t('RDV obtenu')}</button>
+                <button onClick={() => setLoseFor(current)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontWeight: 800, fontSize: 13, color: '#B3261E', background: '#FBF1EF', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}><X size={14} /> {t('Perdu')}</button>
+                <button onClick={advance} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontWeight: 700, fontSize: 13, color: '#6E6A85', background: '#fff', border: '1.5px solid rgba(34,23,122,.14)', borderRadius: 12, padding: 12, cursor: 'pointer' }}><SkipForward size={14} /> {t('Passer')}</button>
               </div>
             </div>
           </div>

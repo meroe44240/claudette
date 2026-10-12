@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
+import { t } from '../lib/i18n';
 
 interface ShortcutConfig {
   key: string;
@@ -13,16 +14,16 @@ export function useKeyboardShortcuts() {
   const [showHelp, setShowHelp] = useState(false);
 
   const shortcuts: ShortcutConfig[] = [
-    { key: 'd', description: 'Dashboard', action: () => navigate('/') },
-    { key: 'c', description: 'Candidats', action: () => navigate('/candidats') },
-    { key: 'm', description: 'Mandats', action: () => navigate('/mandats') },
-    { key: 't', description: 'Tâches', action: () => navigate('/taches') },
-    { key: 'e', description: 'Entreprises', action: () => navigate('/entreprises') },
-    { key: 'k', description: 'Clients', action: () => navigate('/clients') },
-    { key: 'a', description: 'Activités', action: () => navigate('/activites') },
-    { key: 's', description: 'Statistiques', action: () => navigate('/stats') },
-    { key: 'n', ctrl: true, description: 'Nouveau candidat', action: () => navigate('/candidats/new') },
-    { key: '/', description: 'Aide raccourcis', action: () => setShowHelp(prev => !prev) },
+    { key: 'd', description: t('Dashboard'), action: () => navigate('/') },
+    { key: 'c', description: t('Candidats'), action: () => navigate('/candidats') },
+    { key: 'm', description: t('Mandats'), action: () => navigate('/mandats') },
+    { key: 't', description: t('Tâches'), action: () => navigate('/taches') },
+    { key: 'e', description: t('Entreprises'), action: () => navigate('/entreprises') },
+    { key: 'k', description: t('Clients'), action: () => navigate('/clients') },
+    { key: 'a', description: t('Activités'), action: () => navigate('/activites') },
+    { key: 's', description: t('Statistiques'), action: () => navigate('/stats') },
+    { key: 'n', ctrl: true, description: t('Nouveau candidat'), action: () => navigate('/candidats/new') },
+    { key: '/', description: t('Aide raccourcis'), action: () => setShowHelp(prev => !prev) },
   ];
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {

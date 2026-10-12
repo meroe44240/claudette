@@ -4,6 +4,7 @@ import { Briefcase, Users, ListChecks, ChevronRight, Shield } from 'lucide-react
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { t } from '../../lib/i18n';
 
 // ─── TYPES ──────────────────────────────────────────
 interface MandatRecruteur {
@@ -17,8 +18,8 @@ interface RecruteurDashboard { mandats: MandatRecruteur[] }
 interface TachesResponse { meta: { total: number } }
 
 const STAGE_LABELS: Record<string, string> = {
-  SOURCING: 'Sourcing', CONTACTE: 'Qualification', ENTRETIEN_1: 'Entretien interne', ENVOYE_CLIENT: 'Envoi client',
-  ENTRETIEN_CLIENT: 'Entretien client', PROCESS: 'Process', OFFRE: 'Offre', PLACE: 'Gagné', REFUSE: 'Perdu',
+  SOURCING: t('Sourcing'), CONTACTE: t('Qualification'), ENTRETIEN_1: t('Entretien interne'), ENVOYE_CLIENT: t('Envoi client'),
+  ENTRETIEN_CLIENT: t('Entretien client'), PROCESS: t('Process'), OFFRE: t('Offre'), PLACE: t('Gagné'), REFUSE: t('Perdu'),
 };
 const STAGE_PILL: Record<string, { bg: string; fg: string }> = {
   SOURCING: { bg: '#F6F4FB', fg: '#6B5CA5' },
@@ -30,7 +31,7 @@ const STAGE_PILL: Record<string, { bg: string; fg: string }> = {
   PLACE: { bg: '#EAF3EC', fg: '#2C6B3F' },
   REFUSE: { bg: '#F5EAE7', fg: '#A2402C' },
 };
-const ROLE_LABELS: Record<string, string> = { ADMIN: 'Administrateur', RECRUTEUR: 'Recruteur', SALES: 'Sales', MANAGER: 'Manager' };
+const ROLE_LABELS: Record<string, string> = { ADMIN: t('Administrateur'), RECRUTEUR: t('Recruteur'), SALES: t('Sales'), MANAGER: t('Manager') };
 const STAGE_ORDER = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'OFFRE', 'PLACE', 'REFUSE'];
 
 function initials(prenom?: string | null, nom?: string | null) { return `${(prenom?.[0] ?? '')}${(nom?.[0] ?? '')}`.toUpperCase() || 'U'; }
@@ -38,7 +39,7 @@ function initials(prenom?: string | null, nom?: string | null) { return `${(pren
 const GRID = '1.6fr 1.2fr 0.8fr 1.7fr';
 
 export default function MonEspacePage() {
-  usePageTitle('Mon espace');
+  usePageTitle(t('Mon espace'));
   const navigate = useNavigate();
   const user = useAuthStore(s => s.user);
 
@@ -49,12 +50,12 @@ export default function MonEspacePage() {
   const mandatsCount = mandats.length;
   const totalCandidats = mandats.reduce((s, m) => s + m.totalCandidatures, 0);
   const tachesCount = tachesData?.meta?.total ?? 0;
-  const fullName = `${user?.prenom ? user.prenom + ' ' : ''}${user?.nom ?? ''}`.trim() || 'Utilisateur';
+  const fullName = `${user?.prenom ? user.prenom + ' ' : ''}${user?.nom ?? ''}`.trim() || t('Utilisateur');
 
   const stats = [
-    { icon: <Briefcase size={19} color="#22177A" />, value: mandatsCount, label: 'mandats actifs' },
-    { icon: <Users size={19} color="#22177A" />, value: totalCandidats, label: 'candidats en cours' },
-    { icon: <ListChecks size={19} color="#22177A" />, value: tachesCount, label: 'tâches' },
+    { icon: <Briefcase size={19} color="#22177A" />, value: mandatsCount, label: t('mandats actifs') },
+    { icon: <Users size={19} color="#22177A" />, value: totalCandidats, label: t('candidats en cours') },
+    { icon: <ListChecks size={19} color="#22177A" />, value: tachesCount, label: t('tâches') },
   ];
 
   return (
@@ -67,8 +68,8 @@ export default function MonEspacePage() {
       `}</style>
 
       {/* HEADER */}
-      <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>Mon espace</div>
-      <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Mon espace</h1>
+      <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>{t('Mon espace')}</div>
+      <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>{t('Mon espace')}</h1>
 
       {/* PROFILE */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 22, marginTop: 26 }}>
@@ -76,7 +77,7 @@ export default function MonEspacePage() {
         <div>
           <h2 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 30, letterSpacing: '-0.03em', color: '#1A1533' }}>{fullName}</h2>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 8, fontSize: 13, fontWeight: 700, color: '#22177A', background: '#F0EFC4', borderRadius: 999, padding: '5px 13px' }}>
-            <Shield size={13} />{user?.role ? (ROLE_LABELS[user.role] ?? user.role) : 'Membre'}
+            <Shield size={13} />{user?.role ? (ROLE_LABELS[user.role] ?? user.role) : t('Membre')}
           </div>
         </div>
       </div>
@@ -92,13 +93,13 @@ export default function MonEspacePage() {
       </div>
 
       {/* MES MANDATS */}
-      <h3 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, letterSpacing: '-0.02em', color: '#1A1533', marginTop: 34 }}>Mes Mandats</h3>
+      <h3 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, letterSpacing: '-0.02em', color: '#1A1533', marginTop: 34 }}>{t('Mes Mandats')}</h3>
       <div style={{ marginTop: 16, background: '#fff', border: '1px solid rgba(34,23,122,0.08)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 2px rgba(34,23,122,0.04)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 14, padding: '14px 22px', background: '#F7F7EE', borderBottom: '1px solid rgba(34,23,122,0.08)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#8A8699' }}>
-          <span>Poste</span><span>Entreprise</span><span style={{ textAlign: 'center' }}>Candidats</span><span>Étapes</span>
+          <span>{t('Poste')}</span><span>{t('Entreprise')}</span><span style={{ textAlign: 'center' }}>{t('Candidats')}</span><span>{t('Étapes')}</span>
         </div>
         {mandats.length === 0 ? (
-          <div style={{ padding: '40px 20px', textAlign: 'center', color: '#8A8699', fontSize: 14 }}>Aucun mandat qui vous est assigné.</div>
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: '#8A8699', fontSize: 14 }}>{t('Aucun mandat qui vous est assigné.')}</div>
         ) : mandats.map(m => {
           const pills = STAGE_ORDER.filter(s => (m.stageCounts[s] ?? 0) > 0).map(s => ({ s, n: m.stageCounts[s] }));
           return (

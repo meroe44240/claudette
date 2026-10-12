@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { motion, useSpring, useTransform, useMotionValue } from 'framer-motion';
+import { LOCALE } from '../../lib/i18n';
 
 interface StatsCardProps {
   label: string;
@@ -28,7 +29,7 @@ const iconBgClasses = {
 function AnimatedNumber({ value }: { value: number }) {
   const motionValue = useMotionValue(0);
   const springValue = useSpring(motionValue, { stiffness: 100, damping: 30 });
-  const display = useTransform(springValue, (v) => Math.round(v).toLocaleString('fr-FR'));
+  const display = useTransform(springValue, (v) => Math.round(v).toLocaleString(LOCALE));
 
   useEffect(() => {
     motionValue.set(value);

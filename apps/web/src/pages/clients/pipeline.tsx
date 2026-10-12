@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { ArrowLeft, LayoutGrid, Search, TrendingUp, DollarSign, Clock, Users, Plus, Archive } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { t } from '../../lib/i18n';
 import PageHeader from '../../components/ui/PageHeader';
 import KanbanColumn from '../../components/ui/KanbanColumn';
 import KanbanCard from '../../components/ui/KanbanCard';
@@ -73,12 +74,12 @@ const STATUTS: StatutClient[] = [
 
 const STATUT_LABELS: Record<StatutClient, string> = {
   LEAD: 'Lead',
-  PREMIER_CONTACT: 'Premier contact',
-  BESOIN_QUALIFIE: 'Besoin qualifié',
-  PROPOSITION_ENVOYEE: 'Proposition envoyée',
-  MANDAT_SIGNE: 'Mandat signé',
-  RECURRENT: 'Récurrent',
-  INACTIF: 'Inactif',
+  PREMIER_CONTACT: t('Premier contact'),
+  BESOIN_QUALIFIE: t('Besoin qualifié'),
+  PROPOSITION_ENVOYEE: t('Proposition envoyée'),
+  MANDAT_SIGNE: t('Mandat signé'),
+  RECURRENT: t('Récurrent'),
+  INACTIF: t('Inactif'),
 };
 
 // Palette navy — Lead = accent chartreuse (nouveau), plus la column progresse
@@ -125,11 +126,11 @@ function formatCurrency(n: number) {
 }
 
 function formatDaysAgo(dateStr: string | null | undefined): string {
-  if (!dateStr) return 'Aucune';
+  if (!dateStr) return t('Aucune');
   const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
-  if (days === 0) return "Aujourd'hui";
-  if (days === 1) return 'Hier';
-  return `Il y a ${days}j`;
+  if (days === 0) return t("Aujourd'hui");
+  if (days === 1) return t('Hier');
+  return t('Il y a {n}j', { n: days });
 }
 
 // Colonnes principales du kanban commercial (LEAD → MANDAT_SIGNE)
@@ -183,7 +184,7 @@ export default function ClientPipelinePage() {
       // Le contrat modal (chantier 4) automatisera ça ; pour l'instant on
       // toast un rappel actionnable.
       if (variables.statutClient === 'MANDAT_SIGNE') {
-        toast('success', 'Lead signé — pense à créer le mandat associé (bouton "Nouveau" sur /mandats).');
+        toast('success', t('Lead signé — pense à créer le mandat associé (bouton "Nouveau" sur /mandats).'));
       }
     },
   });
@@ -198,14 +199,14 @@ export default function ClientPipelinePage() {
       toast(
         'success',
         data.entrepriseCreated
-          ? `Lead créé : ${data.client.nom} chez ${data.client.entreprise.nom} (nouvelle entreprise)`
-          : `Lead créé : ${data.client.nom} chez ${data.client.entreprise.nom}`,
+          ? t('Lead créé : {nom} chez {entreprise} (nouvelle entreprise)', { nom: data.client.nom, entreprise: data.client.entreprise.nom })
+          : t('Lead créé : {nom} chez {entreprise}', { nom: data.client.nom, entreprise: data.client.entreprise.nom }),
       );
       resetNewLead();
       setNewLeadOpen(false);
     },
     onError: () => {
-      toast('error', 'Erreur lors de la création du lead');
+      toast('error', t('Erreur lors de la création du lead'));
     },
   });
 
@@ -286,9 +287,9 @@ export default function ClientPipelinePage() {
   if (!pipeline || !filteredPipeline) {
     return (
       <div className="text-center py-16">
-        <p className="text-text-secondary">Impossible de charger le pipeline.</p>
+        <p className="text-text-secondary">{t('Impossible de charger le pipeline.')}</p>
         <Button variant="ghost" onClick={() => navigate('/clients')} className="mt-4">
-          Retour aux clients
+          {t('Retour aux clients')}
         </Button>
       </div>
     );
@@ -308,7 +309,7 @@ export default function ClientPipelinePage() {
               textTransform: 'uppercase', color: '#C9761A',
             }}
           >
-            Prospection commerciale
+            {t('Prospection commerciale')}
           </span>
         </div>
         <h1
@@ -318,36 +319,36 @@ export default function ClientPipelinePage() {
             marginTop: 12, lineHeight: 1,
           }}
         >
-          Pipeline de leads
+          {t('Pipeline de leads')}
         </h1>
         <p style={{ marginTop: 8, maxWidth: 720, fontSize: 14, color: '#6E6A85' }}>
-          Chaque lead avance du premier contact jusqu'à la signature du mandat. Glisse une carte pour changer de stade. Un lead qui atteint « Mandat signé » devient un mandat côté recrutement.
+          {t("Chaque lead avance du premier contact jusqu'à la signature du mandat. Glisse une carte pour changer de stade. Un lead qui atteint « Mandat signé » devient un mandat côté recrutement.")}
         </p>
       </div>
 
       <PageHeader
         title=""
         breadcrumbs={[
-          { label: 'Clients', href: '/clients' },
+          { label: t('Clients'), href: '/clients' },
           { label: 'Pipeline' },
         ]}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={() => navigate('/clients')}>
-              <ArrowLeft size={16} /> Liste
+              <ArrowLeft size={16} /> {t('Liste')}
             </Button>
             <Button
               variant={showArchived ? 'secondary' : 'ghost'}
               onClick={() => setShowArchived((v) => !v)}
-              title={showArchived ? 'Masquer les colonnes archivées' : 'Voir Récurrent + Inactif'}
+              title={showArchived ? t('Masquer les colonnes archivées') : t('Voir Récurrent + Inactif')}
             >
-              <Archive size={16} /> {showArchived ? 'Cacher archivés' : 'Voir archivés'}
+              <Archive size={16} /> {showArchived ? t('Cacher archivés') : t('Voir archivés')}
             </Button>
             <Button variant="secondary" disabled>
               <LayoutGrid size={16} /> Pipeline
             </Button>
             <Button variant="primary" onClick={() => setNewLeadOpen(true)}>
-              <Plus size={16} /> Nouveau lead
+              <Plus size={16} /> {t('Nouveau lead')}
             </Button>
           </div>
         }
@@ -359,45 +360,45 @@ export default function ClientPipelinePage() {
           <div className="kpi">
             <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699' }}>
               <Users size={12} style={{ color: '#22177A' }} />
-              <span>Leads actifs</span>
+              <span>{t('Leads actifs')}</span>
             </div>
             <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 29, letterSpacing: '-0.02em', color: '#1A1533', marginTop: 12, lineHeight: 1 }}>
               {pipelineStats.totalClients}
             </div>
-            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>en pipeline</div>
+            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>{t('en pipeline')}</div>
           </div>
           <div className="kpi">
             <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699' }}>
               <Clock size={12} style={{ color: '#C9761A' }} />
-              <span>Relances à faire</span>
+              <span>{t('Relances à faire')}</span>
             </div>
             <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 29, letterSpacing: '-0.02em', color: '#C9761A', marginTop: 12, lineHeight: 1 }}>
               {pipelineStats.avgDaysPerStage.length > 0
                 ? Math.round(pipelineStats.avgDaysPerStage.filter(s => s.avgDays > 0).reduce((sum, s) => sum + s.avgDays, 0) / Math.max(pipelineStats.avgDaysPerStage.filter(s => s.avgDays > 0).length, 1))
                 : 0}
-              <span style={{ fontSize: 15, marginLeft: 6, color: '#8A8699' }}>j moy</span>
+              <span style={{ fontSize: 15, marginLeft: 6, color: '#8A8699' }}>{t('j moy')}</span>
             </div>
-            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>par stage</div>
+            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>{t('par stage')}</div>
           </div>
           <div className="kpi">
             <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699' }}>
               <TrendingUp size={12} style={{ color: '#2C6B3F' }} />
-              <span>Conversion</span>
+              <span>{t('Conversion')}</span>
             </div>
             <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 29, letterSpacing: '-0.02em', color: '#2C6B3F', marginTop: 12, lineHeight: 1 }}>
               {pipelineStats.conversionRates.length >= 4 ? `${pipelineStats.conversionRates[3].rate}%` : '—'}
             </div>
-            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>Lead → Mandat</div>
+            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>{t('Lead → Mandat')}</div>
           </div>
           <div className="kpi">
             <div className="flex items-center gap-2" style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8699' }}>
               <DollarSign size={12} style={{ color: '#22177A' }} />
-              <span>Pipe total</span>
+              <span>{t('Pipe total')}</span>
             </div>
             <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 29, letterSpacing: '-0.02em', color: '#22177A', marginTop: 12, lineHeight: 1 }}>
               {formatCurrency(pipelineStats.totalPipeValue)}
             </div>
-            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>ce mois</div>
+            <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>{t('ce mois')}</div>
           </div>
         </div>
       )}
@@ -405,7 +406,7 @@ export default function ClientPipelinePage() {
       {/* Conversion funnel */}
       {pipelineStats && pipelineStats.conversionRates.length > 0 && (
         <div className="mb-5 rounded-xl bg-white p-4 shadow-sm border border-border/30">
-          <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500 mb-3">Taux de conversion par etape</p>
+          <p className="text-[12px] font-semibold uppercase tracking-wider text-neutral-500 mb-3">{t('Taux de conversion par etape')}</p>
           <div className="flex items-center gap-1 overflow-x-auto">
             {pipelineStats.conversionRates.map((cr, idx) => (
               <div key={idx} className="flex items-center gap-1">
@@ -443,7 +444,7 @@ export default function ClientPipelinePage() {
         <div className="mb-4">
           <div className="flex items-center gap-3 mb-1.5">
             <span className="text-xs font-medium text-text-secondary">
-              {summaryTotal} client{summaryTotal > 1 ? 's' : ''}
+              {t(summaryTotal > 1 ? '{n} clients' : '{n} client', { n: summaryTotal })}
             </span>
           </div>
           <div className="flex h-3 w-full overflow-hidden rounded-full">
@@ -481,7 +482,7 @@ export default function ClientPipelinePage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher par nom ou entreprise..."
+            placeholder={t('Rechercher par nom ou entreprise...')}
             className="w-full rounded-xl border border-border/50 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:ring-4 focus:ring-accent/10 focus:border-accent"
           />
         </div>
@@ -515,7 +516,7 @@ export default function ClientPipelinePage() {
                             extraLine={
                               [
                                 client.revenuePotentiel ? formatCurrency(client.revenuePotentiel) : null,
-                                client.joursEnStage !== undefined ? `${client.joursEnStage}j` : null,
+                                client.joursEnStage !== undefined ? t('{n}j', { n: client.joursEnStage }) : null,
                                 client.lastActivityDate ? formatDaysAgo(client.lastActivityDate) : null,
                               ]
                                 .filter(Boolean)
@@ -539,15 +540,15 @@ export default function ClientPipelinePage() {
       <Modal
         isOpen={newLeadOpen}
         onClose={() => setNewLeadOpen(false)}
-        title="Nouveau lead"
+        title={t('Nouveau lead')}
         size="md"
       >
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
-            Entrée en tête de colonne « Lead ». Si l'entreprise n'existe pas encore dans le CRM, elle est créée automatiquement.
+            {t("Entrée en tête de colonne « Lead ». Si l'entreprise n'existe pas encore dans le CRM, elle est créée automatiquement.")}
           </p>
           <Input
-            label="Entreprise"
+            label={t('Entreprise')}
             placeholder="ACME Corp"
             value={newLead.entrepriseNom}
             onChange={(e) => setNewLead((p) => ({ ...p, entrepriseNom: e.target.value }))}
@@ -555,13 +556,13 @@ export default function ClientPipelinePage() {
           />
           <div className="grid grid-cols-2 gap-3">
             <Input
-              label="Prénom"
+              label={t('Prénom')}
               placeholder="Alice"
               value={newLead.contactPrenom}
               onChange={(e) => setNewLead((p) => ({ ...p, contactPrenom: e.target.value }))}
             />
             <Input
-              label="Nom"
+              label={t('Nom')}
               placeholder="Martin"
               value={newLead.contactNom}
               onChange={(e) => setNewLead((p) => ({ ...p, contactNom: e.target.value }))}
@@ -569,21 +570,21 @@ export default function ClientPipelinePage() {
             />
           </div>
           <Input
-            label="Poste ciblé / rôle contact"
+            label={t('Poste ciblé / rôle contact')}
             placeholder="Head of Sales, Chief People Officer…"
             value={newLead.poste}
             onChange={(e) => setNewLead((p) => ({ ...p, poste: e.target.value }))}
           />
           <div className="grid grid-cols-2 gap-3">
             <Input
-              label="Email (optionnel)"
+              label={t('Email (optionnel)')}
               type="email"
               placeholder="alice@acme.com"
               value={newLead.email}
               onChange={(e) => setNewLead((p) => ({ ...p, email: e.target.value }))}
             />
             <Input
-              label="Téléphone (optionnel)"
+              label={t('Téléphone (optionnel)')}
               placeholder="+33 6…"
               value={newLead.telephone}
               onChange={(e) => setNewLead((p) => ({ ...p, telephone: e.target.value }))}
@@ -591,19 +592,19 @@ export default function ClientPipelinePage() {
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              Premier contact (optionnel)
+              {t('Premier contact (optionnel)')}
             </label>
             <textarea
               value={newLead.note}
               onChange={(e) => setNewLead((p) => ({ ...p, note: e.target.value }))}
               rows={3}
-              placeholder="Ex : Rencontré via LinkedIn, cherche 2 SDR pour Q3."
+              placeholder={t('Ex : Rencontré via LinkedIn, cherche 2 SDR pour Q3.')}
               className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-3 py-2 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-800 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={() => setNewLeadOpen(false)}>
-              Annuler
+              {t('Annuler')}
             </Button>
             <Button
               variant="primary"
@@ -614,7 +615,7 @@ export default function ClientPipelinePage() {
                 quickLeadMutation.isPending
               }
             >
-              {quickLeadMutation.isPending ? 'Création…' : 'Créer le lead'}
+              {quickLeadMutation.isPending ? t('Création…') : t('Créer le lead')}
             </Button>
           </div>
         </div>

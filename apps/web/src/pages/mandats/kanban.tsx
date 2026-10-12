@@ -5,6 +5,7 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-p
 import { Plus, LayoutGrid, List } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../../components/ui/Toast';
+import { t, LOCALE } from '../../lib/i18n';
 
 // ─── BRAND TOKENS ───────────────────────────────────
 const NAVY = '#22177A';
@@ -44,7 +45,7 @@ function defaultStage(m: MandatCard): string {
   return 'Sourcing';
 }
 
-const fmtEuro = (v: number | null) => (v == null ? '—' : `${v.toLocaleString('fr-FR').replace(/[  ]/g, ' ')} €`);
+const fmtEuro = (v: number | null) => (v == null ? '—' : `${v.toLocaleString(LOCALE).replace(/[  ]/g, ' ')} €`);
 const initials = (nom: string, prenom?: string | null) => `${(prenom || '').charAt(0)}${(nom || '').charAt(0)}`.toUpperCase();
 
 export default function MandatsKanbanPage() {
@@ -63,7 +64,7 @@ export default function MandatsKanbanPage() {
       queryClient.invalidateQueries({ queryKey: ['mandats', 'kanban'] });
     },
     onError: () => {
-      toast('error', 'Déplacement impossible');
+      toast('error', t('Déplacement impossible'));
       queryClient.invalidateQueries({ queryKey: ['mandats', 'kanban'] });
     },
   });
@@ -71,7 +72,7 @@ export default function MandatsKanbanPage() {
   const mandats = data?.data || [];
   const columns = useMemo(() => {
     const map: Record<string, MandatCard[]> = {};
-    STAGE_TITLES.forEach((t) => { map[t] = []; });
+    STAGE_TITLES.forEach((title) => { map[title] = []; });
     for (const m of mandats) map[defaultStage(m)].push(m);
     return map;
   }, [mandats]);
@@ -83,7 +84,7 @@ export default function MandatsKanbanPage() {
     const m = mandats.find((x) => x.id === id);
     if (!m || defaultStage(m) === target) return;
     moveMutation.mutate({ id, etapeCycle: target });
-    toast('success', `Déplacé en « ${target} »`);
+    toast('success', t('Déplacé en « {etape} »', { etape: t(target) }));
   };
 
   return (
@@ -91,29 +92,29 @@ export default function MandatsKanbanPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 18 }}>
         <div>
-          <div style={{ fontSize: 12, color: FAINT, fontWeight: 600 }}>Mandats</div>
-          <h1 style={{ fontFamily: ARCHIVO, fontSize: 28, letterSpacing: '-0.02em', color: INK, marginTop: 4 }}>Cycle de vie</h1>
-          <div style={{ fontSize: 13, color: '#8A8699', marginTop: 4 }}>{mandats.length} mandats · glisse une carte pour changer d'étape</div>
+          <div style={{ fontSize: 12, color: FAINT, fontWeight: 600 }}>{t('Mandats')}</div>
+          <h1 style={{ fontFamily: ARCHIVO, fontSize: 28, letterSpacing: '-0.02em', color: INK, marginTop: 4 }}>{t('Cycle de vie')}</h1>
+          <div style={{ fontSize: 13, color: '#8A8699', marginTop: 4 }}>{t("{n} mandats · glisse une carte pour changer d'étape", { n: mandats.length })}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button
             onClick={() => navigate('/mandats')}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: MANROPE, fontWeight: 700, fontSize: 13, background: '#fff', color: NAVY, border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 11, padding: '9px 14px', cursor: 'pointer' }}
           >
-            <List size={15} /> Vue liste
+            <List size={15} /> {t('Vue liste')}
           </button>
           <button
             onClick={() => navigate('/mandats/new')}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: MANROPE, fontWeight: 700, fontSize: 13, background: NAVY, color: '#E6E9AF', border: 'none', borderRadius: 11, padding: '10px 16px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,.7)' }}
           >
-            <Plus size={15} /> Nouveau mandat
+            <Plus size={15} /> {t('Nouveau mandat')}
           </button>
         </div>
       </div>
 
       {isLoading ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: FAINT, fontSize: 14, padding: 40 }}>
-          <LayoutGrid size={18} /> Chargement du board…
+          <LayoutGrid size={18} /> {t('Chargement du board…')}
         </div>
       ) : (
         <DragDropContext onDragEnd={onDragEnd}>
@@ -137,7 +138,7 @@ export default function MandatsKanbanPage() {
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 11 }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                             <span style={{ width: 8, height: 8, borderRadius: '50%', background: stage.accent, flexShrink: 0 }} />
-                            <span style={{ fontFamily: MANROPE, fontSize: 11, fontWeight: 800, letterSpacing: '.05em', textTransform: 'uppercase', color: '#6E6A85', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stage.title}</span>
+                            <span style={{ fontFamily: MANROPE, fontSize: 11, fontWeight: 800, letterSpacing: '.05em', textTransform: 'uppercase', color: '#6E6A85', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t(stage.title)}</span>
                           </span>
                           <span style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 12, color: '#fff', background: stage.accent, borderRadius: 999, minWidth: 20, textAlign: 'center', padding: '1px 7px', flexShrink: 0 }}>{cards.length}</span>
                         </div>

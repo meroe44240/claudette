@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Eye, EyeOff, ArrowRight, AlertCircle, Check } from 'lucide-react';
 import { useAuthStore } from '../stores/auth-store';
+import { t } from '../lib/i18n';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -17,14 +18,14 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     const em = email.trim().toLowerCase();
-    if (!em || !password) { setError('Renseignez votre email et votre mot de passe.'); return; }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { setError('Adresse email invalide.'); return; }
+    if (!em || !password) { setError(t('Renseignez votre email et votre mot de passe.')); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { setError(t('Adresse email invalide.')); return; }
     setIsLoading(true);
     try {
       await login(em, password);
       navigate('/');
     } catch (err: any) {
-      setError(err?.data?.message || 'Email ou mot de passe incorrect');
+      setError(err?.data?.message || t('Email ou mot de passe incorrect'));
     } finally {
       setIsLoading(false);
     }
@@ -66,40 +67,40 @@ export default function LoginPage() {
                 <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#E6E9AF', animation: 'lgPulse 2.2s ease-in-out infinite' }} />
                 <span style={{ position: 'relative', width: 7, height: 7, borderRadius: '50%', background: '#E6E9AF' }} />
               </span>
-              <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: '#E6E9AF' }}>Espace équipe</span>
+              <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: '#E6E9AF' }}>{t('Espace équipe')}</span>
             </div>
 
             <h1 className="lg-rise" style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 40, lineHeight: 1.04, letterSpacing: '-.035em', color: '#fff', marginTop: 20, animationDelay: '.1s' }}>
-              La bonne personne <span style={{ position: 'relative', display: 'inline-block', padding: '0 9px' }}><span style={{ position: 'absolute', inset: 0, background: '#E6E9AF', borderRadius: 8 }} /><span style={{ position: 'relative', color: '#22177A' }}>change tout</span></span>.
+              {t('La bonne personne')} <span style={{ position: 'relative', display: 'inline-block', padding: '0 9px' }}><span style={{ position: 'absolute', inset: 0, background: '#E6E9AF', borderRadius: 8 }} /><span style={{ position: 'relative', color: '#22177A' }}>{t('change tout')}</span></span>.
             </h1>
-            <p className="lg-rise" style={{ fontSize: 14.5, lineHeight: 1.6, color: 'rgba(230,233,175,.78)', marginTop: 16, animationDelay: '.14s' }}>Mandats, pipeline candidats, portail client et sourcing inversé — tout votre delivery au même endroit.</p>
+            <p className="lg-rise" style={{ fontSize: 14.5, lineHeight: 1.6, color: 'rgba(230,233,175,.78)', marginTop: 16, animationDelay: '.14s' }}>{t('Mandats, pipeline candidats, portail client et sourcing inversé — tout votre delivery au même endroit.')}</p>
 
             <div className="lg-rise" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 26, marginTop: 30, paddingTop: 22, borderTop: '1px solid rgba(230,233,175,.18)', animationDelay: '.18s' }}>
-              <div><div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, letterSpacing: '-.02em', color: '#fff' }}>300+</div><div style={{ fontSize: 11, color: 'rgba(230,233,175,.6)', marginTop: 3 }}>placements</div></div>
+              <div><div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, letterSpacing: '-.02em', color: '#fff' }}>300+</div><div style={{ fontSize: 11, color: 'rgba(230,233,175,.6)', marginTop: 3 }}>{t('placements')}</div></div>
               <span style={{ width: 1, height: 30, background: 'rgba(230,233,175,.2)' }} />
-              <div><div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, letterSpacing: '-.02em', color: '#fff' }}>21<span style={{ fontSize: 14 }}>j</span></div><div style={{ fontSize: 11, color: 'rgba(230,233,175,.6)', marginTop: 3 }}>délai moyen</div></div>
+              <div><div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, letterSpacing: '-.02em', color: '#fff' }}>21<span style={{ fontSize: 14 }}>{t('j')}</span></div><div style={{ fontSize: 11, color: 'rgba(230,233,175,.6)', marginTop: 3 }}>{t('délai moyen')}</div></div>
               <span style={{ width: 1, height: 30, background: 'rgba(230,233,175,.2)' }} />
-              <div><div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, letterSpacing: '-.02em', color: '#fff' }}>4</div><div style={{ fontSize: 11, color: 'rgba(230,233,175,.6)', marginTop: 3 }}>verticales</div></div>
+              <div><div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 22, letterSpacing: '-.02em', color: '#fff' }}>4</div><div style={{ fontSize: 11, color: 'rgba(230,233,175,.6)', marginTop: 3 }}>{t('verticales')}</div></div>
             </div>
           </div>
 
-          <div className="lg-rise" style={{ position: 'absolute', left: 0, right: 0, bottom: 34, textAlign: 'center', fontSize: 11.5, color: 'rgba(230,233,175,.45)', animationDelay: '.22s' }}>Hong Kong · Londres · Ho Chi Minh City</div>
+          <div className="lg-rise" style={{ position: 'absolute', left: 0, right: 0, bottom: 34, textAlign: 'center', fontSize: 11.5, color: 'rgba(230,233,175,.45)', animationDelay: '.22s' }}>{t('Hong Kong · Londres · Ho Chi Minh City')}</div>
         </div>
 
         {/* FORM */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '44px 40px', position: 'relative' }}>
           <div aria-hidden style={{ position: 'absolute', top: 0, right: 0, width: 420, height: 340, background: 'radial-gradient(ellipse at top right, rgba(230,233,175,.5), transparent 64%)', pointerEvents: 'none' }} />
           <form onSubmit={handleSubmit} className="lg-rise" style={{ position: 'relative', width: '100%', maxWidth: 372, animationDelay: '.08s' }}>
-            <h2 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 27, letterSpacing: '-.03em', color: '#1A1533' }}>Connexion</h2>
-            <p style={{ fontSize: 14, color: '#6E6A85', marginTop: 7 }}>Accédez à votre espace de recrutement.</p>
+            <h2 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 27, letterSpacing: '-.03em', color: '#1A1533' }}>{t('Connexion')}</h2>
+            <p style={{ fontSize: 14, color: '#6E6A85', marginTop: 7 }}>{t('Accédez à votre espace de recrutement.')}</p>
 
-            <label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#8A8699', margin: '26px 0 7px' }}>Email professionnel</label>
-            <input className="lg-fld" value={email} onChange={e => { setEmail(e.target.value); setError(''); }} placeholder="vous@humanup.io" autoComplete="username" style={{ width: '100%', fontSize: 14, padding: '13px 15px', borderRadius: 12, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', color: '#1A1533' }} />
+            <label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#8A8699', margin: '26px 0 7px' }}>{t('Email professionnel')}</label>
+            <input className="lg-fld" value={email} onChange={e => { setEmail(e.target.value); setError(''); }} placeholder={t('vous@humanup.io')} autoComplete="username" style={{ width: '100%', fontSize: 14, padding: '13px 15px', borderRadius: 12, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', color: '#1A1533' }} />
 
-            <label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#8A8699', margin: '18px 0 7px' }}>Mot de passe</label>
+            <label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#8A8699', margin: '18px 0 7px' }}>{t('Mot de passe')}</label>
             <div style={{ position: 'relative' }}>
               <input className="lg-fld" type={show ? 'text' : 'password'} value={password} onChange={e => { setPassword(e.target.value); setError(''); }} placeholder="••••••••" autoComplete="current-password" style={{ width: '100%', fontSize: 14, padding: '13px 46px 13px 15px', borderRadius: 12, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', color: '#1A1533' }} />
-              <button type="button" onClick={() => setShow(s => !s)} className="lg-eye" title="Afficher le mot de passe" style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', width: 32, height: 32, border: 'none', borderRadius: 9, background: 'transparent', color: '#9A96AE', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+              <button type="button" onClick={() => setShow(s => !s)} className="lg-eye" title={t('Afficher le mot de passe')} style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', width: 32, height: 32, border: 'none', borderRadius: 9, background: 'transparent', color: '#9A96AE', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
             </div>
 
             {error && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 12.5, fontWeight: 600, color: '#B3261E' }}><AlertCircle size={14} style={{ flexShrink: 0 }} />{error}</div>}
@@ -107,17 +108,17 @@ export default function LoginPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 16 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }}>
                 <span onClick={() => setKeep(k => !k)} style={{ flexShrink: 0, width: 19, height: 19, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: `1.5px solid ${keep ? '#22177A' : 'rgba(34,23,122,.24)'}`, background: keep ? '#E6E9AF' : '#fff' }}>{keep && <Check size={11} color="#22177A" strokeWidth={3.4} />}</span>
-                <span style={{ fontSize: 12.5, color: '#4A4568' }}>Rester connecté</span>
+                <span style={{ fontSize: 12.5, color: '#4A4568' }}>{t('Rester connecté')}</span>
               </label>
-              <a href="/forgot-password" className="lg-lnk" style={{ fontSize: 12.5, fontWeight: 700, color: '#8A8699' }}>Mot de passe oublié ?</a>
+              <a href="/forgot-password" className="lg-lnk" style={{ fontSize: 12.5, fontWeight: 700, color: '#8A8699' }}>{t('Mot de passe oublié ?')}</a>
             </div>
 
             <button type="submit" disabled={isLoading} className="lg-cta" style={{ width: '100%', marginTop: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, fontWeight: 800, fontSize: 15, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 13, padding: 15, cursor: isLoading ? 'default' : 'pointer', opacity: isLoading ? 0.85 : 1 }}>
-              {isLoading ? 'Connexion…' : 'Se connecter'}{!isLoading && <ArrowRight size={16} strokeWidth={2.4} />}
+              {isLoading ? t('Connexion…') : t('Se connecter')}{!isLoading && <ArrowRight size={16} strokeWidth={2.4} />}
             </button>
 
             <p style={{ fontSize: 11.5, lineHeight: 1.55, color: '#9A96AE', marginTop: 26, textAlign: 'center' }}>
-              Espace réservé à l'équipe HumanUp.<br />Vous êtes client ? <a href="/portail/login" className="lg-lnk" style={{ fontWeight: 700, color: '#22177A' }}>Accéder au portail de suivi</a>.
+              {t("Espace réservé à l'équipe HumanUp.")}<br />{t('Vous êtes client ?')} <a href="/portail/login" className="lg-lnk" style={{ fontWeight: 700, color: '#22177A' }}>{t('Accéder au portail de suivi')}</a>.
             </p>
           </form>
         </div>

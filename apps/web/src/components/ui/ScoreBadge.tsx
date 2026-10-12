@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { t } from '../../lib/i18n';
 
 interface ScoreBadgeProps {
   score: number;
@@ -24,7 +25,7 @@ export default function ScoreBadge({ score, size = 'sm', className = '' }: Score
       animate={{ opacity: 1, scale: 1 }}
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       className={`inline-flex items-center justify-center rounded-full border font-bold ${color} ${sizeClasses} ${className}`}
-      title={`Score de compatibilité : ${score}%`}
+      title={t('Score de compatibilité : {score}%', { score })}
     >
       {score}
     </motion.span>

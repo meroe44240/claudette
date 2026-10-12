@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { t } from '../../lib/i18n';
 
 interface SelectOption {
   value: string;
@@ -18,7 +19,7 @@ interface SelectProps {
   searchable?: boolean;
 }
 
-export default function Select({ options, value, onChange, placeholder = 'Sélectionner...', label, error, searchable = false }: SelectProps) {
+export default function Select({ options, value, onChange, placeholder = t('Sélectionner...'), label, error, searchable = false }: SelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
@@ -92,7 +93,7 @@ export default function Select({ options, value, onChange, placeholder = 'Sélec
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Rechercher..."
+                placeholder={t('Rechercher...')}
                 className="w-full bg-transparent text-sm outline-none placeholder:text-neutral-300"
                 autoFocus
               />
@@ -110,7 +111,7 @@ export default function Select({ options, value, onChange, placeholder = 'Sélec
               {option.label}
             </button>
           ))}
-          {filtered.length === 0 && <p className="px-3.5 py-2.5 text-sm text-neutral-300">Aucun résultat</p>}
+          {filtered.length === 0 && <p className="px-3.5 py-2.5 text-sm text-neutral-300">{t('Aucun résultat')}</p>}
         </div>
       </motion.div>
     </AnimatePresence>,

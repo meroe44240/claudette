@@ -5,6 +5,7 @@ import { api } from '../../lib/api-client';
 import SlideOver from './SlideOver';
 import Badge from './Badge';
 import Skeleton from './Skeleton';
+import { t } from '../../lib/i18n';
 
 interface EntityPreviewProps {
   isOpen: boolean;
@@ -14,10 +15,10 @@ interface EntityPreviewProps {
 }
 
 const ENTITY_CONFIG: Record<string, { route: string; label: string; icon: typeof User; color: string }> = {
-  candidat: { route: '/candidats', label: 'Candidat', icon: User, color: 'text-violet-500' },
-  client: { route: '/clients', label: 'Client', icon: Building2, color: 'text-blue-500' },
-  entreprise: { route: '/entreprises', label: 'Entreprise', icon: Briefcase, color: 'text-emerald-500' },
-  mandat: { route: '/mandats', label: 'Mandat', icon: FileText, color: 'text-amber-500' },
+  candidat: { route: '/candidats', label: t('Candidat'), icon: User, color: 'text-violet-500' },
+  client: { route: '/clients', label: t('Client'), icon: Building2, color: 'text-blue-500' },
+  entreprise: { route: '/entreprises', label: t('Entreprise'), icon: Briefcase, color: 'text-emerald-500' },
+  mandat: { route: '/mandats', label: t('Mandat'), icon: FileText, color: 'text-amber-500' },
 };
 
 function CandidatPreview({ data }: { data: any }) {
@@ -66,7 +67,7 @@ function CandidatPreview({ data }: { data: any }) {
 
       {data.notes && (
         <div className="rounded-lg bg-neutral-50 p-3">
-          <p className="text-xs font-medium text-neutral-400 mb-1">Notes</p>
+          <p className="text-xs font-medium text-neutral-400 mb-1">{t('Notes')}</p>
           <p className="text-sm text-neutral-700 line-clamp-4 whitespace-pre-wrap">{data.notes}</p>
         </div>
       )}
@@ -138,11 +139,11 @@ function EntreprisePreview({ data }: { data: any }) {
         <div className="flex gap-3">
           <div className="rounded-lg bg-neutral-50 px-3 py-2 text-center flex-1">
             <p className="text-lg font-bold text-neutral-900">{data._count.clients || 0}</p>
-            <p className="text-[11px] text-neutral-400">Contacts</p>
+            <p className="text-[11px] text-neutral-400">{t('Contacts')}</p>
           </div>
           <div className="rounded-lg bg-neutral-50 px-3 py-2 text-center flex-1">
             <p className="text-lg font-bold text-neutral-900">{data._count.mandats || 0}</p>
-            <p className="text-[11px] text-neutral-400">Mandats</p>
+            <p className="text-[11px] text-neutral-400">{t('Mandats')}</p>
           </div>
         </div>
       )}
@@ -152,8 +153,8 @@ function EntreprisePreview({ data }: { data: any }) {
 
 function MandatPreview({ data }: { data: any }) {
   const STATUT_LABELS: Record<string, string> = {
-    OUVERT: 'Ouvert', EN_COURS: 'En cours', GAGNE: 'Gagné',
-    PERDU: 'Perdu', ANNULE: 'Annulé', CLOTURE: 'Clôturé',
+    OUVERT: t('Ouvert'), EN_COURS: t('En cours'), GAGNE: t('Gagné'),
+    PERDU: t('Perdu'), ANNULE: t('Annulé'), CLOTURE: t('Clôturé'),
   };
 
   return (
@@ -170,13 +171,13 @@ function MandatPreview({ data }: { data: any }) {
           <Badge>{STATUT_LABELS[data.statut] || data.statut}</Badge>
         )}
         {data._count?.candidatures !== undefined && (
-          <Badge variant="info">{data._count.candidatures} candidat{data._count.candidatures > 1 ? 's' : ''}</Badge>
+          <Badge variant="info">{t(data._count.candidatures > 1 ? '{n} candidats' : '{n} candidat', { n: data._count.candidatures })}</Badge>
         )}
       </div>
 
       {data.description && (
         <div className="rounded-lg bg-neutral-50 p-3">
-          <p className="text-xs font-medium text-neutral-400 mb-1">Description</p>
+          <p className="text-xs font-medium text-neutral-400 mb-1">{t('Description')}</p>
           <p className="text-sm text-neutral-700 line-clamp-6 whitespace-pre-wrap">{data.description}</p>
         </div>
       )}
@@ -211,7 +212,7 @@ export default function EntityPreview({ isOpen, onClose, entityType, entityId }:
     <SlideOver
       isOpen={isOpen}
       onClose={onClose}
-      title={config?.label || 'Apercu'}
+      title={config?.label || t('Apercu')}
       width="md"
     >
       {isLoading ? (
@@ -222,7 +223,7 @@ export default function EntityPreview({ isOpen, onClose, entityType, entityId }:
           <Skeleton className="h-4 w-40" />
         </div>
       ) : !data ? (
-        <p className="text-sm text-neutral-500">Impossible de charger les donnees.</p>
+        <p className="text-sm text-neutral-500">{t('Impossible de charger les donnees.')}</p>
       ) : (
         <div>
           {normalizedType === 'candidat' && <CandidatPreview data={data} />}
@@ -235,7 +236,7 @@ export default function EntityPreview({ isOpen, onClose, entityType, entityId }:
             className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-violet-50 py-2.5 text-sm font-medium text-violet-600 hover:bg-violet-100 transition-colors"
           >
             <ExternalLink size={14} />
-            Voir la fiche complete
+            {t('Voir la fiche complete')}
           </button>
         </div>
       )}

@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { t } from '../../lib/i18n';
 
 // ── Types ────────────────────────────────────────────────────────
 export interface SelectionAction {
@@ -52,7 +53,7 @@ export default function SelectionBar({
               {count}
             </span>
             <span className="text-sm font-medium text-neutral-700">
-              {entityLabel} selectionne{count > 1 ? 's' : ''}
+              {t(count > 1 ? '{label} selectionnes' : '{label} selectionne', { label: entityLabel })}
             </span>
           </div>
 
@@ -78,7 +79,7 @@ export default function SelectionBar({
               className="ml-2 inline-flex h-8 items-center gap-1 rounded-lg px-2.5 text-xs font-medium text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
             >
               <X size={14} />
-              Annuler
+              {t('Annuler')}
             </button>
           </div>
         </motion.div>

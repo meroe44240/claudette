@@ -25,16 +25,17 @@ import { toast } from '../../components/ui/Toast';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import DuplicateWarning from '../../components/candidats/DuplicateWarning';
 import { useAutosave } from '../../hooks/useAutosave';
+import { t } from '../../lib/i18n';
 
 const sourceOptions = [
-  { value: '', label: 'Sélectionner...' },
+  { value: '', label: t('Sélectionner...') },
   { value: 'LINKEDIN', label: 'LinkedIn' },
-  { value: 'COOPTATION', label: 'Cooptation' },
-  { value: 'CANDIDATURE_SPONTANEE', label: 'Candidature spontanée' },
-  { value: 'JOBBOARD', label: 'Jobboard' },
-  { value: 'CHASSE', label: 'Chasse' },
-  { value: 'SITE_WEB', label: 'Site web' },
-  { value: 'AUTRE', label: 'Autre' },
+  { value: 'COOPTATION', label: t('Cooptation') },
+  { value: 'CANDIDATURE_SPONTANEE', label: t('Candidature spontanée') },
+  { value: 'JOBBOARD', label: t('Jobboard') },
+  { value: 'CHASSE', label: t('Chasse') },
+  { value: 'SITE_WEB', label: t('Site web') },
+  { value: 'AUTRE', label: t('Autre') },
 ];
 
 interface FormData {
@@ -149,7 +150,7 @@ export default function CandidatNewPage() {
   useEffect(() => {
     if (restoredData) {
       setForm(restoredData);
-      toast('success', 'Brouillon restauré');
+      toast('success', t('Brouillon restauré'));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -218,7 +219,7 @@ export default function CandidatNewPage() {
   });
 
   const mandatOptions = [
-    { value: '', label: 'Aucun mandat (optionnel)' },
+    { value: '', label: t('Aucun mandat (optionnel)') },
     ...(mandatsData?.data || []).map((m) => ({
       value: m.id,
       label: `${m.titrePoste}${m.entreprise ? ` - ${m.entreprise.nom}` : ''}`,
@@ -245,7 +246,7 @@ export default function CandidatNewPage() {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.message || `Erreur ${response.status}`);
+        throw new Error(errData.message || t('Erreur {code}', { code: response.status }));
       }
 
       return response.json() as Promise<{ data: CvParsingResult }>;
@@ -284,10 +285,10 @@ export default function CandidatNewPage() {
         aiParsedAt: new Date().toISOString(),
       });
 
-      toast('success', 'CV analysé avec succès ! Les champs ont été pré-remplis.');
+      toast('success', t('CV analysé avec succès ! Les champs ont été pré-remplis.'));
     },
     onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de l\'analyse du CV');
+      toast('error', error.message || t("Erreur lors de l'analyse du CV"));
     },
   });
 
@@ -296,13 +297,13 @@ export default function CandidatNewPage() {
 
     // Validate file type
     if (file.type !== 'application/pdf') {
-      toast('error', 'Seuls les fichiers PDF sont acceptés.');
+      toast('error', t('Seuls les fichiers PDF sont acceptés.'));
       return;
     }
 
     // Validate file size (10 MB)
     if (file.size > 10 * 1024 * 1024) {
-      toast('error', 'Le fichier est trop volumineux. Taille maximale : 10 Mo.');
+      toast('error', t('Le fichier est trop volumineux. Taille maximale : 10 Mo.'));
       return;
     }
 
@@ -338,10 +339,10 @@ export default function CandidatNewPage() {
     try {
       await navigator.clipboard.writeText(text);
       setCopiedField(fieldName);
-      toast('success', 'Copié dans le presse-papiers');
+      toast('success', t('Copié dans le presse-papiers'));
       setTimeout(() => setCopiedField(null), 2000);
     } catch {
-      toast('error', 'Erreur lors de la copie');
+      toast('error', t('Erreur lors de la copie'));
     }
   };
 
@@ -394,7 +395,7 @@ export default function CandidatNewPage() {
       }
 
       clearDraft();
-      toast('success', selectedMandatId ? 'Candidat créé et affilié au mandat' : 'Candidat créé');
+      toast('success', selectedMandatId ? t('Candidat créé et affilié au mandat') : t('Candidat créé'));
       navigate(`/candidats/${created.id}`);
     },
     onError: (error: any) => {
@@ -405,7 +406,7 @@ export default function CandidatNewPage() {
         }
         setErrors(errs);
       } else {
-        toast('error', error.message || 'Erreur lors de la création');
+        toast('error', error.message || t('Erreur lors de la création'));
       }
     },
   });
@@ -414,7 +415,7 @@ export default function CandidatNewPage() {
     e.preventDefault();
 
     if (!form.nom.trim()) {
-      setErrors({ nom: 'Le nom est requis' });
+      setErrors({ nom: t('Le nom est requis') });
       return;
     }
 
@@ -455,10 +456,10 @@ export default function CandidatNewPage() {
   return (
     <div>
       <PageHeader
-        title="Nouveau candidat"
+        title={t('Nouveau candidat')}
         breadcrumbs={[
-          { label: 'Candidats', href: '/candidats' },
-          { label: 'Nouveau' },
+          { label: t('Candidats'), href: '/candidats' },
+          { label: t('Nouveau') },
         ]}
       />
 
@@ -499,9 +500,9 @@ export default function CandidatNewPage() {
                   <Loader2 size={28} className="animate-spin text-[#22177A]" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-primary-600">Analyse du CV en cours...</p>
+                  <p className="text-sm font-semibold text-primary-600">{t('Analyse du CV en cours...')}</p>
                   <p className="mt-1 text-xs text-text-tertiary">
-                    L'IA extrait les informations et génère le pitch commercial
+                    {t("L'IA extrait les informations et génère le pitch commercial")}
                   </p>
                 </div>
               </>
@@ -512,10 +513,10 @@ export default function CandidatNewPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-green-700">
-                    CV analysé : {uploadedFileName}
+                    {t('CV analysé : {fichier}', { fichier: uploadedFileName })}
                   </p>
                   <p className="mt-1 text-xs text-text-tertiary">
-                    Les champs ont été pré-remplis. Vous pouvez déposer un autre CV pour remplacer.
+                    {t('Les champs ont été pré-remplis. Vous pouvez déposer un autre CV pour remplacer.')}
                   </p>
                 </div>
               </>
@@ -526,15 +527,15 @@ export default function CandidatNewPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-text-primary">
-                    <span className="text-[#22177A]">Déposez un CV ici</span> (PDF)
+                    <span className="text-[#22177A]">{t('Déposez un CV ici')}</span> (PDF)
                   </p>
                   <p className="mt-1 text-xs text-text-tertiary">
-                    L'IA extraira les informations automatiquement et générera un pitch commercial
+                    {t("L'IA extraira les informations automatiquement et générera un pitch commercial")}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="info" size="sm">PDF</Badge>
-                  <span className="text-xs text-text-tertiary">Max 10 Mo</span>
+                  <span className="text-xs text-text-tertiary">{t('Max 10 Mo')}</span>
                 </div>
               </>
             )}
@@ -551,18 +552,18 @@ export default function CandidatNewPage() {
             <Card>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <Input
-                  label="Nom *"
+                  label={t('Nom *')}
                   value={form.nom}
                   onChange={set('nom')}
-                  placeholder="Nom de famille"
+                  placeholder={t('Nom de famille')}
                   required
                   error={errors.nom}
                 />
                 <Input
-                  label="Prénom"
+                  label={t('Prénom')}
                   value={form.prenom}
                   onChange={set('prenom')}
-                  placeholder="Prénom"
+                  placeholder={t('Prénom')}
                 />
 
                 <Input
@@ -574,7 +575,7 @@ export default function CandidatNewPage() {
                   error={errors.email}
                 />
                 <Input
-                  label="Téléphone"
+                  label={t('Téléphone')}
                   type="tel"
                   value={form.telephone}
                   onChange={set('telephone')}
@@ -588,26 +589,26 @@ export default function CandidatNewPage() {
                   placeholder="https://linkedin.com/in/..."
                 />
                 <Input
-                  label="Localisation"
+                  label={t('Localisation')}
                   value={form.localisation}
                   onChange={set('localisation')}
                   placeholder="Paris, France"
                 />
 
                 <Input
-                  label="Poste actuel"
+                  label={t('Poste actuel')}
                   value={form.posteActuel}
                   onChange={set('posteActuel')}
-                  placeholder="Développeur Senior"
+                  placeholder={t('Développeur Senior')}
                 />
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-neutral-700">Entreprise actuelle</label>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">{t('Entreprise actuelle')}</label>
                   <input
                     type="text"
                     list="entreprise-suggestions"
                     value={form.entrepriseActuelle}
                     onChange={(e) => set('entrepriseActuelle')(e as React.ChangeEvent<HTMLInputElement>)}
-                    placeholder="Nom de l'entreprise"
+                    placeholder={t("Nom de l'entreprise")}
                     className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-[#22177A] focus:outline-none focus:ring-2 focus:ring-[#22177A]/20 transition-colors"
                   />
                   <datalist id="entreprise-suggestions">
@@ -618,14 +619,14 @@ export default function CandidatNewPage() {
                 </div>
 
                 <Input
-                  label="Salaire actuel (EUR)"
+                  label={t('Salaire actuel (EUR)')}
                   type="number"
                   value={form.salaireActuel}
                   onChange={set('salaireActuel')}
                   placeholder="55000"
                 />
                 <Input
-                  label="Salaire souhaité (EUR)"
+                  label={t('Salaire souhaité (EUR)')}
                   type="number"
                   value={form.salaireSouhaite}
                   onChange={set('salaireSouhaite')}
@@ -633,7 +634,7 @@ export default function CandidatNewPage() {
                 />
 
                 <Input
-                  label="Années d'expérience"
+                  label={t("Années d'expérience")}
                   type="number"
                   value={form.anneesExperience}
                   onChange={set('anneesExperience')}
@@ -641,20 +642,20 @@ export default function CandidatNewPage() {
                 />
 
                 <Select
-                  label="Disponibilité"
+                  label={t('Disponibilité')}
                   options={[
-                    { value: '', label: 'Sélectionner...' },
-                    { value: 'Immédiate', label: 'Immédiate' },
-                    { value: '1 mois', label: '1 mois' },
-                    { value: '3 mois', label: '3 mois' },
-                    { value: 'En poste', label: 'En poste' },
+                    { value: '', label: t('Sélectionner...') },
+                    { value: 'Immédiate', label: t('Immédiate') },
+                    { value: '1 mois', label: t('1 mois') },
+                    { value: '3 mois', label: t('3 mois') },
+                    { value: 'En poste', label: t('En poste') },
                   ]}
                   value={form.disponibilite}
                   onChange={(val) => setForm((prev) => ({ ...prev, disponibilite: val }))}
-                  placeholder="Sélectionner..."
+                  placeholder={t('Sélectionner...')}
                 />
                 <Input
-                  label="Mobilité"
+                  label={t('Mobilité')}
                   value={form.mobilite}
                   onChange={set('mobilite')}
                   placeholder="Île-de-France, Remote..."
@@ -665,14 +666,14 @@ export default function CandidatNewPage() {
                   options={sourceOptions}
                   value={form.source}
                   onChange={(val) => setForm((prev) => ({ ...prev, source: val }))}
-                  placeholder="Sélectionner une source"
+                  placeholder={t('Sélectionner une source')}
                 />
                 <Select
-                  label="Affilier à un mandat"
+                  label={t('Affilier à un mandat')}
                   options={mandatOptions}
                   value={selectedMandatId}
                   onChange={setSelectedMandatId}
-                  placeholder="Sélectionner un mandat"
+                  placeholder={t('Sélectionner un mandat')}
                 />
 
                 <div className="sm:col-span-2">
@@ -680,7 +681,7 @@ export default function CandidatNewPage() {
                     label="Notes"
                     value={form.notes}
                     onChange={set('notes')}
-                    placeholder="Notes libres sur le candidat..."
+                    placeholder={t('Notes libres sur le candidat...')}
                   />
                 </div>
               </div>
@@ -689,7 +690,7 @@ export default function CandidatNewPage() {
               {cvParsed && cvParsed.candidate.skills.length > 0 && (
                 <div className="mt-4">
                   <label className="mb-2 block text-sm font-medium text-text-primary">
-                    Compétences extraites du CV
+                    {t('Compétences extraites du CV')}
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {cvParsed.candidate.skills.map((skill) => (
@@ -705,7 +706,7 @@ export default function CandidatNewPage() {
                 <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
                   <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-500" />
                   <div className="text-sm text-amber-800">
-                    <span>Un candidat avec cet email existe déjà : </span>
+                    <span>{t('Un candidat avec cet email existe déjà : ')}</span>
                     <Link
                       to={`/candidats/${duplicateMatch.id}`}
                       className="font-medium underline hover:text-amber-900"
@@ -718,10 +719,10 @@ export default function CandidatNewPage() {
 
               <div className="mt-6 flex items-center justify-end gap-3">
                 <Button type="button" variant="ghost" onClick={() => navigate('/candidats')}>
-                  Annuler
+                  {t('Annuler')}
                 </Button>
                 <Button type="submit" disabled={mutation.isPending}>
-                  {mutation.isPending ? 'Création...' : 'Créer'}
+                  {mutation.isPending ? t('Création...') : t('Créer')}
                 </Button>
               </div>
             </Card>
@@ -744,7 +745,7 @@ export default function CandidatNewPage() {
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-text-primary">
                     <Sparkles size={16} className="text-[#22177A]" />
-                    Pitch court
+                    {t('Pitch court')}
                   </h3>
                   <button
                     type="button"
@@ -752,7 +753,7 @@ export default function CandidatNewPage() {
                     className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-text-tertiary hover:bg-neutral-50 hover:text-text-primary transition-all"
                   >
                     {copiedField === 'pitchShort' ? <Check size={12} /> : <Copy size={12} />}
-                    {copiedField === 'pitchShort' ? 'Copié' : 'Copier'}
+                    {copiedField === 'pitchShort' ? t('Copié') : t('Copier')}
                   </button>
                 </div>
                 <textarea
@@ -768,7 +769,7 @@ export default function CandidatNewPage() {
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-text-primary">
                     <Sparkles size={16} className="text-[#22177A]" />
-                    Pitch commercial
+                    {t('Pitch commercial')}
                   </h3>
                   <button
                     type="button"
@@ -776,7 +777,7 @@ export default function CandidatNewPage() {
                     className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-text-tertiary hover:bg-neutral-50 hover:text-text-primary transition-all"
                   >
                     {copiedField === 'pitchLong' ? <Check size={12} /> : <Copy size={12} />}
-                    {copiedField === 'pitchLong' ? 'Copié' : 'Copier'}
+                    {copiedField === 'pitchLong' ? t('Copié') : t('Copier')}
                   </button>
                 </div>
                 <textarea
@@ -791,7 +792,7 @@ export default function CandidatNewPage() {
               <Card>
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-primary">
                   <Sparkles size={16} className="text-[#22177A]" />
-                  Points forts
+                  {t('Points forts')}
                 </h3>
                 <div className="space-y-2">
                   {sellingPoints.map((point, idx) => (
@@ -814,7 +815,7 @@ export default function CandidatNewPage() {
               <Card>
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-primary">
                   <Sparkles size={16} className="text-[#22177A]" />
-                  Idéal pour
+                  {t('Idéal pour')}
                 </h3>
                 <input
                   type="text"
@@ -833,7 +834,7 @@ export default function CandidatNewPage() {
                 >
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-text-primary">
                     <Sparkles size={16} className="text-[#22177A]" />
-                    Profil anonymisé
+                    {t('Profil anonymisé')}
                   </h3>
                   {showAnonymized ? <ChevronUp size={16} className="text-text-tertiary" /> : <ChevronDown size={16} className="text-text-tertiary" />}
                 </button>
@@ -849,15 +850,15 @@ export default function CandidatNewPage() {
                     >
                       <div className="mt-4 space-y-3">
                         <div>
-                          <p className="text-xs font-medium text-text-tertiary">Titre</p>
+                          <p className="text-xs font-medium text-text-tertiary">{t('Titre')}</p>
                           <p className="text-sm text-text-primary">{cvParsed.anonymized_profile.title}</p>
                         </div>
                         <div>
-                          <p className="text-xs font-medium text-text-tertiary">Résumé</p>
+                          <p className="text-xs font-medium text-text-tertiary">{t('Résumé')}</p>
                           <p className="whitespace-pre-wrap text-sm text-text-primary">{cvParsed.anonymized_profile.summary}</p>
                         </div>
                         <div>
-                          <p className="mb-2 text-xs font-medium text-text-tertiary">Points clés</p>
+                          <p className="mb-2 text-xs font-medium text-text-tertiary">{t('Points clés')}</p>
                           <ul className="space-y-1">
                             {cvParsed.anonymized_profile.bullet_points.map((point, idx) => (
                               <li key={idx} className="flex items-start gap-2 text-sm text-text-primary">
@@ -883,7 +884,7 @@ export default function CandidatNewPage() {
                           className="mt-2 flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-text-tertiary hover:bg-neutral-50 hover:text-text-primary transition-all"
                         >
                           {copiedField === 'anonymized' ? <Check size={12} /> : <Copy size={12} />}
-                          {copiedField === 'anonymized' ? 'Copié' : 'Copier le profil'}
+                          {copiedField === 'anonymized' ? t('Copié') : t('Copier le profil')}
                         </button>
                       </div>
                     </motion.div>
@@ -911,7 +912,7 @@ export default function CandidatNewPage() {
                   }}
                 >
                   {copiedField === 'fullPitch' ? <Check size={14} /> : <Copy size={14} />}
-                  {copiedField === 'fullPitch' ? 'Copié !' : 'Copier le pitch complet'}
+                  {copiedField === 'fullPitch' ? t('Copié !') : t('Copier le pitch complet')}
                 </Button>
               </div>
             </motion.div>

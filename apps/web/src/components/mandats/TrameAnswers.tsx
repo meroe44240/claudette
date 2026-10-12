@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Sparkles, Check } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../ui/Toast';
+import { t } from '../../lib/i18n';
 
 interface Q { id: string; text: string }
 interface Answer { questionId: string; answer: string | null; source: string; filledAt: string }
@@ -17,8 +18,8 @@ export default function TrameAnswers({ candidatureId, mandatId, hideFill }: { ca
 
   const fill = useMutation({
     mutationFn: () => api.post<{ answers: Answer[]; transcriptsUsed: number }>(`/trames/fill/${candidatureId}`),
-    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['trame-answers', candidatureId] }); toast('success', `Trame remplie depuis ${r.transcriptsUsed} transcript(s)`); },
-    onError: (e: any) => toast('error', e?.message || 'Erreur lors du remplissage'),
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['trame-answers', candidatureId] }); toast('success', t('Trame remplie depuis {n} transcript(s)', { n: r.transcriptsUsed })); },
+    onError: (e: any) => toast('error', e?.message || t('Erreur lors du remplissage')),
   });
 
   const questions = trame?.trame ?? [];
@@ -26,7 +27,7 @@ export default function TrameAnswers({ candidatureId, mandatId, hideFill }: { ca
   const answerFor = (qid: string) => answers.find((a) => a.questionId === qid)?.answer;
 
   if (questions.length === 0) {
-    return <div style={{ fontSize: 12.5, color: '#8A8699', lineHeight: 1.6 }}>Aucune trame définie sur ce mandat. Ouvre le mandat → onglet <strong>Trame</strong> pour créer les questions, puis reviens ici pour remplir automatiquement depuis les transcripts.</div>;
+    return <div style={{ fontSize: 12.5, color: '#8A8699', lineHeight: 1.6 }}>{t('Aucune trame définie sur ce mandat. Ouvre le mandat → onglet {x} pour créer les questions, puis reviens ici pour remplir automatiquement depuis les transcripts.').split('{x}')[0]}<strong>{t('Trame')}</strong>{t('Aucune trame définie sur ce mandat. Ouvre le mandat → onglet {x} pour créer les questions, puis reviens ici pour remplir automatiquement depuis les transcripts.').split('{x}')[1]}</div>;
   }
 
   const filledCount = questions.filter((q) => answerFor(q.id)).length;
@@ -34,10 +35,10 @@ export default function TrameAnswers({ candidatureId, mandatId, hideFill }: { ca
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 12, color: '#6E6A85' }}>{filledCount}/{questions.length} réponse(s) remplie(s) depuis les transcripts.</div>
+        <div style={{ fontSize: 12, color: '#6E6A85' }}>{t('{a}/{b} réponse(s) remplie(s) depuis les transcripts.', { a: filledCount, b: questions.length })}</div>
         {!hideFill && (
           <button onClick={() => fill.mutate()} disabled={fill.isPending} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 800, color: LIME, background: NAVY, border: 'none', borderRadius: 10, padding: '8px 15px', cursor: fill.isPending ? 'wait' : 'pointer', opacity: fill.isPending ? 0.6 : 1 }}>
-            <Sparkles size={14} />{fill.isPending ? 'Analyse des transcripts…' : 'Remplir depuis les transcripts (IA)'}
+            <Sparkles size={14} />{fill.isPending ? t('Analyse des transcripts…') : t('Remplir depuis les transcripts (IA)')}
           </button>
         )}
       </div>
@@ -51,7 +52,7 @@ export default function TrameAnswers({ candidatureId, mandatId, hideFill }: { ca
                 <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: a ? '#EAF3EC' : '#F2F3D8', color: a ? '#2C6B3F' : NAVY, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, fontWeight: 800, marginTop: 1 }}>{a ? <Check size={11} /> : i + 1}</span>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, color: '#1A1533' }}>{q.text}</div>
-                  <div style={{ fontSize: 13, color: a ? '#3A3550' : '#B4B0C4', marginTop: 4, lineHeight: 1.5, fontStyle: a ? 'normal' : 'italic' }}>{a || 'Non abordé dans les transcripts'}</div>
+                  <div style={{ fontSize: 13, color: a ? '#3A3550' : '#B4B0C4', marginTop: 4, lineHeight: 1.5, fontStyle: a ? 'normal' : 'italic' }}>{a || t('Non abordé dans les transcripts')}</div>
                 </div>
               </div>
             </div>

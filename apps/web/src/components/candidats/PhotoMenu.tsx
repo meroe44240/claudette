@@ -2,11 +2,12 @@ import { useRef, useState } from 'react';
 import { Camera, Link2, FileText, Trash2, Upload, Loader2 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../ui/Toast';
+import { t } from '../../lib/i18n';
 
 // Photo du candidat : clic sur l'avatar → importer une image, coller un lien
 // (l'image est téléchargée et hébergée par l'ATS), prendre la photo du CV, retirer.
 
-const authHeader = (): Record<string, string> => { const t = localStorage.getItem('accessToken'); return t ? { Authorization: `Bearer ${t}` } : {}; };
+const authHeader = (): Record<string, string> => { const tok = localStorage.getItem('accessToken'); return tok ? { Authorization: `Bearer ${tok}` } : {}; };
 
 export default function PhotoMenu({ candidatId, photoUrl, initials, hasCv, size = 104, onChanged }: {
   candidatId: string; photoUrl: string | null; initials: string; hasCv: boolean; size?: number; onChanged: () => void;
@@ -21,18 +22,18 @@ export default function PhotoMenu({ candidatId, photoUrl, initials, hasCv, size 
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
     try { await fn(); toast('success', ok); onChanged(); close(); }
-    catch (e: any) { toast('error', e?.message || 'Échec'); }
+    catch (e: any) { toast('error', e?.message || t('Échec')); }
     finally { setBusy(false); if (fileRef.current) fileRef.current.value = ''; }
   };
   const upload = (file: File) => run(async () => {
     const fd = new FormData(); fd.append('file', file);
     const res = await fetch(`/api/v1/candidats/${candidatId}/photo`, { method: 'POST', headers: { ...authHeader() }, body: fd });
-    if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b?.message || "Échec de l'envoi"); }
-  }, 'Photo mise à jour');
+    if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b?.message || t("Échec de l'envoi")); }
+  }, t('Photo mise à jour'));
 
   return (
     <span style={{ position: 'relative', flexShrink: 0, display: 'inline-block' }}>
-      <button className="ph-btn" onClick={() => setOpen(o => !o)} aria-label="Changer la photo" title="Changer la photo" style={{ position: 'relative', width: size, height: size, borderRadius: '50%', border: 'none', padding: 0, cursor: 'pointer', background: 'none', display: 'block' }}>
+      <button className="ph-btn" onClick={() => setOpen(o => !o)} aria-label={t('Changer la photo')} title={t('Changer la photo')} style={{ position: 'relative', width: size, height: size, borderRadius: '50%', border: 'none', padding: 0, cursor: 'pointer', background: 'none', display: 'block' }}>
         {photoUrl
           ? <img src={photoUrl} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', background: '#F2F3D8', display: 'block' }} />
           : <span style={{ width: size, height: size, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Archivo Black',sans-serif", fontSize: size / 3 }}>{initials}</span>}
@@ -48,17 +49,17 @@ export default function PhotoMenu({ candidatId, photoUrl, initials, hasCv, size 
           <div className="fc-menu" style={{ position: 'absolute', top: size + 8, left: 0, zIndex: 41, background: '#fff', border: '1px solid rgba(34,23,122,.12)', borderRadius: 12, padding: 5, boxShadow: '0 18px 40px -20px rgba(26,21,51,.45)', width: 270 }}>
             {!linkMode ? (
               <>
-                <button disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={14} />Importer une image</button>
-                <button disabled={busy} onClick={() => setLinkMode(true)}><Link2 size={14} />Coller un lien</button>
-                <button disabled={busy || !hasCv} title={hasCv ? undefined : 'Aucun CV sur la fiche'} style={{ opacity: hasCv ? 1 : 0.45 }} onClick={() => run(() => api.post(`/candidats/${candidatId}/photo/from-cv`), 'Photo du CV appliquée')}><FileText size={14} />{busy ? 'Recherche dans le CV…' : 'Prendre la photo du CV'}</button>
-                {photoUrl && <button disabled={busy} style={{ color: '#B3261E' }} onClick={() => run(() => api.delete(`/candidats/${candidatId}/photo`), 'Photo retirée')}><Trash2 size={14} />Retirer la photo</button>}
+                <button disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={14} />{t('Importer une image')}</button>
+                <button disabled={busy} onClick={() => setLinkMode(true)}><Link2 size={14} />{t('Coller un lien')}</button>
+                <button disabled={busy || !hasCv} title={hasCv ? undefined : t('Aucun CV sur la fiche')} style={{ opacity: hasCv ? 1 : 0.45 }} onClick={() => run(() => api.post(`/candidats/${candidatId}/photo/from-cv`), t('Photo du CV appliquée'))}><FileText size={14} />{busy ? t('Recherche dans le CV…') : t('Prendre la photo du CV')}</button>
+                {photoUrl && <button disabled={busy} style={{ color: '#B3261E' }} onClick={() => run(() => api.delete(`/candidats/${candidatId}/photo`), t('Photo retirée'))}><Trash2 size={14} />{t('Retirer la photo')}</button>}
               </>
             ) : (
               <div style={{ padding: 8 }}>
-                <input autoFocus value={link} onChange={e => setLink(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && link.trim()) run(() => api.post(`/candidats/${candidatId}/photo/url`, { url: link.trim() }), 'Photo mise à jour'); }} placeholder="https://… (JPG, PNG ou WebP)" style={{ width: '100%', fontSize: 13, padding: '9px 11px', borderRadius: 9, border: '1.5px solid rgba(34,23,122,.16)', background: '#FCFCF5', outline: 'none' }} />
+                <input autoFocus value={link} onChange={e => setLink(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && link.trim()) run(() => api.post(`/candidats/${candidatId}/photo/url`, { url: link.trim() }), t('Photo mise à jour')); }} placeholder={t('https://… (JPG, PNG ou WebP)')} style={{ width: '100%', fontSize: 13, padding: '9px 11px', borderRadius: 9, border: '1.5px solid rgba(34,23,122,.16)', background: '#FCFCF5', outline: 'none' }} />
                 <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                  <button onClick={() => { setLinkMode(false); setLink(''); }} style={{ justifyContent: 'center', background: '#F5F4EA' }}>Retour</button>
-                  <button disabled={busy || !link.trim()} onClick={() => run(() => api.post(`/candidats/${candidatId}/photo/url`, { url: link.trim() }), 'Photo mise à jour')} style={{ justifyContent: 'center', background: '#22177A', color: '#E6E9AF', opacity: link.trim() ? 1 : 0.5 }}>{busy ? 'Envoi…' : 'Valider'}</button>
+                  <button onClick={() => { setLinkMode(false); setLink(''); }} style={{ justifyContent: 'center', background: '#F5F4EA' }}>{t('Retour')}</button>
+                  <button disabled={busy || !link.trim()} onClick={() => run(() => api.post(`/candidats/${candidatId}/photo/url`, { url: link.trim() }), t('Photo mise à jour'))} style={{ justifyContent: 'center', background: '#22177A', color: '#E6E9AF', opacity: link.trim() ? 1 : 0.5 }}>{busy ? t('Envoi…') : t('Valider')}</button>
                 </div>
               </div>
             )}

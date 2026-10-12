@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, Building2, Loader2, X } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { t } from '../../lib/i18n';
 
 export interface PappersSuggestionData {
   nom: string;
@@ -92,7 +93,7 @@ export default function PappersAutocomplete({ onSelect }: PappersAutocompletePro
       setIsOpen(true);
     } catch {
       setSuggestions([]);
-      setError('Erreur lors de la recherche Pappers');
+      setError(t('Erreur lors de la recherche Pappers'));
     } finally {
       setIsSearching(false);
     }
@@ -179,7 +180,7 @@ export default function PappersAutocomplete({ onSelect }: PappersAutocompletePro
 
       setQuery(nom);
     } catch {
-      setError('Erreur lors du chargement des données entreprise');
+      setError(t('Erreur lors du chargement des données entreprise'));
     } finally {
       setIsLoading(false);
     }
@@ -212,7 +213,7 @@ export default function PappersAutocomplete({ onSelect }: PappersAutocompletePro
           onFocus={() => {
             if (suggestions.length > 0) setIsOpen(true);
           }}
-          placeholder="Rechercher sur Pappers (nom ou SIREN)..."
+          placeholder={t('Rechercher sur Pappers (nom ou SIREN)...')}
           className="w-full rounded-lg border-[1.5px] border-neutral-100 bg-white py-2.5 pl-9 pr-24 text-sm outline-none transition-all placeholder:text-neutral-400 focus:border-[#22177A] focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
           disabled={isLoading}
         />
@@ -282,7 +283,7 @@ export default function PappersAutocomplete({ onSelect }: PappersAutocompletePro
       {/* No results */}
       {isOpen && !isSearching && suggestions.length === 0 && query.length >= 2 && (
         <div className="absolute z-50 mt-1 w-full rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-500 shadow-lg">
-          Aucun résultat trouvé pour "{query}"
+          {t('Aucun résultat trouvé pour "{query}"', { query })}
         </div>
       )}
     </div>

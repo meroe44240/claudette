@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuthStore } from '../stores/auth-store';
+import { t } from '../lib/i18n';
 
 export default function ChangePasswordPage() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -18,7 +19,7 @@ export default function ChangePasswordPage() {
       await changePassword(currentPassword, newPassword);
       navigate('/');
     } catch (err: any) {
-      setError(err.data?.message || 'Erreur lors du changement');
+      setError(err.data?.message || t('Erreur lors du changement'));
     } finally {
       setIsLoading(false);
     }
@@ -31,21 +32,21 @@ export default function ChangePasswordPage() {
           <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#22177A] text-[#E6E9AF] font-bold text-lg">
             H
           </div>
-          <h1 className="text-[22px] font-bold text-neutral-900">Changement de mot de passe</h1>
-          <p className="mt-1 text-[13px] text-neutral-500">Changement de mot de passe obligatoire</p>
+          <h1 className="text-[22px] font-bold text-neutral-900">{t('Changement de mot de passe')}</h1>
+          <p className="mt-1 text-[13px] text-neutral-500">{t('Changement de mot de passe obligatoire')}</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-5">
           {error && <div className="rounded-xl bg-error-100 border border-error/20 p-4 text-sm text-error">{error}</div>}
           <div>
-            <label htmlFor="current" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-neutral-500">Mot de passe actuel</label>
+            <label htmlFor="current" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-neutral-500">{t('Mot de passe actuel')}</label>
             <input id="current" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-4 py-3 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]" required />
           </div>
           <div>
-            <label htmlFor="new" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-neutral-500">Nouveau mot de passe</label>
-            <input id="new" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-4 py-3 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]" placeholder="Min 8 caractères, 1 majuscule, 1 chiffre" required minLength={8} />
+            <label htmlFor="new" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-neutral-500">{t('Nouveau mot de passe')}</label>
+            <input id="new" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-4 py-3 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-500 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]" placeholder={t('Min 8 caractères, 1 majuscule, 1 chiffre')} required minLength={8} />
           </div>
           <button type="submit" disabled={isLoading} className="w-full rounded-xl gradient-btn px-4 py-3 text-sm font-semibold text-white shadow-md shadow-primary-500/25 transition-all hover:shadow-lg hover:shadow-primary-500/30 disabled:opacity-50">
-            {isLoading ? 'Changement...' : 'Changer le mot de passe'}
+            {isLoading ? t('Changement...') : t('Changer le mot de passe')}
           </button>
         </form>
       </div>

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Calendar, Clock, Users, ChevronRight } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { t, LOCALE } from '../../lib/i18n';
 import Card from '../ui/Card';
 import Skeleton from '../ui/Skeleton';
 import EmptyState from '../ui/EmptyState';
@@ -23,7 +24,7 @@ interface CalendarEventsResponse {
 
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' });
 }
 
 function isToday(dateStr: string): boolean {
@@ -99,7 +100,7 @@ export default function AgendaWidget() {
     return (
       <Card>
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-text-primary">Agenda</h3>
+          <h3 className="text-lg font-semibold text-text-primary">{t('Agenda')}</h3>
         </div>
         <Skeleton className="h-16 w-full" count={3} />
       </Card>
@@ -113,20 +114,20 @@ export default function AgendaWidget() {
   return (
     <Card>
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-text-primary">Agenda</h3>
+        <h3 className="text-lg font-semibold text-text-primary">{t('Agenda')}</h3>
         <a
           href="/calendar"
           className="flex items-center gap-1 text-xs font-medium text-accent hover:underline"
         >
-          Voir tout
+          {t('Voir tout')}
           <ChevronRight size={14} />
         </a>
       </div>
 
       {!hasEvents ? (
         <EmptyState
-          title="Aucun événement"
-          description="Votre agenda est vide pour aujourd'hui et demain"
+          title={t('Aucun événement')}
+          description={t("Votre agenda est vide pour aujourd'hui et demain")}
           icon={<Calendar size={40} strokeWidth={1} />}
         />
       ) : (
@@ -134,7 +135,7 @@ export default function AgendaWidget() {
           {today.length > 0 && (
             <div>
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-tertiary">
-                Aujourd'hui
+                {t("Aujourd'hui")}
               </h4>
               <div className="space-y-2">
                 {today.map((event) => (
@@ -147,7 +148,7 @@ export default function AgendaWidget() {
           {tomorrow.length > 0 && (
             <div>
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-tertiary">
-                Demain
+                {t('Demain')}
               </h4>
               <div className="space-y-2">
                 {tomorrow.map((event) => (

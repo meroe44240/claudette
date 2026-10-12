@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Plus, Trash2, Check, ArrowUp, Camera, Lock } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../ui/Toast';
+import { t } from '../../lib/i18n';
 
 // Éditeur du dossier que le client voit sur le portail (synthèse, cartes d'infos,
 // adéquation au poste, sections, photo). Aperçu à droite = rendu du portail.
@@ -83,8 +84,8 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
     mutationFn: () => api.put<Dossier>(`/candidats/${candidatId}/dossier`, {
       synthese, infos, adequation, sections: sectionsOut, manuel, coordonneesVisibles: coordonnees,
     }),
-    onSuccess: () => { refresh(); toast('success', 'Dossier client enregistré'); onClose(); },
-    onError: (e: any) => toast('error', e?.message || "Échec de l'enregistrement"),
+    onSuccess: () => { refresh(); toast('success', t('Dossier client enregistré')); onClose(); },
+    onError: (e: any) => toast('error', e?.message || t("Échec de l'enregistrement")),
   });
 
   const uploadPhoto = async (file: File) => {
@@ -94,13 +95,13 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
       const res = await fetch(`/api/v1/candidats/${candidatId}/photo`, { method: 'POST', headers: { ...authHeader() }, body: fd });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.message || body?.error || 'upload');
-      setPhotoUrl(body.photoUrl); refresh(); toast('success', 'Photo mise à jour');
-    } catch (e: any) { toast('error', e?.message && e.message !== 'upload' ? e.message : "Échec de l'envoi de la photo"); }
+      setPhotoUrl(body.photoUrl); refresh(); toast('success', t('Photo mise à jour'));
+    } catch (e: any) { toast('error', e?.message && e.message !== 'upload' ? e.message : t("Échec de l'envoi de la photo")); }
     finally { setPhotoBusy(false); if (fileRef.current) fileRef.current.value = ''; }
   };
   const removePhoto = async () => {
     try { await api.delete(`/candidats/${candidatId}/photo`); setPhotoUrl(null); refresh(); }
-    catch { toast('error', 'Échec de la suppression'); }
+    catch { toast('error', t('Échec de la suppression')); }
   };
 
   const prefillInfos = () => {
@@ -123,7 +124,7 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 92, background: 'rgba(26,21,51,.42)' }} />
-      <div role="dialog" aria-modal="true" aria-label="Dossier client" className="fmodal dcm" style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 93, width: 1120, maxWidth: '96vw', height: '90vh', background: '#fff', borderRadius: 22, boxShadow: '0 44px 96px -40px rgba(0,0,0,.55)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div role="dialog" aria-modal="true" aria-label={t('Dossier client')} className="fmodal dcm" style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 93, width: 1120, maxWidth: '96vw', height: '90vh', background: '#fff', borderRadius: 22, boxShadow: '0 44px 96px -40px rgba(0,0,0,.55)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <style>{`
           .dcm-body{ display:grid; grid-template-columns:minmax(0,1fr) 420px; flex:1; min-height:0; }
           @media (max-width:900px){ .dcm-body{ grid-template-columns:1fr; } .dcm-preview{ display:none; } }
@@ -131,13 +132,13 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
         {/* En-tête */}
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '18px 24px', borderBottom: `1px solid ${LINE}` }}>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 17.5, letterSpacing: '-.015em', color: INK }}>Dossier client</div>
-            <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>Ce que le client voit sur le portail pour {fullName || 'ce candidat'}</div>
+            <div style={{ fontWeight: 800, fontSize: 17.5, letterSpacing: '-.015em', color: INK }}>{t('Dossier client')}</div>
+            <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>{t('Ce que le client voit sur le portail pour {nom}', { nom: fullName || t('ce candidat') })}</div>
           </div>
-          <button onClick={onClose} aria-label="Fermer" style={iconBtn}><X size={16} /></button>
+          <button onClick={onClose} aria-label={t('Fermer')} style={iconBtn}><X size={16} /></button>
         </div>
 
-        {isLoading || !data ? <div style={{ padding: 40, color: MUTED }}>Chargement…</div> : (
+        {isLoading || !data ? <div style={{ padding: 40, color: MUTED }}>{t('Chargement…')}</div> : (
           <div className="dcm-body">
             {/* Formulaire */}
             <div style={{ overflowY: 'auto', padding: '6px 24px 24px' }}>
@@ -147,67 +148,67 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
                     ? <img src={photoUrl} alt="" style={{ width: 64, height: 64, borderRadius: 16, objectFit: 'cover', background: '#F2F3D8' }} />
                     : <span style={{ width: 64, height: 64, borderRadius: 16, background: '#F2F3D8', color: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 20 }}>{initials}</span>}
                   <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); }} />
-                  <button onClick={() => fileRef.current?.click()} disabled={photoBusy} style={{ ...addBtn, borderStyle: 'solid' }}><Camera size={14} />{photoBusy ? 'Envoi…' : photoUrl ? 'Changer la photo' : 'Ajouter une photo'}</button>
-                  {photoUrl && <button onClick={removePhoto} style={{ fontSize: 12.5, fontWeight: 700, color: MUTED, background: 'transparent', border: 'none', cursor: 'pointer' }}>Retirer</button>}
+                  <button onClick={() => fileRef.current?.click()} disabled={photoBusy} style={{ ...addBtn, borderStyle: 'solid' }}><Camera size={14} />{photoBusy ? t('Envoi…') : photoUrl ? t('Changer la photo') : t('Ajouter une photo')}</button>
+                  {photoUrl && <button onClick={removePhoto} style={{ fontSize: 12.5, fontWeight: 700, color: MUTED, background: 'transparent', border: 'none', cursor: 'pointer' }}>{t('Retirer')}</button>}
                 </div>
-                <div style={{ fontSize: 12, color: MUTED, marginTop: 7 }}>JPG, PNG ou WebP, 5 Mo max. Enregistrée tout de suite.</div>
+                <div style={{ fontSize: 12, color: MUTED, marginTop: 7 }}>{t('JPG, PNG ou WebP, 5 Mo max. Enregistrée tout de suite.')}</div>
               </Block>
 
-              <Block title="Synthèse">
-                <textarea value={synthese} onChange={(e) => setSynthese(e.target.value)} maxLength={SYNTHESE_MAX} rows={6} placeholder="Qui est le candidat, ce qu'il a fait, pourquoi il colle au poste" style={{ ...input, resize: 'vertical', lineHeight: 1.55 }} />
+              <Block title={t('Synthèse')}>
+                <textarea value={synthese} onChange={(e) => setSynthese(e.target.value)} maxLength={SYNTHESE_MAX} rows={6} placeholder={t("Qui est le candidat, ce qu'il a fait, pourquoi il colle au poste")} style={{ ...input, resize: 'vertical', lineHeight: 1.55 }} />
                 <div style={{ fontSize: 12, color: synthese.length >= SYNTHESE_MAX ? '#B5552B' : MUTED, marginTop: 5, textAlign: 'right' }}>{synthese.length} / {SYNTHESE_MAX}</div>
               </Block>
 
-              <Block title="Cartes d'infos" right={infos.length === 0 ? <button onClick={prefillInfos} style={addBtn}>Pré-remplir depuis la fiche</button> : undefined}>
+              <Block title={t("Cartes d'infos")} right={infos.length === 0 ? <button onClick={prefillInfos} style={addBtn}>{t('Pré-remplir depuis la fiche')}</button> : undefined}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   {infos.map((it, i) => (
                     <div key={i} style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
-                      <input value={it.label} onChange={(e) => setInfos(infos.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} placeholder="Intitulé" style={{ ...input, flex: '0 0 34%' }} />
-                      <input value={it.value} onChange={(e) => setInfos(infos.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} placeholder="Valeur" style={{ ...input, flex: 1 }} />
-                      <button onClick={() => setInfos(move(infos, i))} disabled={i === 0} aria-label="Monter" style={{ ...iconBtn, opacity: i === 0 ? 0.35 : 1 }}><ArrowUp size={14} /></button>
-                      <button onClick={() => setInfos(infos.filter((_, j) => j !== i))} aria-label="Supprimer" style={iconBtn}><Trash2 size={14} /></button>
+                      <input value={it.label} onChange={(e) => setInfos(infos.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} placeholder={t('Intitulé')} style={{ ...input, flex: '0 0 34%' }} />
+                      <input value={it.value} onChange={(e) => setInfos(infos.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} placeholder={t('Valeur')} style={{ ...input, flex: 1 }} />
+                      <button onClick={() => setInfos(move(infos, i))} disabled={i === 0} aria-label={t('Monter')} style={{ ...iconBtn, opacity: i === 0 ? 0.35 : 1 }}><ArrowUp size={14} /></button>
+                      <button onClick={() => setInfos(infos.filter((_, j) => j !== i))} aria-label={t('Supprimer')} style={iconBtn}><Trash2 size={14} /></button>
                     </div>
                   ))}
                 </div>
-                <button onClick={() => setInfos([...infos, { label: '', value: '' }])} style={{ ...addBtn, marginTop: 8 }}><Plus size={14} />Ajouter une carte</button>
+                <button onClick={() => setInfos([...infos, { label: '', value: '' }])} style={{ ...addBtn, marginTop: 8 }}><Plus size={14} />{t('Ajouter une carte')}</button>
               </Block>
 
-              <Block title="Adéquation au poste">
+              <Block title={t('Adéquation au poste')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   {adequation.map((b, i) => (
                     <div key={i} style={{ display: 'flex', gap: 7, alignItems: 'flex-start' }}>
                       <textarea value={b} onChange={(e) => setAdequation(adequation.map((x, j) => j === i ? e.target.value : x))} rows={2} style={{ ...input, flex: 1, resize: 'vertical', lineHeight: 1.5 }} />
-                      <button onClick={() => setAdequation(move(adequation, i))} disabled={i === 0} aria-label="Monter" style={{ ...iconBtn, opacity: i === 0 ? 0.35 : 1 }}><ArrowUp size={14} /></button>
-                      <button onClick={() => setAdequation(adequation.filter((_, j) => j !== i))} aria-label="Supprimer" style={iconBtn}><Trash2 size={14} /></button>
+                      <button onClick={() => setAdequation(move(adequation, i))} disabled={i === 0} aria-label={t('Monter')} style={{ ...iconBtn, opacity: i === 0 ? 0.35 : 1 }}><ArrowUp size={14} /></button>
+                      <button onClick={() => setAdequation(adequation.filter((_, j) => j !== i))} aria-label={t('Supprimer')} style={iconBtn}><Trash2 size={14} /></button>
                     </div>
                   ))}
                 </div>
-                {adequation.length > 8 && <div style={{ fontSize: 12, color: '#B5552B', marginTop: 7 }}>Le portail n'affiche que les 8 premiers points.</div>}
-                <button onClick={() => setAdequation([...adequation, ''])} style={{ ...addBtn, marginTop: 8 }}><Plus size={14} />Ajouter un point</button>
+                {adequation.length > 8 && <div style={{ fontSize: 12, color: '#B5552B', marginTop: 7 }}>{t("Le portail n'affiche que les 8 premiers points.")}</div>}
+                <button onClick={() => setAdequation([...adequation, ''])} style={{ ...addBtn, marginTop: 8 }}><Plus size={14} />{t('Ajouter un point')}</button>
               </Block>
 
-              <Block title="Sections (parcours, motivations…)">
+              <Block title={t('Sections (parcours, motivations…)')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {sections.map((s, i) => (
                     <div key={i} style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: 10, background: '#FDFDF8' }}>
                       <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
-                        <input value={s.title} onChange={(e) => setSections(sections.map((x, j) => j === i ? { ...x, title: e.target.value } : x))} placeholder="Titre (ex. Parcours)" style={{ ...input, flex: 1, fontWeight: 700 }} />
-                        <button onClick={() => setSections(move(sections, i))} disabled={i === 0} aria-label="Monter" style={{ ...iconBtn, opacity: i === 0 ? 0.35 : 1 }}><ArrowUp size={14} /></button>
-                        <button onClick={() => setSections(sections.filter((_, j) => j !== i))} aria-label="Supprimer la section" style={iconBtn}><Trash2 size={14} /></button>
+                        <input value={s.title} onChange={(e) => setSections(sections.map((x, j) => j === i ? { ...x, title: e.target.value } : x))} placeholder={t('Titre (ex. Parcours)')} style={{ ...input, flex: 1, fontWeight: 700 }} />
+                        <button onClick={() => setSections(move(sections, i))} disabled={i === 0} aria-label={t('Monter')} style={{ ...iconBtn, opacity: i === 0 ? 0.35 : 1 }}><ArrowUp size={14} /></button>
+                        <button onClick={() => setSections(sections.filter((_, j) => j !== i))} aria-label={t('Supprimer la section')} style={iconBtn}><Trash2 size={14} /></button>
                       </div>
-                      <textarea value={s.text} onChange={(e) => setSections(sections.map((x, j) => j === i ? { ...x, text: e.target.value } : x))} rows={4} placeholder="Une ligne par élément" style={{ ...input, marginTop: 7, resize: 'vertical', lineHeight: 1.5 }} />
+                      <textarea value={s.text} onChange={(e) => setSections(sections.map((x, j) => j === i ? { ...x, text: e.target.value } : x))} rows={4} placeholder={t('Une ligne par élément')} style={{ ...input, marginTop: 7, resize: 'vertical', lineHeight: 1.5 }} />
                     </div>
                   ))}
                 </div>
-                <button onClick={() => setSections([...sections, { title: sections.length === 0 ? 'Parcours' : '', text: '' }])} style={{ ...addBtn, marginTop: 8 }}><Plus size={14} />Ajouter une section</button>
+                <button onClick={() => setSections([...sections, { title: sections.length === 0 ? 'Parcours' : '', text: '' }])} style={{ ...addBtn, marginTop: 8 }}><Plus size={14} />{t('Ajouter une section')}</button>
               </Block>
 
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 24, padding: '12px 14px', borderRadius: 12, background: '#F6F5EC', cursor: 'pointer' }}>
                 <input type="checkbox" checked={coordonnees} onChange={(e) => setCoordonnees(e.target.checked)} style={{ marginTop: 3 }} />
                 <span>
-                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: INK }}>Montrer les coordonnées au client</span>
+                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: INK }}>{t('Montrer les coordonnées au client')}</span>
                   <span style={{ display: 'block', fontSize: 12.5, color: MUTED, marginTop: 2 }}>
-                    {[data.contact.email, data.contact.telephone, data.contact.linkedinUrl ? 'LinkedIn' : null].filter(Boolean).join(' · ') || 'Aucune coordonnée sur la fiche'}
+                    {[data.contact.email, data.contact.telephone, data.contact.linkedinUrl ? 'LinkedIn' : null].filter(Boolean).join(' · ') || t('Aucune coordonnée sur la fiche')}
                   </span>
                 </span>
               </label>
@@ -215,15 +216,15 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 10, padding: '12px 14px', borderRadius: 12, background: '#F6F5EC', cursor: 'pointer' }}>
                 <input type="checkbox" checked={manuel} onChange={(e) => setManuel(e.target.checked)} style={{ marginTop: 3 }} />
                 <span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 700, color: INK }}><Lock size={13} />Protéger ce dossier</span>
-                  <span style={{ display: 'block', fontSize: 12.5, color: MUTED, marginTop: 2 }}>Un nouveau CV importé ne remplacera pas la synthèse ni le dossier.</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, fontWeight: 700, color: INK }}><Lock size={13} />{t('Protéger ce dossier')}</span>
+                  <span style={{ display: 'block', fontSize: 12.5, color: MUTED, marginTop: 2 }}>{t('Un nouveau CV importé ne remplacera pas la synthèse ni le dossier.')}</span>
                 </span>
               </label>
             </div>
 
             {/* Aperçu portail */}
             <div className="dcm-preview" style={{ overflowY: 'auto', background: '#F4F3EC', borderLeft: `1px solid ${LINE}`, padding: 18 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: MUTED, marginBottom: 10 }}>Aperçu côté client</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: MUTED, marginBottom: 10 }}>{t('Aperçu côté client')}</div>
               <div style={{ borderRadius: 16, overflow: 'hidden', background: '#FCFCF7', boxShadow: '0 18px 40px -28px rgba(26,21,51,.5)' }}>
                 <div style={{ background: BRAND, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
                   {photoUrl
@@ -285,8 +286,8 @@ export default function DossierClientModal({ candidatId, prefill, onClose }: { c
 
         {/* Pied */}
         <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 24px', borderTop: `1px solid ${LINE}` }}>
-          <button onClick={onClose} style={{ fontSize: 13.5, fontWeight: 700, color: TEXT, background: '#fff', border: '1px solid rgba(34,23,122,.16)', borderRadius: 10, padding: '10px 16px', cursor: 'pointer' }}>Annuler</button>
-          <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending || !data} style={{ fontSize: 13.5, fontWeight: 800, color: CREAM, background: BRAND, border: 'none', borderRadius: 10, padding: '10px 18px', cursor: 'pointer', opacity: saveMut.isPending ? 0.7 : 1 }}>{saveMut.isPending ? 'Enregistrement…' : 'Enregistrer'}</button>
+          <button onClick={onClose} style={{ fontSize: 13.5, fontWeight: 700, color: TEXT, background: '#fff', border: '1px solid rgba(34,23,122,.16)', borderRadius: 10, padding: '10px 16px', cursor: 'pointer' }}>{t('Annuler')}</button>
+          <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending || !data} style={{ fontSize: 13.5, fontWeight: 800, color: CREAM, background: BRAND, border: 'none', borderRadius: 10, padding: '10px 18px', cursor: 'pointer', opacity: saveMut.isPending ? 0.7 : 1 }}>{saveMut.isPending ? t('Enregistrement…') : t('Enregistrer')}</button>
         </div>
       </div>
     </>

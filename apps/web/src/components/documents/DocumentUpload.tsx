@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from '../ui/Toast';
+import { t, LOCALE } from '../../lib/i18n';
 import Button from '../ui/Button';
 
 // ── Types ──────────────────────────────────────────
@@ -69,14 +70,14 @@ function getFileIcon(mimeType: string) {
 }
 
 function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  if (bytes < 1024) return t('{n} o', { n: bytes });
+  if (bytes < 1024 * 1024) return t('{n} Ko', { n: (bytes / 1024).toFixed(1) });
+  return t('{n} Mo', { n: (bytes / (1024 * 1024)).toFixed(1) });
 }
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString('fr-FR', {
+  return d.toLocaleDateString(LOCALE, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -87,11 +88,11 @@ function validateFile(file: File): string | null {
   if (!ALLOWED_TYPES.includes(file.type)) {
     const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      return `Type de fichier non accepté. Acceptés: PDF, DOC, DOCX, PNG, JPG`;
+      return t('Type de fichier non accepté. Acceptés: PDF, DOC, DOCX, PNG, JPG');
     }
   }
   if (file.size > MAX_SIZE) {
-    return `Fichier trop volumineux (${formatFileSize(file.size)}). Max: 10 Mo`;
+    return t('Fichier trop volumineux ({taille}). Max: 10 Mo', { taille: formatFileSize(file.size) });
   }
   return null;
 }
@@ -115,7 +116,7 @@ async function uploadFile(file: File, entityType: string, entityId: string): Pro
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.message || 'Erreur lors du téléversement');
+    throw new Error(data.message || t('Erreur lors du téléversement'));
   }
 
   return response.json();
@@ -153,7 +154,7 @@ async function deleteDocument(id: string, entityType: string, entityId: string):
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.message || 'Erreur lors de la suppression');
+    throw new Error(data.message || t('Erreur lors de la suppression'));
   }
 }
 
@@ -177,10 +178,10 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
     mutationFn: (docId: string) => deleteDocument(docId, entityType, entityId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents', entityType, entityId] });
-      toast('success', 'Document supprimé');
+      toast('success', t('Document supprimé'));
     },
     onError: () => {
-      toast('error', 'Erreur lors de la suppression du document');
+      toast('error', t('Erreur lors de la suppression du document'));
     },
   });
 
@@ -235,12 +236,12 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
 
         // Refresh document list
         queryClient.invalidateQueries({ queryKey: ['documents', entityType, entityId] });
-        toast('success', `${file.name} téléversé avec succès`);
+        toast('success', t('{nom} téléversé avec succès', { nom: file.name }));
       } catch (err: any) {
         setUploads((prev) =>
           prev.map((u) =>
             u.file === file
-              ? { ...u, status: 'error', error: err.message || 'Erreur' }
+              ? { ...u, status: 'error', error: err.message || t('Erreur') }
               : u,
           ),
         );
@@ -250,7 +251,7 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
           setUploads((prev) => prev.filter((u) => u.file !== file));
         }, 5000);
 
-        toast('error', `Erreur: ${err.message || 'Téléversement échoué'}`);
+        toast('error', t('Erreur: {message}', { message: err.message || t('Téléversement échoué') }));
       }
     }
   }, [entityType, entityId, queryClient]);
@@ -319,10 +320,10 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
           </div>
           <div>
             <p className="text-sm font-medium text-neutral-700">
-              {isDragOver ? 'Déposez vos fichiers ici' : 'Glissez-déposez vos fichiers ici'}
+              {isDragOver ? t('Déposez vos fichiers ici') : t('Glissez-déposez vos fichiers ici')}
             </p>
             <p className="mt-1 text-xs text-neutral-400">
-              ou <span className="text-[#22177A] underline">parcourir</span> {'\u2022'} PDF, DOC, DOCX, PNG, JPG {'\u2022'} Max 10 Mo
+              {t('ou')} <span className="text-[#22177A] underline">{t('parcourir')}</span> {'\u2022'} PDF, DOC, DOCX, PNG, JPG {'\u2022'} {t('Max 10 Mo')}
             </p>
           </div>
         </div>
@@ -391,7 +392,7 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
         </div>
       ) : documents.length === 0 ? (
         <div className="py-4 text-center text-sm text-neutral-400">
-          Aucun document
+          {t('Aucun document')}
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -432,7 +433,7 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600"
-                    title="Télécharger"
+                    title={t('Télécharger')}
                   >
                     <Download size={15} />
                   </a>
@@ -445,7 +446,7 @@ export default function DocumentUpload({ entityType, entityId }: DocumentUploadP
                     }}
                     disabled={deleteMutation.isPending}
                     className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
-                    title="Supprimer"
+                    title={t('Supprimer')}
                   >
                     <Trash2 size={15} />
                   </button>

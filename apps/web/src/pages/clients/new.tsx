@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Building2, Plus, Check, Loader2 } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { t } from '../../lib/i18n';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
 import Input, { Textarea } from '../../components/ui/Input';
@@ -15,28 +16,28 @@ import { useAutosave } from '../../hooks/useAutosave';
 import PappersAutocomplete, { type PappersSuggestionData } from '../../components/entreprises/PappersAutocomplete';
 
 const roleContactOptions = [
-  { value: '', label: 'Sélectionner...' },
+  { value: '', label: t('Sélectionner...') },
   { value: 'HIRING_MANAGER', label: 'Hiring Manager' },
-  { value: 'DRH', label: 'DRH' },
+  { value: 'DRH', label: t('DRH') },
   { value: 'PROCUREMENT', label: 'Procurement' },
   { value: 'CEO', label: 'CEO' },
-  { value: 'AUTRE', label: 'Autre' },
+  { value: 'AUTRE', label: t('Autre') },
 ];
 
 const statutClientOptions = [
   { value: 'LEAD', label: 'Lead' },
-  { value: 'PREMIER_CONTACT', label: 'Premier contact' },
-  { value: 'BESOIN_QUALIFIE', label: 'Besoin qualifié' },
-  { value: 'PROPOSITION_ENVOYEE', label: 'Proposition envoyée' },
-  { value: 'MANDAT_SIGNE', label: 'Mandat signé' },
-  { value: 'RECURRENT', label: 'Récurrent' },
-  { value: 'INACTIF', label: 'Inactif' },
+  { value: 'PREMIER_CONTACT', label: t('Premier contact') },
+  { value: 'BESOIN_QUALIFIE', label: t('Besoin qualifié') },
+  { value: 'PROPOSITION_ENVOYEE', label: t('Proposition envoyée') },
+  { value: 'MANDAT_SIGNE', label: t('Mandat signé') },
+  { value: 'RECURRENT', label: t('Récurrent') },
+  { value: 'INACTIF', label: t('Inactif') },
 ];
 
 const typeClientOptions = [
   { value: 'INBOUND', label: '📩 Inbound' },
   { value: 'OUTBOUND', label: '🎯 Outbound' },
-  { value: 'RESEAU', label: '🤝 Réseau' },
+  { value: 'RESEAU', label: t('🤝 Réseau') },
 ];
 
 interface Entreprise {
@@ -103,7 +104,7 @@ export default function ClientNewPage() {
   useEffect(() => {
     if (restoredData) {
       setForm(restoredData);
-      toast('success', 'Brouillon restauré');
+      toast('success', t('Brouillon restauré'));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -180,13 +181,13 @@ export default function ClientNewPage() {
 
       setForm((prev) => ({ ...prev, entrepriseId: created.id }));
       setPappersEntreprise({ nom: data.nom, siren: data.siren });
-      toast('success', `Entreprise "${data.nom}" créée via Pappers`);
+      toast('success', t('Entreprise "{nom}" créée via Pappers', { nom: data.nom }));
 
       // Refresh entreprises list
       queryClient.invalidateQueries({ queryKey: ['entreprises'] });
     } catch (err: any) {
       // If duplicate, try to find the existing one
-      toast('error', err.message || 'Erreur lors de la création de l\'entreprise');
+      toast('error', err.message || t("Erreur lors de la création de l'entreprise"));
     } finally {
       setCreatingEntreprise(false);
     }
@@ -197,7 +198,7 @@ export default function ClientNewPage() {
       api.post<{ id: string }>('/clients', payload),
     onSuccess: (created) => {
       clearDraft();
-      toast('success', 'Client créé');
+      toast('success', t('Client créé'));
       navigate(`/clients/${created.id}`);
     },
     onError: (error: any) => {
@@ -208,7 +209,7 @@ export default function ClientNewPage() {
         }
         setErrors(errs);
       } else {
-        toast('error', error.message || 'Erreur lors de la création');
+        toast('error', error.message || t('Erreur lors de la création'));
       }
     },
   });
@@ -217,8 +218,8 @@ export default function ClientNewPage() {
     e.preventDefault();
 
     const newErrors: Partial<Record<keyof FormData, string>> = {};
-    if (!form.nom.trim()) newErrors.nom = 'Le nom est requis';
-    if (!form.entrepriseId) newErrors.entrepriseId = "L'entreprise est requise";
+    if (!form.nom.trim()) newErrors.nom = t('Le nom est requis');
+    if (!form.entrepriseId) newErrors.entrepriseId = t("L'entreprise est requise");
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -252,10 +253,10 @@ export default function ClientNewPage() {
   return (
     <div>
       <PageHeader
-        title="Nouveau client"
+        title={t('Nouveau client')}
         breadcrumbs={[
-          { label: 'Clients', href: '/clients' },
-          { label: 'Nouveau' },
+          { label: t('Clients'), href: '/clients' },
+          { label: t('Nouveau') },
         ]}
       />
 
@@ -264,18 +265,18 @@ export default function ClientNewPage() {
         <Card>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <Input
-              label="Nom *"
+              label={t('Nom *')}
               value={form.nom}
               onChange={set('nom')}
-              placeholder="Nom du contact"
+              placeholder={t('Nom du contact')}
               required
               error={errors.nom}
             />
             <Input
-              label="Prénom"
+              label={t('Prénom')}
               value={form.prenom}
               onChange={set('prenom')}
-              placeholder="Prénom"
+              placeholder={t('Prénom')}
             />
 
             <Input
@@ -283,11 +284,11 @@ export default function ClientNewPage() {
               type="email"
               value={form.email}
               onChange={set('email')}
-              placeholder="email@exemple.com"
+              placeholder={t('email@exemple.com')}
               error={errors.email}
             />
             <Input
-              label="Téléphone"
+              label={t('Téléphone')}
               type="tel"
               value={form.telephone}
               onChange={set('telephone')}
@@ -295,17 +296,17 @@ export default function ClientNewPage() {
             />
 
             <Input
-              label="Poste"
+              label={t('Poste')}
               value={form.poste}
               onChange={set('poste')}
-              placeholder="Directeur des ressources humaines"
+              placeholder={t('Directeur des ressources humaines')}
             />
             <Select
-              label="Rôle contact"
+              label={t('Rôle contact')}
               options={roleContactOptions}
               value={form.roleContact}
               onChange={(val) => setForm((prev) => ({ ...prev, roleContact: val }))}
-              placeholder="Sélectionner un rôle"
+              placeholder={t('Sélectionner un rôle')}
             />
 
             <Input
@@ -318,7 +319,7 @@ export default function ClientNewPage() {
             {/* Entreprise — Select existing OR create from Pappers */}
             <div>
               <Select
-                label="Entreprise *"
+                label={t('Entreprise *')}
                 options={entrepriseOptions}
                 value={form.entrepriseId}
                 onChange={(val) => {
@@ -326,7 +327,7 @@ export default function ClientNewPage() {
                   setPappersEntreprise(null);
                   if (errors.entrepriseId) setErrors((prev) => ({ ...prev, entrepriseId: undefined }));
                 }}
-                placeholder="Sélectionner une entreprise"
+                placeholder={t('Sélectionner une entreprise')}
                 searchable
                 error={errors.entrepriseId}
               />
@@ -336,14 +337,14 @@ export default function ClientNewPage() {
                 <div className="mt-2">
                   <div className="flex items-center gap-2 mb-1.5">
                     <div className="flex-1 border-t border-neutral-200" />
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">ou créer via Pappers</span>
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">{t('ou créer via Pappers')}</span>
                     <div className="flex-1 border-t border-neutral-200" />
                   </div>
                   <PappersAutocomplete onSelect={handlePappersSelect} />
                   {creatingEntreprise && (
                     <div className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-600">
                       <Loader2 size={12} className="animate-spin" />
-                      Création de l'entreprise en cours...
+                      {t("Création de l'entreprise en cours...")}
                     </div>
                   )}
                 </div>
@@ -371,25 +372,25 @@ export default function ClientNewPage() {
                     }}
                     className="text-xs text-emerald-600 hover:text-emerald-800 underline"
                   >
-                    Changer
+                    {t('Changer')}
                   </button>
                 </div>
               )}
             </div>
 
             <Select
-              label="Statut client"
+              label={t('Statut client')}
               options={statutClientOptions}
               value={form.statutClient}
               onChange={(val) => setForm((prev) => ({ ...prev, statutClient: val }))}
-              placeholder="Sélectionner un statut"
+              placeholder={t('Sélectionner un statut')}
             />
             <Select
-              label="Type client"
+              label={t('Type client')}
               options={typeClientOptions}
               value={form.typeClient}
               onChange={(val) => setForm((prev) => ({ ...prev, typeClient: val }))}
-              placeholder="Sélectionner un type"
+              placeholder={t('Sélectionner un type')}
             />
 
             <div className="sm:col-span-2">
@@ -397,7 +398,7 @@ export default function ClientNewPage() {
                 label="Notes"
                 value={form.notes}
                 onChange={set('notes')}
-                placeholder="Notes sur le contact client..."
+                placeholder={t('Notes sur le contact client...')}
               />
             </div>
           </div>
@@ -406,7 +407,7 @@ export default function ClientNewPage() {
             <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
               <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-500" />
               <div className="text-sm text-amber-800">
-                <span>Un client avec cet email existe d&eacute;j&agrave; : </span>
+                <span>{t('Un client avec cet email existe déjà : ')}</span>
                 <Link
                   to={`/clients/${duplicateMatch.id}`}
                   className="font-medium underline hover:text-amber-900"
@@ -419,10 +420,10 @@ export default function ClientNewPage() {
 
           <div className="mt-6 flex items-center justify-end gap-3">
             <Button type="button" variant="ghost" onClick={() => navigate('/clients')}>
-              Annuler
+              {t('Annuler')}
             </Button>
             <Button type="submit" disabled={mutation.isPending || creatingEntreprise}>
-              {mutation.isPending ? 'Création...' : 'Créer'}
+              {mutation.isPending ? t('Création...') : t('Créer')}
             </Button>
           </div>
         </Card>
