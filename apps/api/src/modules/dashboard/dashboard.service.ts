@@ -643,6 +643,8 @@ export async function getRecruteurStats(userId: string) {
         { createdById: userId },
         { assignedToId: userId },
         { sourceurId: userId },
+        { recruteurId: userId },
+        { salesId: userId },
         { candidatures: { some: { createdById: userId } } },
       ],
     },
@@ -840,7 +842,7 @@ export async function getSpaData(
         changedAt: { gte: startOfMonth, lte: endOfMonth },
         ...(isTeam ? {} : { OR: [
           { changedById: userId },
-          { candidature: { mandat: { OR: [{ assignedToId: userId }, { sourceurId: userId }] } } },
+          { candidature: { mandat: { OR: [{ assignedToId: userId }, { sourceurId: userId }, { recruteurId: userId }, { salesId: userId }] } } },
         ] }),
       },
     }),
@@ -852,7 +854,7 @@ export async function getSpaData(
         changedAt: { gte: startOfMonth, lte: endOfMonth },
         ...(isTeam ? {} : { OR: [
           { changedById: userId },
-          { candidature: { mandat: { OR: [{ assignedToId: userId }, { sourceurId: userId }] } } },
+          { candidature: { mandat: { OR: [{ assignedToId: userId }, { sourceurId: userId }, { recruteurId: userId }, { salesId: userId }] } } },
         ] }),
       },
     }),
@@ -886,7 +888,8 @@ export async function getSpaData(
   const mandatsRaw = await prisma.mandat.findMany({
     where: {
       statut: { in: ['OUVERT', 'EN_COURS'] },
-      ...(isTeam ? {} : { OR: [{ createdById: userId }, { assignedToId: userId }, { candidatures: { some: { createdById: userId } } }] }),
+      // « Mes mandats » = créés par moi, ou dont je suis le responsable, le recruteur, le commercial ou le sourceur
+      ...(isTeam ? {} : { OR: [{ createdById: userId }, { assignedToId: userId }, { recruteurId: userId }, { salesId: userId }, { sourceurId: userId }, { candidatures: { some: { createdById: userId } } }] }),
     },
     select: {
       id: true,
