@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogOut, Menu } from 'lucide-react';
+import { LogOut, Menu, Languages } from 'lucide-react';
 import Sidebar from '../ui/Sidebar';
 import SearchBar from '../ui/SearchBar';
 import EntityPreview from '../ui/EntityPreview';
@@ -13,6 +13,7 @@ import { ToastContainer } from '../ui/Toast';
 import { useAuthStore } from '../../stores/auth-store';
 import { api } from '../../lib/api-client';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { t, isEn, setLang } from '../../lib/i18n';
 
 export default function MainLayout() {
   const { user, logout } = useAuthStore();
@@ -78,7 +79,7 @@ export default function MainLayout() {
           <button
             onClick={() => setSidebarOpen(true)}
             className="mr-2 flex h-10 w-10 items-center justify-center rounded-lg text-neutral-600 hover:bg-neutral-100 transition-colors md:hidden"
-            aria-label="Ouvrir le menu"
+            aria-label={t('Ouvrir le menu')}
           >
             <Menu size={22} />
           </button>
@@ -88,7 +89,7 @@ export default function MainLayout() {
               onSearch={handleSearch}
               onSelect={handleSearchSelect}
               onCreate={handleSearchCreate}
-              placeholder="Rechercher candidats, clients, mandats... (Ctrl+K)"
+              placeholder={t('Rechercher candidats, clients, mandats... (Ctrl+K)')}
             />
           </div>
 
@@ -101,9 +102,10 @@ export default function MainLayout() {
                 </button>
               }
               items={[
-                { label: 'Mon Espace', onClick: () => navigate('/mon-espace') },
-                { label: 'Paramètres', onClick: () => navigate('/settings') },
-                { label: 'Déconnexion', onClick: logout, icon: <LogOut size={14} />, danger: true },
+                { label: t('Mon Espace'), onClick: () => navigate('/mon-espace') },
+                { label: t('Paramètres'), onClick: () => navigate('/settings') },
+                { label: isEn ? 'Passer en français' : 'Switch to English', onClick: () => setLang(isEn ? 'fr' : 'en'), icon: <Languages size={14} /> },
+                { label: t('Déconnexion'), onClick: logout, icon: <LogOut size={14} />, danger: true },
               ]}
             />
           </div>
@@ -138,7 +140,7 @@ export default function MainLayout() {
       {showHelp && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowHelp(false)}>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="mb-4 text-lg font-semibold text-neutral-900">Raccourcis clavier</h3>
+            <h3 className="mb-4 text-lg font-semibold text-neutral-900">{t('Raccourcis clavier')}</h3>
             <div className="space-y-2">
               {shortcuts.map(s => (
                 <div key={s.key} className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-neutral-50">
@@ -149,7 +151,7 @@ export default function MainLayout() {
                 </div>
               ))}
             </div>
-            <p className="mt-4 text-xs text-neutral-400 text-center">Appuyez sur / pour afficher/masquer</p>
+            <p className="mt-4 text-xs text-neutral-400 text-center">{t('Appuyez sur / pour afficher/masquer')}</p>
           </div>
         </div>
       )}
