@@ -1285,7 +1285,7 @@ async function demanderClassement(
     if (!user?.slackUserId) return;
 
     const startDate = classified.startTime
-      ? new Date(classified.startTime).toLocaleString('fr-FR', {
+      ? new Date(classified.startTime).toLocaleString('en-GB', {
           weekday: 'short',
           day: '2-digit',
           month: '2-digit',
@@ -1293,7 +1293,7 @@ async function demanderClassement(
           minute: '2-digit',
           timeZone: 'Europe/Paris',
         })
-      : 'Heure inconnue';
+      : 'Unknown time';
 
     const avec = classified.attendees
       .filter((a) => a.role !== 'internal')
@@ -1308,19 +1308,19 @@ async function demanderClassement(
         text: {
           type: 'mrkdwn',
           text: [
-            `❓ *RDV client ou présentation ?*`,
+            `❓ *Client meeting or presentation?*`,
             ``,
             `📅 *${classified.summary}* · ${startDate}`,
-            `👥 Avec : ${avec || 'participants inconnus'}`,
+            `👥 With: ${avec || 'unknown attendees'}`,
             ``,
-            `<${lien}|Répondre dans l'ATS>`,
-            `_Rien n'est annoncé ni compté tant que tu n'as pas répondu._`,
+            `<${lien}|Answer in the ATS>`,
+            `_Nothing is announced or counted until you answer._`,
           ].join('\n'),
         },
       },
     ];
 
-    const sent = await sendSlackDm(user.slackUserId, { blocks, text: `RDV client ou présentation ? ${classified.summary}` });
+    const sent = await sendSlackDm(user.slackUserId, { blocks, text: `Client meeting or presentation? ${classified.summary}` });
     if (sent) {
       console.log(`[CalendarWatcher] Slack DM "à classer" sent for event: ${classified.summary}`);
     }
