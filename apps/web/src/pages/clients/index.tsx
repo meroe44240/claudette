@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, ChevronDown, X, Phone, Mail } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
+import { t, LOCALE } from '../../lib/i18n';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Client {
@@ -27,12 +28,12 @@ interface PaginatedResponse { data: Client[]; meta: { total: number; page: numbe
 // ─── META ───────────────────────────────────────────
 const STATUT_META: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
   LEAD: { label: 'Lead', bg: 'rgba(34,23,122,.06)', fg: '#22177A', dot: '#8E7CC3' },
-  PREMIER_CONTACT: { label: 'Premier contact', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
-  BESOIN_QUALIFIE: { label: 'Besoin qualifié', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
-  PROPOSITION_ENVOYEE: { label: 'Proposition', bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
-  MANDAT_SIGNE: { label: 'Client actif', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
-  RECURRENT: { label: 'Récurrent', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
-  INACTIF: { label: 'Inactif', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
+  PREMIER_CONTACT: { label: t('Premier contact'), bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  BESOIN_QUALIFIE: { label: t('Besoin qualifié'), bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
+  PROPOSITION_ENVOYEE: { label: t('Proposition'), bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
+  MANDAT_SIGNE: { label: t('Client actif'), bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  RECURRENT: { label: t('Récurrent'), bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  INACTIF: { label: t('Inactif'), bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
 };
 const TYPE_META: Record<string, { label: string; bg: string; fg: string }> = {
   INBOUND: { label: 'Inbound', bg: '#F2F3D8', fg: '#22177A' },
@@ -83,7 +84,7 @@ function ChipDropdown({ label, options, value, open, onToggle, onChange }: {
 
 // ═════════════════════════════════════════════════════
 export default function ClientsPage() {
-  usePageTitle('Clients');
+  usePageTitle(t('Clients'));
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const entrepriseId = searchParams.get('entrepriseId') || undefined;
@@ -150,11 +151,11 @@ export default function ClientsPage() {
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>CRM</div>
-          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Clients</h1>
+          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>{t('Clients')}</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{total.toLocaleString('fr-FR')} clients</span>
-          <button onClick={() => navigate('/clients/new')} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />Nouveau client</button>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{t('{n} clients', { n: total.toLocaleString(LOCALE) })}</span>
+          <button onClick={() => navigate('/clients/new')} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />{t('Nouveau client')}</button>
         </div>
       </div>
 
@@ -162,33 +163,33 @@ export default function ClientsPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', marginTop: 22 }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
           <Search size={15} color="#9A96AE" strokeWidth={2.2} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)' }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un client, une société…" style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 36px', borderRadius: 11, border: '1px solid rgba(34,23,122,0.14)', background: '#FCFCF5', outline: 'none' }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('Rechercher un client, une société…')} style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 36px', borderRadius: 11, border: '1px solid rgba(34,23,122,0.14)', background: '#FCFCF5', outline: 'none' }} />
         </div>
         <ChipDropdown label="Type" options={TYPE_OPTIONS} value={filters.typeClient} open={openChip === 'type'} onToggle={() => setOpenChip(openChip === 'type' ? null : 'type')} onChange={v => setFilter('typeClient', v)} />
-        <ChipDropdown label="Statut" options={STATUT_OPTIONS} value={filters.statutClient} open={openChip === 'statut'} onToggle={() => setOpenChip(openChip === 'statut' ? null : 'statut')} onChange={v => setFilter('statutClient', v)} />
-        <ChipDropdown label="Secteur" options={secteurOptions} value={secteurSel} open={openChip === 'secteur'} onToggle={() => setOpenChip(openChip === 'secteur' ? null : 'secteur')} onChange={setSecteurSel} />
-        <ChipDropdown label="Ville" options={cityOptions} value={filters.city} open={openChip === 'city'} onToggle={() => setOpenChip(openChip === 'city' ? null : 'city')} onChange={v => setFilter('city', v)} />
+        <ChipDropdown label={t('Statut')} options={STATUT_OPTIONS} value={filters.statutClient} open={openChip === 'statut'} onToggle={() => setOpenChip(openChip === 'statut' ? null : 'statut')} onChange={v => setFilter('statutClient', v)} />
+        <ChipDropdown label={t('Secteur')} options={secteurOptions} value={secteurSel} open={openChip === 'secteur'} onToggle={() => setOpenChip(openChip === 'secteur' ? null : 'secteur')} onChange={setSecteurSel} />
+        <ChipDropdown label={t('Ville')} options={cityOptions} value={filters.city} open={openChip === 'city'} onToggle={() => setOpenChip(openChip === 'city' ? null : 'city')} onChange={v => setFilter('city', v)} />
       </div>
 
       {/* ACTIVE CHIPS */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 11 }}>
-        <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>Filtres</span>
-        {activeChips.length === 0 && <span style={{ fontSize: 12, color: '#C4C1D0' }}>aucun</span>}
+        <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>{t('Filtres')}</span>
+        {activeChips.length === 0 && <span style={{ fontSize: 12, color: '#C4C1D0' }}>{t('aucun')}</span>}
         {activeChips.map(ch => (
           <span key={ch.key + ch.value} className="kw" onClick={ch.onRemove} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 999, padding: '5px 11px', cursor: 'pointer' }}>{ch.label}<X size={11} strokeWidth={2.8} /></span>
         ))}
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#8A8699' }}>{rows.length} affichés · {total.toLocaleString('fr-FR')} au total</span>
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#8A8699' }}>{t('{n} affichés · {total} au total', { n: rows.length, total: total.toLocaleString(LOCALE) })}</span>
       </div>
 
       {/* TABLE */}
       <div style={{ marginTop: 18, background: '#fff', border: '1px solid rgba(34,23,122,0.08)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 2px rgba(34,23,122,0.04)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 14, padding: '14px 22px', background: '#F7F7EE', borderBottom: '1px solid rgba(34,23,122,0.08)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#8A8699' }}>
-          <span>Client</span><span>Société</span><span>Contact</span><span>Mandats</span><span>Secteur</span><span>Statut</span><span style={{ textAlign: 'right' }}>Type</span>
+          <span>{t('Client')}</span><span>{t('Société')}</span><span>{t('Contact')}</span><span>{t('Mandats')}</span><span>{t('Secteur')}</span><span>{t('Statut')}</span><span style={{ textAlign: 'right' }}>Type</span>
         </div>
         {isLoading ? (
           Array.from({ length: 8 }).map((_, i) => <div key={i} style={{ height: 67, borderBottom: '1px solid rgba(34,23,122,0.05)', background: i % 2 ? '#fff' : '#FCFCF5' }} />)
         ) : rows.length === 0 ? (
-          <div style={{ padding: '48px 20px', textAlign: 'center', color: '#8A8699' }}>Aucun client ne correspond aux filtres.</div>
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: '#8A8699' }}>{t('Aucun client ne correspond aux filtres.')}</div>
         ) : rows.map(c => {
           const st = STATUT_META[c.statutClient] ?? STATUT_META.LEAD;
           const ty = TYPE_META[(c.computedType || c.typeClient || '') as string];
@@ -214,7 +215,7 @@ export default function ClientsPage() {
               </div>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
                 <span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 15, color: c.mandatsActifs > 0 ? '#1A1533' : '#C4C1D0' }}>{c.mandatsActifs}</span>
-                {isStale(c) && <span title="Client dormant" style={{ width: 7, height: 7, borderRadius: '50%', background: '#B3261E' }} />}
+                {isStale(c) && <span title={t('Client dormant')} style={{ width: 7, height: 7, borderRadius: '50%', background: '#B3261E' }} />}
               </span>
               <span style={{ fontSize: 12, fontWeight: 700, color: '#4A4568', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.entreprise?.secteur || '—'}</span>
               <span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, borderRadius: 999, padding: '4px 11px', background: st.bg, color: st.fg, whiteSpace: 'nowrap' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: st.dot }} />{st.label}</span></span>
@@ -224,7 +225,7 @@ export default function ClientsPage() {
         })}
         {totalPages > 1 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 22px', fontSize: 13, color: '#8A8699' }}>
-            <span>Page {page} / {totalPages} · {total.toLocaleString('fr-FR')} clients</span>
+            <span>{t('Page {page} / {totalPages} · {total} clients', { page, totalPages, total: total.toLocaleString(LOCALE) })}</span>
             <div style={{ display: 'flex', gap: 6 }}>
               <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', color: page <= 1 ? '#C4C1D0' : '#22177A', cursor: page <= 1 ? 'default' : 'pointer' }}>‹</button>
               <span style={{ minWidth: 32, height: 32, borderRadius: 9, background: '#22177A', color: '#E6E9AF', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{page}</span>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { api } from '../../lib/api-client';
 import { toast } from '../ui/Toast';
+import { t } from '../../lib/i18n';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -21,13 +22,13 @@ import PlacementModal from './PlacementModal';
  */
 
 const MOTIF_REFUS_OPTIONS = [
-  { value: 'SALAIRE', label: 'Salaire' },
-  { value: 'PROFIL_PAS_ALIGNE', label: 'Profil pas aligné' },
-  { value: 'CANDIDAT_DECLINE', label: 'Candidat décline' },
-  { value: 'CLIENT_REFUSE', label: 'Client refuse' },
+  { value: 'SALAIRE', label: t('Salaire') },
+  { value: 'PROFIL_PAS_ALIGNE', label: t('Profil pas aligné') },
+  { value: 'CANDIDAT_DECLINE', label: t('Candidat décline') },
+  { value: 'CLIENT_REFUSE', label: t('Client refuse') },
   { value: 'TIMING', label: 'Timing' },
-  { value: 'POSTE_POURVU', label: 'Poste pourvu' },
-  { value: 'AUTRE', label: 'Autre' },
+  { value: 'POSTE_POURVU', label: t('Poste pourvu') },
+  { value: 'AUTRE', label: t('Autre') },
 ];
 
 interface Ctx {
@@ -53,8 +54,8 @@ export function useStageChange(onMoved?: () => void) {
       const { candidatureId, ...body } = p;
       return api.put(`/candidatures/${candidatureId}`, body);
     },
-    onSuccess: () => { toast('success', 'Candidat déplacé'); onMoved?.(); },
-    onError: (e: any) => toast('error', e?.message || 'Erreur lors du déplacement'),
+    onSuccess: () => { toast('success', t('Candidat déplacé')); onMoved?.(); },
+    onError: (e: any) => toast('error', e?.message || t('Erreur lors du déplacement')),
   });
 
   /** Déplace un candidat ; ouvre la modale requise si l'étape l'exige. */
@@ -72,12 +73,12 @@ export function useStageChange(onMoved?: () => void) {
 
   const candidateMsgField = (
     <label className="block text-sm">
-      <span className="mb-1 block font-medium text-text-primary">Message au candidat (optionnel)</span>
+      <span className="mb-1 block font-medium text-text-primary">{t('Message au candidat (optionnel)')}</span>
       <textarea
         value={candidateMsg}
         onChange={(e) => setCandidateMsg(e.target.value)}
         rows={3}
-        placeholder="En français : traduit en anglais pour son espace candidat."
+        placeholder={t('En français : traduit en anglais pour son espace candidat.')}
         className="w-full rounded-lg border border-border px-3 py-2 text-sm"
       />
     </label>
@@ -86,43 +87,43 @@ export function useStageChange(onMoved?: () => void) {
   const modals = (
     <>
       {/* Perdu → motif obligatoire */}
-      <Modal isOpen={!!refusal} onClose={() => setRefusal(null)} title="Marquer comme perdu" size="sm">
+      <Modal isOpen={!!refusal} onClose={() => setRefusal(null)} title={t('Marquer comme perdu')} size="sm">
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
-            {refusal?.candidatName ? `Pourquoi ${refusal.candidatName} n'est pas retenu ?` : 'Indique le motif du refus.'}
+            {refusal?.candidatName ? t("Pourquoi {nom} n'est pas retenu ?", { nom: refusal.candidatName }) : t('Indique le motif du refus.')}
           </p>
-          <Select label="Motif de refus" options={MOTIF_REFUS_OPTIONS} value={motif} onChange={setMotif} placeholder="Sélectionner…" />
-          <Input label="Précision (optionnel)" value={motifDetail} onChange={(e) => setMotifDetail(e.target.value)} placeholder="Détail du motif…" />
+          <Select label={t('Motif de refus')} options={MOTIF_REFUS_OPTIONS} value={motif} onChange={setMotif} placeholder={t('Sélectionner…')} />
+          <Input label={t('Précision (optionnel)')} value={motifDetail} onChange={(e) => setMotifDetail(e.target.value)} placeholder={t('Détail du motif…')} />
           {candidateMsgField}
           <div className="flex justify-end gap-2 pt-1">
-            <Button variant="ghost" onClick={() => setRefusal(null)}>Annuler</Button>
+            <Button variant="ghost" onClick={() => setRefusal(null)}>{t('Annuler')}</Button>
             <Button variant="primary" disabled={!motif || move.isPending} onClick={() => {
               if (!refusal) return;
               move.mutate({ candidatureId: refusal.candidatureId, stage: 'REFUSE', motifRefus: motif, ...(motifDetail.trim() ? { motifRefusDetail: motifDetail.trim() } : {}), ...(candidateMsg.trim() ? { candidateMessage: candidateMsg.trim() } : {}) });
               setRefusal(null);
-            }}>Confirmer</Button>
+            }}>{t('Confirmer')}</Button>
           </div>
         </div>
       </Modal>
 
       {/* Présentation client → date + heure + interlocuteur obligatoires */}
-      <Modal isOpen={!!entretien} onClose={() => setEntretien(null)} title="Présentation client : date et interlocuteur" size="sm">
+      <Modal isOpen={!!entretien} onClose={() => setEntretien(null)} title={t('Présentation client : date et interlocuteur')} size="sm">
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
-            {entretien?.candidatName ? `Planifie la présentation de ${entretien.candidatName} au client.` : 'Planifie la présentation au client.'}
+            {entretien?.candidatName ? t('Planifie la présentation de {nom} au client.', { nom: entretien.candidatName }) : t('Planifie la présentation au client.')}
           </p>
-          <Input label="Date" type="date" value={entretienDate} onChange={(e) => setEntretienDate(e.target.value)} />
-          <Input label="Heure" type="time" value={entretienTime} onChange={(e) => setEntretienTime(e.target.value)} />
-          <Input label="Interlocuteur côté client" value={entretienInter} onChange={(e) => setEntretienInter(e.target.value)} placeholder="Ex. DRH, N+1, dirigeant…" />
+          <Input label={t('Date')} type="date" value={entretienDate} onChange={(e) => setEntretienDate(e.target.value)} />
+          <Input label={t('Heure')} type="time" value={entretienTime} onChange={(e) => setEntretienTime(e.target.value)} />
+          <Input label={t('Interlocuteur côté client')} value={entretienInter} onChange={(e) => setEntretienInter(e.target.value)} placeholder={t('Ex. DRH, N+1, dirigeant…')} />
           {candidateMsgField}
           <div className="flex justify-end gap-2 pt-1">
-            <Button variant="ghost" onClick={() => setEntretien(null)}>Annuler</Button>
+            <Button variant="ghost" onClick={() => setEntretien(null)}>{t('Annuler')}</Button>
             <Button variant="primary" disabled={!entretienDate || !entretienTime || !entretienInter.trim() || move.isPending} onClick={() => {
               if (!entretien) return;
               const iso = new Date(`${entretienDate}T${entretienTime}:00`).toISOString();
               move.mutate({ candidatureId: entretien.candidatureId, stage: 'ENTRETIEN_CLIENT', dateEntretienClient: iso, interlocuteurClient: entretienInter.trim(), ...(candidateMsg.trim() ? { candidateMessage: candidateMsg.trim() } : {}) });
               setEntretien(null);
-            }}>Confirmer la présentation</Button>
+            }}>{t('Confirmer la présentation')}</Button>
           </div>
         </div>
       </Modal>

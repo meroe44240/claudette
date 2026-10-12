@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { api } from '../../lib/api-client';
+import { t, LOCALE, isEn } from '../../lib/i18n';
 import Skeleton from '../ui/Skeleton';
 
 // ─── Types ────────────────────────────────────────────
@@ -57,13 +58,13 @@ type TimelineItem =
 const STAGE_LABELS: Record<string, string> = {
   SOURCING: 'Sourcing',
   CONTACTE: 'Qualification',
-  ENTRETIEN_1: 'Entretien interne',
-  ENVOYE_CLIENT: 'Envoi client',
-  ENTRETIEN_CLIENT: 'Entretien client',
+  ENTRETIEN_1: t('Entretien interne'),
+  ENVOYE_CLIENT: t('Envoi client'),
+  ENTRETIEN_CLIENT: t('Entretien client'),
   PROCESS: 'Process',
-  OFFRE: 'Offre',
-  PLACE: 'Gagné',
-  REFUSE: 'Perdu',
+  OFFRE: t('Offre'),
+  PLACE: t('Gagné'),
+  REFUSE: t('Perdu'),
 };
 
 const STAGE_COLORS: Record<string, string> = {
@@ -81,15 +82,15 @@ const ACTIVITY_ICONS: Record<
   string,
   { icon: React.ElementType; bg: string; color: string; label: string }
 > = {
-  APPEL: { icon: Phone, bg: '#EFF6FF', color: '#3B82F6', label: 'Appel' },
-  EMAIL_SORTANT: { icon: Send, bg: '#EFF6FF', color: '#3B82F6', label: 'Email envoyé' },
-  EMAIL_ENTRANT: { icon: MailOpen, bg: '#f6f5fa', color: '#22177A', label: 'Email reçu' },
+  APPEL: { icon: Phone, bg: '#EFF6FF', color: '#3B82F6', label: t('Appel') },
+  EMAIL_SORTANT: { icon: Send, bg: '#EFF6FF', color: '#3B82F6', label: t('Email envoyé') },
+  EMAIL_ENTRANT: { icon: MailOpen, bg: '#f6f5fa', color: '#22177A', label: t('Email reçu') },
   EMAIL: { icon: Mail, bg: '#EFF6FF', color: '#3B82F6', label: 'Email' },
-  MEETING: { icon: Calendar, bg: '#F0FDFA', color: '#14B8A6', label: 'RDV' },
+  MEETING: { icon: Calendar, bg: '#F0FDFA', color: '#14B8A6', label: isEn ? 'Meeting' : 'RDV' },
   NOTE: { icon: StickyNote, bg: '#FFF7ED', color: '#F59E0B', label: 'Note' },
-  TACHE: { icon: CheckCircle, bg: '#ECFDF5', color: '#059669', label: 'Tâche' },
+  TACHE: { icon: CheckCircle, bg: '#ECFDF5', color: '#059669', label: t('Tâche') },
   TRANSCRIPT: { icon: Mic, bg: '#f6f5fa', color: '#22177A', label: 'Transcript' },
-  SEQUENCE_STEP: { icon: Zap, bg: '#f6f5fa', color: '#22177A', label: 'Séquence' },
+  SEQUENCE_STEP: { icon: Zap, bg: '#f6f5fa', color: '#22177A', label: t('Séquence') },
   DOCUMENT: { icon: FileText, bg: '#f6f5fa', color: '#6e6a85', label: 'Document' },
 };
 
@@ -106,11 +107,11 @@ function formatDate(iso: string): string {
   const diffMin = Math.floor(diffMs / 60000);
   const diffH = Math.floor(diffMs / 3600000);
   const diffD = Math.floor(diffMs / 86400000);
-  if (diffMin < 1) return 'à l’instant';
-  if (diffMin < 60) return `il y a ${diffMin} min`;
-  if (diffH < 24) return `il y a ${diffH} h`;
-  if (diffD < 7) return `il y a ${diffD} j`;
-  return d.toLocaleDateString('fr-FR', {
+  if (diffMin < 1) return t('à l’instant');
+  if (diffMin < 60) return t('il y a {n} min', { n: diffMin });
+  if (diffH < 24) return t('il y a {n} h', { n: diffH });
+  if (diffD < 7) return t('il y a {n} j', { n: diffD });
+  return d.toLocaleDateString(LOCALE, {
     day: '2-digit',
     month: 'short',
     year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric',
@@ -166,10 +167,10 @@ export default function MandatTimeline({ mandatId }: Props) {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-text-primary">Historique du mandat</h3>
+        <h3 className="text-lg font-semibold text-text-primary">{t('Historique du mandat')}</h3>
         <div className="flex gap-2">
           <FilterButton active={filter === 'all'} onClick={() => setFilter('all')}>
-            Tout ({counts.total})
+            {t('Tout ({n})', { n: counts.total })}
           </FilterButton>
           <FilterButton active={filter === 'stages'} onClick={() => setFilter('stages')}>
             Stages ({counts.stages})
@@ -178,20 +179,20 @@ export default function MandatTimeline({ mandatId }: Props) {
             active={filter === 'candidatures'}
             onClick={() => setFilter('candidatures')}
           >
-            Ajouts ({counts.cands})
+            {t('Ajouts ({n})', { n: counts.cands })}
           </FilterButton>
           <FilterButton
             active={filter === 'activities'}
             onClick={() => setFilter('activities')}
           >
-            Activités ({counts.acts})
+            {t('Activités ({n})', { n: counts.acts })}
           </FilterButton>
         </div>
       </div>
 
       {filtered.length === 0 ? (
         <div className="rounded-md border border-border p-6 text-center text-sm text-text-secondary">
-          Aucun événement pour ce filtre.
+          {t('Aucun événement pour ce filtre.')}
         </div>
       ) : (
         <div className="relative border-l-2 border-border pl-6">
@@ -241,6 +242,7 @@ function TimelineRow({ item }: { item: TimelineItem }) {
     const fromLabel = item.fromStage ? STAGE_LABELS[item.fromStage] ?? item.fromStage : null;
     const toLabel = STAGE_LABELS[item.toStage] ?? item.toStage;
     const color = STAGE_COLORS[item.toStage] ?? '#3B82F6';
+    const [avantEtape, apresEtape] = t('passe de {de} à').split('{de}');
     return (
       <div className="flex items-start gap-3">
         <span
@@ -258,10 +260,10 @@ function TimelineRow({ item }: { item: TimelineItem }) {
             <strong>{displayName(item.candidat)}</strong>{' '}
             {fromLabel ? (
               <>
-                passe de <em>{fromLabel}</em> à{' '}
+                {avantEtape}<em>{fromLabel}</em>{apresEtape}{' '}
               </>
             ) : (
-              'ajouté en '
+              `${t('ajouté en')} `
             )}
             <span
               className="inline-block rounded px-2 py-0.5 text-xs font-medium"
@@ -272,7 +274,7 @@ function TimelineRow({ item }: { item: TimelineItem }) {
           </div>
           <div className="mt-0.5 text-xs text-text-secondary">
             {formatDate(item.date)}
-            {item.user && ` · par ${displayName(item.user)}`}
+            {item.user && ` · ${t('par {nom}', { nom: displayName(item.user) })}`}
           </div>
         </div>
       </div>
@@ -295,7 +297,7 @@ function TimelineRow({ item }: { item: TimelineItem }) {
         </div>
         <div className="flex-1">
           <div className="text-sm text-text-primary">
-            <strong>{displayName(item.candidat)}</strong> ajouté au mandat
+            <strong>{displayName(item.candidat)}</strong> {t('ajouté au mandat')}
           </div>
           <div className="mt-0.5 text-xs text-text-secondary">{formatDate(item.date)}</div>
         </div>
@@ -336,7 +338,7 @@ function TimelineRow({ item }: { item: TimelineItem }) {
         )}
         <div className="mt-0.5 text-xs text-text-secondary">
           {formatDate(item.date)}
-          {item.user && ` · par ${displayName(item.user)}`}
+          {item.user && ` · ${t('par {nom}', { nom: displayName(item.user) })}`}
           {item.source && item.source !== 'MANUAL' && ` · ${item.source.toLowerCase()}`}
         </div>
       </div>

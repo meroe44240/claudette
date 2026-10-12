@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
+import { t, LOCALE } from '../../lib/i18n';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Position { stage: string; mandatId: string; mandatTitre: string; entrepriseNom: string | null }
@@ -37,27 +38,27 @@ interface PaginatedResponse {
 
 // ─── STAGE META ─────────────────────────────────────
 const STAGE_META: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
-  SOURCING: { label: 'Sourcing', bg: 'rgba(34,23,122,.07)', fg: '#22177A', dot: '#8E7CC3' },
-  CONTACTE: { label: 'Qualification', bg: 'rgba(34,23,122,.07)', fg: '#22177A', dot: '#8E7CC3' },
-  ENTRETIEN_1: { label: 'Entr. interne', bg: 'rgba(34,23,122,.09)', fg: '#22177A', dot: '#22177A' },
-  ENVOYE_CLIENT: { label: 'Envoi client', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
-  ENTRETIEN_CLIENT: { label: 'Entr. client', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
-  PROCESS: { label: 'Process', bg: '#FDF3D3', fg: '#8A6A2E', dot: '#D9A441' },
-  OFFRE: { label: 'Offre', bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
-  PLACE: { label: 'Gagné', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  SOURCING: { label: t('Sourcing'), bg: 'rgba(34,23,122,.07)', fg: '#22177A', dot: '#8E7CC3' },
+  CONTACTE: { label: t('Qualification'), bg: 'rgba(34,23,122,.07)', fg: '#22177A', dot: '#8E7CC3' },
+  ENTRETIEN_1: { label: t('Entr. interne'), bg: 'rgba(34,23,122,.09)', fg: '#22177A', dot: '#22177A' },
+  ENVOYE_CLIENT: { label: t('Envoi client'), bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  ENTRETIEN_CLIENT: { label: t('Entr. client'), bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
+  PROCESS: { label: t('Process'), bg: '#FDF3D3', fg: '#8A6A2E', dot: '#D9A441' },
+  OFFRE: { label: t('Offre'), bg: '#F0EFC4', fg: '#8A6A2E', dot: '#C9A227' },
+  PLACE: { label: t('Gagné'), bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
 };
-const VIVIER = { label: 'Vivier', fg: '#8A8699', dot: '#C4C1D0' };
+const VIVIER = { label: t('Vivier'), fg: '#8A8699', dot: '#C4C1D0' };
 
 const SOURCE_OPTIONS = [
   { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'candidature', label: 'Candidature' },
-  { value: 'cooptation', label: 'Cooptation' },
+  { value: 'candidature', label: t('Candidature') },
+  { value: 'cooptation', label: t('Cooptation') },
   { value: 'list-push', label: 'List Push' },
   { value: 'sdr_import', label: 'SDR Import' },
-  { value: 'autre', label: 'Autre' },
+  { value: 'autre', label: t('Autre') },
 ];
 const STAGE_OPTIONS = Object.entries(STAGE_META).map(([value, m]) => ({ value, label: m.label }));
-const DISPO_OPTIONS = ['Immédiate', '1 mois', '3 mois', 'En poste', 'Signé'].map(v => ({ value: v, label: v }));
+const DISPO_OPTIONS = ['Immédiate', '1 mois', '3 mois', 'En poste', 'Signé'].map(v => ({ value: v, label: t(v) }));
 
 // ─── HELPERS ────────────────────────────────────────
 function fullName(c: Candidat) { return `${c.prenom ? c.prenom + ' ' : ''}${c.nom}`.trim(); }
@@ -69,7 +70,7 @@ function dispoColor(d: string | null) { return d && /imm[ée]diate/i.test(d) ? '
 function activity(lastAt: string | null): { txt: string; stale: boolean } {
   if (!lastAt) return { txt: '—', stale: false };
   const days = Math.floor((Date.now() - new Date(lastAt).getTime()) / 86400000);
-  const txt = days <= 0 ? "aujourd'hui" : days === 1 ? 'hier' : `il y a ${days} j`;
+  const txt = days <= 0 ? t("aujourd'hui") : days === 1 ? t('hier') : t('il y a {d} j', { d: days });
   return { txt, stale: days > 10 };
 }
 const AV_PALETTE: Array<[string, string]> = [['#22177A', '#E6E9AF'], ['#3B9A54', '#fff'], ['#8E7CC3', '#fff'], ['#2A6BD8', '#fff'], ['#E05A9C', '#fff']];
@@ -119,7 +120,7 @@ function ChipDropdown({ label, options, value, multi, open, onToggle, onChange }
         <>
           <div onClick={onToggle} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
           <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 41, minWidth: 200, maxHeight: 280, overflowY: 'auto', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 12, boxShadow: '0 20px 44px -20px rgba(34,23,122,0.4)', padding: 6 }}>
-            {options.length === 0 && <div style={{ padding: '8px 10px', fontSize: 12.5, color: '#9A96AE' }}>Aucune option</div>}
+            {options.length === 0 && <div style={{ padding: '8px 10px', fontSize: 12.5, color: '#9A96AE' }}>{t('Aucune option')}</div>}
             {options.map(o => {
               const checked = Array.isArray(value) ? value.includes(o.value) : value === o.value;
               return (
@@ -146,7 +147,7 @@ function ChipDropdown({ label, options, value, multi, open, onToggle, onChange }
 
 // ═════════════════════════════════════════════════════
 export default function CandidatsPage() {
-  usePageTitle('Candidats');
+  usePageTitle(t('Candidats'));
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -256,15 +257,15 @@ export default function CandidatsPage() {
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>CRM</div>
-          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Candidats</h1>
+          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>{t('Candidats')}</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{total.toLocaleString('fr-FR')} candidats</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{t('{n} candidats', { n: total.toLocaleString(LOCALE) })}</span>
           <div style={{ display: 'flex', background: '#fff', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 11, overflow: 'hidden' }}>
             <button onClick={() => setView('grid')} style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: view === 'grid' ? '#22177A' : '#fff', border: 'none', cursor: 'pointer' }}><LayoutGrid size={16} color={view === 'grid' ? '#E6E9AF' : '#8A8699'} /></button>
             <button onClick={() => setView('table')} style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: view === 'table' ? '#22177A' : '#fff', border: 'none', cursor: 'pointer' }}><List size={16} color={view === 'table' ? '#E6E9AF' : '#8A8699'} /></button>
           </div>
-          <button onClick={() => navigate('/candidats/new')} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />Ajouter</button>
+          <button onClick={() => navigate('/candidats/new')} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />{t('Ajouter')}</button>
         </div>
       </div>
 
@@ -272,28 +273,28 @@ export default function CandidatsPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', marginTop: 22 }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
           <Search size={15} color="#9A96AE" strokeWidth={2.2} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)' }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Mots-clés : compétence, stack, école, entreprise…" style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 36px', borderRadius: 11, border: '1px solid rgba(34,23,122,0.14)', background: '#FCFCF5', outline: 'none' }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('Mots-clés : compétence, stack, école, entreprise…')} style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 36px', borderRadius: 11, border: '1px solid rgba(34,23,122,0.14)', background: '#FCFCF5', outline: 'none' }} />
         </div>
         <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
           <List size={15} color="#9A96AE" strokeWidth={2.2} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)' }} />
-          <input value={poste} onChange={e => setPoste(e.target.value)} placeholder="Filtrer par poste…" style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 36px', borderRadius: 11, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', outline: 'none' }} />
+          <input value={poste} onChange={e => setPoste(e.target.value)} placeholder={t('Filtrer par poste…')} style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 36px', borderRadius: 11, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', outline: 'none' }} />
         </div>
-        <ChipDropdown label="Ville" multi options={cityOptions} value={filters.city} open={openChip === 'city'} onToggle={() => setOpenChip(openChip === 'city' ? null : 'city')} onChange={v => setFilter('city', v)} />
+        <ChipDropdown label={t('Ville')} multi options={cityOptions} value={filters.city} open={openChip === 'city'} onToggle={() => setOpenChip(openChip === 'city' ? null : 'city')} onChange={v => setFilter('city', v)} />
         <ChipDropdown label="Source" multi options={SOURCE_OPTIONS} value={filters.source} open={openChip === 'source'} onToggle={() => setOpenChip(openChip === 'source' ? null : 'source')} onChange={v => setFilter('source', v)} />
-        <ChipDropdown label="Étape" multi options={STAGE_OPTIONS} value={filters.stage} open={openChip === 'stage'} onToggle={() => setOpenChip(openChip === 'stage' ? null : 'stage')} onChange={v => setFilter('stage', v)} />
-        <ChipDropdown label="Mandat" options={[{ value: 'vivier', label: 'Vivier (aucun)' }]} value={filters.mandat} open={openChip === 'mandat'} onToggle={() => setOpenChip(openChip === 'mandat' ? null : 'mandat')} onChange={v => setFilter('mandat', v)} />
-        <ChipDropdown label="Assigné à" options={userOptions} value={filters.assigned_to} open={openChip === 'assigned_to'} onToggle={() => setOpenChip(openChip === 'assigned_to' ? null : 'assigned_to')} onChange={v => setFilter('assigned_to', v)} />
-        <ChipDropdown label="Disponibilité" options={DISPO_OPTIONS} value={filters.disponibilite} open={openChip === 'disponibilite'} onToggle={() => setOpenChip(openChip === 'disponibilite' ? null : 'disponibilite')} onChange={v => setFilter('disponibilite', v)} />
+        <ChipDropdown label={t('Étape')} multi options={STAGE_OPTIONS} value={filters.stage} open={openChip === 'stage'} onToggle={() => setOpenChip(openChip === 'stage' ? null : 'stage')} onChange={v => setFilter('stage', v)} />
+        <ChipDropdown label={t('Mandat')} options={[{ value: 'vivier', label: t('Vivier (aucun)') }]} value={filters.mandat} open={openChip === 'mandat'} onToggle={() => setOpenChip(openChip === 'mandat' ? null : 'mandat')} onChange={v => setFilter('mandat', v)} />
+        <ChipDropdown label={t('Assigné à')} options={userOptions} value={filters.assigned_to} open={openChip === 'assigned_to'} onToggle={() => setOpenChip(openChip === 'assigned_to' ? null : 'assigned_to')} onChange={v => setFilter('assigned_to', v)} />
+        <ChipDropdown label={t('Disponibilité')} options={DISPO_OPTIONS} value={filters.disponibilite} open={openChip === 'disponibilite'} onToggle={() => setOpenChip(openChip === 'disponibilite' ? null : 'disponibilite')} onChange={v => setFilter('disponibilite', v)} />
       </div>
 
       {/* ACTIVE KEYWORDS */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 11 }}>
-        <span style={{ fontFamily: "'Manrope'", fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>Filtres</span>
-        {activeKeywords.length === 0 && <span style={{ fontSize: 12, color: '#C4C1D0' }}>aucun</span>}
+        <span style={{ fontFamily: "'Manrope'", fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>{t('Filtres')}</span>
+        {activeKeywords.length === 0 && <span style={{ fontSize: 12, color: '#C4C1D0' }}>{t('aucun')}</span>}
         {activeKeywords.map(kw => (
           <span key={kw.key + kw.value} className="kw" onClick={() => { const cur = (filters[kw.key] as string[]) ?? []; setFilter(kw.key, cur.filter(x => x !== kw.value)); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 999, padding: '5px 11px', cursor: 'pointer' }}>{kw.label}<X size={11} strokeWidth={2.8} /></span>
         ))}
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#8A8699' }}>{rows.length} affichés · {total.toLocaleString('fr-FR')} au total</span>
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#8A8699' }}>{t('{n} affichés · {total} au total', { n: rows.length, total: total.toLocaleString(LOCALE) })}</span>
       </div>
 
       {/* TABLE VIEW */}
@@ -301,7 +302,7 @@ export default function CandidatsPage() {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 13, alignItems: 'center', padding: '10px 20px 9px', marginTop: 18, borderBottom: '1.5px solid rgba(34,23,122,0.12)' }}>
             <span style={{ width: 19 }} /><span style={{ width: 46 }} />
-            {['Candidat', 'Étape · mandat', 'Société actuelle', 'Dispo · Ville', 'Prét. · Activité', 'Contact'].map(h => (
+            {[t('Candidat'), t('Étape · mandat'), t('Société actuelle'), t('Dispo · Ville'), t('Prét. · Activité'), 'Contact'].map(h => (
               <span key={h} style={{ fontFamily: "'Manrope'", fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>{h}</span>
             ))}
             <span />
@@ -311,7 +312,7 @@ export default function CandidatsPage() {
             {isLoading ? (
               Array.from({ length: 8 }).map((_, i) => <div key={i} style={{ height: 69, borderBottom: '1px solid rgba(34,23,122,0.05)', background: i % 2 ? '#fff' : '#FCFCF5' }} />)
             ) : rows.length === 0 ? (
-              <div style={{ padding: '48px 20px', textAlign: 'center', color: '#8A8699' }}>Aucun candidat ne correspond aux filtres.</div>
+              <div style={{ padding: '48px 20px', textAlign: 'center', color: '#8A8699' }}>{t('Aucun candidat ne correspond aux filtres.')}</div>
             ) : rows.map(c => {
               const st = c.position ? STAGE_META[c.position.stage] : null;
               const act = activity(c.lastActivityAt);
@@ -331,8 +332,8 @@ export default function CandidatsPage() {
                       </>
                     ) : (
                       <>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3.5px 10px', background: 'transparent', color: VIVIER.fg, border: '1px dashed rgba(34,23,122,.25)' }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: VIVIER.dot }} />Vivier</span>
-                        <button onClick={(e) => { e.stopPropagation(); navigate(`/candidats/${c.id}`); }} className="cact" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 4, fontFamily: "'Manrope'", fontSize: 10.5, fontWeight: 800, color: '#22177A', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}><Plus size={11} strokeWidth={2.8} />Positionner</button>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3.5px 10px', background: 'transparent', color: VIVIER.fg, border: '1px dashed rgba(34,23,122,.25)' }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: VIVIER.dot }} />{VIVIER.label}</span>
+                        <button onClick={(e) => { e.stopPropagation(); navigate(`/candidats/${c.id}`); }} className="cact" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 4, fontFamily: "'Manrope'", fontSize: 10.5, fontWeight: 800, color: '#22177A', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}><Plus size={11} strokeWidth={2.8} />{t('Positionner')}</button>
                       </>
                     )}
                   </div>
@@ -356,8 +357,8 @@ export default function CandidatsPage() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className="cact" style={{ display: 'flex', gap: 6 }}>
-                      <button title="Voir la fiche" onClick={(e) => { e.stopPropagation(); navigate(`/candidats/${c.id}`); }} style={{ width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(34,23,122,0.06)', border: 'none', cursor: 'pointer' }}><Eye size={14} color="#22177A" /></button>
-                      <button title="Plus" onClick={(e) => { e.stopPropagation(); navigate(`/candidats/${c.id}`); }} style={{ width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(34,23,122,0.06)', border: 'none', cursor: 'pointer' }}><MoreVertical size={14} color="#22177A" /></button>
+                      <button title={t('Voir la fiche')} onClick={(e) => { e.stopPropagation(); navigate(`/candidats/${c.id}`); }} style={{ width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(34,23,122,0.06)', border: 'none', cursor: 'pointer' }}><Eye size={14} color="#22177A" /></button>
+                      <button title={t('Plus')} onClick={(e) => { e.stopPropagation(); navigate(`/candidats/${c.id}`); }} style={{ width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(34,23,122,0.06)', border: 'none', cursor: 'pointer' }}><MoreVertical size={14} color="#22177A" /></button>
                     </span>
                     <ChevronRight className="carr" size={16} color="#C4C1D0" strokeWidth={2.2} style={{ flexShrink: 0, transition: 'transform .2s, stroke .2s' }} />
                   </div>
@@ -385,7 +386,7 @@ export default function CandidatsPage() {
                   </div>
                   <div style={{ marginTop: 12 }}>
                     {st ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3.5px 10px', background: st.bg, color: st.fg }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: st.dot }} />{st.label}</span>
-                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3.5px 10px', color: VIVIER.fg, border: '1px dashed rgba(34,23,122,.25)' }}>Vivier</span>}
+                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3.5px 10px', color: VIVIER.fg, border: '1px dashed rgba(34,23,122,.25)' }}>{VIVIER.label}</span>}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, fontSize: 12, color: '#8A8699' }}>
                     <span>{c.localisation || '—'}</span>
@@ -400,7 +401,7 @@ export default function CandidatsPage() {
       {/* PAGINATION */}
       {totalPages > 1 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, fontSize: 13, color: '#8A8699' }}>
-          <span>Page {page} / {totalPages} · {total.toLocaleString('fr-FR')} candidats</span>
+          <span>{t('Page {page} / {pages} · {n} candidats', { page, pages: totalPages, n: total.toLocaleString(LOCALE) })}</span>
           <div style={{ display: 'flex', gap: 6 }}>
             <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ width: 34, height: 34, borderRadius: 9, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', color: page <= 1 ? '#C4C1D0' : '#22177A', cursor: page <= 1 ? 'default' : 'pointer' }}>‹</button>
             <span style={{ minWidth: 34, height: 34, borderRadius: 9, background: '#22177A', color: '#E6E9AF', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{page}</span>
@@ -417,7 +418,7 @@ export default function CandidatsPage() {
             <div style={{ flexShrink: 0, background: '#22177A', padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
               <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(230,233,175,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(230,233,175,.05) 1px,transparent 1px)', backgroundSize: '36px 36px' }} />
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                <span style={{ fontFamily: "'Manrope'", fontSize: 9.5, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color: 'rgba(230,233,175,.7)' }}>Aperçu candidat</span>
+                <span style={{ fontFamily: "'Manrope'", fontSize: 9.5, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color: 'rgba(230,233,175,.7)' }}>{t('Aperçu candidat')}</span>
                 <button onClick={() => setSelId(null)} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(230,233,175,.25)', background: 'transparent', color: '#E6E9AF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} strokeWidth={2.4} /></button>
               </div>
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 13, marginTop: 16 }}>
@@ -432,23 +433,23 @@ export default function CandidatsPage() {
 
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 22px 24px' }}>
               <div style={{ display: 'flex', gap: 8 }}>
-                <a href={sel.telephone ? `tel:${sel.telephone}` : undefined} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, background: '#22177A', color: '#E6E9AF', borderRadius: 10, padding: 11, textDecoration: 'none', opacity: sel.telephone ? 1 : 0.5 }}><Phone size={13} />{sel.telephone || 'Pas de numéro'}</a>
+                <a href={sel.telephone ? `tel:${sel.telephone}` : undefined} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, background: '#22177A', color: '#E6E9AF', borderRadius: 10, padding: 11, textDecoration: 'none', opacity: sel.telephone ? 1 : 0.5 }}><Phone size={13} />{sel.telephone || t('Pas de numéro')}</a>
                 <a href={sel.email ? `mailto:${sel.email}` : undefined} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: '#22177A', border: '1.5px solid rgba(34,23,122,.22)', borderRadius: 10, padding: '10px 15px', textDecoration: 'none' }}><Mail size={13} />Email</a>
               </div>
               {sel.email && <div style={{ fontSize: 12, color: '#6E6A85', marginTop: 8, wordBreak: 'break-all' }}>{sel.email}</div>}
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9, marginTop: 18 }}>
                 <div style={{ background: '#fff', border: '1px solid rgba(34,23,122,.09)', borderRadius: 12, padding: '12px 14px' }}>
-                  <div style={{ fontFamily: "'Manrope'", fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>Prétentions</div>
+                  <div style={{ fontFamily: "'Manrope'", fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>{t('Prétentions')}</div>
                   <div style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '-.02em', color: '#22177A', marginTop: 6 }}>{salaryTxt(sel.salaireSouhaite)}</div>
                 </div>
                 <div style={{ background: '#fff', border: '1px solid rgba(34,23,122,.09)', borderRadius: 12, padding: '12px 14px' }}>
-                  <div style={{ fontFamily: "'Manrope'", fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>Disponibilité</div>
+                  <div style={{ fontFamily: "'Manrope'", fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>{t('Disponibilité')}</div>
                   <div style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '-.02em', color: dispoColor(sel.disponibilite), marginTop: 6 }}>{sel.disponibilite || '—'}</div>
                 </div>
               </div>
 
-              <div style={{ fontFamily: "'Manrope'", fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE', marginTop: 20 }}>Positionné sur</div>
+              <div style={{ fontFamily: "'Manrope'", fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE', marginTop: 20 }}>{t('Positionné sur')}</div>
               {sel.position ? (
                 <div onClick={() => navigate(`/mandats/${sel.position!.mandatId}`)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: '1px solid rgba(34,23,122,.09)', borderRadius: 12, padding: '12px 14px', marginTop: 9, cursor: 'pointer' }}>
                   <span style={{ width: 7, height: 7, borderRadius: '50%', background: STAGE_META[sel.position.stage]?.dot, flexShrink: 0 }} />
@@ -457,8 +458,8 @@ export default function CandidatsPage() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 11, border: '1.5px dashed rgba(34,23,122,.2)', borderRadius: 12, padding: 14, marginTop: 9, background: '#fff' }}>
-                  <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 700, color: '#1A1533' }}>Dans le vivier</div><div style={{ fontSize: 11.5, color: '#8A8699', marginTop: 2 }}>Aucun process en cours.</div></div>
-                  <button onClick={() => navigate(`/candidats/${sel.id}`)} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: "'Manrope'", fontSize: 12, fontWeight: 800, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 9, padding: '8px 13px', cursor: 'pointer' }}><Plus size={12} strokeWidth={2.8} />Positionner</button>
+                  <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 700, color: '#1A1533' }}>{t('Dans le vivier')}</div><div style={{ fontSize: 11.5, color: '#8A8699', marginTop: 2 }}>{t('Aucun process en cours.')}</div></div>
+                  <button onClick={() => navigate(`/candidats/${sel.id}`)} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: "'Manrope'", fontSize: 12, fontWeight: 800, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 9, padding: '8px 13px', cursor: 'pointer' }}><Plus size={12} strokeWidth={2.8} />{t('Positionner')}</button>
                 </div>
               )}
 
@@ -467,18 +468,18 @@ export default function CandidatsPage() {
                 <span style={{ flexShrink: 0, width: 38, height: 44, borderRadius: 7, background: '#F9ECE9', border: '1px solid rgba(176,54,31,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FileText size={17} color="#B3261E" /></span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>CV — {fullName(sel)}.pdf</div>
-                  <div style={{ fontSize: 11.5, color: '#8A8699', marginTop: 2 }}>{sel.cvUrl ? 'PDF · disponible' : 'Aucun CV importé'}</div>
+                  <div style={{ fontSize: 11.5, color: '#8A8699', marginTop: 2 }}>{sel.cvUrl ? t('PDF · disponible') : t('Aucun CV importé')}</div>
                 </div>
               </a>
               <div onClick={() => navigate(`/candidats/${sel.id}`)} className="cvcard" style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#fff', border: '1px solid rgba(34,23,122,.11)', borderRadius: 12, padding: '12px 14px', marginTop: 8, cursor: 'pointer' }}>
                 <span style={{ flexShrink: 0, width: 38, height: 44, borderRadius: 7, background: '#F2F3D8', border: '1px solid rgba(34,23,122,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FileText size={17} color="#22177A" /></span>
-                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 800, color: '#1A1533' }}>Dossier HumanUp</div><div style={{ fontSize: 11.5, color: '#8A8699', marginTop: 2 }}>Voir la fiche complète</div></div>
+                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 800, color: '#1A1533' }}>{t('Dossier HumanUp')}</div><div style={{ fontSize: 11.5, color: '#8A8699', marginTop: 2 }}>{t('Voir la fiche complète')}</div></div>
                 <ChevronRight size={15} color="#C4C1D0" style={{ flexShrink: 0 }} />
               </div>
 
               {sel.tags.length > 0 && (
                 <>
-                  <div style={{ fontFamily: "'Manrope'", fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE', marginTop: 20 }}>Compétences</div>
+                  <div style={{ fontFamily: "'Manrope'", fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE', marginTop: 20 }}>{t('Compétences')}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 9 }}>
                     {sel.tags.slice(0, 12).map((t, i) => (
                       <span key={t} style={{ fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '5px 11px', background: i % 2 ? '#EDEAF9' : '#EEF0C9', color: i % 2 ? '#5B4B9E' : '#22177A' }}>{t}</span>
@@ -489,7 +490,7 @@ export default function CandidatsPage() {
             </div>
 
             <div style={{ flexShrink: 0, borderTop: '1px solid rgba(34,23,122,.1)', padding: '14px 22px', background: '#fff' }}>
-              <button onClick={() => navigate(`/candidats/${sel.id}`)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, fontSize: 13.5, fontWeight: 800, color: '#22177A', background: 'transparent', border: '1.5px solid rgba(34,23,122,.22)', borderRadius: 11, padding: 12, cursor: 'pointer' }}><Maximize2 size={15} strokeWidth={2.2} />Ouvrir en pleine page</button>
+              <button onClick={() => navigate(`/candidats/${sel.id}`)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, fontSize: 13.5, fontWeight: 800, color: '#22177A', background: 'transparent', border: '1.5px solid rgba(34,23,122,.22)', borderRadius: 11, padding: 12, cursor: 'pointer' }}><Maximize2 size={15} strokeWidth={2.2} />{t('Ouvrir en pleine page')}</button>
             </div>
           </aside>
         </>

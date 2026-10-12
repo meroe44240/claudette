@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Sparkles, Pencil, Check, X } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../ui/Toast';
+import { t } from '../../lib/i18n';
 import TrameAnswers from '../mandats/TrameAnswers';
 
 interface Field { key: string; label: string; hint: string; ai: boolean; long?: boolean }
@@ -33,13 +34,13 @@ export default function CandidatureQualif({ candidatureId, mandatId, mandatLabel
       ]);
       if (fitRes.status === 'rejected') throw fitRes.reason;
     },
-    onSuccess: () => { invalidate(); toast('success', 'Fit et trame remplis depuis le meeting'); },
-    onError: (e: any) => toast('error', e?.message || 'Aucun transcript exploitable'),
+    onSuccess: () => { invalidate(); toast('success', t('Fit et trame remplis depuis le meeting')); },
+    onError: (e: any) => toast('error', e?.message || t('Aucun transcript exploitable')),
   });
   const save = useMutation({
     mutationFn: (payload: Record<string, string | null>) => api.put(`/qualification/candidature/${candidatureId}`, payload),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['qualif-fit', candidatureId] }); setEditing(null); },
-    onError: (e: any) => toast('error', e?.message || 'Échec de la sauvegarde'),
+    onError: (e: any) => toast('error', e?.message || t('Échec de la sauvegarde')),
   });
 
   const list = fields ?? [];
@@ -50,9 +51,9 @@ export default function CandidatureQualif({ candidatureId, mandatId, mandatLabel
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-        <div style={{ flex: 1, fontSize: 12, color: '#6E6A85' }}>Fit & trame pour <strong style={{ color: '#22177A' }}>{mandatLabel || 'ce mandat'}</strong>, depuis les meetings.</div>
+        <div style={{ flex: 1, fontSize: 12, color: '#6E6A85' }}>{t('Fit & trame pour |, depuis les meetings.').split('|')[0]}<strong style={{ color: '#22177A' }}>{mandatLabel || t('ce mandat')}</strong>{t('Fit & trame pour |, depuis les meetings.').split('|')[1]}</div>
         <button onClick={() => fill.mutate()} disabled={fill.isPending} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 800, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 10, padding: '8px 15px', cursor: fill.isPending ? 'wait' : 'pointer', opacity: fill.isPending ? 0.6 : 1 }}>
-          <Sparkles size={14} />{fill.isPending ? 'Analyse…' : 'Remplir depuis le meeting'}
+          <Sparkles size={14} />{fill.isPending ? t('Analyse…') : t('Remplir depuis le meeting')}
         </button>
       </div>
 
@@ -66,8 +67,8 @@ export default function CandidatureQualif({ candidatureId, mandatId, mandatLabel
             <div key={fld.key} style={{ background: '#FCFCF5', border: '1px solid rgba(34,23,122,.08)', borderRadius: 12, padding: '11px 13px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: '#8A8699', flex: 1 }}>{fld.label}</span>
-                {val && <span title={val.src === 'ia' ? 'Rempli par l’IA' : 'Saisi manuellement'} style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: val.src === 'ia' ? '#2A4A8A' : '#7A5E1E', background: val.src === 'ia' ? '#E8EEF9' : '#F2F3D8', borderRadius: 5, padding: '2px 6px' }}>{val.src === 'ia' ? 'IA' : 'Manuel'}</span>}
-                {!isEditing && !isGoNoGo && <button onClick={() => startEdit(fld)} title="Modifier" style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2, color: '#B4B0C4', display: 'flex' }}><Pencil size={12.5} /></button>}
+                {val && <span title={val.src === 'ia' ? t('Rempli par l’IA') : t('Saisi manuellement')} style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: val.src === 'ia' ? '#2A4A8A' : '#7A5E1E', background: val.src === 'ia' ? '#E8EEF9' : '#F2F3D8', borderRadius: 5, padding: '2px 6px' }}>{val.src === 'ia' ? t('IA') : t('Manuel')}</span>}
+                {!isEditing && !isGoNoGo && <button onClick={() => startEdit(fld)} title={t('Modifier')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2, color: '#B4B0C4', display: 'flex' }}><Pencil size={12.5} /></button>}
               </div>
 
               {isGoNoGo ? (
@@ -76,19 +77,19 @@ export default function CandidatureQualif({ candidatureId, mandatId, mandatLabel
                     const active = val?.v === g;
                     const col = g === 'GO' ? '#2C6B3F' : g === 'NO-GO' ? '#B3261E' : '#8A6A2E';
                     const bg = g === 'GO' ? '#EAF3EC' : g === 'NO-GO' ? '#F7DEDB' : '#FBF3E7';
-                    return <button key={g} onClick={() => commit(fld, active ? '' : g)} style={{ fontSize: 12, fontWeight: 800, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', border: `1.5px solid ${active ? col : 'rgba(34,23,122,.14)'}`, background: active ? bg : '#fff', color: active ? col : '#8A8699' }}>{g}</button>;
+                    return <button key={g} onClick={() => commit(fld, active ? '' : g)} style={{ fontSize: 12, fontWeight: 800, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', border: `1.5px solid ${active ? col : 'rgba(34,23,122,.14)'}`, background: active ? bg : '#fff', color: active ? col : '#8A8699' }}>{t(g)}</button>;
                   })}
                 </div>
               ) : isEditing ? (
                 <div>
                   <textarea autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={fld.hint} rows={3} style={{ width: '100%', resize: 'vertical', fontFamily: "'Manrope',sans-serif", fontSize: 13, lineHeight: 1.5, padding: '8px 10px', borderRadius: 9, border: '1.5px solid rgba(34,23,122,.18)', background: '#fff', outline: 'none' }} />
                   <div style={{ display: 'flex', gap: 7, marginTop: 7, justifyContent: 'flex-end' }}>
-                    <button onClick={() => setEditing(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: '#4A4568', background: '#F5F4EA', border: 'none', borderRadius: 8, padding: '6px 11px', cursor: 'pointer' }}><X size={12} />Annuler</button>
-                    <button onClick={() => commit(fld)} disabled={save.isPending} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 8, padding: '6px 11px', cursor: 'pointer' }}><Check size={12} />Enregistrer</button>
+                    <button onClick={() => setEditing(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: '#4A4568', background: '#F5F4EA', border: 'none', borderRadius: 8, padding: '6px 11px', cursor: 'pointer' }}><X size={12} />{t('Annuler')}</button>
+                    <button onClick={() => commit(fld)} disabled={save.isPending} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 8, padding: '6px 11px', cursor: 'pointer' }}><Check size={12} />{t('Enregistrer')}</button>
                   </div>
                 </div>
               ) : (
-                <div onClick={() => startEdit(fld)} style={{ fontSize: 13, lineHeight: 1.5, color: val ? '#1A1533' : '#B4B0C4', cursor: 'pointer', whiteSpace: 'pre-wrap' }}>{val?.v || (fld.ai ? '— à qualifier' : '— à renseigner')}</div>
+                <div onClick={() => startEdit(fld)} style={{ fontSize: 13, lineHeight: 1.5, color: val ? '#1A1533' : '#B4B0C4', cursor: 'pointer', whiteSpace: 'pre-wrap' }}>{val?.v || (fld.ai ? t('— à qualifier') : t('— à renseigner'))}</div>
               )}
             </div>
           );
@@ -97,7 +98,7 @@ export default function CandidatureQualif({ candidatureId, mandatId, mandatLabel
 
       {/* Trame du mandat (bouton unifié ci-dessus) */}
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(34,23,122,.08)' }}>
-        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 12 }}>Trame du mandat</div>
+        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 12 }}>{t('Trame du mandat')}</div>
         <TrameAnswers candidatureId={candidatureId} mandatId={mandatId} hideFill />
       </div>
     </div>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api-client';
 import { toast } from '../ui/Toast';
+import { t } from '../../lib/i18n';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bot, ArrowRight, Check, X, ChevronDown, Loader2, RefreshCw,
@@ -41,15 +42,15 @@ interface PipelineSuggestion {
 // ─── CONSTANTS ──────────────────────────────────────
 
 const STAGE_OPTIONS = [
-  { value: 'SOURCING', label: 'Sourcing' },
-  { value: 'CONTACTE', label: 'Qualification' },
-  { value: 'ENTRETIEN_1', label: 'Entretien interne' },
-  { value: 'ENVOYE_CLIENT', label: 'Envoi client' },
-  { value: 'ENTRETIEN_CLIENT', label: 'Entretien client' },
-  { value: 'PROCESS', label: 'Process' },
-  { value: 'OFFRE', label: 'Offre' },
-  { value: 'PLACE', label: 'Gagné' },
-  { value: 'REFUSE', label: 'Perdu' },
+  { value: 'SOURCING', label: t('Sourcing') },
+  { value: 'CONTACTE', label: t('Qualification') },
+  { value: 'ENTRETIEN_1', label: t('Entretien interne') },
+  { value: 'ENVOYE_CLIENT', label: t('Envoi client') },
+  { value: 'ENTRETIEN_CLIENT', label: t('Entretien client') },
+  { value: 'PROCESS', label: t('Process') },
+  { value: 'OFFRE', label: t('Offre') },
+  { value: 'PLACE', label: t('Gagné') },
+  { value: 'REFUSE', label: t('Perdu') },
 ];
 
 // ─── COMPONENT ──────────────────────────────────────
@@ -74,10 +75,10 @@ export default function PipelineAiSuggestions() {
       queryClient.invalidateQueries({ queryKey: ['ai', 'pipeline', 'suggestions'] });
       queryClient.invalidateQueries({ queryKey: ['candidatures'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      toast('success', 'Mouvement pipeline applique');
+      toast('success', t('Mouvement pipeline applique'));
     },
     onError: () => {
-      toast('error', "Erreur lors de l'application du mouvement");
+      toast('error', t("Erreur lors de l'application du mouvement"));
     },
   });
 
@@ -88,7 +89,7 @@ export default function PipelineAiSuggestions() {
       queryClient.invalidateQueries({ queryKey: ['ai', 'pipeline', 'suggestions'] });
     },
     onError: () => {
-      toast('error', 'Erreur lors du rejet');
+      toast('error', t('Erreur lors du rejet'));
     },
   });
 
@@ -97,10 +98,10 @@ export default function PipelineAiSuggestions() {
     mutationFn: () => api.post('/ai/pipeline/analyze'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai', 'pipeline', 'suggestions'] });
-      toast('success', 'Analyse pipeline lancee');
+      toast('success', t('Analyse pipeline lancee'));
     },
     onError: () => {
-      toast('error', "Erreur lors de l'analyse pipeline");
+      toast('error', t("Erreur lors de l'analyse pipeline"));
     },
   });
 
@@ -126,7 +127,7 @@ export default function PipelineAiSuggestions() {
               <Bot size={15} className="text-white" />
             </div>
             <span className="text-[13px] font-semibold text-neutral-800">
-              {suggestions.length} mouvement{suggestions.length > 1 ? 's' : ''} pipeline suggere{suggestions.length > 1 ? 's' : ''}
+              {t(suggestions.length > 1 ? '{n} mouvements pipeline suggeres' : '{n} mouvement pipeline suggere', { n: suggestions.length })}
             </span>
           </div>
 
@@ -134,7 +135,7 @@ export default function PipelineAiSuggestions() {
             onClick={() => analyzeMutation.mutate()}
             disabled={analyzeMutation.isPending}
             className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
-            title="Relancer l'analyse"
+            title={t("Relancer l'analyse")}
           >
             <RefreshCw size={12} className={analyzeMutation.isPending ? 'animate-spin' : ''} />
           </button>
@@ -220,9 +221,9 @@ function SuggestionCard({
                 <span className="text-[13px] font-semibold text-neutral-800">
                   {candidatName}
                   <span className="text-amber-600 font-medium ml-1.5">
-                    &mdash; dormant {suggestion.triggerData && typeof suggestion.triggerData === 'object' && 'daysSinceActivity' in suggestion.triggerData
-                      ? `${(suggestion.triggerData as any).daysSinceActivity}j`
-                      : '14j+'}
+                    &mdash; {suggestion.triggerData && typeof suggestion.triggerData === 'object' && 'daysSinceActivity' in suggestion.triggerData
+                      ? t('dormant {n}j', { n: (suggestion.triggerData as any).daysSinceActivity })
+                      : t('dormant 14j+')}
                   </span>
                 </span>
               ) : (
@@ -232,7 +233,7 @@ function SuggestionCard({
                     &rarr; {suggestion.suggestedStageLabel}
                   </span>
                   <span className="text-neutral-400 font-normal text-[12px] ml-1.5">
-                    (etait : {suggestion.currentStageLabel})
+                    {t('(etait : {etape})', { etape: suggestion.currentStageLabel })}
                   </span>
                 </span>
               )}
@@ -246,7 +247,7 @@ function SuggestionCard({
             {/* Reasoning */}
             {suggestion.reasoning && (
               <div className={`text-[11px] mt-1 italic ${isDormant ? 'text-amber-600' : 'text-blue-500'}`}>
-                Raison : {suggestion.reasoning}
+                {t('Raison :')} {suggestion.reasoning}
               </div>
             )}
 
@@ -261,17 +262,17 @@ function SuggestionCard({
                   ? 'bg-blue-100 text-blue-700'
                   : 'bg-neutral-100 text-neutral-600'
               }`}>
-                {Math.round(suggestion.confidence * 100)}% confiance
+                {t('{n}% confiance', { n: Math.round(suggestion.confidence * 100) })}
               </span>
               <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium ${
                 isDormant
                   ? 'bg-amber-50 text-amber-600'
                   : 'bg-blue-50 text-blue-600'
               }`}>
-                {suggestion.triggerType === 'calendar_event' && 'Calendrier'}
-                {suggestion.triggerType === 'email' && 'Email'}
-                {suggestion.triggerType === 'call' && 'Appel'}
-                {suggestion.triggerType === 'inactivity' && 'Inactivite'}
+                {suggestion.triggerType === 'calendar_event' && t('Calendrier')}
+                {suggestion.triggerType === 'email' && t('Email')}
+                {suggestion.triggerType === 'call' && t('Appel')}
+                {suggestion.triggerType === 'inactivity' && t('Inactivite')}
               </span>
             </div>
           </div>
@@ -285,24 +286,24 @@ function SuggestionCard({
                   onClick={() => onDismiss()}
                   disabled={isApplying || isDismissing}
                   className="flex items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-amber-600 transition-colors disabled:opacity-50 shadow-sm"
-                  title="Ignorer (garder dans le pipe)"
+                  title={t('Ignorer (garder dans le pipe)')}
                 >
                   <Phone size={12} />
-                  Relancer
+                  {t('Relancer')}
                 </button>
                 {/* Retirer du pipe */}
                 <button
                   onClick={() => onApply('REFUSE')}
                   disabled={isApplying || isDismissing}
                   className="flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
-                  title="Retirer du pipeline"
+                  title={t('Retirer du pipeline')}
                 >
                   {isApplying ? (
                     <Loader2 size={12} className="animate-spin" />
                   ) : (
                     <X size={12} />
                   )}
-                  Retirer du pipe
+                  {t('Retirer du pipe')}
                 </button>
               </>
             ) : (
@@ -312,14 +313,14 @@ function SuggestionCard({
                   onClick={() => onApply()}
                   disabled={isApplying || isDismissing}
                   className="flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700 transition-colors disabled:opacity-50 shadow-sm"
-                  title="Appliquer le mouvement"
+                  title={t('Appliquer le mouvement')}
                 >
                   {isApplying ? (
                     <Loader2 size={12} className="animate-spin" />
                   ) : (
                     <Check size={12} />
                   )}
-                  Appliquer
+                  {t('Appliquer')}
                 </button>
 
                 {/* Autre etape dropdown */}
@@ -328,9 +329,9 @@ function SuggestionCard({
                     onClick={() => setStageDropdownOpen(!stageDropdownOpen)}
                     disabled={isApplying || isDismissing}
                     className="flex items-center gap-1 rounded-lg border border-neutral-200 px-2 py-1.5 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50 transition-colors disabled:opacity-50"
-                    title="Choisir une autre etape"
+                    title={t('Choisir une autre etape')}
                   >
-                    Autre etape
+                    {t('Autre etape')}
                     <ChevronDown size={11} className={`transition-transform ${stageDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
                   <AnimatePresence>
@@ -366,14 +367,14 @@ function SuggestionCard({
               onClick={onDismiss}
               disabled={isApplying || isDismissing}
               className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-colors disabled:opacity-50"
-              title="Ignorer"
+              title={t('Ignorer')}
             >
               {isDismissing ? (
                 <Loader2 size={11} className="animate-spin" />
               ) : (
                 <X size={11} />
               )}
-              Ignorer
+              {t('Ignorer')}
             </button>
           </div>
         </div>

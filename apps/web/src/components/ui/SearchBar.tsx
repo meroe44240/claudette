@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, X, Plus, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { t } from '../../lib/i18n';
 
 interface SearchResult {
   id: string;
@@ -34,7 +35,7 @@ function addRecentSearch(query: string) {
   localStorage.setItem(RECENT_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
 }
 
-export default function SearchBar({ onSearch, onSelect, onCreate, placeholder = 'Rechercher...' }: SearchBarProps) {
+export default function SearchBar({ onSearch, onSelect, onCreate, placeholder = t('Rechercher...') }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -47,8 +48,8 @@ export default function SearchBar({ onSearch, onSelect, onCreate, placeholder = 
   const noResultsCreate = query.length >= 2 && results.length === 0 && !isLoading && !!onCreate;
   const createOptions = noResultsCreate
     ? [
-        { type: 'candidat', label: `Cr\u00e9er un candidat "${query}"` },
-        { type: 'entreprise', label: `Cr\u00e9er une entreprise "${query}"` },
+        { type: 'candidat', label: t('Cr\u00e9er un candidat "{query}"', { query }) },
+        { type: 'entreprise', label: t('Cr\u00e9er une entreprise "{query}"', { query }) },
       ]
     : [];
   const totalNavigable = results.length + createOptions.length;
@@ -158,10 +159,10 @@ export default function SearchBar({ onSearch, onSelect, onCreate, placeholder = 
   };
 
   const typeLabels: Record<string, string> = {
-    candidat: 'Candidat',
-    client: 'Client',
-    entreprise: 'Entreprise',
-    mandat: 'Mandat',
+    candidat: t('Candidat'),
+    client: t('Client'),
+    entreprise: t('Entreprise'),
+    mandat: t('Mandat'),
   };
 
   const grouped = results.reduce<Record<string, SearchResult[]>>((acc, r) => {
@@ -206,7 +207,7 @@ export default function SearchBar({ onSearch, onSelect, onCreate, placeholder = 
           >
             <p className="px-3.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-300 flex items-center gap-1.5">
               <Clock size={10} />
-              Recherches r&#233;centes
+              {t('Recherches récentes')}
             </p>
             {recentSearches.map((q) => (
               <button
@@ -232,10 +233,10 @@ export default function SearchBar({ onSearch, onSelect, onCreate, placeholder = 
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             className="absolute z-50 mt-1 w-full rounded-xl border border-neutral-100 bg-white py-2 shadow-[0_12px_36px_rgba(26,26,46,0.12)]"
           >
-            {isLoading && <p className="px-4 py-2 text-[13px] text-neutral-300">Recherche...</p>}
+            {isLoading && <p className="px-4 py-2 text-[13px] text-neutral-300">{t('Recherche...')}</p>}
             {!isLoading && results.length === 0 && (
               <div>
-                <p className="px-4 py-2 text-[13px] text-neutral-400">Aucun r&#233;sultat pour &#171;{query}&#187;</p>
+                <p className="px-4 py-2 text-[13px] text-neutral-400">{t('Aucun résultat pour «{query}»', { query })}</p>
                 {onCreate && createOptions.length > 0 && (
                   <div className="border-t border-neutral-50 mt-1 pt-1">
                     {createOptions.map((opt, idx) => {
@@ -282,9 +283,9 @@ export default function SearchBar({ onSearch, onSelect, onCreate, placeholder = 
             ))}
             {!isLoading && (results.length > 0 || createOptions.length > 0) && (
               <div className="border-t border-neutral-50 mt-1 px-3.5 py-1.5 flex items-center gap-3 text-[10px] text-neutral-300">
-                <span><kbd className="rounded bg-neutral-100 px-1 py-0.5">&#x2191;&#x2193;</kbd> naviguer</span>
-                <span><kbd className="rounded bg-neutral-100 px-1 py-0.5">&#x21B5;</kbd> ouvrir</span>
-                <span><kbd className="rounded bg-neutral-100 px-1 py-0.5">esc</kbd> fermer</span>
+                <span><kbd className="rounded bg-neutral-100 px-1 py-0.5">&#x2191;&#x2193;</kbd> {t('naviguer')}</span>
+                <span><kbd className="rounded bg-neutral-100 px-1 py-0.5">&#x21B5;</kbd> {t('ouvrir')}</span>
+                <span><kbd className="rounded bg-neutral-100 px-1 py-0.5">esc</kbd> {t('fermer')}</span>
               </div>
             )}
           </motion.div>

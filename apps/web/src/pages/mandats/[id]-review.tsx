@@ -13,6 +13,7 @@ import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import { toast } from '../../components/ui/Toast';
 import PageHeader from '../../components/ui/PageHeader';
+import { t } from '../../lib/i18n';
 
 interface Candidature {
   id: string;
@@ -186,27 +187,27 @@ export default function FastReviewPage() {
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100">
             <ThumbsUp size={36} className="text-emerald-600" />
           </div>
-          <h2 className="text-2xl font-bold text-neutral-900">Review terminée !</h2>
+          <h2 className="text-2xl font-bold text-neutral-900">{t('Review terminée !')}</h2>
           <div className="flex justify-center gap-8 text-sm">
             <div className="text-center">
               <div className="text-2xl font-bold text-emerald-600">{stats.shortlisted}</div>
-              <div className="text-neutral-500">Shortlistés</div>
+              <div className="text-neutral-500">{t('Shortlistés')}</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-red-500">{stats.rejected}</div>
-              <div className="text-neutral-500">Refusés</div>
+              <div className="text-neutral-500">{t('Refusés')}</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-amber-500">{stats.skipped}</div>
-              <div className="text-neutral-500">Passés</div>
+              <div className="text-neutral-500">{t('Passés')}</div>
             </div>
           </div>
           <div className="flex justify-center gap-3 pt-4">
             <Button variant="secondary" onClick={() => navigate(`/mandats/${mandatId}/kanban`)}>
-              Voir le kanban
+              {t('Voir le kanban')}
             </Button>
             <Button onClick={() => { setCurrentIndex(0); setStats({ reviewed: 0, shortlisted: 0, rejected: 0, skipped: 0 }); }}>
-              Recommencer
+              {t('Recommencer')}
             </Button>
           </div>
         </motion.div>
@@ -227,18 +228,18 @@ export default function FastReviewPage() {
           </span>
         }
         subtitle={`${mandat?.titrePoste || ''}${mandat?.entreprise?.nom ? ` — ${mandat.entreprise.nom}` : ''}`}
-        breadcrumbs={[{ label: 'Mandats', href: '/mandats' }, { label: mandat?.titrePoste || 'Mandat', href: `/mandats/${mandatId}` }, { label: 'Fast Review' }]}
+        breadcrumbs={[{ label: t('Mandats'), href: '/mandats' }, { label: mandat?.titrePoste || t('Mandat'), href: `/mandats/${mandatId}` }, { label: 'Fast Review' }]}
         actions={
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-sm text-neutral-500">
               <Users size={16} />
-              <span>{remaining} restant{remaining > 1 ? 's' : ''}</span>
+              <span>{t(remaining > 1 ? '{n} restants' : '{n} restant', { n: remaining })}</span>
             </div>
             <button
               onClick={() => setShowShortcuts(true)}
               className="flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-50 transition-colors"
             >
-              <Keyboard size={14} /> Raccourcis
+              <Keyboard size={14} /> {t('Raccourcis')}
             </button>
           </div>
         }
@@ -258,15 +259,15 @@ export default function FastReviewPage() {
       <div className="mb-6 flex justify-center gap-6">
         <div className="flex items-center gap-2 text-sm">
           <div className="h-2 w-2 rounded-full bg-emerald-500" />
-          <span className="text-neutral-500">Shortlistés: <strong className="text-neutral-900">{stats.shortlisted}</strong></span>
+          <span className="text-neutral-500">{t('Shortlistés:')} <strong className="text-neutral-900">{stats.shortlisted}</strong></span>
         </div>
         <div className="flex items-center gap-2 text-sm">
           <div className="h-2 w-2 rounded-full bg-red-500" />
-          <span className="text-neutral-500">Refusés: <strong className="text-neutral-900">{stats.rejected}</strong></span>
+          <span className="text-neutral-500">{t('Refusés:')} <strong className="text-neutral-900">{stats.rejected}</strong></span>
         </div>
         <div className="flex items-center gap-2 text-sm">
           <div className="h-2 w-2 rounded-full bg-amber-500" />
-          <span className="text-neutral-500">Passés: <strong className="text-neutral-900">{stats.skipped}</strong></span>
+          <span className="text-neutral-500">{t('Passés:')} <strong className="text-neutral-900">{stats.skipped}</strong></span>
         </div>
       </div>
 
@@ -295,7 +296,7 @@ export default function FastReviewPage() {
                       {current.candidat.prenom} {current.candidat.nom}
                     </h2>
                     <p className="mt-1 text-lg text-neutral-600">
-                      {current.candidat.posteActuel || 'Poste non renseigné'}
+                      {current.candidat.posteActuel || t('Poste non renseigné')}
                     </p>
                     {current.candidat.entrepriseActuelle && (
                       <p className="flex items-center gap-1.5 mt-1 text-neutral-500">
@@ -347,13 +348,13 @@ export default function FastReviewPage() {
                   <div className="flex gap-6 text-sm">
                     {current.candidat.salaireActuel && (
                       <div>
-                        <span className="text-neutral-400">Actuel: </span>
+                        <span className="text-neutral-400">{t('Actuel: ')}</span>
                         <strong className="text-neutral-700">{(current.candidat.salaireActuel / 1000).toFixed(0)}k$</strong>
                       </div>
                     )}
                     {current.candidat.salaireVise && (
                       <div>
-                        <span className="text-neutral-400">Visé: </span>
+                        <span className="text-neutral-400">{t('Visé: ')}</span>
                         <strong className="text-neutral-700">{(current.candidat.salaireVise / 1000).toFixed(0)}k$</strong>
                       </div>
                     )}
@@ -363,12 +364,12 @@ export default function FastReviewPage() {
                 {/* Experiences (top 3) */}
                 {current.candidat.experiences?.length > 0 && (
                   <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-neutral-700">Expériences</h3>
+                    <h3 className="text-sm font-semibold text-neutral-700">{t('Expériences')}</h3>
                     {current.candidat.experiences.slice(0, 3).map((exp) => (
                       <div key={exp.id} className="flex items-start gap-3 text-sm">
                         <div className="mt-1 h-2 w-2 rounded-full bg-violet-400 flex-shrink-0" />
                         <div>
-                          <p className="font-medium text-neutral-800">{exp.titre || 'Poste non renseigné'}</p>
+                          <p className="font-medium text-neutral-800">{exp.titre || t('Poste non renseigné')}</p>
                           <p className="text-neutral-500">{exp.entreprise}</p>
                         </div>
                       </div>
@@ -386,15 +387,15 @@ export default function FastReviewPage() {
                       className="overflow-hidden border-t border-neutral-100 pt-4 space-y-3"
                     >
                       {current.candidat.disponibilite && (
-                        <p className="text-sm"><span className="text-neutral-400">Disponibilité:</span> <strong>{current.candidat.disponibilite}</strong></p>
+                        <p className="text-sm"><span className="text-neutral-400">{t('Disponibilité:')}</span> <strong>{current.candidat.disponibilite}</strong></p>
                       )}
                       {current.candidat.linkedinUrl && (
                         <a href={current.candidat.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-violet-600 hover:underline">
-                          Voir le profil LinkedIn →
+                          {t('Voir le profil LinkedIn →')}
                         </a>
                       )}
                       <Link to={`/candidats/${current.candidat.id}`} className="block text-sm text-violet-600 hover:underline">
-                        Ouvrir la fiche complète →
+                        {t('Ouvrir la fiche complète →')}
                       </Link>
                     </motion.div>
                   )}
@@ -406,28 +407,28 @@ export default function FastReviewPage() {
                 <button
                   onClick={() => handleAction('reject')}
                   className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-red-200 bg-white text-red-500 shadow-sm transition-all hover:bg-red-50 hover:scale-110 hover:shadow-md active:scale-95"
-                  title="Rejeter (←)"
+                  title={t('Rejeter (←)')}
                 >
                   <X size={24} />
                 </button>
                 <button
                   onClick={() => handleAction('maybe')}
                   className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-amber-200 bg-white text-amber-500 shadow-sm transition-all hover:bg-amber-50 hover:scale-110 hover:shadow-md active:scale-95"
-                  title="Passer (↑)"
+                  title={t('Passer (↑)')}
                 >
                   <Clock size={20} />
                 </button>
                 <button
                   onClick={() => setShowDetails(d => !d)}
                   className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-200 bg-white text-blue-500 shadow-sm transition-all hover:bg-blue-50 hover:scale-110 hover:shadow-md active:scale-95"
-                  title="Détails (↓)"
+                  title={t('Détails (↓)')}
                 >
                   <Eye size={20} />
                 </button>
                 <button
                   onClick={() => handleAction('shortlist')}
                   className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-emerald-200 bg-white text-emerald-500 shadow-sm transition-all hover:bg-emerald-50 hover:scale-110 hover:shadow-md active:scale-95"
-                  title="Shortlister (→)"
+                  title={t('Shortlister (→)')}
                 >
                   <ThumbsUp size={24} />
                 </button>
@@ -437,10 +438,10 @@ export default function FastReviewPage() {
 
           {/* Keyboard hint */}
           <div className="mt-6 flex justify-center gap-6 text-xs text-neutral-400">
-            <span className="flex items-center gap-1"><kbd className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono">←</kbd> Rejeter</span>
+            <span className="flex items-center gap-1"><kbd className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono">←</kbd> {t('Rejeter')}</span>
             <span className="flex items-center gap-1"><kbd className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono">→</kbd> Shortlist</span>
-            <span className="flex items-center gap-1"><kbd className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono">↑</kbd> Passer</span>
-            <span className="flex items-center gap-1"><kbd className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono">↓</kbd> Détails</span>
+            <span className="flex items-center gap-1"><kbd className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono">↑</kbd> {t('Passer')}</span>
+            <span className="flex items-center gap-1"><kbd className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono">↓</kbd> {t('Détails')}</span>
           </div>
         </div>
       ) : (
@@ -449,8 +450,8 @@ export default function FastReviewPage() {
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-neutral-100">
               <Users size={28} className="text-neutral-400" />
             </div>
-            <h3 className="text-lg font-semibold text-neutral-700">Aucun candidat à reviewer</h3>
-            <p className="text-sm text-neutral-500">Ajoutez des candidats en stage "Sourcing" pour commencer</p>
+            <h3 className="text-lg font-semibold text-neutral-700">{t('Aucun candidat à reviewer')}</h3>
+            <p className="text-sm text-neutral-500">{t('Ajoutez des candidats en stage "Sourcing" pour commencer')}</p>
           </div>
         </div>
       )}
@@ -472,14 +473,14 @@ export default function FastReviewPage() {
               onClick={(e) => e.stopPropagation()}
               className="w-80 rounded-2xl bg-white p-6 shadow-xl"
             >
-              <h3 className="text-lg font-bold text-neutral-900 mb-4">Raccourcis clavier</h3>
+              <h3 className="text-lg font-bold text-neutral-900 mb-4">{t('Raccourcis clavier')}</h3>
               <div className="space-y-3 text-sm">
-                <div className="flex justify-between"><span className="text-neutral-600">Rejeter</span><kbd className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs">←</kbd></div>
-                <div className="flex justify-between"><span className="text-neutral-600">Shortlister</span><kbd className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs">→</kbd></div>
-                <div className="flex justify-between"><span className="text-neutral-600">Passer / Plus tard</span><kbd className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs">↑</kbd></div>
-                <div className="flex justify-between"><span className="text-neutral-600">Voir détails</span><kbd className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs">↓</kbd></div>
-                <div className="flex justify-between"><span className="text-neutral-600">Aide raccourcis</span><kbd className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs">?</kbd></div>
-                <div className="flex justify-between"><span className="text-neutral-600">Retour</span><kbd className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs">Esc</kbd></div>
+                <div className="flex justify-between"><span className="text-neutral-600">{t('Rejeter')}</span><kbd className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs">←</kbd></div>
+                <div className="flex justify-between"><span className="text-neutral-600">{t('Shortlister')}</span><kbd className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs">→</kbd></div>
+                <div className="flex justify-between"><span className="text-neutral-600">{t('Passer / Plus tard')}</span><kbd className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs">↑</kbd></div>
+                <div className="flex justify-between"><span className="text-neutral-600">{t('Voir détails')}</span><kbd className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs">↓</kbd></div>
+                <div className="flex justify-between"><span className="text-neutral-600">{t('Aide raccourcis')}</span><kbd className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs">?</kbd></div>
+                <div className="flex justify-between"><span className="text-neutral-600">{t('Retour')}</span><kbd className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs">Esc</kbd></div>
               </div>
             </motion.div>
           </motion.div>

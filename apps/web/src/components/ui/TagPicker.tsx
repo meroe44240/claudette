@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Plus } from 'lucide-react';
+import { t } from '../../lib/i18n';
 
 interface TagPickerProps {
   tags: string[];
@@ -9,7 +10,7 @@ interface TagPickerProps {
   label?: string;
 }
 
-export default function TagPicker({ tags, onChange, suggestions = [], placeholder = 'Ajouter un tag...', label }: TagPickerProps) {
+export default function TagPicker({ tags, onChange, suggestions = [], placeholder = t('Ajouter un tag...'), label }: TagPickerProps) {
   const [inputValue, setInputValue] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);

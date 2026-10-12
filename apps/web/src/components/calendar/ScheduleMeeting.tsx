@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Calendar, Video, Phone, Users, Coffee, Check, AlertCircle } from 'lucide-react';
 import { api, ApiError } from '../../lib/api-client';
+import { t } from '../../lib/i18n';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import { Textarea } from '../ui/Input';
@@ -19,21 +20,21 @@ interface ScheduleMeetingProps {
 }
 
 const MEETING_TYPES = [
-  { value: 'entretien_candidat', label: 'Entretien candidat', icon: '👤' },
-  { value: 'rdv_client', label: 'RDV client', icon: '🏢' },
-  { value: 'call_interne', label: 'Call interne', icon: '📞' },
-  { value: 'suivi', label: 'Point de suivi', icon: '🔄' },
+  { value: 'entretien_candidat', label: t('Entretien candidat'), icon: '👤' },
+  { value: 'rdv_client', label: t('RDV client'), icon: '🏢' },
+  { value: 'call_interne', label: t('Call interne'), icon: '📞' },
+  { value: 'suivi', label: t('Point de suivi'), icon: '🔄' },
   { value: 'debrief', label: 'Debrief', icon: '📋' },
-  { value: 'autre', label: 'Autre', icon: '📅' },
+  { value: 'autre', label: t('Autre'), icon: '📅' },
 ];
 
 const durationOptions = [
   { value: '15', label: '15 minutes' },
   { value: '30', label: '30 minutes' },
   { value: '45', label: '45 minutes' },
-  { value: '60', label: '1 heure' },
-  { value: '90', label: '1h30' },
-  { value: '120', label: '2 heures' },
+  { value: '60', label: t('1 heure') },
+  { value: '90', label: t('1h30') },
+  { value: '120', label: t('2 heures') },
 ];
 
 export default function ScheduleMeeting({
@@ -86,28 +87,28 @@ export default function ScheduleMeeting({
     onSuccess: (data) => {
       setResult(data);
       if (data.success) {
-        toast('success', 'RDV planifié et ajouté au calendrier !');
+        toast('success', t('RDV planifié et ajouté au calendrier !'));
       } else {
-        toast('warning', data.message || 'RDV enregistré mais pas dans le calendrier');
+        toast('warning', data.message || t('RDV enregistré mais pas dans le calendrier'));
       }
     },
     onError: (e) => {
-      toast('error', e instanceof ApiError && e.data.message ? e.data.message : 'Erreur lors de la planification');
+      toast('error', e instanceof ApiError && e.data.message ? e.data.message : t('Erreur lors de la planification'));
     },
   });
 
   const handleSubmit = () => {
     if (!title.trim()) {
-      toast('warning', 'Veuillez saisir un titre');
+      toast('warning', t('Veuillez saisir un titre'));
       return;
     }
     if (!date) {
-      toast('warning', 'Veuillez sélectionner une date');
+      toast('warning', t('Veuillez sélectionner une date'));
       return;
     }
     // Un RDV client n'est compté et annoncé qu'avec ses interlocuteurs
     if (meetingType === 'rdv_client' && entiteType?.toUpperCase() !== 'CLIENT' && !participants.includes('@')) {
-      toast('warning', "Ajoutez l'email d'au moins un interlocuteur");
+      toast('warning', t("Ajoutez l'email d'au moins un interlocuteur"));
       return;
     }
 
@@ -133,11 +134,11 @@ export default function ScheduleMeeting({
   const selectedType = MEETING_TYPES.find((t) => t.value === meetingType);
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Planifier un rendez-vous" size="lg">
+    <Modal isOpen={isOpen} onClose={handleClose} title={t('Planifier un rendez-vous')} size="lg">
       <div className="space-y-4">
         {/* Meeting type */}
         <div>
-          <label className="block text-sm font-medium text-neutral-700 mb-2">Type de rendez-vous</label>
+          <label className="block text-sm font-medium text-neutral-700 mb-2">{t('Type de rendez-vous')}</label>
           <div className="grid grid-cols-3 gap-2">
             {MEETING_TYPES.map((type) => (
               <button
@@ -158,8 +159,8 @@ export default function ScheduleMeeting({
         </div>
 
         <Input
-          label="Titre"
-          placeholder="Entretien, réunion, etc."
+          label={t('Titre')}
+          placeholder={t('Entretien, réunion, etc.')}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
@@ -172,13 +173,13 @@ export default function ScheduleMeeting({
             onChange={(e) => setDate(e.target.value)}
           />
           <Input
-            label="Heure de début"
+            label={t('Heure de début')}
             type="time"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
           />
           <Select
-            label="Durée"
+            label={t('Durée')}
             options={durationOptions}
             value={duration}
             onChange={setDuration}
@@ -187,14 +188,14 @@ export default function ScheduleMeeting({
 
         <Input
           label="Participants (emails)"
-          placeholder="email1@exemple.com, email2@exemple.com"
+          placeholder={t('email1@exemple.com, email2@exemple.com')}
           value={participants}
           onChange={(e) => setParticipants(e.target.value)}
         />
 
         <Textarea
           label="Notes"
-          placeholder="Notes ou ordre du jour (optionnel)..."
+          placeholder={t('Notes ou ordre du jour (optionnel)...')}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
@@ -209,7 +210,7 @@ export default function ScheduleMeeting({
             className="rounded border-neutral-300"
           />
           <span className="text-sm text-neutral-600">
-            Envoyer une invitation par email aux participants
+            {t('Envoyer une invitation par email aux participants')}
           </span>
         </label>
 
@@ -222,7 +223,7 @@ export default function ScheduleMeeting({
           }`}>
             {result.success ? <Check size={16} className="mt-0.5 shrink-0" /> : <AlertCircle size={16} className="mt-0.5 shrink-0" />}
             <div>
-              <p className="font-medium">{result.success ? 'Événement créé !' : 'Attention'}</p>
+              <p className="font-medium">{result.success ? t('Événement créé !') : t('Attention')}</p>
               <p className="text-xs mt-0.5 opacity-80">{result.message}</p>
             </div>
           </div>
@@ -230,12 +231,12 @@ export default function ScheduleMeeting({
 
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" onClick={handleClose}>
-            {result ? 'Fermer' : 'Annuler'}
+            {result ? t('Fermer') : t('Annuler')}
           </Button>
           {!result && (
             <Button onClick={handleSubmit} disabled={createMutation.isPending}>
               <Calendar size={16} />
-              {createMutation.isPending ? 'Planification...' : 'Planifier'}
+              {createMutation.isPending ? t('Planification...') : t('Planifier')}
             </Button>
           )}
         </div>

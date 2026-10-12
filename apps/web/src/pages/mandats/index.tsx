@@ -6,6 +6,7 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
 import MandatCreateModal from '../../components/mandats/MandatCreateModal';
+import { t, LOCALE } from '../../lib/i18n';
 
 // ─── TYPES ──────────────────────────────────────────
 interface UserRef { id: string; nom: string | null; prenom: string | null }
@@ -29,18 +30,18 @@ interface PaginatedResponse { data: Mandat[]; meta: { total: number; page: numbe
 
 // ─── META ───────────────────────────────────────────
 const STATUT_META: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
-  OUVERT: { label: 'Ouvert', bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
-  EN_COURS: { label: 'En cours', bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
-  GAGNE: { label: 'Gagné', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
-  PERDU: { label: 'Perdu', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
-  ANNULE: { label: 'Annulé', bg: 'rgba(34,23,122,.06)', fg: '#8A8699', dot: '#C4C1D0' },
-  CLOTURE: { label: 'Clôturé', bg: 'rgba(34,23,122,.06)', fg: '#6E6A85', dot: '#8E7CC3' },
+  OUVERT: { label: t('Ouvert'), bg: '#E8EEF9', fg: '#2A4A8A', dot: '#2A6BD8' },
+  EN_COURS: { label: t('En cours'), bg: '#FBF3E7', fg: '#8A6A2E', dot: '#E08A2B' },
+  GAGNE: { label: t('Gagné'), bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  PERDU: { label: t('Perdu'), bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
+  ANNULE: { label: t('Annulé'), bg: 'rgba(34,23,122,.06)', fg: '#8A8699', dot: '#C4C1D0' },
+  CLOTURE: { label: t('Clôturé'), bg: 'rgba(34,23,122,.06)', fg: '#6E6A85', dot: '#8E7CC3' },
 };
 const PRIO_META: Record<string, { label: string; bg: string; fg: string }> = {
-  BASSE: { label: 'Basse', bg: 'rgba(34,23,122,.06)', fg: '#8A8699' },
-  NORMALE: { label: 'Normale', bg: '#E8EEF9', fg: '#2A4A8A' },
-  HAUTE: { label: 'Haute', bg: '#FBF3E7', fg: '#8A6A2E' },
-  URGENTE: { label: 'Urgente', bg: '#F7DEDB', fg: '#B3261E' },
+  BASSE: { label: t('Basse'), bg: 'rgba(34,23,122,.06)', fg: '#8A8699' },
+  NORMALE: { label: t('Normale'), bg: '#E8EEF9', fg: '#2A4A8A' },
+  HAUTE: { label: t('Haute'), bg: '#FBF3E7', fg: '#8A6A2E' },
+  URGENTE: { label: t('Urgente'), bg: '#F7DEDB', fg: '#B3261E' },
 };
 const STATUT_OPTIONS = Object.entries(STATUT_META).map(([value, m]) => ({ value, label: m.label }));
 const PRIO_OPTIONS = Object.entries(PRIO_META).map(([value, m]) => ({ value, label: m.label }));
@@ -62,8 +63,8 @@ function initials(u: UserRef | null | undefined): string { return u ? `${(u.pren
 // Avatar binome (S = sales/commercial navy, R = recruteur lavande)
 function TeamAvatar({ u, kind }: { u: UserRef | null | undefined; kind: 'S' | 'R' }) {
   const bg = kind === 'S' ? '#22177A' : '#8E7CC3';
-  if (!u) return <span title={kind === 'S' ? 'Commercial non assigné' : 'Recruteur non assigné'} style={{ width: 26, height: 26, borderRadius: '50%', border: '1.5px dashed rgba(34,23,122,0.25)', color: '#C4C1D0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800 }}>{kind}</span>;
-  return <span title={`${kind === 'S' ? 'Commercial' : 'Recruteur'} · ${fullName(u)}`} style={{ width: 26, height: 26, borderRadius: '50%', background: bg, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, fontWeight: 800, border: '1.5px solid #fff', boxShadow: '0 0 0 1px rgba(34,23,122,0.08)' }}>{initials(u)}</span>;
+  if (!u) return <span title={kind === 'S' ? t('Commercial non assigné') : t('Recruteur non assigné')} style={{ width: 26, height: 26, borderRadius: '50%', border: '1.5px dashed rgba(34,23,122,0.25)', color: '#C4C1D0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800 }}>{kind}</span>;
+  return <span title={`${kind === 'S' ? t('Commercial') : t('Recruteur')} · ${fullName(u)}`} style={{ width: 26, height: 26, borderRadius: '50%', background: bg, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9.5, fontWeight: 800, border: '1.5px solid #fff', boxShadow: '0 0 0 1px rgba(34,23,122,0.08)' }}>{initials(u)}</span>;
 }
 
 // ─── CHIP DROPDOWN ──────────────────────────────────
@@ -98,7 +99,7 @@ function ChipDropdown({ label, options, value, open, onToggle, onChange }: {
 
 // ═════════════════════════════════════════════════════
 export default function MandatsPage() {
-  usePageTitle('Mandats');
+  usePageTitle(t('Mandats'));
   const navigate = useNavigate();
 
   const { user } = useAuthStore();
@@ -162,17 +163,17 @@ export default function MandatsPage() {
       {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>Recrutement</div>
-          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Mandats</h1>
+          <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>{t('Recrutement')}</div>
+          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>{t('Mandats')}</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {!isAdmin && user && (
             <div style={{ display: 'flex', background: '#fff', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 11, overflow: 'hidden' }}>
-              {([{ label: 'Tous', v: 'all' }, { label: 'Mes mandats', v: user.id }]).map(t => {
-                const on = who === t.v;
+              {([{ label: t('Tous'), v: 'all' }, { label: t('Mes mandats'), v: user.id }]).map(tab => {
+                const on = who === tab.v;
                 return (
-                  <button key={t.label} onClick={() => { setWho(t.v); setPage(1); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: on ? '#E6E9AF' : '#4A4568', background: on ? '#22177A' : '#fff', border: 'none', padding: '9px 15px', cursor: 'pointer' }}>
-                    {t.v !== 'all' && <Users size={13} color={on ? '#E6E9AF' : '#8A8699'} />}{t.label}
+                  <button key={tab.label} onClick={() => { setWho(tab.v); setPage(1); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: on ? '#E6E9AF' : '#4A4568', background: on ? '#22177A' : '#fff', border: 'none', padding: '9px 15px', cursor: 'pointer' }}>
+                    {tab.v !== 'all' && <Users size={13} color={on ? '#E6E9AF' : '#8A8699'} />}{tab.label}
                   </button>
                 );
               })}
@@ -182,18 +183,18 @@ export default function MandatsPage() {
             <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
               <Users size={14} color="#8A8699" style={{ position: 'absolute', left: 11, pointerEvents: 'none' }} />
               <select value={who} onChange={e => { setWho(e.target.value); setPage(1); }} style={{ appearance: 'none', fontSize: 13, fontWeight: 700, color: who === 'all' ? '#4A4568' : '#22177A', background: who === 'all' ? '#fff' : '#F2F3D8', border: `1px solid ${who === 'all' ? 'rgba(34,23,122,0.14)' : 'rgba(34,23,122,0.24)'}`, borderRadius: 11, padding: '9px 30px 9px 32px', cursor: 'pointer', outline: 'none' }}>
-                <option value="all">Toute l'équipe</option>
+                <option value="all">{t("Toute l'équipe")}</option>
                 {(team ?? []).map(u => <option key={u.id} value={u.id}>{fullName(u)}</option>)}
               </select>
               <ChevronDown size={13} color="#8A8699" strokeWidth={2.4} style={{ position: 'absolute', right: 11, pointerEvents: 'none' }} />
             </div>
           )}
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{total.toLocaleString('fr-FR')} mandat{total > 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{t(total > 1 ? '{n} mandats' : '{n} mandat', { n: total.toLocaleString(LOCALE) })}</span>
           <div style={{ display: 'flex', background: '#fff', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 11, overflow: 'hidden' }}>
-            <button title="Liste" style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#22177A', border: 'none', cursor: 'pointer' }}><List size={16} color="#E6E9AF" /></button>
+            <button title={t('Liste')} style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#22177A', border: 'none', cursor: 'pointer' }}><List size={16} color="#E6E9AF" /></button>
             <button title="Kanban" onClick={() => navigate('/mandats/kanban')} style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: 'none', cursor: 'pointer' }}><Columns3 size={16} color="#8A8699" /></button>
           </div>
-          <button onClick={() => setCreateOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />Nouveau mandat</button>
+          <button onClick={() => setCreateOpen(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />{t('Nouveau mandat')}</button>
         </div>
       </div>
 
@@ -201,19 +202,19 @@ export default function MandatsPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', marginTop: 22 }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 220, maxWidth: 360 }}>
           <Search size={15} color="#9A96AE" strokeWidth={2.2} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)' }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un poste, une entreprise…" style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 36px', borderRadius: 11, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', outline: 'none' }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('Rechercher un poste, une entreprise…')} style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 36px', borderRadius: 11, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', outline: 'none' }} />
         </div>
-        <ChipDropdown label="Statut" options={STATUT_OPTIONS} value={filters.statut} open={openChip === 'statut'} onToggle={() => setOpenChip(openChip === 'statut' ? null : 'statut')} onChange={v => setFilter('statut', v)} />
-        <ChipDropdown label="Priorité" options={PRIO_OPTIONS} value={filters.priorite} open={openChip === 'prio'} onToggle={() => setOpenChip(openChip === 'prio' ? null : 'prio')} onChange={v => setFilter('priorite', v)} />
+        <ChipDropdown label={t('Statut')} options={STATUT_OPTIONS} value={filters.statut} open={openChip === 'statut'} onToggle={() => setOpenChip(openChip === 'statut' ? null : 'statut')} onChange={v => setFilter('statut', v)} />
+        <ChipDropdown label={t('Priorité')} options={PRIO_OPTIONS} value={filters.priorite} open={openChip === 'prio'} onToggle={() => setOpenChip(openChip === 'prio' ? null : 'prio')} onChange={v => setFilter('priorite', v)} />
       </div>
 
       {/* QUICK STATUT — Actifs / Gagnés / Perdus / Tous */}
       <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 12 }}>
         {([
-          { label: 'Actifs', v: ['OUVERT', 'EN_COURS'] },
-          { label: 'Gagnés', v: ['GAGNE'] },
-          { label: 'Perdus', v: ['PERDU'] },
-          { label: 'Tous', v: [] as string[] },
+          { label: t('Actifs'), v: ['OUVERT', 'EN_COURS'] },
+          { label: t('Gagnés'), v: ['GAGNE'] },
+          { label: t('Perdus'), v: ['PERDU'] },
+          { label: t('Tous'), v: [] as string[] },
         ]).map(q => {
           const cur = (filters.statut ?? []).slice().sort().join(',');
           const on = cur === q.v.slice().sort().join(',');
@@ -225,29 +226,29 @@ export default function MandatsPage() {
 
       {/* ACTIVE CHIPS */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 11 }}>
-        <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>Filtres</span>
-        {activeChips.length === 0 && <span style={{ fontSize: 12, color: '#C4C1D0' }}>aucun</span>}
+        <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>{t('Filtres')}</span>
+        {activeChips.length === 0 && <span style={{ fontSize: 12, color: '#C4C1D0' }}>{t('aucun')}</span>}
         {activeChips.map(ch => <span key={ch.key} className="kw" onClick={ch.onRemove} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 999, padding: '5px 11px', cursor: 'pointer' }}>{ch.label}<X size={11} strokeWidth={2.8} /></span>)}
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#8A8699' }}>{rows.length} affichés · {total.toLocaleString('fr-FR')} au total</span>
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#8A8699' }}>{t('{n} affichés · {total} au total', { n: rows.length, total: total.toLocaleString(LOCALE) })}</span>
       </div>
 
       {/* TABLE */}
       <div style={{ marginTop: 18, background: '#fff', border: '1px solid rgba(34,23,122,0.08)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 2px rgba(34,23,122,0.04)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 14, padding: '14px 22px', background: '#F7F7EE', borderBottom: '1px solid rgba(34,23,122,0.08)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#8A8699' }}>
-          <span>Poste</span><span>Entreprise</span><span>Client</span><span>Statut</span><span>Priorité</span><span>Salaire</span><span>Fee</span><span style={{ textAlign: 'center' }}>Cand.</span><span>Équipe</span><span />
+          <span>{t('Poste')}</span><span>{t('Entreprise')}</span><span>{t('Client')}</span><span>{t('Statut')}</span><span>{t('Priorité')}</span><span>{t('Salaire')}</span><span>Fee</span><span style={{ textAlign: 'center' }}>Cand.</span><span>{t('Équipe')}</span><span />
         </div>
         {isLoading ? (
           Array.from({ length: 8 }).map((_, i) => <div key={i} style={{ height: 62, borderBottom: '1px solid rgba(34,23,122,0.05)', background: i % 2 ? '#fff' : '#FCFCF5' }} />)
         ) : rows.length === 0 ? (
           <div style={{ padding: '52px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
             <div style={{ width: 56, height: 56, borderRadius: 16, border: '1.5px dashed rgba(34,23,122,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}><List size={22} color="#8E7CC3" /></div>
-            <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 17, color: '#1A1533' }}>Aucun mandat à afficher</div>
+            <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 17, color: '#1A1533' }}>{t('Aucun mandat à afficher')}</div>
             <div style={{ fontSize: 13, color: '#8A8699', marginTop: 6, maxWidth: 380 }}>{
-              (debSearch || activeChips.length) ? 'Aucun mandat ne correspond à votre recherche ou vos filtres.'
-              : isAdmin ? (who !== 'all' ? "Cette personne n'a aucun mandat (ni commercial, ni recruteur)." : "Aucun mandat pour l'instant.")
-              : "Aucun mandat où vous êtes le commercial ou le recruteur."
+              (debSearch || activeChips.length) ? t('Aucun mandat ne correspond à votre recherche ou vos filtres.')
+              : isAdmin ? (who !== 'all' ? t("Cette personne n'a aucun mandat (ni commercial, ni recruteur).") : t("Aucun mandat pour l'instant."))
+              : t("Aucun mandat où vous êtes le commercial ou le recruteur.")
             }</div>
-            <button onClick={() => setCreateOpen(true)} style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 13.5, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: '10px 18px', cursor: 'pointer' }}><Plus size={15} strokeWidth={2.4} />Créer un mandat</button>
+            <button onClick={() => setCreateOpen(true)} style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 13.5, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 11, padding: '10px 18px', cursor: 'pointer' }}><Plus size={15} strokeWidth={2.4} />{t('Créer un mandat')}</button>
           </div>
         ) : rows.map(m => {
           const st = STATUT_META[m.statut] ?? STATUT_META.OUVERT;
@@ -257,10 +258,10 @@ export default function MandatsPage() {
             <div key={m.id} className="crow" onClick={() => navigate(`/mandats/${m.id}`)} style={{ cursor: 'pointer', display: 'grid', gridTemplateColumns: GRID, gap: 14, alignItems: 'center', padding: '15px 22px', borderBottom: '1px solid rgba(34,23,122,0.05)' }}>
               <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#1A1533', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.titrePoste}</div>
-                {m.type === 'VIVIER' && <span title="Mandat vivier (sourcing sans client, hors stats)" style={{ flexShrink: 0, fontSize: 10, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#5B4B9E', background: '#EDEAF9', borderRadius: 999, padding: '2px 8px' }}>Vivier</span>}
+                {m.type === 'VIVIER' && <span title={t('Mandat vivier (sourcing sans client, hors stats)')} style={{ flexShrink: 0, fontSize: 10, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#5B4B9E', background: '#EDEAF9', borderRadius: 999, padding: '2px 8px' }}>{t('Vivier')}</span>}
               </div>
               <span onClick={(e) => { e.stopPropagation(); navigate(`/entreprises/${m.entreprise.id}`); }} style={{ fontSize: 13, color: '#22177A', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.entreprise.nom}</span>
-              <span onClick={(e) => { if (m.client) { e.stopPropagation(); navigate(`/clients/${m.client.id}`); } }} style={{ fontSize: 13, color: m.client ? '#4A4568' : '#C4C1D0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: m.client ? 'pointer' : 'default' }}>{m.type === 'VIVIER' && !m.client ? 'Vivier interne' : clientName(m.client)}</span>
+              <span onClick={(e) => { if (m.client) { e.stopPropagation(); navigate(`/clients/${m.client.id}`); } }} style={{ fontSize: 13, color: m.client ? '#4A4568' : '#C4C1D0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: m.client ? 'pointer' : 'default' }}>{m.type === 'VIVIER' && !m.client ? t('Vivier interne') : clientName(m.client)}</span>
               <span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, borderRadius: 999, padding: '4px 11px', background: st.bg, color: st.fg, whiteSpace: 'nowrap' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: st.dot }} />{st.label}</span></span>
               <span><span style={{ display: 'inline-flex', fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '4px 11px', background: pr.bg, color: pr.fg, whiteSpace: 'nowrap' }}>{pr.label}</span></span>
               <span style={{ fontSize: 12.5, color: '#4A4568', whiteSpace: 'nowrap' }}>{salaire(m.salaireMin, m.salaireMax)}</span>
@@ -273,7 +274,7 @@ export default function MandatsPage() {
         })}
         {totalPages > 1 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 22px', fontSize: 13, color: '#8A8699' }}>
-            <span>Page {page} / {totalPages} · {total.toLocaleString('fr-FR')} mandats</span>
+            <span>{t('Page {page} / {totalPages} · {total} mandats', { page, totalPages, total: total.toLocaleString(LOCALE) })}</span>
             <div style={{ display: 'flex', gap: 6 }}>
               <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', color: page <= 1 ? '#C4C1D0' : '#22177A', cursor: page <= 1 ? 'default' : 'pointer' }}>‹</button>
               <span style={{ minWidth: 32, height: 32, borderRadius: 9, background: '#22177A', color: '#E6E9AF', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{page}</span>

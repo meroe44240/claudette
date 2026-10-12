@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, User, Building2, Phone, Loader2, Check, UserPlus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../lib/api-client';
+import { t } from '../../lib/i18n';
 import Modal from '../ui/Modal';
 import { toast } from '../ui/Toast';
 
@@ -76,7 +77,7 @@ export default function IdentifyContactModal({
 
         setResults(mapped);
       } catch {
-        toast('error', 'Erreur lors de la recherche');
+        toast('error', t('Erreur lors de la recherche'));
       } finally {
         setSearching(false);
       }
@@ -103,12 +104,12 @@ export default function IdentifyContactModal({
       }),
     onSuccess: (_, contact) => {
       const name = `${contact.prenom ?? ''} ${contact.nom}`.trim();
-      toast('success', `Appel rattaché à ${name}`);
+      toast('success', t('Appel rattaché à {name}', { name }));
       queryClient.invalidateQueries({ queryKey: ['activites'] });
       onClose();
     },
     onError: () => {
-      toast('error', 'Erreur lors de l\'identification');
+      toast('error', t('Erreur lors de l\'identification'));
     },
   });
 
@@ -117,13 +118,13 @@ export default function IdentifyContactModal({
     : results.filter(r => r.type === activeTab);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Identifier le contact" size="md">
+    <Modal isOpen={isOpen} onClose={onClose} title={t('Identifier le contact')} size="md">
       <div className="space-y-4">
         {/* Phone number display */}
         <div className="flex items-center gap-3 rounded-xl bg-amber-50 px-4 py-3">
           <Phone size={18} className="text-amber-600" />
           <div>
-            <p className="text-[13px] font-medium text-amber-800">Numéro à identifier</p>
+            <p className="text-[13px] font-medium text-amber-800">{t('Numéro à identifier')}</p>
             <p className="text-[15px] font-semibold text-amber-900">{phoneNumber}</p>
           </div>
         </div>
@@ -136,7 +137,7 @@ export default function IdentifyContactModal({
             autoFocus
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Rechercher par nom, prénom, email, téléphone..."
+            placeholder={t('Rechercher par nom, prénom, email, téléphone...')}
             className="w-full rounded-xl border border-neutral-200 bg-white py-2.5 pl-9 pr-4 text-[14px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 transition-colors"
           />
           {searching && (
@@ -147,9 +148,9 @@ export default function IdentifyContactModal({
         {/* Tabs */}
         <div className="flex items-center gap-1">
           {[
-            { id: 'all' as const, label: 'Tous' },
-            { id: 'CANDIDAT' as const, label: 'Candidats' },
-            { id: 'CLIENT' as const, label: 'Clients' },
+            { id: 'all' as const, label: t('Tous') },
+            { id: 'CANDIDAT' as const, label: t('Candidats') },
+            { id: 'CLIENT' as const, label: t('Clients') },
           ].map(tab => (
             <button
               key={tab.id}
@@ -179,9 +180,9 @@ export default function IdentifyContactModal({
                 animate={{ opacity: 1 }}
                 className="rounded-xl bg-neutral-50 px-4 py-6 text-center"
               >
-                <p className="text-[13px] text-neutral-500">Aucun contact trouvé</p>
+                <p className="text-[13px] text-neutral-500">{t('Aucun contact trouvé')}</p>
                 <p className="text-[12px] text-neutral-400 mt-1">
-                  Essayez avec un autre nom ou créez d'abord la fiche dans le CRM
+                  {t("Essayez avec un autre nom ou créez d'abord la fiche dans le CRM")}
                 </p>
               </motion.div>
             ) : (
@@ -222,7 +223,7 @@ export default function IdentifyContactModal({
                             ? 'bg-blue-50 text-blue-600'
                             : 'bg-emerald-50 text-emerald-600'
                         }`}>
-                          {isCandidat ? 'Candidat' : 'Client'}
+                          {isCandidat ? t('Candidat') : t('Client')}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mt-0.5">
@@ -247,7 +248,7 @@ export default function IdentifyContactModal({
                       ) : (
                         <div className="flex items-center gap-1 text-[12px] font-medium text-brand-500">
                           <UserPlus size={14} />
-                          Attribuer
+                          {t('Attribuer')}
                         </div>
                       )}
                     </div>
@@ -261,7 +262,7 @@ export default function IdentifyContactModal({
             <div className="rounded-xl bg-neutral-50 px-4 py-6 text-center">
               <Search size={24} className="mx-auto text-neutral-300 mb-2" />
               <p className="text-[13px] text-neutral-500">
-                Tapez au moins 2 caractères pour rechercher
+                {t('Tapez au moins 2 caractères pour rechercher')}
               </p>
             </div>
           )}

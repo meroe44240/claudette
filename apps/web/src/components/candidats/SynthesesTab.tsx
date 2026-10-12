@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FileText, Upload, Check, RefreshCw, Trash2, ChevronDown, Loader2, Calendar } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../ui/Toast';
+import { t, LOCALE, isEn } from '../../lib/i18n';
 
 // Onglet « Entretiens » : synthèses d'entretien en PDF. L'IA lit le PDF et propose
 // des mises à jour (champs, expériences, dossier client) que le recruteur coche
@@ -24,12 +25,12 @@ interface Meeting { id: string; titre: string | null; contenu: string | null; cr
 
 const BRAND = '#22177A', CREAM = '#E6E9AF', INK = '#1A1533', MUTED = '#8A8699', LINE = 'rgba(34,23,122,.1)';
 const FIELD_LABELS: Record<string, string> = {
-  localisation: 'Localisation', salaireActuel: 'Rémunération actuelle', salaireSouhaite: 'Rémunération souhaitée',
-  anneesExperience: "Années d'expérience", disponibilite: 'Disponibilité', mobilite: 'Mobilité',
+  localisation: t('Localisation'), salaireActuel: t('Rémunération actuelle'), salaireSouhaite: t('Rémunération souhaitée'),
+  anneesExperience: t("Années d'expérience"), disponibilite: t('Disponibilité'), mobilite: t('Mobilité'),
 };
-const fmtField = (k: string, v: string | number | null) => (v == null ? '' : /salaire/.test(k) ? `${Number(v).toLocaleString('fr-FR')} €` : k === 'anneesExperience' ? `${v} ans` : String(v));
-const authHeader = (): Record<string, string> => { const t = localStorage.getItem('accessToken'); return t ? { Authorization: `Bearer ${t}` } : {}; };
-const dateFr = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtField = (k: string, v: string | number | null) => (v == null ? '' : /salaire/.test(k) ? `${Number(v).toLocaleString(LOCALE)} €` : k === 'anneesExperience' ? t('{n} ans', { n: v }) : String(v));
+const authHeader = (): Record<string, string> => { const tok = localStorage.getItem('accessToken'); return tok ? { Authorization: `Bearer ${tok}` } : {}; };
+const dateFr = (iso: string) => new Date(iso).toLocaleDateString(LOCALE,{ day: 'numeric', month: 'short', year: 'numeric' });
 
 export interface SynthesesTabHandle { pick: () => void }
 
@@ -50,15 +51,15 @@ const SynthesesTab = forwardRef<SynthesesTabHandle, { candidatId: string; meetin
     try {
       const res = await fetch(`/api/v1/candidats/${candidatId}/syntheses`, { method: 'POST', headers: { ...authHeader() }, body: fd });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.message || body?.error || "Échec de l'envoi");
+      if (!res.ok) throw new Error(body?.message || body?.error || t("Échec de l'envoi"));
       refresh();
-      if (body?.status === 'erreur') toast('error', `Synthèse rangée, mais la lecture a échoué : ${body.error}`);
-      else { toast('success', 'Synthèse lue : vérifiez la proposition'); setOpenId(body?.id ?? null); }
-    } catch (e: any) { toast('error', e?.message || "Échec de l'envoi"); }
+      if (body?.status === 'erreur') toast('error', t('Synthèse rangée, mais la lecture a échoué : {erreur}', { erreur: body.error }));
+      else { toast('success', t('Synthèse lue : vérifiez la proposition')); setOpenId(body?.id ?? null); }
+    } catch (e: any) { toast('error', e?.message || t("Échec de l'envoi")); }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 
-  const reanalyse = useMutation({ mutationFn: (sid: string) => api.post(`/candidats/${candidatId}/syntheses/${sid}/reanalyse`), onSuccess: () => { refresh(); toast('success', 'Synthèse relue'); }, onError: (e: any) => toast('error', e?.message || 'Échec') });
+  const reanalyse = useMutation({ mutationFn: (sid: string) => api.post(`/candidats/${candidatId}/syntheses/${sid}/reanalyse`), onSuccess: () => { refresh(); toast('success', t('Synthèse relue')); }, onError: (e: any) => toast('error', e?.message || t('Échec')) });
   const remove = useMutation({ mutationFn: (sid: string) => api.delete(`/candidats/${candidatId}/syntheses/${sid}`), onSuccess: () => refresh() });
 
   return (
@@ -68,13 +69,13 @@ const SynthesesTab = forwardRef<SynthesesTabHandle, { candidatId: string; meetin
         <span style={{ display: 'inline-flex', width: 40, height: 40, borderRadius: 12, background: '#F2F3D8', alignItems: 'center', justifyContent: 'center' }}>
           {uploading ? <Loader2 size={19} color={BRAND} className="spin" /> : <Upload size={19} color={BRAND} />}
         </span>
-        <div style={{ fontSize: 13.5, fontWeight: 800, color: INK, marginTop: 10 }}>{uploading ? 'Lecture de la synthèse…' : 'Ajouter une synthèse d\'entretien'}</div>
-        <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>{uploading ? 'Environ 20 secondes' : 'PDF · l\'ATS propose les mises à jour, vous validez'}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: INK, marginTop: 10 }}>{uploading ? t('Lecture de la synthèse…') : t("Ajouter une synthèse d'entretien")}</div>
+        <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>{uploading ? t('Environ 20 secondes') : t("PDF · l'ATS propose les mises à jour, vous validez")}</div>
       </button>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
-        {isLoading && <div style={{ color: MUTED, fontSize: 13 }}>Chargement…</div>}
-        {!isLoading && data.length === 0 && <div style={{ color: MUTED, fontSize: 13, textAlign: 'center', padding: 10 }}>Aucune synthèse pour l'instant.</div>}
+        {isLoading && <div style={{ color: MUTED, fontSize: 13 }}>{t('Chargement…')}</div>}
+        {!isLoading && data.length === 0 && <div style={{ color: MUTED, fontSize: 13, textAlign: 'center', padding: 10 }}>{t("Aucune synthèse pour l'instant.")}</div>}
         {data.map((s) => (
           <div key={s.id} style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 15px' }}>
@@ -82,15 +83,15 @@ const SynthesesTab = forwardRef<SynthesesTabHandle, { candidatId: string; meetin
               <div style={{ flex: 1, minWidth: 0 }}>
                 {s.url
                   ? <a href={s.url} target="_blank" rel="noreferrer" style={{ display: 'block', fontSize: 13.5, fontWeight: 800, color: INK, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.filename}</a>
-                  : <button onClick={() => setTextId(textId === s.id ? null : s.id)} title="Voir le texte du débrief" style={{ display: 'block', maxWidth: '100%', fontSize: 13.5, fontWeight: 800, color: INK, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.filename}</button>}
+                  : <button onClick={() => setTextId(textId === s.id ? null : s.id)} title={t('Voir le texte du débrief')} style={{ display: 'block', maxWidth: '100%', fontSize: 13.5, fontWeight: 800, color: INK, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.filename}</button>}
                 <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{dateFr(s.createdAt)}{s.user ? ` · ${s.user.prenom ?? ''} ${s.user.nom}`.trimEnd() : ''}</div>
               </div>
-              {s.status === 'applique' && <span style={{ fontSize: 11.5, fontWeight: 800, color: '#2C6B3F', background: '#EAF3EC', borderRadius: 999, padding: '4px 10px' }}>Appliquée</span>}
-              {s.status === 'propose' && <span style={{ fontSize: 11.5, fontWeight: 800, color: '#8A6A2E', background: '#FBF3E7', borderRadius: 999, padding: '4px 10px' }}>À valider</span>}
-              {s.status === 'erreur' && <span title={s.error ?? ''} style={{ fontSize: 11.5, fontWeight: 800, color: '#B3261E', background: '#F7DEDB', borderRadius: 999, padding: '4px 10px' }}>Lecture échouée</span>}
-              {s.proposal && <button onClick={() => setOpenId(openId === s.id ? null : s.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700, color: BRAND, background: '#fff', border: '1px solid rgba(34,23,122,.16)', borderRadius: 9, padding: '7px 11px', cursor: 'pointer' }}>Proposition<ChevronDown size={13} style={{ transform: openId === s.id ? 'rotate(180deg)' : 'none' }} /></button>}
-              <button onClick={() => reanalyse.mutate(s.id)} disabled={reanalyse.isPending} title="Relire avec l'IA" style={iconBtn}><RefreshCw size={13} className={reanalyse.isPending && reanalyse.variables === s.id ? 'spin' : ''} /></button>
-              <button onClick={() => { if (confirm('Retirer cette synthèse de la fiche ?')) remove.mutate(s.id); }} title="Retirer" style={iconBtn}><Trash2 size={13} /></button>
+              {s.status === 'applique' && <span style={{ fontSize: 11.5, fontWeight: 800, color: '#2C6B3F', background: '#EAF3EC', borderRadius: 999, padding: '4px 10px' }}>{t('Appliquée')}</span>}
+              {s.status === 'propose' && <span style={{ fontSize: 11.5, fontWeight: 800, color: '#8A6A2E', background: '#FBF3E7', borderRadius: 999, padding: '4px 10px' }}>{t('À valider')}</span>}
+              {s.status === 'erreur' && <span title={s.error ?? ''} style={{ fontSize: 11.5, fontWeight: 800, color: '#B3261E', background: '#F7DEDB', borderRadius: 999, padding: '4px 10px' }}>{t('Lecture échouée')}</span>}
+              {s.proposal && <button onClick={() => setOpenId(openId === s.id ? null : s.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700, color: BRAND, background: '#fff', border: '1px solid rgba(34,23,122,.16)', borderRadius: 9, padding: '7px 11px', cursor: 'pointer' }}>{t('Proposition')}<ChevronDown size={13} style={{ transform: openId === s.id ? 'rotate(180deg)' : 'none' }} /></button>}
+              <button onClick={() => reanalyse.mutate(s.id)} disabled={reanalyse.isPending} title={t("Relire avec l'IA")} style={iconBtn}><RefreshCw size={13} className={reanalyse.isPending && reanalyse.variables === s.id ? 'spin' : ''} /></button>
+              <button onClick={() => { if (confirm(t('Retirer cette synthèse de la fiche ?'))) remove.mutate(s.id); }} title={t('Retirer')} style={iconBtn}><Trash2 size={13} /></button>
             </div>
             {textId === s.id && s.texte && <div style={{ borderTop: `1px solid ${LINE}`, padding: '12px 16px', maxHeight: 360, overflowY: 'auto', fontSize: 12.5, lineHeight: 1.6, color: '#4A4568', whiteSpace: 'pre-wrap', background: '#FDFDF8' }}>{s.texte}</div>}
             {openId === s.id && s.proposal && <ProposalReview candidatId={candidatId} synthese={s} onDone={() => { refresh(); onApplied(); setOpenId(null); }} />}
@@ -100,12 +101,12 @@ const SynthesesTab = forwardRef<SynthesesTabHandle, { candidatId: string; meetin
 
       {meetings.length > 0 && (
         <div style={{ marginTop: 26 }}>
-          <div style={{ fontWeight: 800, fontSize: 15, color: INK, marginBottom: 10 }}>Rendez-vous</div>
+          <div style={{ fontWeight: 800, fontSize: 15, color: INK, marginBottom: 10 }}>{t('Rendez-vous')}</div>
           {meetings.map((m) => (
             <div key={m.id} style={{ display: 'flex', gap: 11, alignItems: 'flex-start', padding: '10px 4px', borderBottom: `1px solid ${LINE}` }}>
               <Calendar size={15} color={MUTED} style={{ marginTop: 2, flexShrink: 0 }} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>{m.titre || 'Rendez-vous'}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>{m.titre || (isEn ? 'Meeting' : 'Rendez-vous')}</div>
                 <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{dateFr(m.createdAt)}</div>
               </div>
             </div>
@@ -142,24 +143,24 @@ function ProposalReview({ candidatId, synthese, onDone }: { candidatId: string; 
       experiences: p.experiences.filter((_, i) => exps.has(i)),
       dossier: dossier ? p.dossier : undefined,
     }),
-    onSuccess: (r) => { toast('success', r.applied.length ? `Appliqué : ${r.applied.join(', ')}` : 'Rien à appliquer'); onDone(); },
-    onError: (e: any) => toast('error', e?.message || "Échec de l'application"),
+    onSuccess: (r) => { toast('success', r.applied.length ? t('Appliqué : {liste}', { liste: r.applied.join(', ') }) : t('Rien à appliquer')); onDone(); },
+    onError: (e: any) => toast('error', e?.message || t("Échec de l'application")),
   });
 
   const h: React.CSSProperties = { fontSize: 12, fontWeight: 800, color: MUTED, margin: '16px 0 4px' };
   return (
     <div style={{ borderTop: `1px solid ${LINE}`, padding: '6px 16px 16px', background: '#FDFDF8', borderRadius: '0 0 14px 14px' }}>
-      {p.resume && <><div style={h}>Résumé pour l'équipe</div><p style={{ fontSize: 13, color: '#4A4568', lineHeight: 1.55, whiteSpace: 'pre-line' }}>{p.resume}</p></>}
+      {p.resume && <><div style={h}>{t("Résumé pour l'équipe")}</div><p style={{ fontSize: 13, color: '#4A4568', lineHeight: 1.55, whiteSpace: 'pre-line' }}>{p.resume}</p></>}
 
-      {fieldKeys.length > 0 && <><div style={h}>Champs de la fiche</div>
+      {fieldKeys.length > 0 && <><div style={h}>{t('Champs de la fiche')}</div>
         {fieldKeys.map((k) => <Tick key={k} on={fields.has(k)} onClick={() => toggle(fields, k, setFields)}><strong>{FIELD_LABELS[k] ?? k}</strong> : {fmtField(k, p.fields[k])}</Tick>)}</>}
 
-      {p.experiences.length > 0 && <><div style={h}>Expériences (les doublons sont ignorés)</div>
-        {p.experiences.map((e, i) => <Tick key={i} on={exps.has(i)} onClick={() => toggle(exps, i, setExps)}><strong>{e.titre}</strong>, {e.entreprise} · {e.anneeDebut} → {e.anneeFin ?? 'auj.'}</Tick>)}</>}
+      {p.experiences.length > 0 && <><div style={h}>{t('Expériences (les doublons sont ignorés)')}</div>
+        {p.experiences.map((e, i) => <Tick key={i} on={exps.has(i)} onClick={() => toggle(exps, i, setExps)}><strong>{e.titre}</strong>, {e.entreprise} · {e.anneeDebut} → {e.anneeFin ?? t('auj.')}</Tick>)}</>}
 
-      <div style={h}>Dossier client (portail)</div>
+      <div style={h}>{t('Dossier client (portail)')}</div>
       <Tick on={dossier} onClick={() => setDossier(!dossier)}>
-        Remplacer la synthèse, {p.dossier.infos.length} cartes d'infos, {p.dossier.adequation.length} points d'adéquation et {p.dossier.sections.length} sections ({p.dossier.sections.map((s) => s.title).join(', ')})
+        {t("Remplacer la synthèse, {infos} cartes d'infos, {points} points d'adéquation et {sections} sections ({titres})", { infos: p.dossier.infos.length, points: p.dossier.adequation.length, sections: p.dossier.sections.length, titres: p.dossier.sections.map((s) => s.title).join(', ') })}
       </Tick>
       {dossier && (
         <div style={{ margin: '4px 0 0 27px', padding: '10px 12px', background: '#fff', border: `1px solid ${LINE}`, borderRadius: 10, fontSize: 12.5, color: '#4A4568', lineHeight: 1.55 }}>
@@ -168,7 +169,7 @@ function ProposalReview({ candidatId, synthese, onDone }: { candidatId: string; 
       )}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-        <button onClick={() => apply.mutate()} disabled={apply.isPending} style={{ fontSize: 13, fontWeight: 800, color: CREAM, background: BRAND, border: 'none', borderRadius: 10, padding: '10px 16px', cursor: 'pointer', opacity: apply.isPending ? 0.7 : 1 }}>{apply.isPending ? 'Application…' : 'Appliquer la sélection'}</button>
+        <button onClick={() => apply.mutate()} disabled={apply.isPending} style={{ fontSize: 13, fontWeight: 800, color: CREAM, background: BRAND, border: 'none', borderRadius: 10, padding: '10px 16px', cursor: 'pointer', opacity: apply.isPending ? 0.7 : 1 }}>{apply.isPending ? t('Application…') : t('Appliquer la sélection')}</button>
       </div>
     </div>
   );

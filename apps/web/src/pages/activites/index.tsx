@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Phone, Mail, Calendar, FileText, ListChecks, Mic, Star, StarOff, Plus, Loader2, Search, MessageSquare, AlertCircle, UserPlus } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { t, LOCALE } from '../../lib/i18n';
 import Badge from '../../components/ui/Badge';
 import Pagination from '../../components/ui/Pagination';
 import EmptyState from '../../components/ui/EmptyState';
@@ -34,34 +35,34 @@ const typeDotColors: Record<string, string> = {
 };
 
 const sourceLabels: Record<string, string> = {
-  MANUEL: 'Manuel',
+  MANUEL: t('Manuel'),
   ALLO: 'Allo',
   GMAIL: 'Gmail',
   CALENDAR: 'Calendar',
   GOOGLE_DOCS: 'Google Docs',
-  AGENT_IA: 'Agent IA',
-  SYSTEME: 'Système',
+  AGENT_IA: t('Agent IA'),
+  SYSTEME: t('Système'),
 };
 
 const TYPE_OPTIONS = [
-  { value: 'APPEL', label: 'Appel' },
+  { value: 'APPEL', label: t('Appel') },
   { value: 'EMAIL', label: 'Email' },
   { value: 'MEETING', label: 'Meeting' },
   { value: 'NOTE', label: 'Note' },
-  { value: 'TACHE', label: 'Tâche' },
+  { value: 'TACHE', label: t('Tâche') },
 ];
 
 const DIRECTION_OPTIONS = [
-  { value: '', label: 'Aucune' },
-  { value: 'ENTRANT', label: 'Entrant' },
-  { value: 'SORTANT', label: 'Sortant' },
+  { value: '', label: t('Aucune') },
+  { value: 'ENTRANT', label: t('Entrant') },
+  { value: 'SORTANT', label: t('Sortant') },
 ];
 
 const ENTITE_TYPE_OPTIONS = [
-  { value: 'CANDIDAT', label: 'Candidat' },
-  { value: 'CLIENT', label: 'Client' },
-  { value: 'ENTREPRISE', label: 'Entreprise' },
-  { value: 'MANDAT', label: 'Mandat' },
+  { value: 'CANDIDAT', label: t('Candidat') },
+  { value: 'CLIENT', label: t('Client') },
+  { value: 'ENTREPRISE', label: t('Entreprise') },
+  { value: 'MANDAT', label: t('Mandat') },
 ];
 
 const ENTITE_ENDPOINTS: Record<string, string> = {
@@ -121,8 +122,8 @@ function entityLabel(entiteType: string, item: Record<string, unknown>): string 
 }
 
 const TABS = [
-  { id: 'all', label: 'Toutes' },
-  { id: 'APPEL', label: 'Appels' },
+  { id: 'all', label: t('Toutes') },
+  { id: 'APPEL', label: t('Appels') },
   { id: 'EMAIL', label: 'Emails' },
   { id: 'MEETING', label: 'Meetings' },
   { id: 'NOTE', label: 'Notes' },
@@ -215,10 +216,10 @@ export default function ActivitesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activites'] });
       resetCreateForm();
-      toast('success', 'Activité créée');
+      toast('success', t('Activité créée'));
     },
     onError: () => {
-      toast('error', 'Erreur lors de la création');
+      toast('error', t('Erreur lors de la création'));
     },
   });
 
@@ -249,15 +250,15 @@ export default function ActivitesPage() {
     try {
       await api.put(`/activites/${id}`, { bookmarked: !current });
       refetch();
-      toast('success', current ? 'Bookmark retiré' : 'Activité bookmarkée');
+      toast('success', current ? t('Bookmark retiré') : t('Activité bookmarkée'));
     } catch {
-      toast('error', 'Erreur lors de la mise à jour');
+      toast('error', t('Erreur lors de la mise à jour'));
     }
   };
 
   const formatTime = (d: string) => {
     const date = new Date(d);
-    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' });
   };
 
   const formatDayLabel = (d: string) => {
@@ -266,9 +267,9 @@ export default function ActivitesPage() {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
 
-    if (date.toDateString() === today.toDateString()) return "Aujourd'hui";
-    if (date.toDateString() === yesterday.toDateString()) return 'Hier';
-    return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    if (date.toDateString() === today.toDateString()) return t("Aujourd'hui");
+    if (date.toDateString() === yesterday.toDateString()) return t('Hier');
+    return date.toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   };
 
   // Group activities by day
@@ -292,8 +293,8 @@ export default function ActivitesPage() {
   return (
     <div className="font-['Plus_Jakarta_Sans']">
       <PageHeader
-        title="Activités"
-        breadcrumbs={[{ label: 'Activités' }]}
+        title={t('Activités')}
+        breadcrumbs={[{ label: t('Activités') }]}
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -308,7 +309,7 @@ export default function ActivitesPage() {
               Bookmarks
             </button>
             <Button variant="primary" onClick={() => setCreateModalOpen(true)}>
-              <Plus size={16} /> Nouvelle activité
+              <Plus size={16} /> {t('Nouvelle activité')}
             </Button>
           </div>
         }
@@ -337,8 +338,8 @@ export default function ActivitesPage() {
           <Skeleton className="h-16 w-full" count={5} />
         ) : !data?.data.length ? (
           <EmptyState
-            title="Aucune activité"
-            description="Les activités apparaîtront ici"
+            title={t('Aucune activité')}
+            description={t('Les activités apparaîtront ici')}
           />
         ) : (
           <div className="relative">
@@ -401,7 +402,7 @@ export default function ActivitesPage() {
                               <div className="flex items-center gap-2">
                                 <AlertCircle size={14} className="text-amber-600 shrink-0" />
                                 <span className="text-[12px] font-medium text-amber-800">
-                                  Contact non identifié : {meta.unidentifiedPhone}
+                                  {t('Contact non identifié : {tel}', { tel: meta.unidentifiedPhone })}
                                 </span>
                               </div>
                               <button
@@ -414,7 +415,7 @@ export default function ActivitesPage() {
                                 className="flex items-center gap-1 rounded-lg bg-white border border-amber-300 px-2.5 py-1 text-[12px] font-semibold text-amber-700 hover:bg-amber-100 transition-colors shrink-0 ml-2"
                               >
                                 <UserPlus size={13} />
-                                Identifier
+                                {t('Identifier')}
                               </button>
                             </div>
                           )}
@@ -465,7 +466,7 @@ export default function ActivitesPage() {
       <Modal
         isOpen={createModalOpen}
         onClose={resetCreateForm}
-        title="Nouvelle activité"
+        title={t('Nouvelle activité')}
         size="md"
       >
         <div className="space-y-4">
@@ -484,7 +485,7 @@ export default function ActivitesPage() {
               options={DIRECTION_OPTIONS}
               value={newDirection}
               onChange={setNewDirection}
-              placeholder="Aucune"
+              placeholder={t('Aucune')}
             />
           )}
 
@@ -492,39 +493,39 @@ export default function ActivitesPage() {
           {newType === 'MEETING' && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Input
-                label="Date et heure"
+                label={t('Date et heure')}
                 type="datetime-local"
                 value={newMeetingDate}
                 onChange={(e) => setNewMeetingDate(e.target.value)}
               />
               <Input
-                label="Interlocuteurs"
+                label={t('Interlocuteurs')}
                 value={newInterlocuteurs}
                 onChange={(e) => setNewInterlocuteurs(e.target.value)}
-                placeholder="Prénom Nom"
+                placeholder={t('Prénom Nom')}
               />
             </div>
           )}
 
           {/* Titre */}
           <Input
-            label="Titre"
+            label={t('Titre')}
             value={newTitre}
             onChange={(e) => setNewTitre(e.target.value)}
-            placeholder="Titre de l'activité"
+            placeholder={t("Titre de l'activité")}
           />
 
           {/* Contenu */}
           <Textarea
-            label="Contenu"
+            label={t('Contenu')}
             value={newContenu}
             onChange={(e) => setNewContenu(e.target.value)}
-            placeholder="Détails de l'activité..."
+            placeholder={t("Détails de l'activité...")}
           />
 
           {/* Entity Type */}
           <Select
-            label="Type d'entité"
+            label={t("Type d'entité")}
             options={ENTITE_TYPE_OPTIONS}
             value={newEntiteType}
             onChange={setNewEntiteType}
@@ -533,7 +534,7 @@ export default function ActivitesPage() {
           {/* Entity search/select */}
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-neutral-700">
-              Entité liée
+              {t('Entité liée')}
             </label>
             {newEntiteId ? (
               <div className="flex items-center gap-2 rounded-xl border border-[#22177A]/30 bg-[#22177A]/5 px-3 py-2">
@@ -543,7 +544,7 @@ export default function ActivitesPage() {
                   onClick={() => { setNewEntiteId(''); setSelectedEntityLabel(''); }}
                   className="text-xs text-neutral-400 hover:text-red-500"
                 >
-                  Changer
+                  {t('Changer')}
                 </button>
               </div>
             ) : (
@@ -553,7 +554,7 @@ export default function ActivitesPage() {
                   <input
                     value={entitySearch}
                     onChange={(e) => setEntitySearch(e.target.value)}
-                    placeholder="Rechercher..."
+                    placeholder={t('Rechercher...')}
                     className="w-full rounded-xl border border-neutral-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:ring-4 focus:ring-[#22177A]/10 focus:border-[#22177A]"
                   />
                 </div>
@@ -564,7 +565,7 @@ export default function ActivitesPage() {
                     </div>
                   ) : !entityResults?.length ? (
                     <div className="py-4 text-center text-xs text-neutral-400">
-                      Aucun résultat
+                      {t('Aucun résultat')}
                     </div>
                   ) : (
                     entityResults.map((e) => (
@@ -586,7 +587,7 @@ export default function ActivitesPage() {
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={resetCreateForm}>
-              Annuler
+              {t('Annuler')}
             </Button>
             <Button
               variant="primary"
@@ -594,9 +595,9 @@ export default function ActivitesPage() {
               disabled={!newEntiteId || createActiviteMutation.isPending}
             >
               {createActiviteMutation.isPending ? (
-                <><Loader2 size={16} className="animate-spin" /> Création...</>
+                <><Loader2 size={16} className="animate-spin" /> {t('Création...')}</>
               ) : (
-                'Créer'
+                t('Créer')
               )}
             </Button>
           </div>

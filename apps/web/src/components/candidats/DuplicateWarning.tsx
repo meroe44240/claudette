@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, ExternalLink, X } from 'lucide-react';
 import { Link } from 'react-router';
 import { api } from '../../lib/api-client';
+import { t } from '../../lib/i18n';
 
 interface DuplicateCandidat {
   id: string;
@@ -59,10 +60,10 @@ export default function DuplicateWarning({ email, linkedinUrl, excludeId }: Dupl
           <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-500 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-amber-800">
-              {duplicates.length === 1 ? 'Doublon potentiel détecté' : `${duplicates.length} doublons potentiels détectés`}
+              {duplicates.length === 1 ? t('Doublon potentiel détecté') : t('{n} doublons potentiels détectés', { n: duplicates.length })}
             </p>
             <p className="text-xs text-amber-600 mt-1">
-              Un candidat avec les mêmes informations existe déjà :
+              {t('Un candidat avec les mêmes informations existe déjà :')}
             </p>
             <div className="mt-2 space-y-1.5">
               {duplicates.map((d) => (

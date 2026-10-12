@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Phone, Mail, Send, MailOpen, Calendar, FileText, StickyNote, ListChecks, CheckCircle, Mic, Star, Plus, Loader2, ArrowRight, Zap, Search, AlertCircle, UserPlus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../lib/api-client';
+import { t, LOCALE } from '../../lib/i18n';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
@@ -79,32 +80,32 @@ const typeDotColors: Record<string, string> = {
 };
 
 const sourceLabels: Record<string, string> = {
-  MANUEL: 'Manuel',
+  MANUEL: t('Manuel'),
   ALLO: 'Allo',
   GMAIL: 'Gmail',
   CALENDAR: 'Calendar',
   GOOGLE_DOCS: 'Google Docs',
-  AGENT_IA: 'Agent IA',
-  SYSTEME: 'Système',
+  AGENT_IA: t('Agent IA'),
+  SYSTEME: t('Système'),
 };
 
 const TYPE_OPTIONS = [
-  { value: 'APPEL', label: 'Appel' },
+  { value: 'APPEL', label: t('Appel') },
   { value: 'EMAIL', label: 'Email' },
   { value: 'MEETING', label: 'Meeting' },
   { value: 'NOTE', label: 'Note' },
-  { value: 'TACHE', label: 'Tâche' },
+  { value: 'TACHE', label: t('Tâche') },
 ];
 
 const DIRECTION_OPTIONS = [
-  { value: '', label: 'Aucune' },
-  { value: 'ENTRANT', label: 'Entrant' },
-  { value: 'SORTANT', label: 'Sortant' },
+  { value: '', label: t('Aucune') },
+  { value: 'ENTRANT', label: t('Entrant') },
+  { value: 'SORTANT', label: t('Sortant') },
 ];
 
 const TABS = [
-  { id: 'all', label: 'Toutes' },
-  { id: 'APPEL', label: 'Appels' },
+  { id: 'all', label: t('Toutes') },
+  { id: 'APPEL', label: t('Appels') },
   { id: 'EMAIL', label: 'Emails' },
   { id: 'MEETING', label: 'Meetings' },
   { id: 'NOTE', label: 'Notes' },
@@ -117,7 +118,7 @@ const TABS = [
 
 function formatTime(d: string): string {
   const date = new Date(d);
-  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDayLabel(d: string): string {
@@ -126,9 +127,9 @@ function formatDayLabel(d: string): string {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
 
-  if (date.toDateString() === today.toDateString()) return "Aujourd'hui";
-  if (date.toDateString() === yesterday.toDateString()) return 'Hier';
-  return date.toLocaleDateString('fr-FR', {
+  if (date.toDateString() === today.toDateString()) return t("Aujourd'hui");
+  if (date.toDateString() === yesterday.toDateString()) return t('Hier');
+  return date.toLocaleDateString(LOCALE, {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -190,7 +191,7 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
       queryClient.invalidateQueries({ queryKey: ['activites', entiteType, entiteId] });
       setQuickNote('');
       setQuickNoteOpen(false);
-      toast('success', 'Note ajoutée');
+      toast('success', t('Note ajoutée'));
     },
   });
 
@@ -227,9 +228,9 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
     try {
       await api.put(`/activites/${id}`, { bookmarked: !current });
       refetch();
-      toast('success', current ? 'Bookmark retiré' : 'Activité bookmarkée');
+      toast('success', current ? t('Bookmark retiré') : t('Activité bookmarkée'));
     } catch {
-      toast('error', 'Erreur lors de la mise à jour');
+      toast('error', t('Erreur lors de la mise à jour'));
     }
   };
 
@@ -248,10 +249,10 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activites', entiteType, entiteId] });
       resetCreateForm();
-      toast('success', 'Activité créée');
+      toast('success', t('Activité créée'));
     },
     onError: () => {
-      toast('error', 'Erreur lors de la création');
+      toast('error', t('Erreur lors de la création'));
     },
   });
 
@@ -286,7 +287,7 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
     <div className="font-['Plus_Jakarta_Sans']">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-[22px] font-bold text-neutral-900">Journal d'activité</h2>
+        <h2 className="text-[22px] font-bold text-neutral-900">{t("Journal d'activité")}</h2>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setBookmarkedOnly(!bookmarkedOnly)}
@@ -300,7 +301,7 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
             Bookmarks
           </button>
           <Button variant="primary" onClick={() => setCreateModalOpen(true)}>
-            <Plus size={16} /> Nouvelle activité
+            <Plus size={16} /> {t('Nouvelle activité')}
           </Button>
         </div>
       </div>
@@ -332,7 +333,7 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Rechercher dans les activités..."
+          placeholder={t('Rechercher dans les activités...')}
           className="w-full rounded-xl border border-neutral-200 bg-white py-2.5 pl-9 pr-4 text-[14px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 transition-colors"
         />
         {searchQuery && (
@@ -352,7 +353,7 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
             onClick={() => setQuickNoteOpen(true)}
             className="w-full rounded-xl bg-neutral-50 px-4 py-3 text-left text-[14px] text-neutral-400 hover:bg-neutral-100 transition-colors"
           >
-            Ajouter une note...
+            {t('Ajouter une note...')}
           </button>
         ) : (
           <div className="rounded-xl bg-white border border-neutral-200 p-3 shadow-sm">
@@ -366,7 +367,7 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
                   quickNoteMutation.mutate();
                 }
               }}
-              placeholder="Écrire une note... (Cmd+Enter pour sauvegarder)"
+              placeholder={t('Écrire une note... (Cmd+Enter pour sauvegarder)')}
               className="w-full resize-none rounded-lg bg-neutral-50 px-3 py-2 text-[14px] text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
               rows={3}
             />
@@ -375,14 +376,14 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
                 onClick={() => { setQuickNoteOpen(false); setQuickNote(''); }}
                 className="rounded-md px-3 py-1.5 text-[13px] font-medium text-neutral-500 hover:bg-neutral-100"
               >
-                Annuler
+                {t('Annuler')}
               </button>
               <button
                 onClick={() => quickNote.trim() && quickNoteMutation.mutate()}
                 disabled={!quickNote.trim() || quickNoteMutation.isPending}
                 className="rounded-md bg-brand-500 px-4 py-1.5 text-[13px] font-medium text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
               >
-                {quickNoteMutation.isPending ? 'Envoi...' : 'Enregistrer'}
+                {quickNoteMutation.isPending ? t('Envoi...') : t('Enregistrer')}
               </button>
             </div>
           </div>
@@ -395,7 +396,7 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
           <Skeleton className="h-16 w-full" count={5} />
         ) : !data?.data.length ? (
           <div className="rounded-xl bg-white p-8 text-center shadow-card">
-            <p className="text-sm text-neutral-500">Aucune activité</p>
+            <p className="text-sm text-neutral-500">{t('Aucune activité')}</p>
           </div>
         ) : (
           <motion.div
@@ -475,14 +476,14 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
                             {/* Email metadata */}
                             {a.type === 'EMAIL' && meta.subject && (
                               <p className="text-[13px] font-medium text-neutral-600 mt-0.5">
-                                Objet : {meta.subject}
+                                {t('Objet : {objet}', { objet: meta.subject })}
                               </p>
                             )}
                             {/* Meta row */}
                             <div className="flex items-center gap-2 mt-2">
                               {a.user && (
                                 <span className="text-[12px] text-neutral-400">
-                                  Par : {a.user.prenom} {a.user.nom}
+                                  {t('Par : {nom}', { nom: `${a.user.prenom ?? ''} ${a.user.nom}` })}
                                 </span>
                               )}
                               <Badge>{sourceLabels[a.source] || a.source}</Badge>
@@ -494,7 +495,7 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
                                 <div className="flex items-center gap-2">
                                   <AlertCircle size={14} className="text-amber-600 shrink-0" />
                                   <span className="text-[12px] font-medium text-amber-800">
-                                    Contact non identifié : {meta.unidentifiedPhone}
+                                    {t('Contact non identifié : {tel}', { tel: meta.unidentifiedPhone })}
                                   </span>
                                 </div>
                                 <button
@@ -507,7 +508,7 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
                                   className="flex items-center gap-1 rounded-lg bg-white border border-amber-300 px-2.5 py-1 text-[12px] font-semibold text-amber-700 hover:bg-amber-100 transition-colors shrink-0 ml-2"
                                 >
                                   <UserPlus size={13} />
-                                  Identifier
+                                  {t('Identifier')}
                                 </button>
                               </div>
                             )}
@@ -567,7 +568,7 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
       <Modal
         isOpen={createModalOpen}
         onClose={resetCreateForm}
-        title="Nouvelle activité"
+        title={t('Nouvelle activité')}
         size="md"
       >
         <div className="space-y-4">
@@ -586,30 +587,30 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
               options={DIRECTION_OPTIONS}
               value={newDirection}
               onChange={setNewDirection}
-              placeholder="Aucune"
+              placeholder={t('Aucune')}
             />
           )}
 
           {/* Titre */}
           <Input
-            label="Titre"
+            label={t('Titre')}
             value={newTitre}
             onChange={(e) => setNewTitre(e.target.value)}
-            placeholder="Titre de l'activité"
+            placeholder={t("Titre de l'activité")}
           />
 
           {/* Contenu */}
           <Textarea
-            label="Contenu"
+            label={t('Contenu')}
             value={newContenu}
             onChange={(e) => setNewContenu(e.target.value)}
-            placeholder="Détails de l'activité..."
+            placeholder={t("Détails de l'activité...")}
           />
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={resetCreateForm}>
-              Annuler
+              {t('Annuler')}
             </Button>
             <Button
               variant="primary"
@@ -618,10 +619,10 @@ export default function ActivityJournal({ entiteType, entiteId }: ActivityJourna
             >
               {createActiviteMutation.isPending ? (
                 <>
-                  <Loader2 size={16} className="animate-spin" /> Création...
+                  <Loader2 size={16} className="animate-spin" /> {t('Création...')}
                 </>
               ) : (
-                'Créer'
+                t('Créer')
               )}
             </Button>
           </div>

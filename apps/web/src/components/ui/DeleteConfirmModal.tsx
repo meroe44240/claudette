@@ -2,6 +2,7 @@ import { AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Button from './Button';
 import { useEffect, useCallback } from 'react';
+import { t } from '../../lib/i18n';
 
 interface DeleteConfirmModalProps {
   isOpen: boolean;
@@ -60,10 +61,10 @@ export default function DeleteConfirmModal({
                 <AlertTriangle size={24} className="text-red-500" />
               </div>
               <h2 className="mb-2 text-lg font-bold text-text-primary">
-                Supprimer {entityName} ?
+                {t('Supprimer {name} ?', { name: entityName })}
               </h2>
               <p className="mb-6 text-sm text-text-secondary">
-                Cette action est irr&eacute;versible. Toutes les donn&eacute;es associ&eacute;es seront supprim&eacute;es.
+                {t('Cette action est irréversible. Toutes les données associées seront supprimées.')}
               </p>
               <div className="flex w-full items-center justify-center gap-3">
                 <Button
@@ -71,7 +72,7 @@ export default function DeleteConfirmModal({
                   onClick={onClose}
                   disabled={isLoading}
                 >
-                  Annuler
+                  {t('Annuler')}
                 </Button>
                 <Button
                   variant="danger"
@@ -80,7 +81,7 @@ export default function DeleteConfirmModal({
                   disabled={isLoading}
                   className="!bg-red-500 !text-white hover:!bg-red-600"
                 >
-                  Supprimer
+                  {t('Supprimer')}
                 </Button>
               </div>
             </div>

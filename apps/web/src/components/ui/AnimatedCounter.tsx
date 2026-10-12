@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useMotionValue, useSpring, useTransform, motion } from 'framer-motion';
+import { LOCALE } from '../../lib/i18n';
 
 interface AnimatedCounterProps {
   value: number;
@@ -22,7 +23,7 @@ export default function AnimatedCounter({
   });
   const displayValue = useTransform(springValue, (latest) => {
     const rounded = Math.round(latest);
-    return formatFn ? formatFn(rounded) : rounded.toLocaleString('fr-FR');
+    return formatFn ? formatFn(rounded) : rounded.toLocaleString(LOCALE);
   });
 
   const prevRef = useRef(0);

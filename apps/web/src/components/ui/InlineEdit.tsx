@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Pencil, Loader2, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { t } from '../../lib/i18n';
 
 interface InlineEditProps {
   value: string;
@@ -16,7 +17,7 @@ export default function InlineEdit({
   value,
   onSave,
   label,
-  placeholder = 'Cliquer pour modifier',
+  placeholder = t('Cliquer pour modifier'),
   type = 'text',
   className = '',
   disabled = false,

@@ -292,7 +292,7 @@ export default function Sidebar({ collapsed = false, onToggleCollapse, isOpen = 
                   {user?.prenom || ''} {user?.nom || ''}
                 </div>
                 <div className="text-[11px] truncate leading-tight" style={{ color: 'rgba(230,233,175,0.6)' }}>
-                  {user?.role === 'ADMIN' ? 'Administrateur' : 'Recruteur'}
+                  {user?.role === 'ADMIN' ? t('Administrateur') : t('Recruteur')}
                 </div>
               </div>
               <ChevronDown size={16} className="shrink-0" style={{ color: 'rgba(230,233,175,0.6)' }} />

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { t } from '../../lib/i18n';
 
 // Rend une note dense (CV importé, note libre) lisible : détecte les sections
 // type CV (PROFIL, EXPÉRIENCE, COMPÉTENCES…) → titres navy en gras, et tronque
@@ -57,7 +58,7 @@ export default function NoteContent({ text, color = '#4A4568' }: { text: string;
       })}
       {long && (
         <button onClick={() => setOpen((o) => !o)} style={{ marginTop: 5, background: 'none', border: 'none', color: '#22177A', fontWeight: 700, fontSize: 12, cursor: 'pointer', padding: 0 }}>
-          {open ? 'Voir moins' : 'Voir plus'}
+          {open ? t('Voir moins') : t('Voir plus')}
         </button>
       )}
     </div>

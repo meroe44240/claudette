@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api-client';
 import { toast } from '../ui/Toast';
+import { t } from '../../lib/i18n';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CalendarSync, User, Building2, Loader2, RefreshCw, Check, Users, X } from 'lucide-react';
 
@@ -58,10 +59,10 @@ export default function CalendarAiSuggestions() {
       queryClient.invalidateQueries({ queryKey: ['candidats'] });
       queryClient.invalidateQueries({ queryKey: ['clients'] });
       queryClient.invalidateQueries({ queryKey: ['entreprises'] });
-      toast('success', `${pendingLegacy.length} suggestion(s) traitee(s) automatiquement`);
+      toast('success', t('{n} suggestion(s) traitee(s) automatiquement', { n: pendingLegacy.length }));
     },
     onError: () => {
-      toast('error', 'Erreur lors du traitement des suggestions');
+      toast('error', t('Erreur lors du traitement des suggestions'));
     },
   });
 
@@ -77,13 +78,13 @@ export default function CalendarAiSuggestions() {
       queryClient.invalidateQueries({ queryKey: ['entreprises'] });
       const total = (result.candidats || 0) + (result.clients || 0);
       if (total > 0) {
-        toast('success', `${result.candidats} candidat(s), ${result.clients} client(s), ${result.entreprises} entreprise(s) crees`);
+        toast('success', t('{candidats} candidat(s), {clients} client(s), {entreprises} entreprise(s) crees', { candidats: result.candidats, clients: result.clients, entreprises: result.entreprises }));
       } else {
-        toast('success', `${result.analyzed} evenements analyses. Aucun nouveau contact.`);
+        toast('success', t('{n} evenements analyses. Aucun nouveau contact.', { n: result.analyzed }));
       }
     },
     onError: () => {
-      toast('error', "Erreur lors de l'analyse du calendrier");
+      toast('error', t("Erreur lors de l'analyse du calendrier"));
     },
   });
 
@@ -104,10 +105,10 @@ export default function CalendarAiSuggestions() {
               </div>
               <div>
                 <span className="text-[13px] font-semibold text-neutral-800">
-                  {pendingLegacy.length} suggestion{pendingLegacy.length > 1 ? 's' : ''} en attente
+                  {t(pendingLegacy.length > 1 ? '{n} suggestions en attente' : '{n} suggestion en attente', { n: pendingLegacy.length })}
                 </span>
                 <p className="text-[11px] text-neutral-400 mt-0.5">
-                  Les contacts sont maintenant crees automatiquement. Voulez-vous accepter les anciennes suggestions ?
+                  {t('Les contacts sont maintenant crees automatiquement. Voulez-vous accepter les anciennes suggestions ?')}
                 </p>
               </div>
             </div>
@@ -122,7 +123,7 @@ export default function CalendarAiSuggestions() {
                 ) : (
                   <Check size={12} />
                 )}
-                Accepter tout
+                {t('Accepter tout')}
               </button>
             </div>
           </div>

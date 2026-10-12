@@ -3,6 +3,7 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
+import { t } from '../../lib/i18n';
 
 interface PlacementPayload {
   feeMontantFacture: number;
@@ -24,22 +25,22 @@ const SOURCE_PROFIL_OPTIONS = [
   { value: 'Indeed', label: 'Indeed' },
   { value: 'CVTech', label: 'CVTech' },
   { value: 'LinkedIn Recruiter', label: 'LinkedIn Recruiter' },
-  { value: 'LinkedIn (organique)', label: 'LinkedIn (organique)' },
-  { value: 'Cooptation', label: 'Cooptation / Référence' },
-  { value: 'Approche directe', label: 'Approche directe' },
-  { value: 'Database interne', label: 'Database interne' },
-  { value: 'Autre', label: 'Autre…' },
+  { value: 'LinkedIn (organique)', label: t('LinkedIn (organique)') },
+  { value: 'Cooptation', label: t('Cooptation / Référence') },
+  { value: 'Approche directe', label: t('Approche directe') },
+  { value: 'Database interne', label: t('Database interne') },
+  { value: 'Autre', label: t('Autre…') },
 ];
 
 const SOURCE_LEAD_OPTIONS = [
   { value: 'Cold call', label: 'Cold call' },
-  { value: 'Cooptation', label: 'Cooptation / Recommandation' },
-  { value: 'LinkedIn', label: 'LinkedIn (réseau)' },
-  { value: 'Inbound', label: 'Inbound (site web, demande entrante)' },
+  { value: 'Cooptation', label: t('Cooptation / Recommandation') },
+  { value: 'LinkedIn', label: t('LinkedIn (réseau)') },
+  { value: 'Inbound', label: t('Inbound (site web, demande entrante)') },
   { value: 'Email outbound', label: 'Email outbound (cold mail)' },
-  { value: 'Salon', label: 'Salon / Événement' },
-  { value: 'Partenariat', label: 'Partenariat' },
-  { value: 'Autre', label: 'Autre…' },
+  { value: 'Salon', label: t('Salon / Événement') },
+  { value: 'Partenariat', label: t('Partenariat') },
+  { value: 'Autre', label: t('Autre…') },
 ];
 
 export default function PlacementModal({
@@ -96,45 +97,45 @@ export default function PlacementModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Confirmer le placement" size="sm">
+    <Modal isOpen={isOpen} onClose={onClose} title={t('Confirmer le placement')} size="sm">
       <div className="space-y-5">
         <p className="text-sm text-text-secondary">
           {candidatName
-            ? `Closing won pour ${candidatName} ! Confirme les infos ci-dessous.`
-            : 'Confirme les infos ci-dessous pour finaliser le placement.'}
+            ? t('Closing won pour {nom} ! Confirme les infos ci-dessous.', { nom: candidatName })
+            : t('Confirme les infos ci-dessous pour finaliser le placement.')}
         </p>
 
         <Input
-          label="Montant de la facture (€)"
+          label={t('Montant de la facture (€)')}
           type="number"
           inputMode="numeric"
           min={0}
           step={1}
           value={fee}
           onChange={(e) => setFee(e.target.value)}
-          error={touched && !feeValid ? 'Montant requis' : undefined}
+          error={touched && !feeValid ? t('Montant requis') : undefined}
         />
 
         <Input
-          label="Date de démarrage"
+          label={t('Date de démarrage')}
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          error={touched && !dateValid ? 'Date requise' : undefined}
+          error={touched && !dateValid ? t('Date requise') : undefined}
         />
 
         <div className="space-y-2">
           <Select
-            label="Source du profil placé"
+            label={t('Source du profil placé')}
             options={SOURCE_PROFIL_OPTIONS}
             value={sourceProfil}
             onChange={setSourceProfil}
-            placeholder="Sélectionner…"
-            error={touched && !sourceProfilValid ? 'Source requise' : undefined}
+            placeholder={t('Sélectionner…')}
+            error={touched && !sourceProfilValid ? t('Source requise') : undefined}
           />
           {sourceProfil === 'Autre' && (
             <Input
-              placeholder="Préciser la source…"
+              placeholder={t('Préciser la source…')}
               value={sourceProfilOther}
               onChange={(e) => setSourceProfilOther(e.target.value)}
             />
@@ -143,16 +144,16 @@ export default function PlacementModal({
 
         <div className="space-y-2">
           <Select
-            label="Source du lead (mandat)"
+            label={t('Source du lead (mandat)')}
             options={SOURCE_LEAD_OPTIONS}
             value={sourceLead}
             onChange={setSourceLead}
-            placeholder="Sélectionner…"
-            error={touched && !sourceLeadValid ? 'Source requise' : undefined}
+            placeholder={t('Sélectionner…')}
+            error={touched && !sourceLeadValid ? t('Source requise') : undefined}
           />
           {sourceLead === 'Autre' && (
             <Input
-              placeholder="Préciser la source…"
+              placeholder={t('Préciser la source…')}
               value={sourceLeadOther}
               onChange={(e) => setSourceLeadOther(e.target.value)}
             />
@@ -161,10 +162,10 @@ export default function PlacementModal({
 
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={onClose} disabled={isPending}>
-            Annuler
+            {t('Annuler')}
           </Button>
           <Button variant="primary" onClick={handleConfirm} disabled={!canSubmit}>
-            Confirmer le placement
+            {t('Confirmer le placement')}
           </Button>
         </div>
       </div>

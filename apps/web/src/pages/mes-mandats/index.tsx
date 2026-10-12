@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Building2, User, Briefcase, ArrowRight, Euro, Calendar } from 'lucide-react';
 import { api } from '../../lib/api-client';
+import { t } from '../../lib/i18n';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import PageHeader from '../../components/ui/PageHeader';
 import EmptyState from '../../components/ui/EmptyState';
@@ -45,15 +46,15 @@ interface MandatMine {
 }
 
 const STAGE_LABEL: Record<Stage, string> = {
-  SOURCING: 'Sourcing',
-  CONTACTE: 'Qualification',
-  ENTRETIEN_1: 'Entr. interne',
-  ENVOYE_CLIENT: 'Envoi client',
-  ENTRETIEN_CLIENT: 'Entr. client',
-  PROCESS: 'Process',
-  OFFRE: 'Offre',
-  PLACE: 'Gagné',
-  REFUSE: 'Perdu',
+  SOURCING: t('Sourcing'),
+  CONTACTE: t('Qualification'),
+  ENTRETIEN_1: t('Entr. interne'),
+  ENVOYE_CLIENT: t('Envoi client'),
+  ENTRETIEN_CLIENT: t('Entr. client'),
+  PROCESS: t('Process'),
+  OFFRE: t('Offre'),
+  PLACE: t('Gagné'),
+  REFUSE: t('Perdu'),
 };
 
 const ACTIVE_STAGES: Stage[] = [
@@ -67,12 +68,12 @@ const ACTIVE_STAGES: Stage[] = [
 ];
 
 const STATUT_LABEL: Record<Statut, string> = {
-  OUVERT: 'Ouvert',
-  EN_COURS: 'En cours',
-  GAGNE: 'Gagné',
-  PERDU: 'Perdu',
-  ANNULE: 'Annulé',
-  CLOTURE: 'Clôturé',
+  OUVERT: t('Ouvert'),
+  EN_COURS: t('En cours'),
+  GAGNE: t('Gagné'),
+  PERDU: t('Perdu'),
+  ANNULE: t('Annulé'),
+  CLOTURE: t('Clôturé'),
 };
 
 const STATUT_TONE: Record<Statut, { bg: string; fg: string }> = {
@@ -106,7 +107,7 @@ function daysBetween(a: string, b: Date = new Date()): number {
 }
 
 export default function MesMandatsPage() {
-  usePageTitle('Mes Mandats');
+  usePageTitle(t('Mes Mandats'));
   const navigate = useNavigate();
   const [tab, setTab] = useState<'open' | 'closed'>('open');
 
@@ -129,21 +130,21 @@ export default function MesMandatsPage() {
   return (
     <div>
       <PageHeader
-        title="Mes Mandats"
-        subtitle="Tous les mandats où tu es sales, recruteur, ou co-recruteur."
-        breadcrumbs={[{ label: 'Mes Mandats' }]}
+        title={t('Mes Mandats')}
+        subtitle={t('Tous les mandats où tu es sales, recruteur, ou co-recruteur.')}
+        breadcrumbs={[{ label: t('Mes Mandats') }]}
       />
 
       <div className="mb-6 flex items-center gap-2 border-b border-neutral-100">
         <TabButton
-          label="Ouverts"
+          label={t('Ouverts')}
           count={openCount}
           active={tab === 'open'}
           onClick={() => setTab('open')}
           loading={openQuery.isLoading}
         />
         <TabButton
-          label="Fermés"
+          label={t('Fermés')}
           count={closedCount}
           active={tab === 'closed'}
           onClick={() => setTab('closed')}
@@ -159,11 +160,11 @@ export default function MesMandatsPage() {
         </div>
       ) : mandats.length === 0 ? (
         <EmptyState
-          title={tab === 'open' ? 'Aucun mandat ouvert' : 'Aucun mandat fermé'}
+          title={tab === 'open' ? t('Aucun mandat ouvert') : t('Aucun mandat fermé')}
           description={
             tab === 'open'
-              ? "Tu n'as pas de mandat OUVERT ou EN_COURS pour l'instant."
-              : "Aucun mandat GAGNÉ / PERDU / ANNULÉ / CLÔTURÉ à afficher."
+              ? t("Tu n'as pas de mandat OUVERT ou EN_COURS pour l'instant.")
+              : t("Aucun mandat GAGNÉ / PERDU / ANNULÉ / CLÔTURÉ à afficher.")
           }
         />
       ) : (
@@ -316,7 +317,7 @@ function MandatCard({
 
       <div className="flex items-center gap-3 text-[11px]">
         <BinomeChip role="Sales" user={mandat.sales} />
-        <BinomeChip role="Recruteur" user={mandat.recruteur} />
+        <BinomeChip role={t('Recruteur')} user={mandat.recruteur} />
       </div>
 
       {/* Pipeline */}
@@ -327,11 +328,11 @@ function MandatCard({
               Pipeline
             </span>
             <span className="text-[12px] font-bold text-neutral-700 tabular-nums">
-              {totalActifs} en process
+              {t('{n} en process', { n: totalActifs })}
             </span>
           </div>
           {totalActifs === 0 ? (
-            <p className="text-[12px] italic text-neutral-400">Aucun candidat actif.</p>
+            <p className="text-[12px] italic text-neutral-400">{t('Aucun candidat actif.')}</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {ACTIVE_STAGES.map((s) => {
@@ -357,10 +358,10 @@ function MandatCard({
         <div className="flex items-center gap-1.5 text-[11px] text-neutral-400">
           <Calendar size={12} strokeWidth={2} />
           {scope === 'open'
-            ? `Ouvert il y a ${ageDays}j`
+            ? t('Ouvert il y a {n}j', { n: ageDays })
             : closedDays !== null
-              ? `Fermé il y a ${closedDays}j`
-              : `Ouvert il y a ${ageDays}j`}
+              ? t('Fermé il y a {n}j', { n: closedDays })
+              : t('Ouvert il y a {n}j', { n: ageDays })}
         </div>
         <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-800 transition-colors group-hover:text-primary-700">
           Kanban
@@ -385,7 +386,7 @@ function BinomeChip({ role, user }: { role: string; user: UserRef | null }) {
         {initials(user)}
       </span>
       <span className="text-neutral-500">
-        <span className="text-neutral-400">{role} : </span>
+        <span className="text-neutral-400">{t('{role} : ', { role })}</span>
         <span className="font-medium text-neutral-700">{userLabel(user)}</span>
       </span>
     </span>

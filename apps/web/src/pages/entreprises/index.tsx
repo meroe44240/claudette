@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, ChevronDown, X, Users } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { api } from '../../lib/api-client';
+import { t, LOCALE } from '../../lib/i18n';
 import CompanyLogo from '../../components/entreprises/CompanyLogo';
 
 // ─── TYPES ──────────────────────────────────────────
@@ -26,10 +27,10 @@ interface PaginatedResponse { data: Entreprise[]; meta: { total: number; page: n
 
 // ─── META ───────────────────────────────────────────
 const REL_META: Record<string, { label: string; bg: string; fg: string; dot: string }> = {
-  client: { label: 'Client', bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
-  prospect: { label: 'Prospect', bg: '#EDEAF9', fg: '#5B4B9E', dot: '#8E7CC3' },
-  cible: { label: 'Cible', bg: '#F2F3D8', fg: '#22177A', dot: '#C9A227' },
-  dormant: { label: 'Dormant', bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
+  client: { label: t('Client'), bg: '#EAF3EC', fg: '#2C6B3F', dot: '#3B9A54' },
+  prospect: { label: t('Prospect'), bg: '#EDEAF9', fg: '#5B4B9E', dot: '#8E7CC3' },
+  cible: { label: t('Cible'), bg: '#F2F3D8', fg: '#22177A', dot: '#C9A227' },
+  dormant: { label: t('Dormant'), bg: '#F7DEDB', fg: '#B3261E', dot: '#B3261E' },
 };
 const REL_OPTIONS = Object.entries(REL_META).map(([value, m]) => ({ value, label: m.label }));
 
@@ -44,14 +45,14 @@ function relationOf(e: Entreprise): string {
   return 'cible';
 }
 function lastContact(iso: string | null): { txt: string; late: boolean } {
-  if (!iso) return { txt: 'jamais', late: false };
+  if (!iso) return { txt: t('jamais'), late: false };
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   const late = d > 30;
-  if (d <= 0) return { txt: "aujourd'hui", late: false };
-  if (d === 1) return { txt: 'hier', late: false };
-  if (d < 30) return { txt: `il y a ${d} j`, late };
-  if (d < 60) return { txt: `il y a ${Math.floor(d / 7)} sem.`, late };
-  return { txt: `il y a ${Math.floor(d / 30)} mois`, late: true };
+  if (d <= 0) return { txt: t("aujourd'hui"), late: false };
+  if (d === 1) return { txt: t('hier'), late: false };
+  if (d < 30) return { txt: t('il y a {n} j', { n: d }), late };
+  if (d < 60) return { txt: t('il y a {n} sem.', { n: Math.floor(d / 7) }), late };
+  return { txt: t('il y a {n} mois', { n: Math.floor(d / 30) }), late: true };
 }
 
 // ─── CHIP DROPDOWN ──────────────────────────────────
@@ -69,7 +70,7 @@ function ChipDropdown({ label, options, value, open, onToggle, onChange }: {
         <>
           <div onClick={onToggle} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
           <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 41, minWidth: 190, maxHeight: 280, overflowY: 'auto', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 12, boxShadow: '0 20px 44px -20px rgba(34,23,122,0.4)', padding: 6 }}>
-            {options.length === 0 && <div style={{ padding: '8px 10px', fontSize: 12.5, color: '#9A96AE' }}>Aucune option</div>}
+            {options.length === 0 && <div style={{ padding: '8px 10px', fontSize: 12.5, color: '#9A96AE' }}>{t('Aucune option')}</div>}
             {options.map(o => {
               const checked = sel.includes(o.value);
               return (
@@ -87,7 +88,7 @@ function ChipDropdown({ label, options, value, open, onToggle, onChange }: {
 
 // ═════════════════════════════════════════════════════
 export default function EntreprisesPage() {
-  usePageTitle('Entreprises');
+  usePageTitle(t('Entreprises'));
   const navigate = useNavigate();
 
   const [page, setPage] = useState(1);
@@ -153,11 +154,11 @@ export default function EntreprisesPage() {
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>CRM</div>
-          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Entreprises</h1>
+          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>{t('Entreprises')}</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{total.toLocaleString('fr-FR')} entreprises</span>
-          <button onClick={() => navigate('/entreprises/new')} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />Ajouter</button>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{t('{n} entreprises', { n: total.toLocaleString(LOCALE) })}</span>
+          <button onClick={() => navigate('/entreprises/new')} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />{t('Ajouter')}</button>
         </div>
       </div>
 
@@ -165,31 +166,31 @@ export default function EntreprisesPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', marginTop: 22 }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 220, maxWidth: 340 }}>
           <Search size={15} color="#9A96AE" strokeWidth={2.2} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)' }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une entreprise…" style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 36px', borderRadius: 11, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', outline: 'none' }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('Rechercher une entreprise…')} style={{ width: '100%', fontSize: 13.5, padding: '10px 12px 10px 36px', borderRadius: 11, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', outline: 'none' }} />
         </div>
-        <ChipDropdown label="Relation" options={REL_OPTIONS} value={relSel} open={openChip === 'rel'} onToggle={() => setOpenChip(openChip === 'rel' ? null : 'rel')} onChange={setRelSel} />
-        <ChipDropdown label="Secteur" options={secteurOptions} value={filters.secteur} open={openChip === 'secteur'} onToggle={() => setOpenChip(openChip === 'secteur' ? null : 'secteur')} onChange={v => setFilter('secteur', v)} />
-        <ChipDropdown label="Ville" options={cityOptions} value={filters.city} open={openChip === 'city'} onToggle={() => setOpenChip(openChip === 'city' ? null : 'city')} onChange={v => setFilter('city', v)} />
+        <ChipDropdown label={t('Relation')} options={REL_OPTIONS} value={relSel} open={openChip === 'rel'} onToggle={() => setOpenChip(openChip === 'rel' ? null : 'rel')} onChange={setRelSel} />
+        <ChipDropdown label={t('Secteur')} options={secteurOptions} value={filters.secteur} open={openChip === 'secteur'} onToggle={() => setOpenChip(openChip === 'secteur' ? null : 'secteur')} onChange={v => setFilter('secteur', v)} />
+        <ChipDropdown label={t('Ville')} options={cityOptions} value={filters.city} open={openChip === 'city'} onToggle={() => setOpenChip(openChip === 'city' ? null : 'city')} onChange={v => setFilter('city', v)} />
         <button onClick={() => { setPappersOnly(p => !p); setPage(1); }} className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: '#22177A', background: pappersOnly ? '#F0EFC4' : '#fff', border: `1px solid ${pappersOnly ? 'transparent' : 'rgba(34,23,122,0.14)'}`, borderRadius: 10, padding: '9px 13px', cursor: 'pointer' }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22177A' }} />Pappers</button>
       </div>
 
       {/* ACTIVE CHIPS */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 11 }}>
-        <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>Filtres</span>
-        {activeChips.length === 0 && <span style={{ fontSize: 12, color: '#C4C1D0' }}>aucun</span>}
+        <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: '#9A96AE' }}>{t('Filtres')}</span>
+        {activeChips.length === 0 && <span style={{ fontSize: 12, color: '#C4C1D0' }}>{t('aucun')}</span>}
         {activeChips.map(ch => <span key={ch.key} className="kw" onClick={ch.onRemove} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: '1px solid rgba(34,23,122,0.14)', borderRadius: 999, padding: '5px 11px', cursor: 'pointer' }}>{ch.label}<X size={11} strokeWidth={2.8} /></span>)}
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#8A8699' }}>{rows.length} affichés · {total.toLocaleString('fr-FR')} au total</span>
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#8A8699' }}>{t('{n} affichés · {total} au total', { n: rows.length, total: total.toLocaleString(LOCALE) })}</span>
       </div>
 
       {/* TABLE */}
       <div style={{ marginTop: 18, background: '#fff', border: '1px solid rgba(34,23,122,0.08)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 2px rgba(34,23,122,0.04)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 14, padding: '14px 22px', background: '#F7F7EE', borderBottom: '1px solid rgba(34,23,122,0.08)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#8A8699' }}>
-          <span>Entreprise</span><span>Secteur</span><span>Ville</span><span>Contacts</span><span style={{ textAlign: 'center' }}>Mandats</span><span>Relation</span><span style={{ textAlign: 'right' }}>Dernier contact</span>
+          <span>{t('Entreprise')}</span><span>{t('Secteur')}</span><span>{t('Ville')}</span><span>{t('Contacts')}</span><span style={{ textAlign: 'center' }}>{t('Mandats')}</span><span>{t('Relation')}</span><span style={{ textAlign: 'right' }}>{t('Dernier contact')}</span>
         </div>
         {isLoading ? (
           Array.from({ length: 8 }).map((_, i) => <div key={i} style={{ height: 65, borderBottom: '1px solid rgba(34,23,122,0.05)', background: i % 2 ? '#fff' : '#FCFCF5' }} />)
         ) : rows.length === 0 ? (
-          <div style={{ padding: '48px 20px', textAlign: 'center', color: '#8A8699' }}>Aucune entreprise ne correspond aux filtres.</div>
+          <div style={{ padding: '48px 20px', textAlign: 'center', color: '#8A8699' }}>{t('Aucune entreprise ne correspond aux filtres.')}</div>
         ) : rows.map(e => {
           const rel = REL_META[relationOf(e)];
           const contacts = e._count?.clients ?? 0;
@@ -211,9 +212,9 @@ export default function EntreprisesPage() {
               <span>
                 {contacts > 0
                   ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#22177A', background: 'rgba(34,23,122,.06)', borderRadius: 999, padding: '4px 11px' }}><Users size={12} />{contacts}</span>
-                  : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: '#8A8699', border: '1px dashed rgba(34,23,122,.22)', borderRadius: 999, padding: '4px 10px' }}><Plus size={11} strokeWidth={2.6} />Ajouter</span>}
+                  : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: '#8A8699', border: '1px dashed rgba(34,23,122,.22)', borderRadius: 999, padding: '4px 10px' }}><Plus size={11} strokeWidth={2.6} />{t('Ajouter')}</span>}
               </span>
-              <span style={{ textAlign: 'center' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}><span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 14, color: mandats > 0 ? '#1A1533' : '#C4C1D0' }}>{mandats}</span>{stale && <span title="Mandat dormant" style={{ width: 7, height: 7, borderRadius: '50%', background: '#B3261E' }} />}</span></span>
+              <span style={{ textAlign: 'center' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}><span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 14, color: mandats > 0 ? '#1A1533' : '#C4C1D0' }}>{mandats}</span>{stale && <span title={t('Mandat dormant')} style={{ width: 7, height: 7, borderRadius: '50%', background: '#B3261E' }} />}</span></span>
               <span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, borderRadius: 999, padding: '4px 11px', background: rel.bg, color: rel.fg, whiteSpace: 'nowrap' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: rel.dot }} />{rel.label}</span></span>
               <span style={{ textAlign: 'right', fontSize: 12.5, color: last.late ? '#B3261E' : '#8A8699', whiteSpace: 'nowrap' }}>{last.txt}</span>
             </div>
@@ -221,7 +222,7 @@ export default function EntreprisesPage() {
         })}
         {totalPages > 1 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 22px', fontSize: 13, color: '#8A8699' }}>
-            <span>Page {page} / {totalPages} · {total.toLocaleString('fr-FR')} entreprises</span>
+            <span>{t('Page {page} / {totalPages} · {total} entreprises', { page, totalPages, total: total.toLocaleString(LOCALE) })}</span>
             <div style={{ display: 'flex', gap: 6 }}>
               <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(34,23,122,0.14)', background: '#fff', color: page <= 1 ? '#C4C1D0' : '#22177A', cursor: page <= 1 ? 'default' : 'pointer' }}>‹</button>
               <span style={{ minWidth: 32, height: 32, borderRadius: 9, background: '#22177A', color: '#E6E9AF', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{page}</span>

@@ -34,6 +34,7 @@ import Select from '../../components/ui/Select';
 import Skeleton from '../../components/ui/Skeleton';
 import Confetti from '../../components/ui/Confetti';
 import ScoreBadge from '../../components/ui/ScoreBadge';
+import { t } from '../../lib/i18n';
 
 // ── Types ────────────────────────────────────────────
 
@@ -115,15 +116,15 @@ const STAGES: StageCandidature[] = [
 ];
 
 const STAGE_LABELS: Record<StageCandidature, string> = {
-  SOURCING: 'Sourcing',
-  CONTACTE: 'Qualification',
-  ENTRETIEN_1: 'Entretien interne',
-  ENVOYE_CLIENT: 'Envoi client',
-  ENTRETIEN_CLIENT: 'Entretien client',
-  PROCESS: 'Process',
-  OFFRE: 'Offre',
-  PLACE: 'Gagné',
-  REFUSE: 'Perdu',
+  SOURCING: t('Sourcing'),
+  CONTACTE: t('Qualification'),
+  ENTRETIEN_1: t('Entretien interne'),
+  ENVOYE_CLIENT: t('Envoi client'),
+  ENTRETIEN_CLIENT: t('Entretien client'),
+  PROCESS: t('Process'),
+  OFFRE: t('Offre'),
+  PLACE: t('Gagné'),
+  REFUSE: t('Perdu'),
 };
 
 const STAGE_COLORS: Record<StageCandidature, string> = {
@@ -139,24 +140,24 @@ const STAGE_COLORS: Record<StageCandidature, string> = {
 };
 
 const MOTIF_REFUS_OPTIONS: { value: MotifRefus; label: string }[] = [
-  { value: 'SALAIRE', label: 'Salaire' },
-  { value: 'PROFIL_PAS_ALIGNE', label: 'Profil pas aligné' },
-  { value: 'CANDIDAT_DECLINE', label: 'Candidat décline' },
-  { value: 'CLIENT_REFUSE', label: 'Client refuse' },
-  { value: 'TIMING', label: 'Timing' },
-  { value: 'POSTE_POURVU', label: 'Poste pourvu' },
-  { value: 'AUTRE', label: 'Autre' },
+  { value: 'SALAIRE', label: t('Salaire') },
+  { value: 'PROFIL_PAS_ALIGNE', label: t('Profil pas aligné') },
+  { value: 'CANDIDAT_DECLINE', label: t('Candidat décline') },
+  { value: 'CLIENT_REFUSE', label: t('Client refuse') },
+  { value: 'TIMING', label: t('Timing') },
+  { value: 'POSTE_POURVU', label: t('Poste pourvu') },
+  { value: 'AUTRE', label: t('Autre') },
 ];
 
 // ── Stage → suggested follow-up task ──
 const STAGE_TASK_SUGGESTIONS: Partial<Record<StageCandidature, { titre: string; days: number }>> = {
-  CONTACTE: { titre: 'Qualifier le candidat', days: 1 },
-  ENTRETIEN_1: { titre: "Planifier l'entretien interne", days: 3 },
-  ENVOYE_CLIENT: { titre: 'Relancer le client pour avoir un retour', days: 5 },
-  ENTRETIEN_CLIENT: { titre: "Planifier l'entretien client", days: 3 },
-  PROCESS: { titre: 'Suivre le process client', days: 5 },
-  OFFRE: { titre: "Préparer et envoyer l'offre", days: 2 },
-  PLACE: { titre: 'Finaliser le placement et onboarding', days: 5 },
+  CONTACTE: { titre: t('Qualifier le candidat'), days: 1 },
+  ENTRETIEN_1: { titre: t("Planifier l'entretien interne"), days: 3 },
+  ENVOYE_CLIENT: { titre: t('Relancer le client pour avoir un retour'), days: 5 },
+  ENTRETIEN_CLIENT: { titre: t("Planifier l'entretien client"), days: 3 },
+  PROCESS: { titre: t('Suivre le process client'), days: 5 },
+  OFFRE: { titre: t("Préparer et envoyer l'offre"), days: 2 },
+  PLACE: { titre: t('Finaliser le placement et onboarding'), days: 5 },
 };
 
 // ── Helpers ──────────────────────────────────────────
@@ -287,7 +288,7 @@ function SortableKanbanCard({ candidature, onClick, selected = false, onToggleSe
             className={`mt-0.5 shrink-0 rounded p-0.5 transition-opacity ${
               selected ? 'opacity-100 text-primary-800' : 'opacity-0 text-neutral-400 group-hover:opacity-100'
             }`}
-            title={selected ? 'Désélectionner' : 'Sélectionner'}
+            title={selected ? t('Désélectionner') : t('Sélectionner')}
           >
             {selected ? (
               <CheckCircle2 size={16} strokeWidth={2} className="fill-primary-800 text-white" />
@@ -369,7 +370,7 @@ function SortableKanbanCard({ candidature, onClick, selected = false, onToggleSe
                     : 'bg-neutral-100 text-neutral-500'
               }`}
             >
-              {days}j
+              {t('{n}j', { n: days })}
             </span>
           )}
         </div>
@@ -416,7 +417,7 @@ function DragOverlayCard({ candidature }: { candidature: KanbanCandidature }) {
                   : 'bg-neutral-100 text-neutral-500'
             }`}
           >
-            {days}j
+            {t('{n}j', { n: days })}
           </span>
         )}
       </div>
@@ -477,7 +478,7 @@ function DroppableColumn({
           <button
             type="button"
             onClick={onToggleVisibility}
-            title={visibleToClient ? 'Masquer cette étape au client' : 'Rendre cette étape visible au client'}
+            title={visibleToClient ? t('Masquer cette étape au client') : t('Rendre cette étape visible au client')}
             className={`ml-auto rounded-md p-1 transition-colors ${
               visibleToClient
                 ? 'text-primary-800 hover:bg-primary-50'
@@ -499,7 +500,7 @@ function DroppableColumn({
             <div className="h-8 w-8 rounded-full bg-neutral-100 flex items-center justify-center mb-2">
               <UserPlus size={14} className="text-neutral-300" />
             </div>
-            <p className="text-[11px] text-neutral-400">Glissez un candidat ici</p>
+            <p className="text-[11px] text-neutral-400">{t('Glissez un candidat ici')}</p>
           </div>
         ) : children}
       </div>
@@ -644,10 +645,10 @@ export default function MandatKanbanPage() {
       queryClient.invalidateQueries({ queryKey: ['mandat-kanban', id] });
       setAddCandidatOpen(false);
       setCandidatSearch('');
-      toast('success', 'Candidat ajouté au mandat');
+      toast('success', t('Candidat ajouté au mandat'));
     },
     onError: () => {
-      toast('error', "Erreur lors de l'ajout du candidat");
+      toast('error', t("Erreur lors de l'ajout du candidat"));
     },
   });
 
@@ -663,14 +664,14 @@ export default function MandatKanbanPage() {
       }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['mandat-kanban', id] });
-      toast('success', `${variables.ids.length} candidat${variables.ids.length > 1 ? 's' : ''} présenté${variables.ids.length > 1 ? 's' : ''} au client`);
+      toast('success', t(variables.ids.length > 1 ? '{n} candidats présentés au client' : '{n} candidat présenté au client', { n: variables.ids.length }));
       clearSelection();
       setPresentModal(false);
       setPresentMessage('');
       setPresentNotify(true);
     },
     onError: () => {
-      toast('error', 'Erreur lors de la présentation au client');
+      toast('error', t('Erreur lors de la présentation au client'));
     },
   });
 
@@ -688,7 +689,7 @@ export default function MandatKanbanPage() {
       queryClient.invalidateQueries({ queryKey: ['mandat', id] });
     },
     onError: () => {
-      toast('error', 'Erreur lors de la mise à jour de la visibilité');
+      toast('error', t('Erreur lors de la mise à jour de la visibilité'));
     },
   });
 
@@ -698,11 +699,11 @@ export default function MandatKanbanPage() {
       api.post('/taches', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['taches'] });
-      toast('success', 'Tâche de suivi créée');
+      toast('success', t('Tâche de suivi créée'));
       setTaskSuggestion(null);
     },
     onError: () => {
-      toast('error', 'Erreur lors de la création de la tâche');
+      toast('error', t('Erreur lors de la création de la tâche'));
     },
   });
 
@@ -789,7 +790,7 @@ export default function MandatKanbanPage() {
       return { previousKanban };
     },
     onSuccess: (_data, variables) => {
-      toast('success', `Candidat déplacé vers ${STAGE_LABELS[variables.stage]}`);
+      toast('success', t('Candidat déplacé vers {etape}', { etape: STAGE_LABELS[variables.stage] }));
 
       // Confetti on placement!
       if (variables.stage === 'PLACE') {
@@ -804,7 +805,7 @@ export default function MandatKanbanPage() {
         dueDate.setDate(dueDate.getDate() + suggestion.days);
         setTaskSuggestion({
           candidatId: variables.candidatId,
-          candidatName: variables.candidatName || 'Candidat',
+          candidatName: variables.candidatName || t('Candidat'),
           stage: variables.stage,
           titre: suggestion.titre,
           dueDate: dueDate.toISOString(),
@@ -816,7 +817,7 @@ export default function MandatKanbanPage() {
       if (context?.previousKanban) {
         queryClient.setQueryData(['mandat-kanban', id], context.previousKanban);
       }
-      toast('error', 'Erreur lors du déplacement du candidat');
+      toast('error', t('Erreur lors du déplacement du candidat'));
     },
     onSettled: () => {
       // Always refetch to ensure server consistency
@@ -1042,9 +1043,9 @@ export default function MandatKanbanPage() {
   if (!filteredKanban) {
     return (
       <div className="text-center py-16">
-        <p className="text-text-secondary">Mandat introuvable.</p>
+        <p className="text-text-secondary">{t('Mandat introuvable.')}</p>
         <Button variant="ghost" onClick={() => navigate('/mandats')} className="mt-4">
-          Retour aux mandats
+          {t('Retour aux mandats')}
         </Button>
       </div>
     );
@@ -1054,11 +1055,11 @@ export default function MandatKanbanPage() {
     <div>
       <Confetti active={showConfetti} />
       <PageHeader
-        title={mandat ? `Kanban \u2014 ${mandat.titrePoste}` : 'Vue Kanban'}
+        title={mandat ? `Kanban \u2014 ${mandat.titrePoste}` : t('Vue Kanban')}
         subtitle={mandat?.entreprise?.nom}
         breadcrumbs={[
-          { label: 'Mandats', href: '/mandats' },
-          { label: mandat?.titrePoste || 'Détail', href: `/mandats/${id}` },
+          { label: t('Mandats'), href: '/mandats' },
+          { label: mandat?.titrePoste || t('Détail'), href: `/mandats/${id}` },
           { label: 'Kanban' },
         ]}
         actions={
@@ -1066,13 +1067,13 @@ export default function MandatKanbanPage() {
             <Button
               variant={clientPreview ? 'primary' : 'secondary'}
               onClick={() => setClientPreview((v) => !v)}
-              title={clientPreview ? 'Revenir en vue interne' : "Voir ce que le client verra dans le portail"}
+              title={clientPreview ? t('Revenir en vue interne') : t("Voir ce que le client verra dans le portail")}
             >
               {clientPreview ? <Eye size={16} /> : <EyeOff size={16} />}
-              {clientPreview ? 'Aperçu client (actif)' : 'Aperçu client'}
+              {clientPreview ? t('Aperçu client (actif)') : t('Aperçu client')}
             </Button>
             <Button variant="primary" onClick={() => setAddCandidatOpen(true)}>
-              <UserPlus size={16} /> Ajouter un candidat
+              <UserPlus size={16} /> {t('Ajouter un candidat')}
             </Button>
             <Link to={`/mandats/${id}/review`}>
               <Button variant="secondary">
@@ -1080,7 +1081,7 @@ export default function MandatKanbanPage() {
               </Button>
             </Link>
             <Button variant="ghost" onClick={() => navigate(`/mandats/${id}`)}>
-              <ArrowLeft size={16} /> Détail
+              <ArrowLeft size={16} /> {t('Détail')}
             </Button>
             <Button variant="secondary" disabled>
               <LayoutGrid size={16} /> Kanban
@@ -1094,8 +1095,8 @@ export default function MandatKanbanPage() {
         <div className="mb-4 flex items-center justify-between rounded-xl border border-primary-100 bg-primary-50/50 px-4 py-2.5">
           <div className="flex items-center gap-2 text-sm text-primary-800">
             <Eye size={16} strokeWidth={2} />
-            <span className="font-semibold">Aperçu client</span>
-            <span className="text-primary-700">— tu vois ce que le client verra dans le portail. Bascule off pour voir toutes les colonnes.</span>
+            <span className="font-semibold">{t('Aperçu client')}</span>
+            <span className="text-primary-700">{t('— tu vois ce que le client verra dans le portail. Bascule off pour voir toutes les colonnes.')}</span>
           </div>
           <button
             type="button"
@@ -1111,7 +1112,7 @@ export default function MandatKanbanPage() {
       {stageCounts && stageCounts.total > 0 && (
         <div className="mb-4 flex items-center gap-3">
           <span className="shrink-0 text-xs font-medium text-text-secondary">
-            {stageCounts.total} candidat{stageCounts.total > 1 ? 's' : ''}
+            {t(stageCounts.total > 1 ? '{n} candidats' : '{n} candidat', { n: stageCounts.total })}
           </span>
           <div className="flex h-3 flex-1 overflow-hidden rounded-full">
             {STAGES.map((stage, i) => {
@@ -1148,7 +1149,7 @@ export default function MandatKanbanPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un candidat..."
+            placeholder={t('Rechercher un candidat...')}
             className="w-full rounded-xl border border-border/50 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:ring-4 focus:ring-accent/10 focus:border-accent"
           />
         </div>
@@ -1206,7 +1207,7 @@ export default function MandatKanbanPage() {
                   {/* Empty state */}
                   {items.length === 0 && !activeDragId && (
                     <div className="flex items-center justify-center py-8 text-xs text-neutral-300">
-                      Aucun candidat
+                      {t('Aucun candidat')}
                     </div>
                   )}
                 </DroppableColumn>
@@ -1244,7 +1245,7 @@ export default function MandatKanbanPage() {
                 {taskSuggestion.titre}
               </p>
               <p className="text-xs text-neutral-400">
-                Pour {taskSuggestion.candidatName} \u2022 {STAGE_LABELS[taskSuggestion.stage]}
+                {t('Pour {nom}', { nom: taskSuggestion.candidatName })} \u2022 {STAGE_LABELS[taskSuggestion.stage]}
               </p>
             </div>
             <button
@@ -1260,7 +1261,7 @@ export default function MandatKanbanPage() {
               className="flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 transition-colors disabled:opacity-50"
             >
               <CheckCircle2 size={14} />
-              Créer
+              {t('Créer')}
             </button>
             <button
               onClick={() => setTaskSuggestion(null)}
@@ -1287,16 +1288,16 @@ export default function MandatKanbanPage() {
           <div onClick={(e) => e.stopPropagation()} style={{ width: 480, maxWidth: '94vw', background: '#fff', borderRadius: 22, boxShadow: '0 44px 96px -40px rgba(0,0,0,.55)', padding: '26px 28px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 12, background: '#FBF3E7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Calendar size={18} color="#E08A2B" /></span>
-              <div><div style={{ fontWeight: 800, fontSize: 17.5, letterSpacing: '-.015em', color: '#1A1533' }}>Entretien client</div><div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{entretienModal.candidatName} — planifiez la date de l'entretien</div></div>
+              <div><div style={{ fontWeight: 800, fontSize: 17.5, letterSpacing: '-.015em', color: '#1A1533' }}>{t('Entretien client')}</div><div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{t("{nom} — planifiez la date de l'entretien", { nom: entretienModal.candidatName || '' })}</div></div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12, marginTop: 20 }}>
               <div><label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 6 }}>Date</label><input type="date" value={entretienDate} onChange={(e) => setEntretienDate(e.target.value)} style={{ width: '100%', fontSize: 13.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} /></div>
-              <div><label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 6 }}>Heure</label><input type="time" value={entretienTime} onChange={(e) => setEntretienTime(e.target.value)} style={{ width: '100%', fontSize: 13.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} /></div>
-              <div style={{ gridColumn: '1 / -1' }}><label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 6 }}>Interlocuteur côté client</label><input value={entretienInter} onChange={(e) => setEntretienInter(e.target.value)} placeholder="Ex. DRH, N+1, dirigeant…" style={{ width: '100%', fontSize: 13.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} /></div>
+              <div><label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 6 }}>{t('Heure')}</label><input type="time" value={entretienTime} onChange={(e) => setEntretienTime(e.target.value)} style={{ width: '100%', fontSize: 13.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} /></div>
+              <div style={{ gridColumn: '1 / -1' }}><label style={{ display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#8A8699', marginBottom: 6 }}>{t('Interlocuteur côté client')}</label><input value={entretienInter} onChange={(e) => setEntretienInter(e.target.value)} placeholder={t('Ex. DRH, N+1, dirigeant…')} style={{ width: '100%', fontSize: 13.5, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} /></div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
-              <button onClick={() => setEntretienModal({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null })} style={{ flex: 1, fontSize: 14, fontWeight: 700, background: '#F5F4EA', color: '#4A4568', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Annuler</button>
-              <button disabled={!entretienDate || !entretienInter.trim()} onClick={handleConfirmEntretien} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: (entretienDate && entretienInter.trim()) ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 12, cursor: (entretienDate && entretienInter.trim()) ? 'pointer' : 'default' }}>Confirmer la présentation</button>
+              <button onClick={() => setEntretienModal({ open: false, candidatureId: null, sourceStage: null, candidatId: null, candidatName: null })} style={{ flex: 1, fontSize: 14, fontWeight: 700, background: '#F5F4EA', color: '#4A4568', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>{t('Annuler')}</button>
+              <button disabled={!entretienDate || !entretienInter.trim()} onClick={handleConfirmEntretien} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: (entretienDate && entretienInter.trim()) ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 12, cursor: (entretienDate && entretienInter.trim()) ? 'pointer' : 'default' }}>{t('Confirmer la présentation')}</button>
             </div>
           </div>
         </div>
@@ -1321,15 +1322,15 @@ export default function MandatKanbanPage() {
                   {selectedIds.size}
                 </span>
                 <span className="text-sm font-medium text-neutral-700">
-                  candidat{selectedIds.size > 1 ? 's' : ''} sélectionné{selectedIds.size > 1 ? 's' : ''}
+                  {t(selectedIds.size > 1 ? 'candidats sélectionnés' : 'candidat sélectionné')}
                 </span>
               </div>
               <div className="h-6 w-px bg-neutral-100" />
               <Button variant="primary" onClick={() => setPresentModal(true)}>
-                <Mail size={14} /> Présenter au client
+                <Mail size={14} /> {t('Présenter au client')}
               </Button>
               <Button variant="ghost" onClick={clearSelection}>
-                <X size={14} /> Désélectionner
+                <X size={14} /> {t('Désélectionner')}
               </Button>
             </div>
           </motion.div>
@@ -1340,12 +1341,12 @@ export default function MandatKanbanPage() {
       <Modal
         isOpen={presentModal}
         onClose={() => setPresentModal(false)}
-        title="Présenter au client"
+        title={t('Présenter au client')}
         size="md"
       >
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
-            <strong>{selectedIds.size} candidat{selectedIds.size > 1 ? 's' : ''}</strong> passera{selectedIds.size > 1 ? 'ont' : ''} en <span className="font-semibold text-neutral-800">Envoi client</span>. Le client sera notifié par un email agrégé.
+            <strong>{t(selectedIds.size > 1 ? '{n} candidats' : '{n} candidat', { n: selectedIds.size })}</strong> {t(selectedIds.size > 1 ? 'passeront en' : 'passera en')} <span className="font-semibold text-neutral-800">{t('Envoi client')}</span>. {t('Le client sera notifié par un email agrégé.')}
           </p>
           <div className="rounded-xl border border-neutral-100 p-3">
             <label className="flex cursor-pointer items-start gap-2">
@@ -1356,22 +1357,22 @@ export default function MandatKanbanPage() {
                 className="mt-0.5 h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-800 focus:ring-primary-800"
               />
               <div className="flex-1">
-                <span className="text-sm font-medium text-neutral-800">Notifier le client par email</span>
+                <span className="text-sm font-medium text-neutral-800">{t('Notifier le client par email')}</span>
                 <p className="mt-0.5 text-xs text-neutral-500">
-                  Un seul email au contact client du mandat listant les {selectedIds.size} profil{selectedIds.size > 1 ? 's' : ''}.
+                  {t(selectedIds.size > 1 ? 'Un seul email au contact client du mandat listant les {n} profils.' : 'Un seul email au contact client du mandat listant les {n} profil.', { n: selectedIds.size })}
                 </p>
               </div>
             </label>
             {presentNotify && (
               <div className="mt-3 pl-6">
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Mot au client (optionnel)
+                  {t('Mot au client (optionnel)')}
                 </label>
                 <textarea
                   value={presentMessage}
                   onChange={(e) => setPresentMessage(e.target.value)}
                   rows={3}
-                  placeholder="Ex : Voici la première salve — le premier profil est disponible pour un entretien dès la semaine prochaine."
+                  placeholder={t('Ex : Voici la première salve — le premier profil est disponible pour un entretien dès la semaine prochaine.')}
                   className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-3 py-2 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-800 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
                 />
               </div>
@@ -1379,7 +1380,7 @@ export default function MandatKanbanPage() {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={() => setPresentModal(false)}>
-              Annuler
+              {t('Annuler')}
             </Button>
             <Button
               variant="primary"
@@ -1392,7 +1393,7 @@ export default function MandatKanbanPage() {
               }
               disabled={bulkPresentMutation.isPending || selectedIds.size === 0}
             >
-              {bulkPresentMutation.isPending ? 'Envoi…' : `Présenter ${selectedIds.size} candidat${selectedIds.size > 1 ? 's' : ''}`}
+              {bulkPresentMutation.isPending ? t('Envoi…') : t(selectedIds.size > 1 ? 'Présenter {n} candidats' : 'Présenter {n} candidat', { n: selectedIds.size })}
             </Button>
           </div>
         </div>
@@ -1402,29 +1403,29 @@ export default function MandatKanbanPage() {
       <Modal
         isOpen={refusalModal.open}
         onClose={handleCancelRefusal}
-        title="Motif de refus"
+        title={t('Motif de refus')}
         size="md"
       >
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
-            Sélectionne le motif du refus, puis choisis si on prévient le candidat et/ou le client.
+            {t('Sélectionne le motif du refus, puis choisis si on prévient le candidat et/ou le client.')}
           </p>
           <Select
-            label="Motif de refus"
+            label={t('Motif de refus')}
             options={MOTIF_REFUS_OPTIONS}
             value={selectedMotif}
             onChange={setSelectedMotif}
-            placeholder="Sélectionner un motif..."
+            placeholder={t('Sélectionner un motif...')}
           />
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              Détail (optionnel)
+              {t('Détail (optionnel)')}
             </label>
             <textarea
               value={refusalMotifDetail}
               onChange={(e) => setRefusalMotifDetail(e.target.value)}
               rows={2}
-              placeholder="Ex : Attente d'un autre profil plus senior, timing pas bon…"
+              placeholder={t("Ex : Attente d'un autre profil plus senior, timing pas bon…")}
               className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-3 py-2 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-800 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
             />
           </div>
@@ -1439,9 +1440,9 @@ export default function MandatKanbanPage() {
                 className="mt-0.5 h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-800 focus:ring-primary-800"
               />
               <div>
-                <span className="text-sm font-medium text-neutral-800">Envoyer un email de refus au candidat</span>
+                <span className="text-sm font-medium text-neutral-800">{t('Envoyer un email de refus au candidat')}</span>
                 <p className="mt-0.5 text-xs text-neutral-500">
-                  Message court + branding HumanUp. Le candidat reçoit un mail auto tout de suite.
+                  {t('Message court + branding HumanUp. Le candidat reçoit un mail auto tout de suite.')}
                 </p>
               </div>
             </label>
@@ -1457,22 +1458,22 @@ export default function MandatKanbanPage() {
                 className="mt-0.5 h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-800 focus:ring-primary-800"
               />
               <div className="flex-1">
-                <span className="text-sm font-medium text-neutral-800">Notifier le client par email</span>
+                <span className="text-sm font-medium text-neutral-800">{t('Notifier le client par email')}</span>
                 <p className="mt-0.5 text-xs text-neutral-500">
-                  Informer le contact client du mandat.
+                  {t('Informer le contact client du mandat.')}
                 </p>
               </div>
             </label>
             {refusalNotifyClient && (
               <div className="mt-3 pl-6">
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Mot au client (optionnel)
+                  {t('Mot au client (optionnel)')}
                 </label>
                 <textarea
                   value={refusalMessageToClient}
                   onChange={(e) => setRefusalMessageToClient(e.target.value)}
                   rows={3}
-                  placeholder="Ex : Profil trop junior, on continue à sourcer sur votre besoin."
+                  placeholder={t('Ex : Profil trop junior, on continue à sourcer sur votre besoin.')}
                   className="w-full rounded-xl border-[1.5px] border-neutral-100 bg-white px-3 py-2 text-sm outline-none transition-all placeholder:text-neutral-300 focus:border-primary-800 focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
                 />
               </div>
@@ -1481,14 +1482,14 @@ export default function MandatKanbanPage() {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={handleCancelRefusal}>
-              Annuler
+              {t('Annuler')}
             </Button>
             <Button
               variant="danger"
               onClick={handleConfirmRefusal}
               disabled={!selectedMotif || updateStageMutation.isPending}
             >
-              Confirmer le refus
+              {t('Confirmer le refus')}
             </Button>
           </div>
         </div>
@@ -1498,12 +1499,12 @@ export default function MandatKanbanPage() {
       <Modal
         isOpen={addCandidatOpen}
         onClose={() => { setAddCandidatOpen(false); setCandidatSearch(''); }}
-        title="Ajouter un candidat"
+        title={t('Ajouter un candidat')}
         size="md"
       >
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
-            Recherchez un candidat existant pour l'ajouter au mandat en tant que candidature.
+            {t("Recherchez un candidat existant pour l'ajouter au mandat en tant que candidature.")}
           </p>
 
           {/* Search input */}
@@ -1515,7 +1516,7 @@ export default function MandatKanbanPage() {
             <input
               value={candidatSearch}
               onChange={(e) => setCandidatSearch(e.target.value)}
-              placeholder="Rechercher par nom, poste..."
+              placeholder={t('Rechercher par nom, poste...')}
               className="w-full rounded-xl border border-border/50 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:ring-4 focus:ring-accent/10 focus:border-accent"
               autoFocus
             />
@@ -1529,7 +1530,7 @@ export default function MandatKanbanPage() {
               </div>
             ) : !candidatResults?.data?.length ? (
               <div className="py-8 text-center text-sm text-text-tertiary">
-                Aucun candidat trouvé
+                {t('Aucun candidat trouvé')}
               </div>
             ) : (
               candidatResults.data.map((c) => (
@@ -1560,7 +1561,7 @@ export default function MandatKanbanPage() {
 
           <div className="flex justify-end pt-2">
             <Button variant="ghost" onClick={() => { setAddCandidatOpen(false); setCandidatSearch(''); }}>
-              Fermer
+              {t('Fermer')}
             </Button>
           </div>
         </div>

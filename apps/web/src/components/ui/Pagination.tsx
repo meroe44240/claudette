@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { t } from '../../lib/i18n';
 
 interface PaginationProps {
   page: number;
@@ -24,7 +25,7 @@ export default function Pagination({ page, totalPages, total, onPageChange }: Pa
     <div className="flex items-center gap-3">
       {total !== undefined && (
         <span className="text-[13px] text-neutral-500">
-          Page {page} sur {totalPages} ({total} résultats)
+          {t('Page {page} sur {totalPages} ({total} résultats)', { page, totalPages, total })}
         </span>
       )}
       <div className="flex items-center gap-1">
