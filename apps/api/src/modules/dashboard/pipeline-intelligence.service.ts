@@ -19,7 +19,7 @@ interface MandatHealth {
 
 export async function getPipelineIntelligence(userId?: string): Promise<{ mandats: MandatHealth[] }> {
   const where: any = { statut: { in: ['OUVERT', 'EN_COURS'] } };
-  if (userId) where.assignedToId = userId;
+  if (userId) where.OR = [{ assignedToId: userId }, { recruteurId: userId }, { salesId: userId }, { sourceurId: userId }];
 
   const mandats = await prisma.mandat.findMany({
     where,
