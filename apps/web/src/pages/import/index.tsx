@@ -21,6 +21,7 @@ import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Select from '../../components/ui/Select';
 import Skeleton from '../../components/ui/Skeleton';
+import { t } from '../../lib/i18n';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -117,12 +118,15 @@ const fieldOptions: Record<string, { value: string; label: string }[]> = {
   ],
 };
 
+/** Options traduites pour l'affichage (les libellés FR restent les en-têtes du modèle CSV). */
+const translatedOptions = (opts: { value: string; label: string }[]) => opts.map((o) => ({ ...o, label: t(o.label) }));
+
 const entityOptions: { value: EntityType; label: string }[] = [
-  { value: 'candidats', label: 'Candidats' },
-  { value: 'clients', label: 'Clients' },
-  { value: 'entreprises', label: 'Entreprises' },
-  { value: 'mandats', label: 'Mandats' },
-  { value: 'leads', label: 'Leads' },
+  { value: 'candidats', label: t('Candidats') },
+  { value: 'clients', label: t('Clients') },
+  { value: 'entreprises', label: t('Entreprises') },
+  { value: 'mandats', label: t('Mandats') },
+  { value: 'leads', label: t('Leads') },
 ];
 
 const entityRoutes: Record<EntityType, string> = {
@@ -134,11 +138,11 @@ const entityRoutes: Record<EntityType, string> = {
 };
 
 const entityLabels: Record<EntityType, string> = {
-  candidats: 'candidats',
-  clients: 'clients',
-  entreprises: 'entreprises',
-  mandats: 'mandats',
-  leads: 'leads',
+  candidats: t('candidats'),
+  clients: t('clients'),
+  entreprises: t('entreprises'),
+  mandats: t('mandats'),
+  leads: t('leads'),
 };
 
 // ---------------------------------------------------------------------------
@@ -146,10 +150,10 @@ const entityLabels: Record<EntityType, string> = {
 // ---------------------------------------------------------------------------
 
 const steps = [
-  { num: 1, label: 'Upload' },
-  { num: 2, label: 'Mapping' },
-  { num: 3, label: 'Prévisualisation' },
-  { num: 4, label: 'Résultat' },
+  { num: 1, label: t('Upload') },
+  { num: 2, label: t('Mapping') },
+  { num: 3, label: t('Prévisualisation') },
+  { num: 4, label: t('Résultat') },
 ];
 
 function StepIndicator({ current }: { current: number }) {
@@ -209,9 +213,9 @@ function downloadCsvTemplate(entityType: EntityType) {
 }
 
 function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  if (bytes < 1024) return t('{n} o', { n: bytes });
+  if (bytes < 1024 * 1024) return t('{n} Ko', { n: (bytes / 1024).toFixed(1) });
+  return t('{n} Mo', { n: (bytes / (1024 * 1024)).toFixed(1) });
 }
 
 // ---------------------------------------------------------------------------
@@ -285,7 +289,7 @@ export default function ImportPage() {
     ];
     const ext = f.name.split('.').pop()?.toLowerCase();
     if (!validTypes.includes(f.type) && ext !== 'csv' && ext !== 'xlsx') {
-      toast('error', 'Format non supporté. Veuillez sélectionner un fichier .csv ou .xlsx');
+      toast('error', t('Format non supporté. Veuillez sélectionner un fichier .csv ou .xlsx'));
       return;
     }
     setFile(f);
@@ -317,16 +321,16 @@ export default function ImportPage() {
       );
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Erreur lors de l’envoi du fichier');
+        throw new Error(err.message || t('Erreur lors de l’envoi du fichier'));
       }
       const data: UploadResponse = await res.json();
       setHeaders(data.headers);
       setRows(data.rows);
       setMapping(data.autoMapping || {});
-      toast('success', `${data.rowCount} lignes détectées`);
+      toast('success', t('{n} lignes détectées', { n: data.rowCount }));
       setStep(2);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erreur lors de l’envoi du fichier';
+      const message = err instanceof Error ? err.message : t('Erreur lors de l’envoi du fichier');
       toast('error', message);
     } finally {
       setLoading(false);
@@ -347,7 +351,7 @@ export default function ImportPage() {
       setDuplicates(data.duplicates);
       setStep(3);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erreur lors de la prévisualisation';
+      const message = err instanceof Error ? err.message : t('Erreur lors de la prévisualisation');
       toast('error', message);
     } finally {
       setLoading(false);
@@ -367,9 +371,9 @@ export default function ImportPage() {
       });
       setResult(data);
       setStep(4);
-      toast('success', `Import terminé : ${data.imported} enregistrement(s) importé(s)`);
+      toast('success', t('Import terminé : {n} enregistrement(s) importé(s)', { n: data.imported }));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erreur lors de l’import';
+      const message = err instanceof Error ? err.message : t('Erreur lors de l’import');
       toast('error', message);
     } finally {
       setLoading(false);
@@ -410,7 +414,7 @@ export default function ImportPage() {
   const allFieldLabels: Record<string, string> = {};
   Object.values(fieldOptions).forEach((opts) => {
     opts.forEach((o) => {
-      if (o.value) allFieldLabels[o.value] = o.label;
+      if (o.value) allFieldLabels[o.value] = t(o.label);
     });
   });
 
@@ -421,11 +425,11 @@ export default function ImportPage() {
   return (
     <div>
       <PageHeader
-        title="Import"
-        subtitle="Importez des données depuis un fichier CSV ou Excel"
+        title={t('Import')}
+        subtitle={t('Importez des données depuis un fichier CSV ou Excel')}
         breadcrumbs={[
-          { label: 'Tableau de bord', href: '/' },
-          { label: 'Import' },
+          { label: t('Tableau de bord'), href: '/' },
+          { label: t('Import') },
         ]}
       />
 
@@ -439,7 +443,7 @@ export default function ImportPage() {
           <div className="mx-auto max-w-xl space-y-6">
             {/* Entity type selection */}
             <Select
-              label="Type de données à importer"
+              label={t('Type de données à importer')}
               options={entityOptions}
               value={entityType}
               onChange={(v) => setEntityType(v as EntityType)}
@@ -452,13 +456,13 @@ export default function ImportPage() {
               className="inline-flex items-center gap-1.5 text-sm text-primary-500 hover:text-primary-700 transition-colors"
             >
               <Download size={14} />
-              Télécharger un modèle CSV ({entityLabels[entityType]})
+              {t('Télécharger un modèle CSV ({type})', { type: entityLabels[entityType] })}
             </button>
 
             {/* Dropzone */}
             <div>
               <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                Fichier (.csv ou .xlsx)
+                {t('Fichier (.csv ou .xlsx)')}
               </label>
               <div
                 onDragEnter={handleDrag}
@@ -477,7 +481,7 @@ export default function ImportPage() {
                   className={`mb-3 ${dragActive ? 'text-primary-500' : 'text-neutral-300'}`}
                 />
                 <p className="text-[15px] text-neutral-500">
-                  Glissez un fichier ici ou cliquez pour sélectionner
+                  {t('Glissez un fichier ici ou cliquez pour sélectionner')}
                 </p>
                 <p className="mt-1.5 text-[11px] text-neutral-300">
                   CSV, XLSX — max 10MB
@@ -522,12 +526,12 @@ export default function ImportPage() {
                 {loading ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    Envoi en cours...
+                    {t('Envoi en cours...')}
                   </>
                 ) : (
                   <>
                     <Upload size={16} />
-                    Envoyer le fichier
+                    {t('Envoyer le fichier')}
                   </>
                 )}
               </Button>
@@ -551,18 +555,18 @@ export default function ImportPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-[18px] font-semibold text-neutral-900">
-                    Correspondance des colonnes
+                    {t('Correspondance des colonnes')}
                   </h2>
                   <p className="mt-1 text-[13px] text-neutral-500">
-                    Associez chaque colonne de votre fichier à un champ de l&apos;ATS.
+                    {t("Associez chaque colonne de votre fichier à un champ de l'ATS.")}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant={mappedCount > 0 ? 'success' : 'default'}>
-                    {mappedCount} mappé(s)
+                    {t('{n} mappé(s)', { n: mappedCount })}
                   </Badge>
                   {unmappedCount > 0 && (
-                    <Badge variant="warning">{unmappedCount} ignoré(s)</Badge>
+                    <Badge variant="warning">{t('{n} ignoré(s)', { n: unmappedCount })}</Badge>
                   )}
                 </div>
               </div>
@@ -572,10 +576,10 @@ export default function ImportPage() {
                 {/* Header row */}
                 <div className="grid grid-cols-2 gap-4 bg-neutral-50 px-4 py-3">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                    Colonne du fichier
+                    {t('Colonne du fichier')}
                   </span>
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                    Champ ATS
+                    {t('Champ ATS')}
                   </span>
                 </div>
                 {headers.map((header) => (
@@ -595,10 +599,10 @@ export default function ImportPage() {
                       </span>
                     </div>
                     <Select
-                      options={fieldOptions[entityType]}
+                      options={translatedOptions(fieldOptions[entityType])}
                       value={mapping[header] || ''}
                       onChange={(v) => updateMapping(header, v)}
-                      placeholder="— Ignorer —"
+                      placeholder={t('— Ignorer —')}
                     />
                   </div>
                 ))}
@@ -608,17 +612,17 @@ export default function ImportPage() {
               <div className="flex items-center justify-between">
                 <Button variant="secondary" onClick={() => setStep(1)}>
                   <ArrowLeft size={16} />
-                  Retour
+                  {t('Retour')}
                 </Button>
                 <Button onClick={handlePreview} disabled={mappedCount === 0 || loading}>
                   {loading ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      Chargement...
+                      {t('Chargement...')}
                     </>
                   ) : (
                     <>
-                      Prévisualiser
+                      {t('Prévisualiser')}
                       <ArrowRight size={16} />
                     </>
                   )}
@@ -645,11 +649,11 @@ export default function ImportPage() {
               <div className="flex flex-wrap items-center gap-3 border-b border-neutral-100 px-6 pt-6 pb-4">
                 <span className="text-[13px] text-neutral-500">
                   <strong className="text-neutral-900">{preview.length}</strong>{' '}
-                  ligne(s) à importer
+                  {t('ligne(s) à importer')}
                 </span>
                 {duplicates.length > 0 && (
                   <Badge variant="warning">
-                    {duplicates.length} doublon(s) détecté(s)
+                    {t('{n} doublon(s) détecté(s)', { n: duplicates.length })}
                   </Badge>
                 )}
               </div>
@@ -671,7 +675,7 @@ export default function ImportPage() {
                         </th>
                       ))}
                       <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                        Statut
+                        {t('Statut')}
                       </th>
                     </tr>
                   </thead>
@@ -693,7 +697,7 @@ export default function ImportPage() {
                           ))}
                           <td className="px-4 py-3">
                             {isDuplicate ? (
-                              <Badge variant="warning">Doublon</Badge>
+                              <Badge variant="warning">{t('Doublon')}</Badge>
                             ) : (
                               <Badge variant="success">OK</Badge>
                             )}
@@ -714,23 +718,23 @@ export default function ImportPage() {
                     onChange={(e) => setSkipDuplicates(e.target.checked)}
                     className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
                   />
-                  Ignorer les doublons
+                  {t('Ignorer les doublons')}
                 </label>
                 <div className="flex items-center gap-3">
                   <Button variant="secondary" onClick={() => setStep(2)}>
                     <ArrowLeft size={16} />
-                    Retour
+                    {t('Retour')}
                   </Button>
                   <Button onClick={handleExecute} disabled={loading}>
                     {loading ? (
                       <>
                         <Loader2 size={16} className="animate-spin" />
-                        Import en cours...
+                        {t('Import en cours...')}
                       </>
                     ) : (
                       <>
                         <Check size={16} />
-                        Importer
+                        {t('Importer')}
                       </>
                     )}
                   </Button>
@@ -751,19 +755,19 @@ export default function ImportPage() {
             <Card>
               <div className="flex flex-col items-center py-2">
                 <span className="text-3xl font-bold text-success">{result.imported}</span>
-                <span className="mt-1 text-[13px] text-neutral-500">Importé(s)</span>
+                <span className="mt-1 text-[13px] text-neutral-500">{t('Importé(s)')}</span>
               </div>
             </Card>
             <Card>
               <div className="flex flex-col items-center py-2">
                 <span className="text-3xl font-bold text-warning">{result.skipped}</span>
-                <span className="mt-1 text-[13px] text-neutral-500">Ignoré(s)</span>
+                <span className="mt-1 text-[13px] text-neutral-500">{t('Ignoré(s)')}</span>
               </div>
             </Card>
             <Card>
               <div className="flex flex-col items-center py-2">
                 <span className="text-3xl font-bold text-error">{result.errors.length}</span>
-                <span className="mt-1 text-[13px] text-neutral-500">Erreur(s)</span>
+                <span className="mt-1 text-[13px] text-neutral-500">{t('Erreur(s)')}</span>
               </div>
             </Card>
           </div>
@@ -778,7 +782,7 @@ export default function ImportPage() {
                 <div className="flex items-center gap-2">
                   <AlertTriangle size={18} className="text-error" />
                   <span className="text-sm font-medium text-neutral-900">
-                    {result.errors.length} erreur(s) lors de l&apos;import
+                    {t("{n} erreur(s) lors de l'import", { n: result.errors.length })}
                   </span>
                 </div>
                 {errorsExpanded ? (
@@ -791,7 +795,7 @@ export default function ImportPage() {
                 <div className="mt-4 divide-y divide-neutral-100 rounded-xl border border-neutral-100">
                   {result.errors.map((err, idx) => (
                     <div key={idx} className="flex items-start gap-3 px-4 py-3">
-                      <Badge variant="error">Ligne {err.row}</Badge>
+                      <Badge variant="error">{t('Ligne {n}', { n: err.row })}</Badge>
                       <span className="text-sm text-neutral-500">{err.message}</span>
                     </div>
                   ))}
@@ -803,10 +807,10 @@ export default function ImportPage() {
           {/* Actions */}
           <div className="flex items-center justify-center gap-4">
             <Button variant="secondary" onClick={handleReset}>
-              Nouvel import
+              {t('Nouvel import')}
             </Button>
             <Button onClick={() => navigate(entityRoutes[entityType])}>
-              Voir les {entityLabels[entityType]}
+              {t('Voir les {type}', { type: entityLabels[entityType] })}
               <ArrowRight size={16} />
             </Button>
           </div>

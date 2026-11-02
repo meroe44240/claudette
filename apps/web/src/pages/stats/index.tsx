@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
 import PageHeader from '../../components/ui/PageHeader';
+import { t } from '../../lib/i18n';
 
 // ─── TYPES ──────────────────────────────────────────────
 
@@ -90,10 +91,10 @@ const COLORS = {
 const CARD_SHADOW = '0 2px 12px rgba(26,26,46,0.05)';
 
 const PERIOD_OPTIONS: { key: Period; label: string }[] = [
-  { key: 'week', label: 'Cette semaine' },
-  { key: 'month', label: 'Ce mois' },
-  { key: 'quarter', label: 'Ce trimestre' },
-  { key: 'year', label: 'Cette année' },
+  { key: 'week', label: t('Cette semaine') },
+  { key: 'month', label: t('Ce mois') },
+  { key: 'quarter', label: t('Ce trimestre') },
+  { key: 'year', label: t('Cette année') },
 ];
 
 const SCORECARD_CONFIG: {
@@ -103,12 +104,12 @@ const SCORECARD_CONFIG: {
   color: string;
   format: (v: number) => string;
 }[] = [
-  { key: 'appels', label: 'APPELS', emoji: '\uD83D\uDCDE', color: COLORS.activityBlue, format: (v) => String(v) },
-  { key: 'rdv', label: 'RDV', emoji: '\uD83D\uDCC5', color: COLORS.commercialTeal, format: (v) => String(v) },
-  { key: 'candidats', label: 'CANDIDATS', emoji: '\uD83D\uDC65', color: COLORS.pipelineViolet, format: (v) => String(v) },
-  { key: 'mandats', label: 'MANDATS', emoji: '\uD83D\uDCCB', color: COLORS.warningAmber, format: (v) => String(v) },
-  { key: 'ca', label: 'CA', emoji: '\uD83D\uDCB0', color: COLORS.revenueGreen, format: (v) => formatCurrency(v) },
-  { key: 'tauxPresentation', label: 'TAUX PRÉSENTATION', emoji: '\uD83C\uDFAF', color: COLORS.activityBlue, format: (v) => `${v}%` },
+  { key: 'appels', label: t('Appels'), emoji: '\uD83D\uDCDE', color: COLORS.activityBlue, format: (v) => String(v) },
+  { key: 'rdv', label: t('RDV'), emoji: '\uD83D\uDCC5', color: COLORS.commercialTeal, format: (v) => String(v) },
+  { key: 'candidats', label: t('Candidats'), emoji: '\uD83D\uDC65', color: COLORS.pipelineViolet, format: (v) => String(v) },
+  { key: 'mandats', label: t('Mandats'), emoji: '\uD83D\uDCCB', color: COLORS.warningAmber, format: (v) => String(v) },
+  { key: 'ca', label: t('CA'), emoji: '\uD83D\uDCB0', color: COLORS.revenueGreen, format: (v) => formatCurrency(v) },
+  { key: 'tauxPresentation', label: t('Taux de présentation'), emoji: '\uD83C\uDFAF', color: COLORS.activityBlue, format: (v) => `${v}%` },
 ];
 
 // ─── HELPERS ────────────────────────────────────────────
@@ -347,7 +348,7 @@ function CallsByDayChart({ data }: { data: StatsData['callsByDay'] }) {
   return (
     <Card>
       <h3 className="text-[15px] font-semibold text-neutral-900 mb-4">
-        Appels par jour
+        {t('Appels par jour')}
       </h3>
       <div className="h-[260px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -371,7 +372,7 @@ function CallsByDayChart({ data }: { data: StatsData['callsByDay'] }) {
               stroke={COLORS.neutralText}
               strokeDasharray="6 4"
               label={{
-                value: `Moy: ${avg}`,
+                value: t('Moy. : {n}', { n: avg }),
                 position: 'right',
                 fill: COLORS.neutralText,
                 fontSize: 11,
@@ -379,7 +380,7 @@ function CallsByDayChart({ data }: { data: StatsData['callsByDay'] }) {
             />
             <Bar
               dataKey="count"
-              name="Appels"
+              name={t('Appels')}
               barSize={28}
               radius={[6, 6, 0, 0]}
             >
@@ -406,7 +407,7 @@ function RdvByTypeChart({ data }: { data: StatsData['rdvByType'] }) {
   return (
     <Card>
       <h3 className="text-[15px] font-semibold text-neutral-900 mb-4">
-        RDV par type
+        {t('RDV par type')}
       </h3>
       <div className="h-[260px] flex items-center justify-center">
         <div className="relative w-full h-full">
@@ -434,7 +435,7 @@ function RdvByTypeChart({ data }: { data: StatsData['rdvByType'] }) {
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">
               <span className="text-2xl font-bold text-neutral-900">{total}</span>
-              <span className="block text-[11px] text-neutral-400 uppercase tracking-wider">Total</span>
+              <span className="block text-[11px] text-neutral-400 uppercase tracking-wider">{t('Total')}</span>
             </div>
           </div>
         </div>
@@ -477,7 +478,7 @@ function FunnelChart({ data }: { data: StatsData['funnel'] }) {
   return (
     <Card>
       <h3 className="text-[15px] font-semibold text-neutral-900 mb-4">
-        Pipeline de recrutement
+        {t('Pipeline de recrutement')}
       </h3>
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -506,7 +507,7 @@ function FunnelChart({ data }: { data: StatsData['funnel'] }) {
             <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(34,23,122,0.04)' }} />
             <Bar
               dataKey="count"
-              name="Candidats"
+              name={t('Candidats')}
               barSize={24}
               radius={[0, 6, 6, 0]}
               label={{
@@ -533,12 +534,12 @@ function MandatsActifsList({ data }: { data: StatsData['mandatsActifs'] }) {
   return (
     <Card>
       <h3 className="text-[15px] font-semibold text-neutral-900 mb-4">
-        Mandats actifs
+        {t('Mandats actifs')}
       </h3>
       <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1 -mr-1">
         {data.length === 0 && (
           <p className="text-[13px] text-neutral-400 py-4 text-center">
-            Aucun mandat actif
+            {t('Aucun mandat actif')}
           </p>
         )}
         {data.map((m) => (
@@ -573,12 +574,12 @@ function MandatsActifsList({ data }: { data: StatsData['mandatsActifs'] }) {
             </div>
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-neutral-400">
-                {m.candidats} candidat{m.candidats !== 1 ? 's' : ''}
+                {t(m.candidats !== 1 ? '{n} candidats' : '{n} candidat', { n: m.candidats })}
               </span>
               {m.dormantDays !== null && m.dormantDays > 7 && (
                 <span className="flex items-center gap-1 text-amber-600 font-medium">
                   <AlertTriangle size={11} />
-                  Dormant {m.dormantDays}j
+                  {t('Dormant {n}j', { n: m.dormantDays })}
                 </span>
               )}
               {(m.dormantDays === null || m.dormantDays <= 7) && (
@@ -631,7 +632,7 @@ function RevenueChart({
   return (
     <Card>
       <h3 className="text-[15px] font-semibold text-neutral-900 mb-4">
-        Chiffre d'affaires
+        {t("Chiffre d'affaires")}
       </h3>
       <div className="h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -664,14 +665,14 @@ function RevenueChart({
             />
             <Bar
               dataKey="facture"
-              name="CA facturé"
+              name={t('CA facturé')}
               fill={COLORS.revenueGreen}
               barSize={24}
               radius={[6, 6, 0, 0]}
             />
             <Line
               dataKey="encaisseCumul"
-              name="Encaissé cumulé"
+              name={t('Encaissé cumulé')}
               stroke={COLORS.revenueGreenDark}
               strokeWidth={2}
               dot={{ r: 3, fill: COLORS.revenueGreenDark }}
@@ -679,7 +680,7 @@ function RevenueChart({
             />
             <Line
               dataKey="objectifProrata"
-              name="Objectif prorata"
+              name={t('Objectif prorata')}
               stroke={COLORS.neutralText}
               strokeWidth={1.5}
               strokeDasharray="6 4"
@@ -695,7 +696,7 @@ function RevenueChart({
         {/* Annual objective progress */}
         <div>
           <div className="flex items-center justify-between text-[13px] mb-2">
-            <span className="font-medium text-neutral-600">Objectif annuel</span>
+            <span className="font-medium text-neutral-600">{t('Objectif annuel')}</span>
             <span className="font-semibold text-neutral-900">
               {formatCurrency(caYtd)} / {formatCurrency(objectifAnnuel)}
               <span className="ml-2 text-neutral-400">({progressPct}%)</span>
@@ -716,7 +717,7 @@ function RevenueChart({
         <div className="flex flex-wrap gap-6 pt-2">
           <div>
             <span className="block text-[11px] text-neutral-400 uppercase tracking-wider mb-0.5">
-              Pipe pondéré
+              {t('Pipe pondéré')}
             </span>
             <span className="text-[16px] font-bold text-neutral-900">
               {formatCurrency(pipeCommercial)}
@@ -724,7 +725,7 @@ function RevenueChart({
           </div>
           <div>
             <span className="block text-[11px] text-neutral-400 uppercase tracking-wider mb-0.5">
-              Impayés
+              {t('Impayés')}
             </span>
             <span className="text-[16px] font-bold text-red-500">
               {formatCurrency(impayes)}
@@ -742,7 +743,7 @@ function PerformanceRadar({ data }: { data: StatsData['radar'] }) {
   return (
     <Card>
       <h3 className="text-[15px] font-semibold text-neutral-900 mb-4">
-        Radar de performance
+        {t('Radar de performance')}
       </h3>
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -759,7 +760,7 @@ function PerformanceRadar({ data }: { data: StatsData['radar'] }) {
               tickCount={4}
             />
             <Radar
-              name="Équipe"
+              name={t('Équipe')}
               dataKey="teamAvg"
               stroke="#c4c4d0"
               fill="#c4c4d0"
@@ -768,7 +769,7 @@ function PerformanceRadar({ data }: { data: StatsData['radar'] }) {
               strokeDasharray="4 3"
             />
             <Radar
-              name="Vous"
+              name={t('Vous')}
               dataKey="value"
               stroke={COLORS.pipelineViolet}
               fill={COLORS.pipelineViolet}
@@ -804,7 +805,7 @@ function TimePerStageChart({
   return (
     <Card>
       <h3 className="text-[15px] font-semibold text-neutral-900 mb-4">
-        Temps par étape
+        {t('Temps par étape')}
       </h3>
       <div className="space-y-3 mb-4">
         {data.map((stage, i) => {
@@ -816,7 +817,7 @@ function TimePerStageChart({
                 <span className="text-neutral-600">
                   {stage.from} &rarr; {stage.to}
                 </span>
-                <span className="font-semibold text-neutral-900">{stage.days}j</span>
+                <span className="font-semibold text-neutral-900">{t('{n}j', { n: stage.days })}</span>
               </div>
               <div className="relative h-3 rounded-full bg-neutral-100 overflow-hidden">
                 <div
@@ -830,7 +831,7 @@ function TimePerStageChart({
                 <div
                   className="absolute top-0 h-full w-0.5 bg-neutral-400"
                   style={{ left: `${avgPct}%` }}
-                  title={`Moy. équipe: ${stage.teamAvg}j`}
+                  title={t('Moy. équipe : {n}j', { n: stage.teamAvg })}
                 />
               </div>
             </div>
@@ -841,15 +842,15 @@ function TimePerStageChart({
       <div className="pt-4 border-t border-neutral-100">
         <div className="flex items-center justify-between">
           <span className="text-[13px] font-medium text-neutral-600">
-            Time-to-fill total
+            {t('Time-to-fill total')}
           </span>
           <div className="text-right">
             <span className="text-[18px] font-bold text-neutral-900">
-              {timeToFill !== null ? `${timeToFill}j` : 'N/A'}
+              {timeToFill !== null ? t('{n}j', { n: timeToFill }) : t('N/A')}
             </span>
             {teamTimeToFill !== null && (
               <span className="block text-[11px] text-neutral-400">
-                Moy. équipe: {teamTimeToFill}j
+                {t('Moy. équipe : {n}j', { n: teamTimeToFill })}
               </span>
             )}
           </div>
@@ -907,7 +908,7 @@ function TeamComparisonChart({
     <Card>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-[15px] font-semibold text-neutral-900">
-          Comparaison équipe
+          {t('Comparaison équipe')}
         </h3>
         {topCounts && (
           <span className="flex items-center gap-1.5 text-[12px] font-semibold text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
@@ -939,10 +940,10 @@ function TeamComparisonChart({
               iconSize={8}
               wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
             />
-            <Bar dataKey="Appels" fill={COLORS.activityBlue} barSize={14} radius={[4, 4, 0, 0]} />
-            <Bar dataKey="RDV" fill={COLORS.commercialTeal} barSize={14} radius={[4, 4, 0, 0]} />
-            <Bar dataKey="Candidats" fill={COLORS.pipelineViolet} barSize={14} radius={[4, 4, 0, 0]} />
-            <Bar dataKey="CA" fill={COLORS.revenueGreen} barSize={14} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Appels" name={t('Appels')} fill={COLORS.activityBlue} barSize={14} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="RDV" name={t('RDV')} fill={COLORS.commercialTeal} barSize={14} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Candidats" name={t('Candidats')} fill={COLORS.pipelineViolet} barSize={14} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="CA" name={t('CA')} fill={COLORS.revenueGreen} barSize={14} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -957,7 +958,7 @@ function exportToCsv(stats: StatsData) {
 
   // Scorecards
   rows.push(['== Scorecards ==']);
-  rows.push(['Métrique', 'Valeur', 'Tendance %']);
+  rows.push([t('Métrique'), t('Valeur'), t('Tendance %')]);
   SCORECARD_CONFIG.forEach((cfg) => {
     const item = stats.scorecards[cfg.key];
     rows.push([cfg.label, String(item.value), `${item.trend}%`]);
@@ -965,52 +966,52 @@ function exportToCsv(stats: StatsData) {
   rows.push([]);
 
   // Calls by day
-  rows.push(['== Appels par jour ==']);
-  rows.push(['Jour', 'Nombre']);
+  rows.push([`== ${t('Appels par jour')} ==`]);
+  rows.push([t('Jour'), t('Nombre')]);
   stats.callsByDay.forEach((d) => rows.push([d.day, String(d.count)]));
   rows.push([]);
 
   // RDV by type
-  rows.push(['== RDV par type ==']);
-  rows.push(['Type', 'Nombre']);
+  rows.push([`== ${t('RDV par type')} ==`]);
+  rows.push([t('Type'), t('Nombre')]);
   stats.rdvByType.forEach((d) => rows.push([d.type, String(d.count)]));
   rows.push([]);
 
   // Funnel
-  rows.push(['== Pipeline ==']);
-  rows.push(['Étape', 'Nombre']);
+  rows.push([`== ${t('Pipeline')} ==`]);
+  rows.push([t('Étape'), t('Nombre')]);
   stats.funnel.forEach((d) => rows.push([d.stage, String(d.count)]));
   rows.push([]);
 
   // Mandats actifs
-  rows.push(['== Mandats actifs ==']);
-  rows.push(['Titre', 'Entreprise', 'Candidats', 'Fee', 'Progression %', 'Jours dormant']);
+  rows.push([`== ${t('Mandats actifs')} ==`]);
+  rows.push([t('Titre'), t('Entreprise'), t('Candidats'), t('Fee'), t('Progression %'), t('Jours dormant')]);
   stats.mandatsActifs.forEach((m) =>
     rows.push([m.titre, m.entreprise, String(m.candidats), String(m.fee), String(m.progress), m.dormantDays !== null ? String(m.dormantDays) : '']),
   );
   rows.push([]);
 
   // Revenue
-  rows.push(['== Chiffre d\'affaires ==']);
-  rows.push(['Mois', 'Facturé', 'Encaissé']);
+  rows.push([`== ${t("Chiffre d'affaires")} ==`]);
+  rows.push([t('Mois'), t('Facturé'), t('Encaissé')]);
   stats.revenueByMonth.forEach((d) => rows.push([d.month, String(d.facture), String(d.encaisse)]));
   rows.push([]);
 
-  rows.push(['CA YTD', String(stats.caYtd)]);
-  rows.push(['Objectif annuel', String(stats.objectifAnnuel)]);
-  rows.push(['Pipe commercial', String(stats.pipeCommercial)]);
-  rows.push(['Impayés', String(stats.impayes)]);
+  rows.push([t('CA YTD'), String(stats.caYtd)]);
+  rows.push([t('Objectif annuel'), String(stats.objectifAnnuel)]);
+  rows.push([t('Pipe commercial'), String(stats.pipeCommercial)]);
+  rows.push([t('Impayés'), String(stats.impayes)]);
   rows.push([]);
 
   // Radar
   rows.push(['== Performance ==']);
-  rows.push(['Métrique', 'Valeur', 'Moy. équipe']);
+  rows.push([t('Métrique'), t('Valeur'), t('Moy. équipe')]);
   stats.radar.forEach((d) => rows.push([d.metric, String(d.value), String(d.teamAvg)]));
   rows.push([]);
 
   // Time per stage
-  rows.push(['== Temps par étape ==']);
-  rows.push(['De', 'Vers', 'Jours', 'Moy. équipe']);
+  rows.push([`== ${t('Temps par étape')} ==`]);
+  rows.push([t('De'), t('Vers'), t('Jours'), t('Moy. équipe')]);
   stats.timePerStage.forEach((d) => rows.push([d.from, d.to, String(d.days), String(d.teamAvg)]));
   if (stats.timeToFill !== null) {
     rows.push(['Time-to-fill', String(stats.timeToFill), '', stats.teamTimeToFill !== null ? String(stats.teamTimeToFill) : '']);
@@ -1019,8 +1020,8 @@ function exportToCsv(stats: StatsData) {
 
   // Team comparison
   if (stats.teamComparison) {
-    rows.push(['== Comparaison équipe ==']);
-    rows.push(['Nom', 'Appels', 'RDV', 'Candidats', 'CA']);
+    rows.push([`== ${t('Comparaison équipe')} ==`]);
+    rows.push([t('Nom'), t('Appels'), t('RDV'), t('Candidats'), t('CA')]);
     stats.teamComparison.forEach((d) =>
       rows.push([`${d.prenom} ${d.nom}`, String(d.appels), String(d.rdv), String(d.candidats), String(d.ca)]),
     );
@@ -1106,10 +1107,10 @@ export default function StatsPage() {
         title={
           <span className="flex items-center gap-2">
             <span className="text-[24px]">{'\uD83D\uDCCA'}</span>
-            Statistiques de {displayUser.prenom} {displayUser.nom}
+            {t('Statistiques de {name}', { name: `${displayUser.prenom} ${displayUser.nom}`.trim() })}
           </span>
         }
-        breadcrumbs={[{ label: 'Statistiques' }]}
+        breadcrumbs={[{ label: t('Statistiques') }]}
       />
 
       {/* Controls bar */}
@@ -1198,16 +1199,16 @@ export default function StatsPage() {
         >
           <div className="text-[48px] mb-4">&#x26A0;&#xFE0F;</div>
           <h3 className="text-[16px] font-semibold text-neutral-900 mb-2">
-            Erreur de chargement
+            {t('Erreur de chargement')}
           </h3>
           <p className="text-[13px] text-neutral-500 mb-4">
-            {(error as any)?.message ?? 'Impossible de charger les statistiques. Veuillez réessayer.'}
+            {(error as any)?.message ?? t('Impossible de charger les statistiques. Veuillez réessayer.')}
           </p>
           <button
             onClick={() => window.location.reload()}
             className="rounded-xl bg-blue-500 px-6 py-2.5 text-[13px] font-semibold text-white hover:bg-blue-600 transition-colors"
           >
-            Réessayer
+            {t('Réessayer')}
           </button>
         </div>
       )}
@@ -1236,7 +1237,7 @@ export default function StatsPage() {
 
           {/* ────── SECTION 2: ACTIVITY ────── */}
           <section>
-            <SectionTitle>Activité</SectionTitle>
+            <SectionTitle>{t('Activité')}</SectionTitle>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <motion.div variants={fadeUp} custom={0}>
                 <CallsByDayChart data={stats.callsByDay} />
@@ -1249,7 +1250,7 @@ export default function StatsPage() {
 
           {/* ────── SECTION 3: PIPELINE ────── */}
           <section>
-            <SectionTitle>Pipeline</SectionTitle>
+            <SectionTitle>{t('Pipeline')}</SectionTitle>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <motion.div variants={fadeUp} custom={0}>
                 <FunnelChart data={stats.funnel} />
@@ -1262,7 +1263,7 @@ export default function StatsPage() {
 
           {/* ────── SECTION 4: REVENUE ────── */}
           <section>
-            <SectionTitle>Chiffre d'affaires</SectionTitle>
+            <SectionTitle>{t("Chiffre d'affaires")}</SectionTitle>
             <motion.div variants={fadeUp} custom={0}>
               <RevenueChart
                 data={stats.revenueByMonth}
@@ -1276,7 +1277,7 @@ export default function StatsPage() {
 
           {/* ────── SECTION 5: EFFICIENCY ────── */}
           <section>
-            <SectionTitle>Efficacité</SectionTitle>
+            <SectionTitle>{t('Efficacité')}</SectionTitle>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <motion.div variants={fadeUp} custom={0}>
                 <PerformanceRadar data={stats.radar} />
@@ -1297,10 +1298,10 @@ export default function StatsPage() {
               <SectionTitle>Push CV</SectionTitle>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 {[
-                  { label: 'Total envoyés', value: pushStats.totals.sent, color: COLORS.activityBlue },
-                  { label: 'Réponses', value: pushStats.totals.responded, color: COLORS.commercialTeal },
-                  { label: 'RDV bookés', value: pushStats.totals.rdv_booked, color: COLORS.pipelineViolet },
-                  { label: 'Taux conversion', value: pushStats.totals.sent > 0 ? `${Math.round((pushStats.totals.converted / pushStats.totals.sent) * 100)}%` : '0%', color: COLORS.revenueGreen },
+                  { label: t('Total envoyés'), value: pushStats.totals.sent, color: COLORS.activityBlue },
+                  { label: t('Réponses'), value: pushStats.totals.responded, color: COLORS.commercialTeal },
+                  { label: t('RDV bookés'), value: pushStats.totals.rdv_booked, color: COLORS.pipelineViolet },
+                  { label: t('Taux de conversion'), value: pushStats.totals.sent > 0 ? `${Math.round((pushStats.totals.converted / pushStats.totals.sent) * 100)}%` : '0%', color: COLORS.revenueGreen },
                 ].map((item, i) => (
                   <motion.div key={item.label} variants={fadeUp} custom={i}>
                     <Card>
@@ -1319,13 +1320,13 @@ export default function StatsPage() {
               {pushStats.conversion_funnel && (
                 <motion.div variants={fadeUp} custom={4}>
                   <Card>
-                    <h3 className="text-[13px] font-semibold text-neutral-700 mb-4">Funnel de conversion</h3>
+                    <h3 className="text-[13px] font-semibold text-neutral-700 mb-4">{t('Funnel de conversion')}</h3>
                     <div className="space-y-3">
                       {[
-                        { label: 'Ouverts', count: pushStats.totals.opened, pct: pushStats.conversion_funnel.opened_pct },
-                        { label: 'Répondus', count: pushStats.totals.responded, pct: pushStats.conversion_funnel.responded_pct },
-                        { label: 'RDV bookés', count: pushStats.totals.rdv_booked, pct: pushStats.conversion_funnel.rdv_booked_pct },
-                        { label: 'Convertis', count: pushStats.totals.converted, pct: pushStats.conversion_funnel.converted_pct },
+                        { label: t('Ouverts'), count: pushStats.totals.opened, pct: pushStats.conversion_funnel.opened_pct },
+                        { label: t('Répondus'), count: pushStats.totals.responded, pct: pushStats.conversion_funnel.responded_pct },
+                        { label: t('RDV bookés'), count: pushStats.totals.rdv_booked, pct: pushStats.conversion_funnel.rdv_booked_pct },
+                        { label: t('Convertis'), count: pushStats.totals.converted, pct: pushStats.conversion_funnel.converted_pct },
                       ].map((step) => (
                         <div key={step.label}>
                           <div className="flex items-center justify-between mb-1">
@@ -1355,7 +1356,7 @@ export default function StatsPage() {
           {/* ────── SECTION 7: TEAM COMPARISON (ADMIN) ────── */}
           {isAdmin && stats.teamComparison && stats.teamComparison.length > 0 && (
             <section>
-              <SectionTitle>Comparaison équipe</SectionTitle>
+              <SectionTitle>{t('Comparaison équipe')}</SectionTitle>
               <motion.div variants={fadeUp} custom={0}>
                 <TeamComparisonChart data={stats.teamComparison} />
               </motion.div>
@@ -1370,7 +1371,7 @@ export default function StatsPage() {
                 className="flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-[13px] font-medium text-neutral-700 hover:bg-neutral-50 transition-colors border border-neutral-200"
               >
                 <Download size={15} />
-                Exporter en CSV
+                {t('Exporter en CSV')}
               </button>
             </div>
           </section>

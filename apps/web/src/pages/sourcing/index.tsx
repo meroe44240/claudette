@@ -14,6 +14,7 @@ import {
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
+import { t, LOCALE } from '../../lib/i18n';
 
 // ── Types ──────────────────────────────────────────
 interface Mandat { id: string; titrePoste: string; entreprise?: { nom: string } | null }
@@ -44,17 +45,17 @@ const LIME = '#E6E9AF';
 // ── Valeurs acceptées Kalent (listes fermées) ─────
 const YEARS_BANDS = ['0-1', '1-3', '3-5', '5-10', '10-15', '15-20', '20-30', '30-100'];
 const SIZE_BANDS = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5001-10000', '10001+'];
-const DEGREE_OPTS = [{ v: 'bachelors', l: 'Licence' }, { v: 'masters', l: 'Master' }, { v: 'doctorates', l: 'Doctorat' }];
+const DEGREE_OPTS = [{ v: 'bachelors', l: t('Licence') }, { v: 'masters', l: t('Master') }, { v: 'doctorates', l: t('Doctorat') }];
 
 // ── Helpers ────────────────────────────────────────
 const splitList = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
-const talentName = (t: Talent) => `${t.firstname || ''} ${t.lastname || ''}`.trim() || 'Profil';
-const talentLoc = (t: Talent) => [t.city, t.state, t.country].filter(Boolean).join(', ');
-const initials = (t: Talent) => `${(t.firstname || '')[0] || ''}${(t.lastname || '')[0] || ''}`.toUpperCase() || '?';
+const talentName = (tal: Talent) => `${tal.firstname || ''} ${tal.lastname || ''}`.trim() || t('Profil');
+const talentLoc = (tal: Talent) => [tal.city, tal.state, tal.country].filter(Boolean).join(', ');
+const initials = (tal: Talent) => `${(tal.firstname || '')[0] || ''}${(tal.lastname || '')[0] || ''}`.toUpperCase() || '?';
 const yr = (d?: string | null) => (d ? new Date(d).getFullYear() : null);
 const period = (e: Experience) => {
   const s = yr(e.startDate);
-  const end = e.isCurrent ? "aujourd'hui" : (yr(e.endDate) ?? '');
+  const end = e.isCurrent ? t("aujourd'hui") : (yr(e.endDate) ?? '');
   if (!s && !end) return '';
   return `${s ?? ''}${s || end ? ' – ' : ''}${end}`;
 };
@@ -62,7 +63,7 @@ const eduLine = (e: Education) => [e.schoolName, [...(e.degrees || []), ...(e.ma
 
 // ═══════════════════════════════════════════════════
 export default function SourcingKalentPage() {
-  usePageTitle('Sourcing Kalent');
+  usePageTitle(t('Sourcing Kalent'));
 
   // Projet (mandat) sélectionné — persistant
   const [projectId, setProjectId] = useState<string>(() => localStorage.getItem('kalent-project') || '');
@@ -142,75 +143,75 @@ export default function SourcingKalentPage() {
         relatedTransactionIds: append ? txIds : [],
       };
       const res = await api.post<SearchResult>('/sourcing/kalent/search', body);
-      if (res.configured === false) { toast('error', res.error || 'Kalent non configuré'); return; }
+      if (res.configured === false) { toast('error', res.error || t('Kalent non configuré')); return; }
       const newTalents = res.data?.talents ?? [];
       setEstimation(res.data?.estimationCount ?? null);
       if (res.data?.searchTransactionId) setTxIds((prev) => [...prev, res.data!.searchTransactionId]);
       setTalents((prev) => {
-        const seen = new Set(prev.map((t) => t.id));
+        const seen = new Set(prev.map((tal) => tal.id));
         const merged = append ? [...prev] : [];
         if (!append) seen.clear();
-        for (const t of newTalents) if (!seen.has(t.id)) { merged.push(t); seen.add(t.id); }
+        for (const tal of newTalents) if (!seen.has(tal.id)) { merged.push(tal); seen.add(tal.id); }
         return merged;
       });
-      if (append && newTalents.length === 0) toast('info', 'Plus de nouveaux profils pour cette recherche.');
+      if (append && newTalents.length === 0) toast('info', t('Plus de nouveaux profils pour cette recherche.'));
     } catch (e) {
-      toast('error', e instanceof Error ? e.message : 'Erreur de recherche');
+      toast('error', e instanceof Error ? e.message : t('Erreur de recherche'));
     } finally { setLoading(false); setLoadingMore(false); }
   }
 
   function searchByPrompt() {
-    if (!prompt.trim()) { toast('error', 'Décris le profil recherché.'); return; }
+    if (!prompt.trim()) { toast('error', t('Décris le profil recherché.')); return; }
     const s: LastSearch = { mode: 'prompt', prompt: prompt.trim() };
     setLastSearch(s); doSearch(s, false);
   }
   function searchByFilters() {
     const filters = buildFilters();
-    if (!filters.length) { toast('error', 'Renseigne au moins un filtre.'); return; }
+    if (!filters.length) { toast('error', t('Renseigne au moins un filtre.')); return; }
     const s: LastSearch = { mode: 'filters', filters };
     setLastSearch(s); doSearch(s, false);
   }
 
-  async function addTalent(t: Talent) {
-    setAddStates((p) => ({ ...p, [t.id]: { status: 'loading' } }));
+  async function addTalent(tal: Talent) {
+    setAddStates((p) => ({ ...p, [tal.id]: { status: 'loading' } }));
     try {
-      const en = enrichStates[t.id];
+      const en = enrichStates[tal.id];
       const res = await api.post<{ created: boolean; alreadyInMandat: boolean; duplicate: boolean }>(
         '/sourcing/kalent/add',
         {
           mandatId: hasMandat ? projectId : null,
           candidat: {
-            nom: t.lastname || t.firstname || 'Inconnu',
-            prenom: t.lastname ? t.firstname : undefined,
-            linkedinUrl: t.linkedinUrl,
-            photoUrl: t.photoUrl,
-            posteActuel: t.jobTitle || t.headline,
-            entrepriseActuelle: t.currentOrganization?.name,
-            localisation: talentLoc(t),
+            nom: tal.lastname || tal.firstname || 'Inconnu',
+            prenom: tal.lastname ? tal.firstname : undefined,
+            linkedinUrl: tal.linkedinUrl,
+            photoUrl: tal.photoUrl,
+            posteActuel: tal.jobTitle || tal.headline,
+            entrepriseActuelle: tal.currentOrganization?.name,
+            localisation: talentLoc(tal),
             email: en?.emails?.[0],
             telephone: en?.phones?.[0],
           },
         },
       );
       const status: AddState['status'] = res.alreadyInMandat ? 'inmandat' : res.duplicate ? 'exists' : 'created';
-      setAddStates((p) => ({ ...p, [t.id]: { status } }));
+      setAddStates((p) => ({ ...p, [tal.id]: { status } }));
       toast('success',
-        res.alreadyInMandat ? 'Déjà dans ce mandat'
-          : res.duplicate ? (hasMandat ? 'Candidat existant → ajouté au mandat' : 'Déjà dans l\'ATS')
-            : (hasMandat ? 'Ajouté au mandat' : 'Ajouté au vivier'));
+        res.alreadyInMandat ? t('Déjà dans ce mandat')
+          : res.duplicate ? (hasMandat ? t('Candidat existant → ajouté au mandat') : t('Déjà dans l\'ATS'))
+            : (hasMandat ? t('Ajouté au mandat') : t('Ajouté au vivier')));
     } catch (e) {
-      setAddStates((p) => ({ ...p, [t.id]: { status: 'idle' } }));
-      toast('error', e instanceof Error ? e.message : 'Erreur');
+      setAddStates((p) => ({ ...p, [tal.id]: { status: 'idle' } }));
+      toast('error', e instanceof Error ? e.message : t('Erreur'));
     }
   }
 
-  async function enrich(t: Talent) {
-    if (!t.linkedinUrl) { toast('error', 'Pas d\'URL LinkedIn pour ce profil.'); return; }
-    setEnrichStates((p) => ({ ...p, [t.id]: { loading: true, done: false, emails: [], phones: [] } }));
+  async function enrich(tal: Talent) {
+    if (!tal.linkedinUrl) { toast('error', t('Pas d\'URL LinkedIn pour ce profil.')); return; }
+    setEnrichStates((p) => ({ ...p, [tal.id]: { loading: true, done: false, emails: [], phones: [] } }));
     try {
-      const start = await api.post<{ data?: { talentId: string } }>('/sourcing/kalent/enrich', { linkedinUrl: t.linkedinUrl });
+      const start = await api.post<{ data?: { talentId: string } }>('/sourcing/kalent/enrich', { linkedinUrl: tal.linkedinUrl });
       const tid = start.data?.talentId;
-      if (!tid) throw new Error('Enrichissement indisponible');
+      if (!tid) throw new Error(t('Enrichissement indisponible'));
       for (let i = 0; i < 12; i++) {
         await new Promise((r) => setTimeout(r, 2500));
         const r = await api.get<{ data?: { emails: string[]; phones: string[]; contactsLoading?: { email: boolean; phone: boolean } } }>(
@@ -219,23 +220,23 @@ export default function SourcingKalentPage() {
         const cl = d?.contactsLoading;
         const stillLoading = cl ? (cl.email || cl.phone) : false;
         if (!stillLoading) {
-          setEnrichStates((p) => ({ ...p, [t.id]: { loading: false, done: true, emails: d?.emails ?? [], phones: d?.phones ?? [] } }));
-          if (!(d?.emails?.length) && !(d?.phones?.length)) toast('info', 'Aucune coordonnée trouvée.');
+          setEnrichStates((p) => ({ ...p, [tal.id]: { loading: false, done: true, emails: d?.emails ?? [], phones: d?.phones ?? [] } }));
+          if (!(d?.emails?.length) && !(d?.phones?.length)) toast('info', t('Aucune coordonnée trouvée.'));
           return;
         }
       }
-      setEnrichStates((p) => ({ ...p, [t.id]: { loading: false, done: true, emails: [], phones: [] } }));
-      toast('info', 'Enrichissement encore en cours, réessaie dans un instant.');
+      setEnrichStates((p) => ({ ...p, [tal.id]: { loading: false, done: true, emails: [], phones: [] } }));
+      toast('info', t('Enrichissement encore en cours, réessaie dans un instant.'));
     } catch (e) {
-      setEnrichStates((p) => ({ ...p, [t.id]: { loading: false, done: false, emails: [], phones: [] } }));
-      toast('error', e instanceof Error ? e.message : 'Erreur enrichissement');
+      setEnrichStates((p) => ({ ...p, [tal.id]: { loading: false, done: false, emails: [], phones: [] } }));
+      toast('error', e instanceof Error ? e.message : t('Erreur enrichissement'));
     }
   }
 
   const notConfigured = config && !config.configured;
 
   const addLabel = useMemo(
-    () => (!hasChosen ? 'Choisis un projet' : hasMandat ? 'Ajouter au mandat' : 'Ajouter au vivier'),
+    () => (!hasChosen ? t('Choisis un projet') : hasMandat ? t('Ajouter au mandat') : t('Ajouter au vivier')),
     [hasChosen, hasMandat],
   );
 
@@ -247,8 +248,8 @@ export default function SourcingKalentPage() {
           <Users size={22} color={LIME} />
         </div>
         <div>
-          <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 22, color: '#1A1533', margin: 0, letterSpacing: '-0.02em' }}>Sourcing Kalent</h1>
-          <p style={{ fontSize: 13, color: '#8A8699', margin: 0 }}>Recherche dans +200M de profils, puis ajoute au mandat en un clic.</p>
+          <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 22, color: '#1A1533', margin: 0, letterSpacing: '-0.02em' }}>{t('Sourcing Kalent')}</h1>
+          <p style={{ fontSize: 13, color: '#8A8699', margin: 0 }}>{t('Recherche dans +200M de profils, puis ajoute au mandat en un clic.')}</p>
         </div>
       </div>
 
@@ -256,7 +257,7 @@ export default function SourcingKalentPage() {
         <div className="mb-5 flex items-start gap-2.5 rounded-xl p-3.5" style={{ background: '#FDF4E3', border: '1px solid #F0D9A8' }}>
           <AlertCircle size={18} color="#9A6B12" style={{ flexShrink: 0, marginTop: 1 }} />
           <div style={{ fontSize: 13.5, color: '#7A5510' }}>
-            <strong>Intégration Kalent non configurée.</strong> La clé API doit être ajoutée côté serveur (<code>KALENT_API_KEY</code>) — contacte un admin. La page fonctionnera dès que la clé sera posée.
+            <strong>{t('Intégration Kalent non configurée.')}</strong> {t('La clé API doit être ajoutée côté serveur')} (<code>KALENT_API_KEY</code>) — {t('contacte un admin. La page fonctionnera dès que la clé sera posée.')}
           </div>
         </div>
       )}
@@ -265,7 +266,7 @@ export default function SourcingKalentPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl p-4" style={{ background: '#fff', border: '1px solid rgba(34,23,122,.1)' }}>
         <div className="flex items-center gap-2" style={{ color: BRAND }}>
           <Briefcase size={18} />
-          <span style={{ fontWeight: 700, fontSize: 14 }}>Projet</span>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>{t('Projet')}</span>
         </div>
         <select
           value={projectId}
@@ -273,15 +274,15 @@ export default function SourcingKalentPage() {
           className="flex-1 min-w-[240px] rounded-xl border px-3 py-2.5 text-[14px]"
           style={{ borderColor: hasChosen ? 'rgba(34,23,122,.16)' : '#E5A93B', background: '#FCFCF5', color: hasChosen ? '#1A1533' : '#9A6B12' }}
         >
-          <option value="">— Choisis un mandat pour sourcer —</option>
+          <option value="">— {t('Choisis un mandat pour sourcer')} —</option>
           {mandats.map((m) => (
             <option key={m.id} value={m.id}>{m.titrePoste}{m.entreprise?.nom ? ` — ${m.entreprise.nom}` : ''}</option>
           ))}
-          <option value="__VIVIER__">Vivier (sans mandat)</option>
+          <option value="__VIVIER__">{t('Vivier (sans mandat)')}</option>
         </select>
         {project && (
           <Link to={`/mandats/${project.id}/kanban`} className="text-[13px] font-semibold inline-flex items-center gap-1.5" style={{ color: BRAND }}>
-            Voir le pipeline <ExternalLink size={13} />
+            {t('Voir le pipeline')} <ExternalLink size={13} />
           </Link>
         )}
       </div>
@@ -295,7 +296,7 @@ export default function SourcingKalentPage() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') searchByPrompt(); }}
-              placeholder="Décris le profil : « Head of Sales SaaS à Paris, 5+ ans, anglais courant »"
+              placeholder={t('Décris le profil : « Head of Sales SaaS à Paris, 5+ ans, anglais courant »')}
               className="w-full rounded-xl border py-3 pl-10 pr-3 text-[14.5px]"
               style={{ borderColor: 'rgba(34,23,122,.16)', background: '#FCFCF5', color: '#1A1533' }}
             />
@@ -306,7 +307,7 @@ export default function SourcingKalentPage() {
             className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold"
             style={{ background: BRAND, color: LIME }}
           >
-            {loading ? <Loader2 size={17} className="animate-spin" /> : <Search size={17} />} Rechercher
+            {loading ? <Loader2 size={17} className="animate-spin" /> : <Search size={17} />} {t('Rechercher')}
           </button>
         </div>
         <button
@@ -314,33 +315,33 @@ export default function SourcingKalentPage() {
           className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold"
           style={{ color: BRAND }}
         >
-          <SlidersHorizontal size={14} /> {showFilters ? 'Masquer' : 'Filtres avancés'}
+          <SlidersHorizontal size={14} /> {showFilters ? t('Masquer') : t('Filtres avancés')}
         </button>
 
         {showFilters && (
           <div className="mt-3 pt-3 grid grid-cols-1 md:grid-cols-2 gap-3" style={{ borderTop: '1px solid rgba(34,23,122,.08)' }}>
-            <Field label="Intitulé de poste"><input value={f.jobTitle} onChange={(e) => setF({ ...f, jobTitle: e.target.value })} placeholder="Account Executive" style={inp} /></Field>
+            <Field label={t('Intitulé de poste')}><input value={f.jobTitle} onChange={(e) => setF({ ...f, jobTitle: e.target.value })} placeholder="Account Executive" style={inp} /></Field>
             <div className="grid grid-cols-[1fr_90px] gap-2">
-              <Field label="Localisation"><input value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} placeholder="Paris" style={inp} /></Field>
-              <Field label="Rayon (km)"><input value={f.radius} onChange={(e) => setF({ ...f, radius: e.target.value })} type="number" style={inp} /></Field>
+              <Field label={t('Localisation')}><input value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} placeholder="Paris" style={inp} /></Field>
+              <Field label={t('Rayon (km)')}><input value={f.radius} onChange={(e) => setF({ ...f, radius: e.target.value })} type="number" style={inp} /></Field>
             </div>
-            <Field label="Compétences (séparées par ,)"><input value={f.skills} onChange={(e) => setF({ ...f, skills: e.target.value })} placeholder="SaaS, prospection" style={inp} /></Field>
-            <Field label="Séniorité (,)"><input value={f.seniority} onChange={(e) => setF({ ...f, seniority: e.target.value })} placeholder="Senior, Director" style={inp} /></Field>
-            <Field label="Entreprises (,)"><input value={f.companies} onChange={(e) => setF({ ...f, companies: e.target.value })} placeholder="Salesforce, HubSpot" style={inp} /></Field>
-            <Field label="Entreprises exclues (,)"><input value={f.excludedCompanies} onChange={(e) => setF({ ...f, excludedCompanies: e.target.value })} style={inp} /></Field>
-            <Field label="Secteur (,)"><input value={f.industries} onChange={(e) => setF({ ...f, industries: e.target.value })} placeholder="Logiciel, SaaS" style={inp} /></Field>
-            <Field label="Langues (,)"><input value={f.languages} onChange={(e) => setF({ ...f, languages: e.target.value })} placeholder="Français, Anglais" style={inp} /></Field>
-            <Field label="Mots-clés"><input value={f.keywords} onChange={(e) => setF({ ...f, keywords: e.target.value })} style={inp} /></Field>
-            <div className="md:col-span-2"><Field label="Années d'expérience"><Chips options={YEARS_BANDS.map((b) => ({ v: b, l: `${b} ans` }))} value={yearsExp} onChange={setYearsExp} /></Field></div>
-            <div className="md:col-span-2"><Field label="Ancienneté dans le poste actuel"><Chips options={YEARS_BANDS.map((b) => ({ v: b, l: `${b} ans` }))} value={durationInJob} onChange={setDurationInJob} /></Field></div>
-            <div className="md:col-span-2"><Field label="Taille d'entreprise (effectif)"><Chips options={SIZE_BANDS.map((b) => ({ v: b, l: b }))} value={companySize} onChange={setCompanySize} /></Field></div>
-            <div className="md:col-span-2"><Field label="Diplôme"><Chips options={DEGREE_OPTS} value={degrees} onChange={setDegrees} /></Field></div>
-            <Field label="École / université (,)"><input value={f.schools} onChange={(e) => setF({ ...f, schools: e.target.value })} placeholder="HEC, Polytechnique" style={inp} /></Field>
-            <Field label="Année de diplôme"><input value={f.graduationYear} onChange={(e) => setF({ ...f, graduationYear: e.target.value })} placeholder="2018" style={inp} /></Field>
-            <div className="md:col-span-2"><Field label="Certifications (,)"><input value={f.certifications} onChange={(e) => setF({ ...f, certifications: e.target.value })} placeholder="AWS Certified, PMP" style={inp} /></Field></div>
+            <Field label={t('Compétences (séparées par ,)')}><input value={f.skills} onChange={(e) => setF({ ...f, skills: e.target.value })} placeholder="SaaS, prospection" style={inp} /></Field>
+            <Field label={t('Séniorité (,)')}><input value={f.seniority} onChange={(e) => setF({ ...f, seniority: e.target.value })} placeholder="Senior, Director" style={inp} /></Field>
+            <Field label={t('Entreprises (,)')}><input value={f.companies} onChange={(e) => setF({ ...f, companies: e.target.value })} placeholder="Salesforce, HubSpot" style={inp} /></Field>
+            <Field label={t('Entreprises exclues (,)')}><input value={f.excludedCompanies} onChange={(e) => setF({ ...f, excludedCompanies: e.target.value })} style={inp} /></Field>
+            <Field label={t('Secteur (,)')}><input value={f.industries} onChange={(e) => setF({ ...f, industries: e.target.value })} placeholder={t('Logiciel, SaaS')} style={inp} /></Field>
+            <Field label={t('Langues (,)')}><input value={f.languages} onChange={(e) => setF({ ...f, languages: e.target.value })} placeholder={t('Français, Anglais')} style={inp} /></Field>
+            <Field label={t('Mots-clés')}><input value={f.keywords} onChange={(e) => setF({ ...f, keywords: e.target.value })} style={inp} /></Field>
+            <div className="md:col-span-2"><Field label={t("Années d'expérience")}><Chips options={YEARS_BANDS.map((b) => ({ v: b, l: t('{b} ans', { b }) }))} value={yearsExp} onChange={setYearsExp} /></Field></div>
+            <div className="md:col-span-2"><Field label={t('Ancienneté dans le poste actuel')}><Chips options={YEARS_BANDS.map((b) => ({ v: b, l: t('{b} ans', { b }) }))} value={durationInJob} onChange={setDurationInJob} /></Field></div>
+            <div className="md:col-span-2"><Field label={t("Taille d'entreprise (effectif)")}><Chips options={SIZE_BANDS.map((b) => ({ v: b, l: b }))} value={companySize} onChange={setCompanySize} /></Field></div>
+            <div className="md:col-span-2"><Field label={t('Diplôme')}><Chips options={DEGREE_OPTS} value={degrees} onChange={setDegrees} /></Field></div>
+            <Field label={t('École / université (,)')}><input value={f.schools} onChange={(e) => setF({ ...f, schools: e.target.value })} placeholder="HEC, Polytechnique" style={inp} /></Field>
+            <Field label={t('Année de diplôme')}><input value={f.graduationYear} onChange={(e) => setF({ ...f, graduationYear: e.target.value })} placeholder="2018" style={inp} /></Field>
+            <div className="md:col-span-2"><Field label={t('Certifications (,)')}><input value={f.certifications} onChange={(e) => setF({ ...f, certifications: e.target.value })} placeholder="AWS Certified, PMP" style={inp} /></Field></div>
             <div className="md:col-span-2 flex justify-end">
               <button onClick={searchByFilters} disabled={loading} className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13.5px] font-bold" style={{ background: BRAND, color: LIME }}>
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Rechercher avec ces filtres
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} {t('Rechercher avec ces filtres')}
               </button>
             </div>
           </div>
@@ -350,7 +351,7 @@ export default function SourcingKalentPage() {
       {/* Résultats */}
       {estimation != null && (
         <div className="mb-3 text-[13px]" style={{ color: '#6E6A85' }}>
-          ~<strong style={{ color: '#1A1533' }}>{estimation.toLocaleString('fr-FR')}</strong> profils estimés · {talents.length} affiché{talents.length > 1 ? 's' : ''}
+          ~<strong style={{ color: '#1A1533' }}>{estimation.toLocaleString(LOCALE)}</strong> {t('profils estimés')} · {t(talents.length > 1 ? '{n} affichés' : '{n} affiché', { n: talents.length })}
         </div>
       )}
 
@@ -359,47 +360,47 @@ export default function SourcingKalentPage() {
       )}
 
       {!loading && searched && talents.length === 0 && (
-        <div className="py-16 text-center text-[14px]" style={{ color: '#8A8699' }}>Aucun profil trouvé. Élargis tes critères.</div>
+        <div className="py-16 text-center text-[14px]" style={{ color: '#8A8699' }}>{t('Aucun profil trouvé. Élargis tes critères.')}</div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {talents.map((t) => {
-          const add = addStates[t.id]?.status ?? 'idle';
-          const en = enrichStates[t.id];
-          const expanded = expandedIds.has(t.id);
-          const exps = t.experiences || [];
-          const edus = t.educations || [];
-          const langs = t.languages || [];
+        {talents.map((tal) => {
+          const add = addStates[tal.id]?.status ?? 'idle';
+          const en = enrichStates[tal.id];
+          const expanded = expandedIds.has(tal.id);
+          const exps = tal.experiences || [];
+          const edus = tal.educations || [];
+          const langs = tal.languages || [];
           return (
-            <div key={t.id} className="rounded-2xl p-4 flex gap-3.5" style={{ background: '#fff', border: '1px solid rgba(34,23,122,.1)' }}>
-              {t.photoUrl ? (
-                <img src={t.photoUrl} alt="" style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+            <div key={tal.id} className="rounded-2xl p-4 flex gap-3.5" style={{ background: '#fff', border: '1px solid rgba(34,23,122,.1)' }}>
+              {tal.photoUrl ? (
+                <img src={tal.photoUrl} alt="" style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
               ) : (
-                <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#ECEAF8', color: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 17, flexShrink: 0 }}>{initials(t)}</div>
+                <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#ECEAF8', color: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 17, flexShrink: 0 }}>{initials(tal)}</div>
               )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div style={{ fontWeight: 700, fontSize: 15, color: '#1A1533' }} className="truncate">{talentName(t)}</div>
-                    <div style={{ fontSize: 13, color: '#4A4568' }} className="truncate">{t.jobTitle || t.headline || '—'}</div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: '#1A1533' }} className="truncate">{talentName(tal)}</div>
+                    <div style={{ fontSize: 13, color: '#4A4568' }} className="truncate">{tal.jobTitle || tal.headline || '—'}</div>
                   </div>
-                  {t.linkedinUrl && (
-                    <a href={t.linkedinUrl} target="_blank" rel="noopener noreferrer" title="Voir le profil LinkedIn" style={{ color: '#2A6BD8', flexShrink: 0 }}><Linkedin size={18} /></a>
+                  {tal.linkedinUrl && (
+                    <a href={tal.linkedinUrl} target="_blank" rel="noopener noreferrer" title={t('Voir le profil LinkedIn')} style={{ color: '#2A6BD8', flexShrink: 0 }}><Linkedin size={18} /></a>
                   )}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[12.5px]" style={{ color: '#8A8699' }}>
-                  {t.currentOrganization?.name && <span className="inline-flex items-center gap-1"><Building2 size={12} />{t.currentOrganization.name}</span>}
-                  {talentLoc(t) && <span className="inline-flex items-center gap-1"><MapPin size={12} />{talentLoc(t)}</span>}
+                  {tal.currentOrganization?.name && <span className="inline-flex items-center gap-1"><Building2 size={12} />{tal.currentOrganization.name}</span>}
+                  {talentLoc(tal) && <span className="inline-flex items-center gap-1"><MapPin size={12} />{talentLoc(tal)}</span>}
                 </div>
                 {/* Résumé */}
-                {t.summary && (
-                  <p className="mt-2 text-[12.5px] leading-relaxed" style={{ color: '#6E6A85', display: '-webkit-box', WebkitLineClamp: expanded ? 'unset' : 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{t.summary}</p>
+                {tal.summary && (
+                  <p className="mt-2 text-[12.5px] leading-relaxed" style={{ color: '#6E6A85', display: '-webkit-box', WebkitLineClamp: expanded ? 'unset' : 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{tal.summary}</p>
                 )}
 
                 {/* Parcours */}
                 {exps.length > 0 && (
                   <div className="mt-2.5">
-                    <div className="text-[10.5px] font-bold uppercase mb-1" style={{ color: '#9A96AE', letterSpacing: '.08em' }}>Parcours</div>
+                    <div className="text-[10.5px] font-bold uppercase mb-1" style={{ color: '#9A96AE', letterSpacing: '.08em' }}>{t('Parcours')}</div>
                     <div className="flex flex-col gap-1">
                       {(expanded ? exps.slice(0, 6) : exps.slice(0, 1)).map((e, i) => (
                         <div key={i} className="flex items-start gap-1.5 text-[12.5px]" style={{ color: '#4A4568' }}>
@@ -414,7 +415,7 @@ export default function SourcingKalentPage() {
                 {/* Formation */}
                 {edus.length > 0 && (
                   <div className="mt-2">
-                    <div className="text-[10.5px] font-bold uppercase mb-1" style={{ color: '#9A96AE', letterSpacing: '.08em' }}>Formation</div>
+                    <div className="text-[10.5px] font-bold uppercase mb-1" style={{ color: '#9A96AE', letterSpacing: '.08em' }}>{t('Formation')}</div>
                     <div className="flex flex-col gap-1">
                       {(expanded ? edus.slice(0, 4) : edus.slice(0, 1)).map((e, i) => (
                         <div key={i} className="flex items-start gap-1.5 text-[12.5px]" style={{ color: '#4A4568' }}>
@@ -437,18 +438,18 @@ export default function SourcingKalentPage() {
                 )}
 
                 {/* Compétences */}
-                {t.skills && t.skills.length > 0 && (
+                {tal.skills && tal.skills.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {t.skills.slice(0, expanded ? 30 : 6).map((s, i) => (
+                    {tal.skills.slice(0, expanded ? 30 : 6).map((s, i) => (
                       <span key={i} className="rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ background: '#F1F0F5', color: '#6E6A85' }}>{s}</span>
                     ))}
                   </div>
                 )}
 
                 {/* Voir plus / moins */}
-                {(exps.length > 1 || edus.length > 1 || (t.skills?.length ?? 0) > 6 || (t.summary?.length ?? 0) > 160) && (
-                  <button onClick={() => toggleExpand(t.id)} className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold" style={{ color: BRAND }}>
-                    {expanded ? <>Voir moins <ChevronUp size={13} /></> : <>Voir plus <ChevronDown size={13} /></>}
+                {(exps.length > 1 || edus.length > 1 || (tal.skills?.length ?? 0) > 6 || (tal.summary?.length ?? 0) > 160) && (
+                  <button onClick={() => toggleExpand(tal.id)} className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold" style={{ color: BRAND }}>
+                    {expanded ? <>{t('Voir moins')} <ChevronUp size={13} /></> : <>{t('Voir plus')} <ChevronDown size={13} /></>}
                   </button>
                 )}
 
@@ -463,9 +464,9 @@ export default function SourcingKalentPage() {
                 {/* Actions */}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button
-                    onClick={() => addTalent(t)}
+                    onClick={() => addTalent(tal)}
                     disabled={add === 'loading' || add === 'created' || add === 'inmandat' || !hasChosen}
-                    title={!hasChosen ? 'Choisis d\'abord un projet en haut' : undefined}
+                    title={!hasChosen ? t('Choisis d\'abord un projet en haut') : undefined}
                     className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-bold"
                     style={
                       !hasChosen && add === 'idle'
@@ -480,20 +481,20 @@ export default function SourcingKalentPage() {
                     {add === 'loading' ? <Loader2 size={13} className="animate-spin" />
                       : add === 'created' || add === 'inmandat' ? <Check size={13} />
                         : <Plus size={13} />}
-                    {add === 'created' ? (hasMandat ? 'Ajouté au mandat' : 'Ajouté au vivier')
-                      : add === 'inmandat' ? 'Déjà dans le mandat'
-                        : add === 'exists' ? 'Existant (relié)'
+                    {add === 'created' ? (hasMandat ? t('Ajouté au mandat') : t('Ajouté au vivier'))
+                      : add === 'inmandat' ? t('Déjà dans le mandat')
+                        : add === 'exists' ? t('Existant (relié)')
                           : addLabel}
                   </button>
                   <button
-                    onClick={() => enrich(t)}
-                    disabled={!t.linkedinUrl || en?.loading}
+                    onClick={() => enrich(tal)}
+                    disabled={!tal.linkedinUrl || en?.loading}
                     className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold"
-                    style={{ background: '#fff', border: '1px solid rgba(34,23,122,.16)', color: t.linkedinUrl ? BRAND : '#C4C1D0' }}
-                    title={t.linkedinUrl ? 'Révéler email + téléphone (crédits Kalent)' : 'Pas de LinkedIn'}
+                    style={{ background: '#fff', border: '1px solid rgba(34,23,122,.16)', color: tal.linkedinUrl ? BRAND : '#C4C1D0' }}
+                    title={tal.linkedinUrl ? t('Révéler email + téléphone (crédits Kalent)') : t('Pas de LinkedIn')}
                   >
                     {en?.loading ? <Loader2 size={13} className="animate-spin" /> : <Mail size={13} />}
-                    {en?.loading ? 'Enrichissement…' : en?.done ? 'Ré-enrichir' : 'Révéler contact'}
+                    {en?.loading ? t('Enrichissement…') : en?.done ? t('Ré-enrichir') : t('Révéler contact')}
                   </button>
                 </div>
               </div>
@@ -511,7 +512,7 @@ export default function SourcingKalentPage() {
             className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13.5px] font-bold"
             style={{ background: '#fff', border: `1.5px solid ${BRAND}`, color: BRAND }}
           >
-            {loadingMore ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Charger plus de profils
+            {loadingMore ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} {t('Charger plus de profils')}
           </button>
         </div>
       )}

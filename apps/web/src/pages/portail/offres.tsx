@@ -11,6 +11,7 @@ import {
   BG, BRAND, COL_ACCENT, COL_LABELS, COL_ORDER, CREAM, DISPLAY, FAINT, FONT, FS, INK, LABEL, LINE, MUTED, SHARED_CSS,
   CompanyLogo, PersonAvatar, PortalTopBar, portalFetch, relTime, useIsMobile, type Col,
 } from './portal-ui';
+import { t } from '../../lib/i18n';
 
 interface Person { nom: string; prenom: string | null; avatarUrl?: string | null }
 interface Offre {
@@ -29,7 +30,7 @@ export default function PortalOffresPage() {
 
   useEffect(() => {
     if (!portalStore.get('portal_token')) { navigate('/portail/login'); return; }
-    document.title = 'Offres d’emploi | HumanUp';
+    document.title = t('Offres d’emploi | HumanUp');
     void portalFetch('/offres').then(async (r) => {
       if (r.status === 401) { portalStore.clear(); navigate('/portail/login?expired=1'); return; }
       setOffres(r.ok ? await r.json() : []);
@@ -48,17 +49,17 @@ export default function PortalOffresPage() {
       `}</style>
       <PortalTopBar active="offres" />
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '22px 16px 40px' : '32px 32px 56px' }}>
-        <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 22 : FS.xxl, letterSpacing: '-.025em' }}>Offres d’emploi</h1>
+        <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 22 : FS.xxl, letterSpacing: '-.025em' }}>{t('Offres d’emploi')}</h1>
 
-        {offres === null && <p style={{ marginTop: 28, fontSize: FS.base, color: FAINT }}>Chargement…</p>}
+        {offres === null && <p style={{ marginTop: 28, fontSize: FS.base, color: FAINT }}>{t('Chargement…')}</p>}
         {offres?.length === 0 && (
           <div style={{ marginTop: 28, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, padding: 28, textAlign: 'center', color: MUTED, fontSize: FS.md }}>
-            Aucune offre en cours.
+            {t('Aucune offre en cours.')}
           </div>
         )}
 
-        {open.length > 0 && <OfferList title="En cours" offres={open} />}
-        {closed.length > 0 && <OfferList title="Terminées" offres={closed} muted />}
+        {open.length > 0 && <OfferList title={t('En cours')} offres={open} />}
+        {closed.length > 0 && <OfferList title={t('Terminées')} offres={closed} muted />}
       </main>
     </div>
   );
@@ -88,15 +89,15 @@ function OfferCard({ o, muted }: { o: Offre; muted?: boolean }) {
             <span style={{ fontSize: FS.lg, fontWeight: 800 }}>{o.titrePoste}</span>
             {o.toReview > 0 && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: FS.sm, fontWeight: 800, color: BRAND, background: '#EDEBFA', borderRadius: 999, padding: '2px 9px' }}>
-                <BellRing size={12} aria-hidden />{o.toReview} à traiter
+                <BellRing size={12} aria-hidden />{t('{n} à traiter', { n: o.toReview })}
               </span>
             )}
-            {muted && <span style={{ fontSize: FS.sm, fontWeight: 700, color: MUTED, background: 'rgba(26,21,51,.06)', borderRadius: 999, padding: '2px 9px' }}>{o.statut === 'GAGNE' ? 'Pourvue' : 'Terminée'}</span>}
+            {muted && <span style={{ fontSize: FS.sm, fontWeight: 700, color: MUTED, background: 'rgba(26,21,51,.06)', borderRadius: 999, padding: '2px 9px' }}>{o.statut === 'GAGNE' ? t('Pourvue') : t('Terminée')}</span>}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 4, fontSize: FS.sm, color: MUTED }}>
             {o.localisation && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={13} aria-hidden />{o.localisation}</span>}
-            <span>{active} profil{active > 1 ? 's' : ''} en cours</span>
-            {o.lastActivity && <span>Mis à jour {relTime(o.lastActivity)}</span>}
+            <span>{t(active > 1 ? '{n} profils en cours' : '{n} profil en cours', { n: active })}</span>
+            {o.lastActivity && <span>{t('Mis à jour {time}', { time: relTime(o.lastActivity) })}</span>}
           </div>
         </div>
         {people.length > 0 && (

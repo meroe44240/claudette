@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
+import { t } from '../../lib/i18n';
 
 // ─── Types ──────────────────────────────────────────
 
@@ -85,7 +86,7 @@ export default function ReportsPage() {
         })
         .catch((err) => {
           newTab.document.write(
-            '<html><body><h1>Erreur</h1><p>Impossible de generer le rapport.</p></body></html>',
+            `<html><body><h1>${t('Erreur')}</h1><p>${t('Impossible de générer le rapport.')}</p></body></html>`,
           );
           newTab.document.close();
           setIsGenerating(false);
@@ -98,15 +99,15 @@ export default function ReportsPage() {
   return (
     <div>
       <PageHeader
-        title="Rapports"
-        breadcrumbs={[{ label: 'Rapports' }]}
+        title={t('Rapports')}
+        breadcrumbs={[{ label: t('Rapports') }]}
       />
 
       <div className="max-w-2xl">
         {/* Report type selection */}
         <div className="mb-6">
           <label className="block text-[13px] font-semibold text-neutral-700 mb-2">
-            Type de rapport
+            {t('Type de rapport')}
           </label>
           <div className="flex gap-3">
             <button
@@ -121,7 +122,7 @@ export default function ReportsPage() {
               }`}
             >
               <Building2 size={18} />
-              Rapport Client
+              {t('Rapport Client')}
             </button>
             <button
               onClick={() => {
@@ -135,7 +136,7 @@ export default function ReportsPage() {
               }`}
             >
               <Briefcase size={18} />
-              Rapport Mandat
+              {t('Rapport Mandat')}
             </button>
           </div>
         </div>
@@ -143,7 +144,7 @@ export default function ReportsPage() {
         {/* Entity selection */}
         <div className="mb-6">
           <label className="block text-[13px] font-semibold text-neutral-700 mb-2">
-            {reportType === 'client' ? 'Selectionner un client' : 'Selectionner un mandat'}
+            {reportType === 'client' ? t('Sélectionner un client') : t('Sélectionner un mandat')}
           </label>
           <select
             value={selectedId}
@@ -152,21 +153,21 @@ export default function ReportsPage() {
           >
             <option value="">
               {reportType === 'client'
-                ? '-- Choisir un client --'
-                : '-- Choisir un mandat --'}
+                ? t('-- Choisir un client --')
+                : t('-- Choisir un mandat --')}
             </option>
 
             {reportType === 'client' &&
               clients.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.prenom ?? ''} {c.nom} - {c.entreprise?.nom ?? 'Sans entreprise'}
+                  {c.prenom ?? ''} {c.nom} - {c.entreprise?.nom ?? t('Sans entreprise')}
                 </option>
               ))}
 
             {reportType === 'mandat' &&
               mandats.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.titrePoste} - {m.entreprise?.nom ?? 'Sans entreprise'} ({m.statut})
+                  {m.titrePoste} - {m.entreprise?.nom ?? t('Sans entreprise')} ({m.statut})
                 </option>
               ))}
           </select>
@@ -180,7 +181,7 @@ export default function ReportsPage() {
             className="flex items-center gap-2 rounded-xl bg-brand-500 px-6 py-3 text-[14px] font-semibold text-white hover:bg-primary-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <FileText size={18} />
-            {isGenerating ? 'Generation en cours...' : 'Generer le rapport'}
+            {isGenerating ? t('Génération en cours...') : t('Générer le rapport')}
             <ExternalLink size={14} className="ml-1" />
           </button>
         </div>
@@ -191,13 +192,10 @@ export default function ReportsPage() {
             <Printer size={18} className="text-amber-600 mt-0.5 shrink-0" />
             <div>
               <p className="text-[14px] font-semibold text-amber-800 mb-1">
-                Imprimer ou sauvegarder en PDF
+                {t('Imprimer ou sauvegarder en PDF')}
               </p>
               <p className="text-[13px] text-amber-700">
-                Le rapport s'ouvre dans un nouvel onglet au format A4 optimise pour
-                l'impression. Utilisez Ctrl+P (ou Cmd+P sur Mac) pour imprimer ou
-                sauvegarder en PDF via l'option "Enregistrer en PDF" de votre
-                navigateur.
+                {t("Le rapport s'ouvre dans un nouvel onglet au format A4 optimisé pour l'impression. Utilisez Ctrl+P (ou Cmd+P sur Mac) pour imprimer ou sauvegarder en PDF via l'option « Enregistrer en PDF » de votre navigateur.")}
               </p>
             </div>
           </div>
@@ -206,22 +204,22 @@ export default function ReportsPage() {
         {/* Description of report contents */}
         <div className="mt-8 space-y-4">
           <h3 className="text-[16px] font-semibold text-neutral-900">
-            Contenu des rapports
+            {t('Contenu des rapports')}
           </h3>
 
           <div className="rounded-xl bg-white border border-neutral-200 p-5">
             <div className="flex items-center gap-2 mb-2">
               <Building2 size={16} className="text-blue-500" />
               <h4 className="text-[14px] font-semibold text-neutral-900">
-                Rapport Client
+                {t('Rapport Client')}
               </h4>
             </div>
             <ul className="text-[13px] text-neutral-600 space-y-1 ml-6 list-disc">
-              <li>Informations du client et de l'entreprise</li>
-              <li>Statistiques globales (mandats, candidatures, placements, fees)</li>
-              <li>Liste des mandats avec statut et candidatures</li>
-              <li>Pipeline des mandats actifs</li>
-              <li>Timeline des 10 dernieres activites</li>
+              <li>{t("Informations du client et de l'entreprise")}</li>
+              <li>{t('Statistiques globales (mandats, candidatures, placements, fees)')}</li>
+              <li>{t('Liste des mandats avec statut et candidatures')}</li>
+              <li>{t('Pipeline des mandats actifs')}</li>
+              <li>{t('Timeline des 10 dernières activités')}</li>
             </ul>
           </div>
 
@@ -229,15 +227,15 @@ export default function ReportsPage() {
             <div className="flex items-center gap-2 mb-2">
               <Briefcase size={16} className="text-purple-500" />
               <h4 className="text-[14px] font-semibold text-neutral-900">
-                Rapport Mandat
+                {t('Rapport Mandat')}
               </h4>
             </div>
             <ul className="text-[13px] text-neutral-600 space-y-1 ml-6 list-disc">
-              <li>Informations du mandat (poste, salaire, fee, dates)</li>
-              <li>KPIs (jours ouvert, candidats sources, taux entretien/offre)</li>
-              <li>Pipeline visuel des candidats par stage</li>
-              <li>Liste detaillee des candidats avec stage et notes</li>
-              <li>Timeline des activites recentes</li>
+              <li>{t('Informations du mandat (poste, salaire, fee, dates)')}</li>
+              <li>{t('KPIs (jours ouvert, candidats sourcés, taux entretien/offre)')}</li>
+              <li>{t('Pipeline visuel des candidats par étape')}</li>
+              <li>{t('Liste détaillée des candidats avec étape et notes')}</li>
+              <li>{t('Timeline des activités récentes')}</li>
             </ul>
           </div>
         </div>

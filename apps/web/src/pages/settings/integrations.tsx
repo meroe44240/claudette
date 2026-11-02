@@ -10,6 +10,7 @@ import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Skeleton from '../../components/ui/Skeleton';
 import { toast } from '../../components/ui/Toast';
+import { t } from '../../lib/i18n';
 
 interface IntegrationStatus {
   connected: boolean;
@@ -85,12 +86,12 @@ export default function IntegrationsSettingsPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations', 'status'] });
-      toast('success', 'Allo configuré avec succès');
+      toast('success', t('Allo configuré avec succès'));
       setAlloModalOpen(false);
       setAlloApiKey('');
     },
     onError: () => {
-      toast('error', 'Erreur lors de la configuration Allo');
+      toast('error', t('Erreur lors de la configuration Allo'));
     },
   });
 
@@ -99,20 +100,20 @@ export default function IntegrationsSettingsPage() {
       api.put('/integrations/config/allo', { enabled: false, accessToken: '' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations', 'status'] });
-      toast('success', 'Allo déconnecté');
+      toast('success', t('Allo déconnecté'));
     },
     onError: () => {
-      toast('error', 'Erreur lors de la déconnexion');
+      toast('error', t('Erreur lors de la déconnexion'));
     },
   });
 
   const syncAlloMutation = useMutation({
     mutationFn: () => api.post<{ status: string; synced?: number; message: string }>('/integrations/allo/sync'),
     onSuccess: (result) => {
-      toast('success', result.message || 'Synchronisation Allo terminée');
+      toast('success', result.message || t('Synchronisation Allo terminée'));
     },
     onError: () => {
-      toast('error', 'Erreur lors de la synchronisation Allo');
+      toast('error', t('Erreur lors de la synchronisation Allo'));
     },
   });
 
@@ -120,10 +121,10 @@ export default function IntegrationsSettingsPage() {
     mutationFn: () => api.post('/integrations/gmail/disconnect'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations', 'status'] });
-      toast('success', 'Gmail déconnecté');
+      toast('success', t('Gmail déconnecté'));
     },
     onError: () => {
-      toast('error', 'Erreur lors de la déconnexion');
+      toast('error', t('Erreur lors de la déconnexion'));
     },
   });
 
@@ -131,20 +132,20 @@ export default function IntegrationsSettingsPage() {
     mutationFn: () => api.post('/integrations/calendar/disconnect'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations', 'status'] });
-      toast('success', 'Google Calendar déconnecté');
+      toast('success', t('Google Calendar déconnecté'));
     },
     onError: () => {
-      toast('error', 'Erreur lors de la déconnexion');
+      toast('error', t('Erreur lors de la déconnexion'));
     },
   });
 
   const syncCalendlyMutation = useMutation({
     mutationFn: () => api.post<{ calendlyEvents: number; enrichedCandidates: number; message: string }>('/integrations/calendar/sync-calendly'),
     onSuccess: (result) => {
-      toast('success', result.message || 'Synchronisation Calendly terminée');
+      toast('success', result.message || t('Synchronisation Calendly terminée'));
     },
     onError: () => {
-      toast('error', 'Erreur lors de la synchronisation Calendly');
+      toast('error', t('Erreur lors de la synchronisation Calendly'));
     },
   });
 
@@ -154,11 +155,11 @@ export default function IntegrationsSettingsPage() {
       api.post<SlackConfig>('/slack/config', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['slack', 'config'] });
-      toast('success', 'Configuration Slack sauvegardée');
+      toast('success', t('Configuration Slack sauvegardée'));
       setSlackDirty(false);
     },
     onError: () => {
-      toast('error', 'Erreur lors de la sauvegarde Slack');
+      toast('error', t('Erreur lors de la sauvegarde Slack'));
     },
   });
 
@@ -173,7 +174,7 @@ export default function IntegrationsSettingsPage() {
       }
     },
     onError: () => {
-      toast('error', 'Erreur lors de l\'envoi du test Slack');
+      toast('error', t("Erreur lors de l'envoi du test Slack"));
     },
   });
 
@@ -181,20 +182,20 @@ export default function IntegrationsSettingsPage() {
   const watchDriveMutation = useMutation({
     mutationFn: (folderId: string) => api.put('/transcripts/watch', { folderId }),
     onSuccess: () => {
-      toast('success', 'Dossier Drive surveillé');
+      toast('success', t('Dossier Drive surveillé'));
     },
     onError: () => {
-      toast('error', 'Dossier Drive introuvable ou accès refusé');
+      toast('error', t('Dossier Drive introuvable ou accès refusé'));
     },
   });
 
   const scanDriveMutation = useMutation({
     mutationFn: () => api.post<{ processed?: number; message?: string }>('/transcripts/scan-folder'),
     onSuccess: (result) => {
-      toast('success', result?.message || 'Dossier Drive scanné');
+      toast('success', result?.message || t('Dossier Drive scanné'));
     },
     onError: () => {
-      toast('error', 'Erreur lors du scan du dossier Drive');
+      toast('error', t('Erreur lors du scan du dossier Drive'));
     },
   });
 
@@ -203,7 +204,7 @@ export default function IntegrationsSettingsPage() {
       const data = await api.get<AuthUrlResponse>('/integrations/gmail/auth-url');
       window.open(data.url, '_blank');
     } catch {
-      toast('error', "Erreur lors de la récupération de l'URL d'authentification Google");
+      toast('error', t("Erreur lors de la récupération de l'URL d'authentification Google"));
     }
   };
 
@@ -212,7 +213,7 @@ export default function IntegrationsSettingsPage() {
       const data = await api.get<AuthUrlResponse>('/integrations/gmail/auth-url');
       window.open(data.url, '_blank');
     } catch {
-      toast('error', "Erreur lors de la récupération de l'URL d'authentification");
+      toast('error', t("Erreur lors de la récupération de l'URL d'authentification"));
     }
   };
 
@@ -221,13 +222,13 @@ export default function IntegrationsSettingsPage() {
       const data = await api.get<AuthUrlResponse>('/integrations/calendar/auth-url');
       window.open(data.url, '_blank');
     } catch {
-      toast('error', "Erreur lors de la récupération de l'URL d'authentification");
+      toast('error', t("Erreur lors de la récupération de l'URL d'authentification"));
     }
   };
 
   const handleSaveSlack = () => {
     if (!slackWebhookUrl.trim()) {
-      toast('error', 'Veuillez saisir une URL webhook Slack');
+      toast('error', t('Veuillez saisir une URL webhook Slack'));
       return;
     }
     saveSlackMutation.mutate({ webhookUrl: slackWebhookUrl, enabled: slackEnabled });
@@ -245,10 +246,10 @@ export default function IntegrationsSettingsPage() {
     return (
       <div>
         <PageHeader
-          title="Intégrations"
+          title={t('Intégrations')}
           breadcrumbs={[
-            { label: 'Paramètres', href: '/settings' },
-            { label: 'Intégrations' },
+            { label: t('Paramètres'), href: '/settings' },
+            { label: t('Intégrations') },
           ]}
         />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -264,12 +265,12 @@ export default function IntegrationsSettingsPage() {
     <div>
       <div className="rise" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>Administration</div>
-          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Mes intégrations</h1>
-          <div style={{ fontSize: 13.5, color: '#6E6A85', marginTop: 6 }}>Connectez vos outils pour une expérience unifiée.</div>
+          <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>{t('Administration')}</div>
+          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>{t('Mes intégrations')}</h1>
+          <div style={{ fontSize: 13.5, color: '#6E6A85', marginTop: 6 }}>{t('Connectez vos outils pour une expérience unifiée.')}</div>
         </div>
         <Button variant="secondary" onClick={() => navigate('/settings/integrations/guide')}>
-          📖 Guide de connexion
+          📖 {t('Guide de connexion')}
         </Button>
       </div>
 
@@ -282,14 +283,14 @@ export default function IntegrationsSettingsPage() {
                 <Phone size={18} className="text-green-600" />
               </div>
               <div>
-                <h3 className="text-[18px] font-semibold text-neutral-900">Allo (Téléphonie)</h3>
+                <h3 className="text-[18px] font-semibold text-neutral-900">{t('Allo (Téléphonie)')}</h3>
                 <p className="mt-0.5 text-[13px] text-neutral-500">
-                  Intégration téléphonique pour vos appels
+                  {t('Intégration téléphonique pour vos appels')}
                 </p>
               </div>
             </div>
             <Badge variant={integrations?.allo?.connected ? 'success' : 'default'}>
-              {integrations?.allo?.connected ? 'Connecté' : 'Déconnecté'}
+              {integrations?.allo?.connected ? t('Connecté') : t('Déconnecté')}
             </Badge>
           </div>
 
@@ -297,16 +298,16 @@ export default function IntegrationsSettingsPage() {
             <div className="flex items-center gap-2 text-neutral-500">
               <Shield size={14} className="text-neutral-300" />
               <span>
-                Clé API :{' '}
+                {t('Clé API :')}{' '}
                 {integrations?.allo?.apiKeyConfigured ? (
                   <span className="font-medium text-neutral-900">{'*'.repeat(20)}</span>
                 ) : (
-                  <span className="text-neutral-300">Non configurée</span>
+                  <span className="text-neutral-300">{t('Non configurée')}</span>
                 )}
               </span>
             </div>
             <div className="rounded-lg bg-neutral-50 p-2.5 text-xs text-neutral-500">
-              <span className="font-medium">Webhook URL :</span>
+              <span className="font-medium">{t('Webhook URL :')}</span>
               <br />
               <span className="break-all">{window.location.origin}/api/v1/integrations/allo/webhook</span>
             </div>
@@ -323,7 +324,7 @@ export default function IntegrationsSettingsPage() {
                   disabled={syncAlloMutation.isPending}
                 >
                   <RefreshCw size={14} className={syncAlloMutation.isPending ? 'animate-spin' : ''} />
-                  {syncAlloMutation.isPending ? 'Synchronisation...' : 'Synchroniser les appels'}
+                  {syncAlloMutation.isPending ? t('Synchronisation...') : t('Synchroniser les appels')}
                 </Button>
                 <div className="flex gap-2">
                   <Button
@@ -332,7 +333,7 @@ export default function IntegrationsSettingsPage() {
                     className="flex-1"
                     onClick={() => { setAlloApiKey(''); setAlloModalOpen(true); }}
                   >
-                    Reconfigurer
+                    {t('Reconfigurer')}
                   </Button>
                   <Button
                     variant="ghost"
@@ -342,14 +343,14 @@ export default function IntegrationsSettingsPage() {
                     disabled={disconnectAlloMutation.isPending}
                   >
                     <Unlink size={14} />
-                    Déconnecter
+                    {t('Déconnecter')}
                   </Button>
                 </div>
               </>
             ) : (
               <Button size="sm" className="w-full" onClick={() => setAlloModalOpen(true)}>
                 <Link size={14} />
-                Configurer Allo
+                {t('Configurer Allo')}
               </Button>
             )}
           </div>
@@ -362,20 +363,20 @@ export default function IntegrationsSettingsPage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Phone size={18} className="text-green-600" />
-                  <h3 className="text-lg font-semibold text-neutral-900">Configurer Allo</h3>
+                  <h3 className="text-lg font-semibold text-neutral-900">{t('Configurer Allo')}</h3>
                 </div>
                 <button onClick={() => setAlloModalOpen(false)} className="text-neutral-400 hover:text-neutral-600">
                   <X size={18} />
                 </button>
               </div>
               <p className="text-[13px] text-neutral-500 mb-4">
-                Entrez votre clé API Allo pour activer l'intégration téléphonique.
+                {t("Entrez votre clé API Allo pour activer l'intégration téléphonique.")}
               </p>
               <input
                 type="password"
                 value={alloApiKey}
                 onChange={e => setAlloApiKey(e.target.value)}
-                placeholder="Clé API Allo (ex: allo_xxxxxxxxxxxx)"
+                placeholder={t('Clé API Allo (ex: allo_xxxxxxxxxxxx)')}
                 className="w-full rounded-lg border border-[rgba(34,23,122,0.14)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(34,23,122,0.1)] focus:border-[#22177A]"
                 autoFocus
               />
@@ -386,7 +387,7 @@ export default function IntegrationsSettingsPage() {
                   className="flex-1"
                   onClick={() => setAlloModalOpen(false)}
                 >
-                  Annuler
+                  {t('Annuler')}
                 </Button>
                 <Button
                   size="sm"
@@ -395,7 +396,7 @@ export default function IntegrationsSettingsPage() {
                   disabled={!alloApiKey.trim() || saveAlloMutation.isPending}
                 >
                   <Check size={14} />
-                  {saveAlloMutation.isPending ? 'Sauvegarde...' : 'Sauvegarder'}
+                  {saveAlloMutation.isPending ? t('Sauvegarde...') : t('Sauvegarder')}
                 </Button>
               </div>
             </div>
@@ -412,12 +413,12 @@ export default function IntegrationsSettingsPage() {
               <div>
                 <h3 className="text-[18px] font-semibold text-neutral-900">Gmail</h3>
                 <p className="mt-0.5 text-[13px] text-neutral-500">
-                  Envoyez des emails directement depuis HumanUp
+                  {t('Envoyez des emails directement depuis HumanUp')}
                 </p>
               </div>
             </div>
             <Badge variant={integrations?.gmail?.connected ? 'success' : 'default'}>
-              {integrations?.gmail?.connected ? 'Connecté' : 'Déconnecté'}
+              {integrations?.gmail?.connected ? t('Connecté') : t('Déconnecté')}
             </Badge>
           </div>
 
@@ -430,7 +431,7 @@ export default function IntegrationsSettingsPage() {
             )}
             {!integrations?.gmail?.connected && (
               <p className="text-neutral-300">
-                Connectez votre compte Gmail pour envoyer des emails directement depuis HumanUp.
+                {t('Connectez votre compte Gmail pour envoyer des emails directement depuis HumanUp.')}
               </p>
             )}
           </div>
@@ -445,12 +446,12 @@ export default function IntegrationsSettingsPage() {
                 disabled={disconnectGmailMutation.isPending}
               >
                 <Unlink size={14} />
-                {disconnectGmailMutation.isPending ? 'Déconnexion...' : 'Déconnecter'}
+                {disconnectGmailMutation.isPending ? t('Déconnexion...') : t('Déconnecter')}
               </Button>
             ) : (
               <Button size="sm" className="w-full" onClick={handleConnectGmail}>
                 <Link size={14} />
-                Connecter Gmail
+                {t('Connecter Gmail')}
                 <ExternalLink size={12} />
               </Button>
             )}
@@ -467,12 +468,12 @@ export default function IntegrationsSettingsPage() {
               <div>
                 <h3 className="text-[18px] font-semibold text-neutral-900">Google Calendar</h3>
                 <p className="mt-0.5 text-[13px] text-neutral-500">
-                  Synchronisez votre agenda et planifiez des rendez-vous
+                  {t('Synchronisez votre agenda et planifiez des rendez-vous')}
                 </p>
               </div>
             </div>
             <Badge variant={integrations?.calendar?.connected ? 'success' : 'default'}>
-              {integrations?.calendar?.connected ? 'Connecté' : 'Déconnecté'}
+              {integrations?.calendar?.connected ? t('Connecté') : t('Déconnecté')}
             </Badge>
           </div>
 
@@ -491,7 +492,7 @@ export default function IntegrationsSettingsPage() {
             )}
             {!integrations?.calendar?.connected && (
               <p className="text-neutral-300">
-                Connectez Google Calendar pour planifier des rendez-vous et synchroniser votre agenda.
+                {t('Connectez Google Calendar pour planifier des rendez-vous et synchroniser votre agenda.')}
               </p>
             )}
           </div>
@@ -507,7 +508,7 @@ export default function IntegrationsSettingsPage() {
                   disabled={syncCalendlyMutation.isPending}
                 >
                   <RefreshCw size={14} className={syncCalendlyMutation.isPending ? 'animate-spin' : ''} />
-                  {syncCalendlyMutation.isPending ? 'Synchronisation...' : 'Sync Calendly -> Candidats'}
+                  {syncCalendlyMutation.isPending ? t('Synchronisation...') : t('Sync Calendly -> Candidats')}
                 </Button>
                 <Button
                   variant="ghost"
@@ -517,13 +518,13 @@ export default function IntegrationsSettingsPage() {
                   disabled={disconnectCalendarMutation.isPending}
                 >
                   <Unlink size={14} />
-                  {disconnectCalendarMutation.isPending ? 'Déconnexion...' : 'Déconnecter'}
+                  {disconnectCalendarMutation.isPending ? t('Déconnexion...') : t('Déconnecter')}
                 </Button>
               </>
             ) : (
               <Button size="sm" className="w-full" onClick={handleConnectCalendar}>
                 <Link size={14} />
-                Connecter Google Calendar
+                {t('Connecter Google Calendar')}
                 <ExternalLink size={12} />
               </Button>
             )}
@@ -540,12 +541,12 @@ export default function IntegrationsSettingsPage() {
               <div>
                 <h3 className="text-[18px] font-semibold text-neutral-900">Google Drive</h3>
                 <p className="mt-0.5 text-[13px] text-neutral-500">
-                  Importez CV et comptes-rendus depuis un dossier Drive
+                  {t('Importez CV et comptes-rendus depuis un dossier Drive')}
                 </p>
               </div>
             </div>
             <Badge variant={googleConnected ? 'success' : 'default'}>
-              {googleConnected ? 'Connecté' : 'Déconnecté'}
+              {googleConnected ? t('Connecté') : t('Déconnecté')}
             </Badge>
           </div>
 
@@ -554,7 +555,7 @@ export default function IntegrationsSettingsPage() {
               <div className="flex items-center gap-2 text-sm text-neutral-500">
                 <Shield size={14} className="text-neutral-300" />
                 <span>
-                  Accès via votre compte Google
+                  {t('Accès via votre compte Google')}
                   {integrations?.gmail?.email && (
                     <span className="font-medium text-neutral-900"> ({integrations.gmail.email})</span>
                   )}
@@ -562,14 +563,14 @@ export default function IntegrationsSettingsPage() {
               </div>
               <div>
                 <label className="mb-1.5 block text-[13px] font-medium text-neutral-700">
-                  Dossier Drive à surveiller
+                  {t('Dossier Drive à surveiller')}
                 </label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={driveFolderId}
                     onChange={(e) => setDriveFolderId(e.target.value)}
-                    placeholder="ID du dossier Drive (ex: 1a2B3c...)"
+                    placeholder={t('ID du dossier Drive (ex: 1a2B3c...)')}
                     className="w-full rounded-lg border border-[rgba(34,23,122,0.14)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(34,23,122,0.1)] focus:border-[#22177A]"
                   />
                   <Button
@@ -578,11 +579,11 @@ export default function IntegrationsSettingsPage() {
                     disabled={!driveFolderId.trim() || watchDriveMutation.isPending}
                   >
                     <Folder size={14} />
-                    {watchDriveMutation.isPending ? '...' : 'Surveiller'}
+                    {watchDriveMutation.isPending ? '...' : t('Surveiller')}
                   </Button>
                 </div>
                 <p className="mt-1.5 text-xs text-neutral-400">
-                  CV et comptes-rendus déposés dans ce dossier sont importés automatiquement.
+                  {t('CV et comptes-rendus déposés dans ce dossier sont importés automatiquement.')}
                 </p>
               </div>
               <Button
@@ -593,17 +594,17 @@ export default function IntegrationsSettingsPage() {
                 disabled={scanDriveMutation.isPending}
               >
                 <RefreshCw size={14} className={scanDriveMutation.isPending ? 'animate-spin' : ''} />
-                {scanDriveMutation.isPending ? 'Scan en cours...' : 'Scanner le dossier maintenant'}
+                {scanDriveMutation.isPending ? t('Scan en cours...') : t('Scanner le dossier maintenant')}
               </Button>
             </div>
           ) : (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-neutral-300">
-                Connectez votre compte Google pour accéder à Drive (import de CV et comptes-rendus).
+                {t('Connectez votre compte Google pour accéder à Drive (import de CV et comptes-rendus).')}
               </p>
               <Button size="sm" className="w-full" onClick={handleConnectDrive}>
                 <Link size={14} />
-                Connecter Google Drive
+                {t('Connecter Google Drive')}
                 <ExternalLink size={12} />
               </Button>
             </div>
@@ -621,12 +622,12 @@ export default function IntegrationsSettingsPage() {
               <div>
                 <h3 className="text-[18px] font-semibold text-neutral-900">Slack</h3>
                 <p className="mt-0.5 text-[13px] text-neutral-500">
-                  Résumé quotidien de l'équipe envoyé via webhook
+                  {t("Résumé quotidien de l'équipe envoyé via webhook")}
                 </p>
               </div>
             </div>
             <Badge variant={slackConfig?.enabled && slackConfig?.webhookUrl ? 'success' : 'default'}>
-              {slackConfig?.enabled && slackConfig?.webhookUrl ? 'Actif' : 'Inactif'}
+              {slackConfig?.enabled && slackConfig?.webhookUrl ? t('Actif') : t('Inactif')}
             </Badge>
           </div>
 
@@ -660,7 +661,7 @@ export default function IntegrationsSettingsPage() {
                 className="h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-[rgba(34,23,122,0.1)]"
               />
               <span className="text-sm text-neutral-700">
-                Résumé quotidien (lundi-vendredi)
+                {t('Résumé quotidien (lundi-vendredi)')}
               </span>
             </label>
           </div>
@@ -674,7 +675,7 @@ export default function IntegrationsSettingsPage() {
               disabled={testSlackMutation.isPending || !slackWebhookUrl.trim()}
             >
               <Send size={14} className={testSlackMutation.isPending ? 'animate-pulse' : ''} />
-              {testSlackMutation.isPending ? 'Envoi...' : 'Envoyer un test'}
+              {testSlackMutation.isPending ? t('Envoi...') : t('Envoyer un test')}
             </Button>
             <Button
               size="sm"
@@ -683,7 +684,7 @@ export default function IntegrationsSettingsPage() {
               disabled={saveSlackMutation.isPending || !slackDirty}
             >
               <Save size={14} />
-              {saveSlackMutation.isPending ? 'Sauvegarde...' : 'Sauvegarder'}
+              {saveSlackMutation.isPending ? t('Sauvegarde...') : t('Sauvegarder')}
             </Button>
           </div>
         </Card>
@@ -699,12 +700,12 @@ export default function IntegrationsSettingsPage() {
               <div>
                 <h3 className="text-[18px] font-semibold text-neutral-900">Pappers</h3>
                 <p className="mt-0.5 text-[13px] text-neutral-500">
-                  Enrichissez vos entreprises avec les données légales et financières (SIREN, SIRET, capital, effectif...)
+                  {t('Enrichissez vos entreprises avec les données légales et financières (SIREN, SIRET, capital, effectif...)')}
                 </p>
               </div>
             </div>
             <Badge variant={integrations?.pappers?.connected ? 'success' : 'error'}>
-              {integrations?.pappers?.connected ? 'Connecté' : 'Non configuré'}
+              {integrations?.pappers?.connected ? t('Connecté') : t('Non configuré')}
             </Badge>
           </div>
 
@@ -714,28 +715,28 @@ export default function IntegrationsSettingsPage() {
                 <div className="flex items-center gap-2 text-neutral-500">
                   <Shield size={14} className="text-neutral-300" />
                   <span>
-                    Clé API : <span className="font-medium text-neutral-900">Configurée côté serveur</span>
+                    {t('Clé API :')} <span className="font-medium text-neutral-900">{t('Configurée côté serveur')}</span>
                   </span>
                 </div>
                 {integrations.pappers.tokensUsed != null && (
                   <div className="flex items-center gap-2">
                     <Badge variant="info" size="sm">
-                      {integrations.pappers.tokensUsed} jetons utilisés
+                      {t('{n} jetons utilisés', { n: integrations.pappers.tokensUsed })}
                     </Badge>
                     {integrations.pappers.tokensRemaining != null && (
                       <Badge variant="default" size="sm">
-                        {integrations.pappers.tokensRemaining} restants
+                        {t('{n} restants', { n: integrations.pappers.tokensRemaining })}
                       </Badge>
                     )}
                   </div>
                 )}
                 <div className="rounded-lg bg-neutral-50 p-2.5 text-xs text-neutral-500">
-                  L'auto-complétion Pappers est disponible lors de la création d'une entreprise.
+                  {t("L'auto-complétion Pappers est disponible lors de la création d'une entreprise.")}
                 </div>
               </>
             ) : (
               <p className="text-neutral-300">
-                Ajoutez la variable <span className="font-mono text-neutral-400">PAPPERS_API_KEY</span> dans le fichier <span className="font-mono text-neutral-400">.env</span> du serveur pour activer Pappers.
+                {t('Ajoutez la variable')} <span className="font-mono text-neutral-400">PAPPERS_API_KEY</span> {t('dans le fichier')} <span className="font-mono text-neutral-400">.env</span> {t('du serveur pour activer Pappers.')}
               </p>
             )}
           </div>

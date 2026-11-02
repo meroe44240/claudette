@@ -5,10 +5,16 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { AlertCircle, CalendarX, Check } from 'lucide-react';
+import { lang as globalLang } from '../lib/i18n';
+import { LangSwitch } from '../components/ui/LangSwitch';
 
 interface Ctx { prenom: string; date: string; alreadyCancelled: boolean; lang?: 'fr' | 'en' }
 
 // Les candidats des pages /careers (recrutement Humanup au Vietnam) voient la page en anglais.
+// Un choix explicite via le sélecteur FR/EN (stocké par lib/i18n) l'emporte sur la langue du rendez-vous.
+function storedLang(): 'fr' | 'en' | null {
+  try { const v = localStorage.getItem('ats.lang'); return v === 'fr' || v === 'en' ? v : null; } catch { return null; }
+}
 const TEXTS = {
   fr: {
     docTitle: 'Annuler le rendez-vous — HumanUp',
@@ -50,7 +56,7 @@ export default function AnnulerRdvPage() {
   const [ctx, setCtx] = useState<Ctx | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'invalid' | 'sending' | 'done'>('loading');
 
-  const lang: 'fr' | 'en' = (ctx?.lang ?? params.get('lang')) === 'en' ? 'en' : 'fr';
+  const lang: 'fr' | 'en' = storedLang() ?? ((ctx?.lang ?? params.get('lang') ?? globalLang) === 'en' ? 'en' : 'fr');
   const t = TEXTS[lang];
 
   useEffect(() => { document.title = t.docTitle; }, [t]);
@@ -87,6 +93,7 @@ export default function AnnulerRdvPage() {
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10 }}>
             <img src="/brand/logo-mark-cream.png" alt="" style={{ width: 30, height: 30 }} />
             <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, letterSpacing: '.01em', color: '#E6E9AF' }}>HUMANUP</span>
+            <LangSwitch activeColor="#E6E9AF" color="rgba(230,233,175,.6)" style={{ marginLeft: 'auto' }} />
           </div>
         </div>
 

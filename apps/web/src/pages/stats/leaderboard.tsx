@@ -6,6 +6,7 @@ import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Select from '../../components/ui/Select';
 import Skeleton from '../../components/ui/Skeleton';
+import { t } from '../../lib/i18n';
 
 interface LeaderboardEntry {
   userId: string;
@@ -23,10 +24,10 @@ interface LeaderboardEntry {
 }
 
 const periodOptions = [
-  { value: 'week', label: 'Cette semaine' },
-  { value: 'month', label: 'Ce mois' },
-  { value: 'quarter', label: 'Ce trimestre' },
-  { value: 'year', label: 'Cette année' },
+  { value: 'week', label: t('Cette semaine') },
+  { value: 'month', label: t('Ce mois') },
+  { value: 'quarter', label: t('Ce trimestre') },
+  { value: 'year', label: t('Cette année') },
 ];
 
 const rankColors = ['text-amber-500', 'text-neutral-400', 'text-amber-700'];
@@ -46,7 +47,7 @@ export default function LeaderboardPage() {
     <div className="font-['Plus_Jakarta_Sans']">
       <PageHeader
         title="Leaderboard"
-        breadcrumbs={[{ label: 'Stats', href: '/stats' }, { label: 'Leaderboard' }]}
+        breadcrumbs={[{ label: t('Statistiques'), href: '/stats' }, { label: 'Leaderboard' }]}
       />
 
       <div className="mb-6 flex justify-end">
@@ -90,7 +91,7 @@ export default function LeaderboardPage() {
                       {entry.prenom} {entry.nom}
                     </p>
                     <div className="mt-1 flex gap-4 text-xs text-neutral-500">
-                      <span className="flex items-center gap-1"><Trophy size={12} /> {entry.stats.placements} placement{entry.stats.placements > 1 ? 's' : ''}</span>
+                      <span className="flex items-center gap-1"><Trophy size={12} /> {t(entry.stats.placements > 1 ? '{n} placements' : '{n} placement', { n: entry.stats.placements })}</span>
                       <span className="flex items-center gap-1"><TrendingUp size={12} /> {(entry.stats.revenue / 1000).toFixed(0)}k&euro;</span>
                     </div>
                   </div>

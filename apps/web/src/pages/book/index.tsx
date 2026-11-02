@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { Clock, Video, Calendar, Check, ArrowLeft, AlertCircle } from 'lucide-react';
+import { lang as globalLang } from '../../lib/i18n';
 
 interface PublicPage {
   slug: string; title: string; durationMin: number; timezone: string;
@@ -24,7 +25,9 @@ const PERSONAL_DOMAINS = new Set([
 
 const TXT = {
   fr: {
-    lang: 'FR', minutes: 'minutes', meet: 'Google Meet (lien envoyé automatiquement)', tz: 'Fuseau',
+    lang: 'FR', docTitle: 'Réserver un créneau — HumanUp', loading: 'Chargement…',
+    notFound: "Cette page de réservation n'existe pas ou n'est plus active.", bookFail: 'Réservation impossible',
+    minutes: 'minutes', meet: 'Google Meet (lien envoyé automatiquement)', tz: 'Fuseau',
     chooseSlot: 'Choisissez un créneau', noSlot: 'Aucun créneau disponible pour l\'instant.',
     changeSlot: 'Changer de créneau', confirm: 'Vos informations', slotN: (n: number) => `${n} créneau${n > 1 ? 'x' : ''}`,
     yourInfo: 'Vos informations', seeSlots: 'Voir les créneaux', backInfo: 'Modifier mes infos',
@@ -57,7 +60,9 @@ Le premier appel est gratuit. Mes honoraires : 22 % du package total du candidat
 Le lien de visioconférence est dans l'invitation. Si vous ne pouvez pas être présent, prévenez-moi en amont — je décale sans problème. Une absence sans nouvelles, et je ne reprogramme pas.`,
   },
   en: {
-    lang: 'EN', minutes: 'minutes', meet: 'Google Meet (link sent automatically)', tz: 'Timezone',
+    lang: 'EN', docTitle: 'Book a time — HumanUp', loading: 'Loading…',
+    notFound: 'This booking page does not exist or is no longer active.', bookFail: 'Booking failed',
+    minutes: 'minutes', meet: 'Google Meet (link sent automatically)', tz: 'Timezone',
     chooseSlot: 'Pick a time', noSlot: 'No slots available right now.',
     changeSlot: 'Change time', confirm: 'Your details', slotN: (n: number) => `${n} slot${n > 1 ? 's' : ''}`,
     yourInfo: 'Your details', seeSlots: 'See availability', backInfo: 'Edit my details',
@@ -101,7 +106,7 @@ export default function BookPage() {
   const [page, setPage] = useState<PublicPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
-  const [lang, setLang] = useState<Lang>('fr');
+  const [lang, setLang] = useState<Lang>(globalLang);
   const [step, setStep] = useState<'info' | 'slot'>('info');
   const [selDay, setSelDay] = useState<string | null>(null);
   const [f, setF] = useState({ name: '', email: '', phone: '', poste: '', societe: '', roleHiring: '', timeline: '', note: '' });
@@ -112,16 +117,17 @@ export default function BookPage() {
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF(p => ({ ...p, [k]: e.target.value }));
 
   useEffect(() => {
-    document.title = 'Réserver un créneau — HumanUp';
     (async () => {
       try {
         const res = await fetch(`/api/v1/public/booking/${slug}`);
-        if (!res.ok) throw new Error('Page introuvable');
+        if (!res.ok) throw new Error('not found');
         setPage(await res.json() as PublicPage);
-      } catch { setErr("Cette page de réservation n'existe pas ou n'est plus active."); }
+      } catch { setErr(TXT[lang].notFound); }
       finally { setLoading(false); }
     })();
   }, [slug]);
+
+  useEffect(() => { document.title = t.docTitle; }, [t]);
 
   const days = useMemo(() => {
     if (!page) return [];
@@ -162,14 +168,14 @@ export default function BookPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Réservation impossible');
+      if (!res.ok) throw new Error(data.message || t.bookFail);
       setConfirmed(data as Confirmed);
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
   };
 
   const S = { fontFamily: "'Manrope',sans-serif" };
-  if (loading) return <div style={{ ...S, minHeight: '100vh', background: '#F4F4EA', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9A96AE' }}>Chargement…</div>;
+  if (loading) return <div style={{ ...S, minHeight: '100vh', background: '#F4F4EA', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9A96AE' }}>{t.loading}</div>;
   if (err && !page) return <div style={{ ...S, minHeight: '100vh', background: '#F4F4EA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 10, color: '#B3261E' }}><AlertCircle size={26} />{err}</div>;
   if (!page) return null;
 

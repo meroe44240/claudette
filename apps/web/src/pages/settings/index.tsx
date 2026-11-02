@@ -15,6 +15,7 @@ import Select from '../../components/ui/Select';
 import Skeleton from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import { toast } from '../../components/ui/Toast';
+import { t, isEn, LOCALE } from '../../lib/i18n';
 
 type Fonction = 'SALES' | 'RECRUTEUR' | 'LES_DEUX';
 
@@ -51,20 +52,20 @@ interface UpdateUserPayload {
 }
 
 const roleOptions = [
-  { value: 'RECRUTEUR', label: 'Recruteur' },
-  { value: 'ADMIN', label: 'Administrateur' },
+  { value: 'RECRUTEUR', label: t('Recruteur') },
+  { value: 'ADMIN', label: t('Administrateur') },
 ];
 
 const fonctionOptions: { value: Fonction; label: string }[] = [
   { value: 'SALES', label: 'Sales' },
-  { value: 'RECRUTEUR', label: 'Recruteur' },
-  { value: 'LES_DEUX', label: 'Les deux' },
+  { value: 'RECRUTEUR', label: t('Recruteur') },
+  { value: 'LES_DEUX', label: t('Les deux') },
 ];
 
 const fonctionLabel: Record<Fonction, string> = {
   SALES: 'Sales',
-  RECRUTEUR: 'Recruteur',
-  LES_DEUX: 'Les deux',
+  RECRUTEUR: t('Recruteur'),
+  LES_DEUX: t('Les deux'),
 };
 
 const roleBadgeVariant: Record<string, 'info' | 'warning'> = {
@@ -75,9 +76,9 @@ const roleBadgeVariant: Record<string, 'info' | 'warning'> = {
 type SettingsSection = 'general' | 'equipe' | 'integrations' | 'pipeline' | 'notifications' | 'booking';
 
 const sidebarItems: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
-  { id: 'general', label: 'Général', icon: <Settings size={16} /> },
-  { id: 'equipe', label: 'Équipe', icon: <Users size={16} /> },
-  { id: 'integrations', label: 'Intégrations', icon: <Puzzle size={16} /> },
+  { id: 'general', label: t('Général'), icon: <Settings size={16} /> },
+  { id: 'equipe', label: t('Équipe'), icon: <Users size={16} /> },
+  { id: 'integrations', label: t('Intégrations'), icon: <Puzzle size={16} /> },
   { id: 'pipeline', label: 'Pipeline', icon: <GitBranch size={16} /> },
   { id: 'notifications', label: 'Notifications', icon: <Bell size={16} /> },
 ];
@@ -127,7 +128,7 @@ export default function SettingsPage() {
   const [bookingBuffer, setBookingBuffer] = useState(15);
   const [bookingMinNotice, setBookingMinNotice] = useState(2);
   const [bookingMaxAdvance, setBookingMaxAdvance] = useState(30);
-  const [bookingWelcome, setBookingWelcome] = useState('Choisissez un créneau pour notre échange.');
+  const [bookingWelcome, setBookingWelcome] = useState(t('Choisissez un créneau pour notre échange.'));
   const [bookingReminderEmail, setBookingReminderEmail] = useState(true);
   const [bookingReminderBefore, setBookingReminderBefore] = useState(true);
 
@@ -183,11 +184,11 @@ export default function SettingsPage() {
       api.put('/ai/config', payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-config'] });
-      toast('success', 'Configuration IA enregistree avec succes');
+      toast('success', t('Configuration IA enregistree avec succes'));
       setAiApiKey('');
     },
     onError: (error: any) => {
-      toast('error', error?.data?.message || 'Erreur lors de la sauvegarde');
+      toast('error', error?.data?.message || t('Erreur lors de la sauvegarde'));
     },
   });
 
@@ -201,13 +202,13 @@ export default function SettingsPage() {
       }
     },
     onError: (error: any) => {
-      toast('error', error?.data?.message || 'Erreur lors du test');
+      toast('error', error?.data?.message || t('Erreur lors du test'));
     },
   });
 
   const handleSaveAiConfig = () => {
     if (!aiApiKey.trim() && !aiConfigData?.data?.hasApiKey) {
-      toast('error', 'Veuillez entrer une cle API');
+      toast('error', t('Veuillez entrer une cle API'));
       return;
     }
     saveAiConfigMutation.mutate({
@@ -238,9 +239,9 @@ export default function SettingsPage() {
     mutationFn: (data: any) => api.put('/settings/general', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings', 'general'] });
-      toast('success', 'Paramètres enregistrés');
+      toast('success', t('Paramètres enregistrés'));
     },
-    onError: () => toast('error', 'Erreur lors de la sauvegarde'),
+    onError: () => toast('error', t('Erreur lors de la sauvegarde')),
   });
 
   // Booking settings queries
@@ -273,10 +274,10 @@ export default function SettingsPage() {
     mutationFn: (payload: any) => api.put('/booking/settings', payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['booking-settings'] });
-      toast('success', 'Paramètres de booking enregistrés');
+      toast('success', t('Paramètres de booking enregistrés'));
     },
     onError: (error: any) => {
-      toast('error', error?.data?.message || 'Erreur lors de la sauvegarde');
+      toast('error', error?.data?.message || t('Erreur lors de la sauvegarde'));
     },
   });
 
@@ -288,7 +289,7 @@ export default function SettingsPage() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast('success', 'Lien copié !');
+    toast('success', t('Lien copié !'));
   };
 
   const { data: users, isLoading } = useQuery({
@@ -302,11 +303,11 @@ export default function SettingsPage() {
     onSuccess: (user, payload) => {
       queryClient.invalidateQueries({ queryKey: ['settings', 'users'] });
       if (!payload.sendInvite) {
-        toast('success', 'Utilisateur créé avec succès');
+        toast('success', t('Utilisateur créé avec succès'));
       } else if (user.inviteSent) {
-        toast('success', `Utilisateur créé, invitation envoyée à ${payload.email}`);
+        toast('success', t('Utilisateur créé, invitation envoyée à {email}', { email: payload.email }));
       } else {
-        toast('error', "Utilisateur créé, mais l'email d'invitation n'a pas pu être envoyé");
+        toast('error', t("Utilisateur créé, mais l'email d'invitation n'a pas pu être envoyé"));
       }
       closeCreateModal();
     },
@@ -318,7 +319,7 @@ export default function SettingsPage() {
         }
         setFormErrors(errs);
       } else {
-        toast('error', error.data?.message || 'Erreur lors de la création');
+        toast('error', error.data?.message || t('Erreur lors de la création'));
       }
     },
   });
@@ -327,11 +328,11 @@ export default function SettingsPage() {
     mutationFn: (id: string) => api.delete(`/settings/users/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings', 'users'] });
-      toast('success', 'Utilisateur supprimé');
+      toast('success', t('Utilisateur supprimé'));
       setDeleteConfirm(null);
     },
     onError: () => {
-      toast('error', 'Erreur lors de la suppression');
+      toast('error', t('Erreur lors de la suppression'));
       setDeleteConfirm(null);
     },
   });
@@ -343,7 +344,7 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['settings', 'users'] });
     },
     onError: () => {
-      toast('error', 'Erreur lors de la mise à jour');
+      toast('error', t('Erreur lors de la mise à jour'));
     },
   });
 
@@ -362,12 +363,12 @@ export default function SettingsPage() {
 
   const handleCreate = () => {
     const errors: Record<string, string> = {};
-    if (!formEmail.trim()) errors.email = 'Email requis';
-    if (!formNom.trim()) errors.nom = 'Nom requis';
-    if (!formPrenom.trim()) errors.prenom = 'Prénom requis';
-    if (!formPassword.trim()) errors.password = 'Mot de passe requis';
+    if (!formEmail.trim()) errors.email = t('Email requis');
+    if (!formNom.trim()) errors.nom = t('Nom requis');
+    if (!formPrenom.trim()) errors.prenom = t('Prénom requis');
+    if (!formPassword.trim()) errors.password = t('Mot de passe requis');
     if (formPassword.length > 0 && formPassword.length < 8)
-      errors.password = 'Minimum 8 caractères';
+      errors.password = t('Minimum 8 caractères');
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -388,7 +389,7 @@ export default function SettingsPage() {
 
   const formatDate = (d: string | null) => {
     if (!d) return '—';
-    return new Date(d).toLocaleDateString('fr-FR', {
+    return new Date(d).toLocaleDateString(LOCALE, {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -400,7 +401,7 @@ export default function SettingsPage() {
   const columns = [
     {
       key: 'nom',
-      header: 'Nom',
+      header: t('Nom'),
       render: (u: User) => (
         <div>
           <span className="font-medium text-neutral-900">
@@ -416,16 +417,16 @@ export default function SettingsPage() {
     },
     {
       key: 'role',
-      header: 'Rôle',
+      header: t('Rôle'),
       render: (u: User) => (
         <Badge variant={roleBadgeVariant[u.role] || 'default'}>
-          {u.role === 'ADMIN' ? 'Admin' : 'Recruteur'}
+          {u.role === 'ADMIN' ? 'Admin' : t('Recruteur')}
         </Badge>
       ),
     },
     {
       key: 'fonction',
-      header: 'Fonction',
+      header: t('Fonction'),
       render: (u: User) => (
         <select
           value={u.fonction}
@@ -447,7 +448,7 @@ export default function SettingsPage() {
     },
     {
       key: 'excludeFromTeamStats',
-      header: 'Hors stats équipe',
+      header: t('Hors stats équipe'),
       render: (u: User) => (
         <label className="inline-flex cursor-pointer items-center gap-2">
           <input
@@ -462,14 +463,14 @@ export default function SettingsPage() {
             className="h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
           />
           <span className="text-xs text-neutral-500">
-            {u.excludeFromTeamStats ? 'Exclu' : '—'}
+            {u.excludeFromTeamStats ? t('Exclu') : '—'}
           </span>
         </label>
       ),
     },
     {
       key: 'objectifCaTrimestre',
-      header: 'Objectif CA / trim. (€)',
+      header: t('Objectif CA / trim. (€)'),
       render: (u: User) => (
         <input
           type="number"
@@ -490,7 +491,7 @@ export default function SettingsPage() {
     },
     {
       key: 'lastLoginAt',
-      header: 'Dernière connexion',
+      header: t('Dernière connexion'),
       render: (u: User) => (
         <span className="text-xs text-neutral-300">{formatDate(u.lastLoginAt)}</span>
       ),
@@ -503,7 +504,7 @@ export default function SettingsPage() {
         u.id !== currentUser?.id ? (
           <div className="flex items-center gap-1">
             <button
-              title="Réinitialiser le mot de passe"
+              title={t('Réinitialiser le mot de passe')}
               onClick={(e) => {
                 e.stopPropagation();
                 setNewPwd('');
@@ -514,7 +515,7 @@ export default function SettingsPage() {
               <KeyRound size={16} />
             </button>
             <button
-              title="Supprimer"
+              title={t('Supprimer')}
               onClick={(e) => {
                 e.stopPropagation();
                 setDeleteConfirm(u.id);
@@ -531,10 +532,10 @@ export default function SettingsPage() {
   if (currentUser?.role !== 'ADMIN') {
     return (
       <div>
-        <PageHeader title="Paramètres" breadcrumbs={[{ label: 'Paramètres' }]} />
+        <PageHeader title={t('Paramètres')} breadcrumbs={[{ label: t('Paramètres') }]} />
         <EmptyState
-          title="Accès restreint"
-          description="Seuls les administrateurs peuvent accéder à cette page."
+          title={t('Accès restreint')}
+          description={t('Seuls les administrateurs peuvent accéder à cette page.')}
         />
       </div>
     );
@@ -564,8 +565,8 @@ export default function SettingsPage() {
   return (
     <div>
       <div className="rise" style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>Administration</div>
-        <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Paramètres</h1>
+        <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>{t('Administration')}</div>
+        <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>{t('Paramètres')}</h1>
       </div>
 
       <div className="flex gap-8">
@@ -601,50 +602,50 @@ export default function SettingsPage() {
           {activeSection === 'general' && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-[18px] font-semibold text-neutral-900">Général</h2>
-                <p className="mt-1 text-[13px] text-neutral-500">Paramètres généraux de votre espace</p>
+                <h2 className="text-[18px] font-semibold text-neutral-900">{t('Général')}</h2>
+                <p className="mt-1 text-[13px] text-neutral-500">{t('Paramètres généraux de votre espace')}</p>
               </div>
               <div className="space-y-6">
                 <Input
-                  label="Nom de l'entreprise"
+                  label={t("Nom de l'entreprise")}
                   placeholder="HumanUp"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                 />
                 <Select
-                  label="Devise"
+                  label={t('Devise')}
                   options={currencyOptions}
                   value={currency}
                   onChange={setCurrency}
                 />
                 <Select
-                  label="Fuseau horaire"
+                  label={t('Fuseau horaire')}
                   options={timezoneOptions}
                   value={timezone}
                   onChange={setTimezone}
                 />
                 <Select
-                  label="Langue"
+                  label={t('Langue')}
                   options={languageOptions}
                   value={language}
                   onChange={setLanguage}
                 />
                 <div>
                   <Input
-                    label="Objectif de CA agence — par trimestre (€)"
+                    label={t('Objectif de CA agence — par trimestre (€)')}
                     type="number"
-                    placeholder="ex. 200000"
+                    placeholder={t('ex. 200000')}
                     value={objectifAgence}
                     onChange={(e) => setObjectifAgence(e.target.value)}
                   />
-                  <p className="mt-1.5 text-[12px] text-neutral-500">Sert à la jauge « CA agence » du dashboard. Laissé vide = somme des objectifs individuels.</p>
+                  <p className="mt-1.5 text-[12px] text-neutral-500">{t('Sert à la jauge « CA agence » du dashboard. Laissé vide = somme des objectifs individuels.')}</p>
                 </div>
                 <div className="flex justify-end pt-2">
                   <Button
                     onClick={() => saveGeneralMutation.mutate({ companyName, currency, timezone, language, objectifCaAgenceTrimestre: objectifAgence.trim() === '' ? null : Math.max(0, parseInt(objectifAgence, 10) || 0) })}
                     loading={saveGeneralMutation.isPending}
                   >
-                    Enregistrer
+                    {t('Enregistrer')}
                   </Button>
                 </div>
               </div>
@@ -656,12 +657,12 @@ export default function SettingsPage() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-[18px] font-semibold text-neutral-900">Équipe</h2>
-                  <p className="mt-1 text-[13px] text-neutral-500">Gérez les membres de votre équipe</p>
+                  <h2 className="text-[18px] font-semibold text-neutral-900">{t('Équipe')}</h2>
+                  <p className="mt-1 text-[13px] text-neutral-500">{t('Gérez les membres de votre équipe')}</p>
                 </div>
                 <Button onClick={() => setShowCreateModal(true)}>
                   <Plus size={16} />
-                  Ajouter un utilisateur
+                  {t('Ajouter un utilisateur')}
                 </Button>
               </div>
 
@@ -669,9 +670,9 @@ export default function SettingsPage() {
                 <Skeleton className="h-12 w-full" count={5} />
               ) : !users?.length ? (
                 <EmptyState
-                  title="Aucun utilisateur"
-                  description="Ajoutez votre premier utilisateur pour commencer"
-                  actionLabel="Ajouter un utilisateur"
+                  title={t('Aucun utilisateur')}
+                  description={t('Ajoutez votre premier utilisateur pour commencer')}
+                  actionLabel={t('Ajouter un utilisateur')}
                   onAction={() => setShowCreateModal(true)}
                 />
               ) : (
@@ -689,11 +690,11 @@ export default function SettingsPage() {
             <div className="space-y-6">
               <div>
                 <h2 className="text-[18px] font-semibold text-neutral-900">Pipeline</h2>
-                <p className="mt-1 text-[13px] text-neutral-500">Configurez les étapes de votre pipeline de recrutement</p>
+                <p className="mt-1 text-[13px] text-neutral-500">{t('Configurez les étapes de votre pipeline de recrutement')}</p>
               </div>
               <EmptyState
-                title="Bientôt disponible"
-                description="La configuration du pipeline sera disponible prochainement."
+                title={t('Bientôt disponible')}
+                description={t('La configuration du pipeline sera disponible prochainement.')}
               />
             </div>
           )}
@@ -702,12 +703,12 @@ export default function SettingsPage() {
           {activeSection === 'integrations' && (
             <div className="space-y-8">
               <div>
-                <h2 className="text-[18px] font-semibold text-neutral-900">Integrations</h2>
-                <p className="mt-1 text-[13px] text-neutral-500">Connectez vos outils pour une experience unifiee</p>
+                <h2 className="text-[18px] font-semibold text-neutral-900">{t('Integrations')}</h2>
+                <p className="mt-1 text-[13px] text-neutral-500">{t('Connectez vos outils pour une experience unifiee')}</p>
               </div>
               <Button onClick={() => navigate('/settings/integrations')}>
                 <Plug size={16} />
-                Gerer les integrations
+                {t('Gerer les integrations')}
               </Button>
 
               {/* AI Configuration Section */}
@@ -717,12 +718,12 @@ export default function SettingsPage() {
                     <Sparkles size={18} className="text-purple-600" />
                   </div>
                   <div>
-                    <h3 className="text-[15px] font-semibold text-neutral-900">Intelligence Artificielle</h3>
-                    <p className="text-[12px] text-neutral-500">Configurez votre fournisseur IA pour les fonctionnalites Adchase et autres</p>
+                    <h3 className="text-[15px] font-semibold text-neutral-900">{t('Intelligence Artificielle')}</h3>
+                    <p className="text-[12px] text-neutral-500">{t('Configurez votre fournisseur IA pour les fonctionnalites Adchase et autres')}</p>
                   </div>
                   {aiConfigData?.data?.hasApiKey && (
                     <Badge variant="success" className="ml-auto">
-                      <CheckCircle2 size={12} className="mr-1" /> Connecte
+                      <CheckCircle2 size={12} className="mr-1" /> {t('Connecte')}
                     </Badge>
                   )}
                 </div>
@@ -734,7 +735,7 @@ export default function SettingsPage() {
                 ) : (
                   <div className="space-y-4">
                     <Select
-                      label="Fournisseur IA"
+                      label={t('Fournisseur IA')}
                       options={aiProviderOptions}
                       value={aiProvider}
                       onChange={(val) => {
@@ -744,7 +745,7 @@ export default function SettingsPage() {
                     />
 
                     <Select
-                      label="Modele"
+                      label={t('Modele')}
                       options={aiModelOptions}
                       value={aiModel}
                       onChange={setAiModel}
@@ -752,14 +753,14 @@ export default function SettingsPage() {
 
                     <div className="space-y-1.5">
                       <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                        Cle API
+                        {t('Cle API')}
                       </label>
                       <div className="relative">
                         <input
                           type={showAiKey ? 'text' : 'password'}
                           value={aiApiKey}
                           onChange={(e) => setAiApiKey(e.target.value)}
-                          placeholder={aiConfigData?.data?.hasApiKey ? 'Cle deja configuree (laisser vide pour garder)' : 'Entrez votre cle API...'}
+                          placeholder={aiConfigData?.data?.hasApiKey ? t('Cle deja configuree (laisser vide pour garder)') : t('Entrez votre cle API...')}
                           className="w-full rounded-lg border-[1.5px] border-neutral-100 bg-white px-3 py-2.5 pr-10 text-sm outline-none transition-all placeholder:text-text-tertiary focus:border-[#22177A] focus:shadow-[0_0_0_3px_rgba(34,23,122,0.1)]"
                         />
                         <button
@@ -779,13 +780,13 @@ export default function SettingsPage() {
                         loading={testAiMutation.isPending}
                         disabled={!aiConfigData?.data?.hasApiKey && !aiApiKey.trim()}
                       >
-                        Tester la connexion
+                        {t('Tester la connexion')}
                       </Button>
                       <Button
                         onClick={handleSaveAiConfig}
                         loading={saveAiConfigMutation.isPending}
                       >
-                        Enregistrer
+                        {t('Enregistrer')}
                       </Button>
                     </div>
                   </div>
@@ -799,11 +800,11 @@ export default function SettingsPage() {
             <div className="space-y-6">
               <div>
                 <h2 className="text-[18px] font-semibold text-neutral-900">Notifications</h2>
-                <p className="mt-1 text-[13px] text-neutral-500">Configurez vos préférences de notifications</p>
+                <p className="mt-1 text-[13px] text-neutral-500">{t('Configurez vos préférences de notifications')}</p>
               </div>
               <EmptyState
-                title="Bientôt disponible"
-                description="Les paramètres de notifications seront disponibles prochainement."
+                title={t('Bientôt disponible')}
+                description={t('Les paramètres de notifications seront disponibles prochainement.')}
               />
             </div>
           )}
@@ -813,10 +814,10 @@ export default function SettingsPage() {
             <div className="space-y-6">
               <div>
                 <h2 className="text-[18px] font-semibold text-neutral-900">
-                  {'\u{1F4C5}'} Paramètres de booking
+                  {'\u{1F4C5}'} {t('Paramètres de booking')}
                 </h2>
                 <p className="mt-1 text-[13px] text-neutral-500">
-                  Configurez votre disponibilité et vos créneaux de réservation
+                  {t('Configurez votre disponibilité et vos créneaux de réservation')}
                 </p>
               </div>
 
@@ -830,7 +831,7 @@ export default function SettingsPage() {
                   className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
                 />
                 <label htmlFor="booking-active" className="text-sm font-medium text-neutral-900">
-                  Booking activé
+                  {t('Booking activé')}
                 </label>
               </div>
 
@@ -838,7 +839,7 @@ export default function SettingsPage() {
               {bookingSlug && (
                 <div className="rounded-2xl border border-[rgba(34,23,122,0.08)] bg-white shadow-[0_1px_2px_rgba(34,23,122,0.04)] p-4">
                   <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500 mb-2">
-                    Votre lien de booking
+                    {t('Votre lien de booking')}
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="flex-1 truncate rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
@@ -850,7 +851,7 @@ export default function SettingsPage() {
                       className="flex items-center gap-1.5 rounded-lg border border-[rgba(34,23,122,0.14)] bg-white px-3 py-2 text-sm text-neutral-600 transition-colors hover:bg-neutral-50"
                     >
                       <Copy size={14} />
-                      Copier
+                      {t('Copier')}
                     </button>
                   </div>
                 </div>
@@ -858,8 +859,8 @@ export default function SettingsPage() {
 
               {/* Slug input */}
               <Input
-                label="Votre slug"
-                placeholder="mon-entreprise"
+                label={t('Votre slug')}
+                placeholder={t('mon-entreprise')}
                 value={bookingSlug}
                 onChange={(e) => setBookingSlug(e.target.value)}
               />
@@ -867,10 +868,10 @@ export default function SettingsPage() {
               {/* Working days */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Jours de disponibilité
+                  {t('Jours de disponibilité')}
                 </label>
                 <div className="flex gap-2">
-                  {(['L', 'M', 'M', 'J', 'V', 'S', 'D'] as const).map((dayLabel, idx) => {
+                  {(isEn ? ['M', 'T', 'W', 'T', 'F', 'S', 'S'] : ['L', 'M', 'M', 'J', 'V', 'S', 'D']).map((dayLabel, idx) => {
                     const dayValues = [1, 2, 3, 4, 5, 6, 0];
                     const dayValue = dayValues[idx];
                     const isSelected = bookingDays.includes(dayValue);
@@ -899,13 +900,13 @@ export default function SettingsPage() {
               {/* Time range */}
               <div className="grid grid-cols-2 gap-4">
                 <Input
-                  label="Heure de début"
+                  label={t('Heure de début')}
                   type="time"
                   value={bookingStartTime}
                   onChange={(e) => setBookingStartTime(e.target.value)}
                 />
                 <Input
-                  label="Heure de fin"
+                  label={t('Heure de fin')}
                   type="time"
                   value={bookingEndTime}
                   onChange={(e) => setBookingEndTime(e.target.value)}
@@ -914,7 +915,7 @@ export default function SettingsPage() {
 
               {/* Duration dropdown */}
               <Select
-                label="Durée du créneau"
+                label={t('Durée du créneau')}
                 options={[
                   { value: '15', label: '15 min' },
                   { value: '30', label: '30 min' },
@@ -927,7 +928,7 @@ export default function SettingsPage() {
 
               {/* Buffer dropdown */}
               <Select
-                label="Temps tampon entre créneaux"
+                label={t('Temps tampon entre créneaux')}
                 options={[
                   { value: '0', label: '0 min' },
                   { value: '5', label: '5 min' },
@@ -941,13 +942,13 @@ export default function SettingsPage() {
 
               {/* Min notice dropdown */}
               <Select
-                label="Préavis minimum"
+                label={t('Préavis minimum')}
                 options={[
-                  { value: '1', label: '1 heure' },
-                  { value: '2', label: '2 heures' },
-                  { value: '4', label: '4 heures' },
-                  { value: '8', label: '8 heures' },
-                  { value: '24', label: '24 heures' },
+                  { value: '1', label: t('1 heure') },
+                  { value: '2', label: t('{n} heures', { n: 2 }) },
+                  { value: '4', label: t('{n} heures', { n: 4 }) },
+                  { value: '8', label: t('{n} heures', { n: 8 }) },
+                  { value: '24', label: t('{n} heures', { n: 24 }) },
                 ]}
                 value={String(bookingMinNotice)}
                 onChange={(val) => setBookingMinNotice(Number(val))}
@@ -955,13 +956,13 @@ export default function SettingsPage() {
 
               {/* Max advance dropdown */}
               <Select
-                label="Réservation à l'avance max"
+                label={t("Réservation à l'avance max")}
                 options={[
-                  { value: '7', label: '7 jours' },
-                  { value: '14', label: '14 jours' },
-                  { value: '30', label: '30 jours' },
-                  { value: '60', label: '60 jours' },
-                  { value: '90', label: '90 jours' },
+                  { value: '7', label: t('{n} jours', { n: 7 }) },
+                  { value: '14', label: t('{n} jours', { n: 14 }) },
+                  { value: '30', label: t('{n} jours', { n: 30 }) },
+                  { value: '60', label: t('{n} jours', { n: 60 }) },
+                  { value: '90', label: t('{n} jours', { n: 90 }) },
                 ]}
                 value={String(bookingMaxAdvance)}
                 onChange={(val) => setBookingMaxAdvance(Number(val))}
@@ -969,8 +970,8 @@ export default function SettingsPage() {
 
               {/* Welcome message */}
               <Textarea
-                label="Message d'accueil"
-                placeholder="Choisissez un créneau pour notre échange."
+                label={t("Message d'accueil")}
+                placeholder={t('Choisissez un créneau pour notre échange.')}
                 value={bookingWelcome}
                 onChange={(e) => setBookingWelcome(e.target.value)}
               />
@@ -978,7 +979,7 @@ export default function SettingsPage() {
               {/* Reminders */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Rappels
+                  {t('Rappels')}
                 </label>
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
@@ -990,7 +991,7 @@ export default function SettingsPage() {
                       className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
                     />
                     <label htmlFor="reminder-email" className="text-sm text-neutral-700">
-                      Email la veille (18h)
+                      {t('Email la veille (18h)')}
                     </label>
                   </div>
                   <div className="flex items-center gap-3">
@@ -1002,7 +1003,7 @@ export default function SettingsPage() {
                       className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
                     />
                     <label htmlFor="reminder-before" className="text-sm text-neutral-700">
-                      Email 1h avant
+                      {t('Email 1h avant')}
                     </label>
                   </div>
                 </div>
@@ -1029,14 +1030,14 @@ export default function SettingsPage() {
                   }
                   loading={saveBookingMutation.isPending}
                 >
-                  Sauvegarder
+                  {t('Sauvegarder')}
                 </Button>
               </div>
 
               {/* Mandat links section */}
               {mandatLinksData?.data && mandatLinksData.data.length > 0 && (
                 <div className="space-y-3 border-t border-neutral-100 pt-6">
-                  <h3 className="text-[15px] font-semibold text-neutral-900">Liens par mandat</h3>
+                  <h3 className="text-[15px] font-semibold text-neutral-900">{t('Liens par mandat')}</h3>
                   <div className="space-y-2">
                     {mandatLinksData.data.map((mandat: any) => (
                       <div
@@ -1074,13 +1075,13 @@ export default function SettingsPage() {
       <Modal
         isOpen={showCreateModal}
         onClose={closeCreateModal}
-        title="Ajouter un utilisateur"
+        title={t('Ajouter un utilisateur')}
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="Prénom"
-              placeholder="Jean"
+              label={t('Prénom')}
+              placeholder={t('Jean')}
               value={formPrenom}
               onChange={(e) => {
                 setFormPrenom(e.target.value);
@@ -1089,8 +1090,8 @@ export default function SettingsPage() {
               error={formErrors.prenom}
             />
             <Input
-              label="Nom"
-              placeholder="Dupont"
+              label={t('Nom')}
+              placeholder={t('Dupont')}
               value={formNom}
               onChange={(e) => {
                 setFormNom(e.target.value);
@@ -1102,7 +1103,7 @@ export default function SettingsPage() {
           <Input
             label="Email"
             type="email"
-            placeholder="jean.dupont@exemple.com"
+            placeholder={t('jean.dupont@exemple.com')}
             value={formEmail}
             onChange={(e) => {
               setFormEmail(e.target.value);
@@ -1112,13 +1113,13 @@ export default function SettingsPage() {
           />
           <div className="grid grid-cols-2 gap-4">
             <Select
-              label="Rôle"
+              label={t('Rôle')}
               options={roleOptions}
               value={formRole}
               onChange={setFormRole}
             />
             <Select
-              label="Fonction"
+              label={t('Fonction')}
               options={fonctionOptions}
               value={formFonction}
               onChange={(v) => setFormFonction(v as Fonction)}
@@ -1131,12 +1132,12 @@ export default function SettingsPage() {
               onChange={(e) => setFormExcludeStats(e.target.checked)}
               className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
             />
-            <span>Exclure des totaux d'équipe (recaps, dashboards)</span>
+            <span>{t("Exclure des totaux d'équipe (recaps, dashboards)")}</span>
           </label>
           <Input
-            label="Mot de passe"
+            label={t('Mot de passe')}
             type="password"
-            placeholder="Minimum 8 caractères"
+            placeholder={t('Minimum 8 caractères')}
             value={formPassword}
             onChange={(e) => {
               setFormPassword(e.target.value);
@@ -1151,14 +1152,14 @@ export default function SettingsPage() {
               onChange={(e) => setFormSendInvite(e.target.checked)}
               className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
             />
-            <span>Envoyer l'email d'invitation (en anglais) avec les identifiants</span>
+            <span>{t("Envoyer l'email d'invitation (en anglais) avec les identifiants")}</span>
           </label>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={closeCreateModal}>
-              Annuler
+              {t('Annuler')}
             </Button>
             <Button onClick={handleCreate} disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Création...' : 'Créer'}
+              {createMutation.isPending ? t('Création...') : t('Créer')}
             </Button>
           </div>
         </div>
@@ -1168,22 +1169,22 @@ export default function SettingsPage() {
       <Modal
         isOpen={!!deleteConfirm}
         onClose={() => setDeleteConfirm(null)}
-        title="Confirmer la suppression"
+        title={t('Confirmer la suppression')}
         size="sm"
       >
         <p className="text-sm text-neutral-500">
-          Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.
+          {t('Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.')}
         </p>
         <div className="mt-6 flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setDeleteConfirm(null)}>
-            Annuler
+            {t('Annuler')}
           </Button>
           <Button
             variant="danger"
             onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm)}
             disabled={deleteMutation.isPending}
           >
-            {deleteMutation.isPending ? 'Suppression...' : 'Supprimer'}
+            {deleteMutation.isPending ? t('Suppression...') : t('Supprimer')}
           </Button>
         </div>
       </Modal>
@@ -1192,17 +1193,17 @@ export default function SettingsPage() {
       <Modal
         isOpen={!!resetPwdUser}
         onClose={() => setResetPwdUser(null)}
-        title="Réinitialiser le mot de passe"
+        title={t('Réinitialiser le mot de passe')}
         size="sm"
       >
         <p className="text-sm text-neutral-500">
-          Définir un nouveau mot de passe pour <strong>{resetPwdUser?.prenom} {resetPwdUser?.nom}</strong> ({resetPwdUser?.email}). Communique-le lui : il pourra se connecter avec directement.
+          {t('Définir un nouveau mot de passe pour')} <strong>{resetPwdUser?.prenom} {resetPwdUser?.nom}</strong> ({resetPwdUser?.email}). {t('Communique-le lui : il pourra se connecter avec directement.')}
         </p>
         <div className="mt-4">
           <Input
             type="text"
-            label="Nouveau mot de passe"
-            placeholder="Min. 8 caractères"
+            label={t('Nouveau mot de passe')}
+            placeholder={t('Min. 8 caractères')}
             value={newPwd}
             onChange={(e) => setNewPwd(e.target.value)}
             autoFocus
@@ -1210,20 +1211,20 @@ export default function SettingsPage() {
         </div>
         <div className="mt-6 flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setResetPwdUser(null)}>
-            Annuler
+            {t('Annuler')}
           </Button>
           <Button
             onClick={() => {
-              if (newPwd.trim().length < 8) { toast('error', 'Minimum 8 caractères'); return; }
+              if (newPwd.trim().length < 8) { toast('error', t('Minimum 8 caractères')); return; }
               if (!resetPwdUser) return;
               updateUserMutation.mutate(
                 { id: resetPwdUser.id, patch: { password: newPwd } },
-                { onSuccess: () => { toast('success', 'Mot de passe réinitialisé'); setResetPwdUser(null); setNewPwd(''); } },
+                { onSuccess: () => { toast('success', t('Mot de passe réinitialisé')); setResetPwdUser(null); setNewPwd(''); } },
               );
             }}
             disabled={updateUserMutation.isPending}
           >
-            {updateUserMutation.isPending ? 'Enregistrement…' : 'Réinitialiser'}
+            {updateUserMutation.isPending ? t('Enregistrement…') : t('Réinitialiser')}
           </Button>
         </div>
       </Modal>

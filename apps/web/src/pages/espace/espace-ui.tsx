@@ -3,6 +3,8 @@
 // blanches, indigo pour l'action, vert pâle pour ce qui demande l'attention.
 import { useEffect, type CSSProperties, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { t, isEn } from '../../lib/i18n';
+import { LangSwitch } from '../../components/ui/LangSwitch';
 
 export const C = {
   bg: '#F7F7F8', card: '#FFFFFF', ink: '#111827', body: '#374151', muted: '#4B5563', line: '#E5E7EB', soft: '#F3F4F6',
@@ -13,7 +15,7 @@ export const FONT = '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans
 const KEY = 'espace_token';
 export const espaceStore = {
   get(): string | null { try { return localStorage.getItem(KEY); } catch { return null; } },
-  set(t: string) { try { localStorage.setItem(KEY, t); } catch { /* navigation privée */ } },
+  set(v: string) { try { localStorage.setItem(KEY, v); } catch { /* navigation privée */ } },
   clear() { try { localStorage.removeItem(KEY); } catch { /* noop */ } },
 };
 
@@ -29,7 +31,7 @@ export async function espaceFetch<T = any>(path: string, init?: RequestInit): Pr
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers || {}) },
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new EspaceError(data?.message || 'Something went wrong. Please try again.', res.status);
+  if (!res.ok) throw new EspaceError(data?.message || t('Une erreur est survenue. Merci de réessayer.'), res.status);
   return data as T;
 }
 
@@ -70,23 +72,25 @@ const CSS = `
 export function Page({ children, header = true, unread = 0, name }: { children: ReactNode; header?: boolean; unread?: number; name?: string }) {
   useInterFont();
   return (
-    <div className="esp" style={{ minHeight: '100vh', background: C.bg, fontFamily: FONT, color: C.body, fontSize: 15, lineHeight: 1.6 }}>
+    <div className="esp" style={{ position: 'relative', minHeight: '100vh', background: C.bg, fontFamily: FONT, color: C.body, fontSize: 15, lineHeight: 1.6 }}>
       <style>{CSS}</style>
+      {!header && <LangSwitch activeColor={C.accent} color={C.muted} style={{ position: 'absolute', top: 14, right: 20 }} />}
       {header && (
         <header style={{ background: C.card, borderBottom: `1px solid ${C.line}` }}>
           <div style={{ maxWidth: 1080, margin: '0 auto', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             <Link to="/espace" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-              <img src={LOGO} alt="Humanup logo" style={{ width: 34, height: 34, borderRadius: '50%' }} />
+              <img src={LOGO} alt={t('Logo Humanup')} style={{ width: 34, height: 34, borderRadius: '50%' }} />
               <span style={{ fontWeight: 700, color: C.ink, fontSize: 16 }}>Humanup</span>
-              <span className="esp-hide-sm" style={{ color: C.muted, fontSize: 14 }}>Candidate space</span>
+              <span className="esp-hide-sm" style={{ color: C.muted, fontSize: 14 }}>{t('Espace candidat')}</span>
             </Link>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 14 }}>
-              <Link to="/espace/notifications" aria-label={unread ? `Updates, ${unread} new` : 'Updates'} style={{ position: 'relative', width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.body, border: `1px solid ${C.line}` }}>
+              <LangSwitch activeColor={C.accent} color={C.muted} />
+              <Link to="/espace/notifications" aria-label={unread ? t('Mises à jour, {n} nouvelles', { n: unread }) : t('Mises à jour')} style={{ position: 'relative', width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.body, border: `1px solid ${C.line}` }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
                 {unread > 0 && <span style={{ position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, borderRadius: 9, background: C.accent, color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{unread}</span>}
               </Link>
               {name && <span className="esp-hide-sm" style={{ color: C.muted }}>{name}</span>}
-              <button onClick={() => { espaceStore.clear(); window.location.href = '/espace/login'; }} style={{ ...linkBtn, fontSize: 14 }}>Sign out</button>
+              <button onClick={() => { espaceStore.clear(); window.location.href = '/espace/login'; }} style={{ ...linkBtn, fontSize: 14 }}>{t('Se déconnecter')}</button>
             </div>
           </div>
         </header>
@@ -117,35 +121,38 @@ export function Avatar({ name, url, size = 48 }: { name: string; url?: string | 
 
 export function TeamCard({ team }: { team: TeamMember[] }) {
   if (!team.length) return null;
-  const emails = team.map((t) => t.email).join(',');
+  const emails = team.map((m) => m.email).join(',');
   return (
     <section style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <h2 style={h2}>Your Humanup team</h2>
-      {team.map((t) => (
-        <div key={t.id} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <Avatar name={t.name} url={t.avatarUrl} />
+      <h2 style={h2}>{t('Votre équipe Humanup')}</h2>
+      {team.map((m) => (
+        <div key={m.id} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <Avatar name={m.name} url={m.avatarUrl} />
           <div style={{ display: 'flex', flexDirection: 'column', fontSize: 14 }}>
-            <span style={{ fontWeight: 700, color: C.ink }}>{t.name}</span>
-            <span style={{ color: C.muted }}>{t.role}</span>
+            <span style={{ fontWeight: 700, color: C.ink }}>{m.name}</span>
+            <span style={{ color: C.muted }}>{m.role}</span>
           </div>
         </div>
       ))}
-      {team.length > 1 && <p style={{ margin: 0, fontSize: 14, color: C.muted }}>Both of them follow your file. One message reaches them both.</p>}
-      <a href={`mailto:${emails}`} style={{ ...btn, padding: '10px 12px' }}>Message the team</a>
+      {team.length > 1 && <p style={{ margin: 0, fontSize: 14, color: C.muted }}>{t('Tous les deux suivent votre dossier. Un seul message suffit pour les joindre.')}</p>}
+      <a href={`mailto:${emails}`} style={{ ...btn, padding: '10px 12px' }}>{t("Écrire à l'équipe")}</a>
     </section>
   );
 }
 
+// Format US conservé en anglais (dates "Oct 20"), français sinon.
+const DATE_LOCALE = isEn ? 'en-US' : 'fr-FR';
+
 export function fmtDate(d: string | Date | null | undefined, opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }) {
   if (!d) return '';
-  return new Intl.DateTimeFormat('en-US', opts).format(new Date(d));
+  return new Intl.DateTimeFormat(DATE_LOCALE, opts).format(new Date(d));
 }
 export function fmtDateTime(d: string | Date) {
-  return new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(d));
+  return new Intl.DateTimeFormat(DATE_LOCALE, { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(d));
 }
 
 export function Loading() {
-  return <div style={{ padding: 40, textAlign: 'center', color: C.muted }}>Loading...</div>;
+  return <div style={{ padding: 40, textAlign: 'center', color: C.muted }}>{t('Chargement...')}</div>;
 }
 
 export function ErrorNote({ children }: { children: ReactNode }) {

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
+import { t, LOCALE } from '../../lib/i18n';
 
 // ─── TYPES ──────────────────────────────────────────────
 
@@ -65,17 +66,17 @@ function formatRelativeDate(dateStr: string): string {
   const date = new Date(dateStr).getTime();
   const diffMs = now - date;
   const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "A l'instant";
-  if (diffMin < 60) return `Il y a ${diffMin} min`;
+  if (diffMin < 1) return t("A l'instant");
+  if (diffMin < 60) return t('Il y a {n} min', { n: diffMin });
   const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `Il y a ${diffH}h`;
+  if (diffH < 24) return t('Il y a {n}h', { n: diffH });
   const diffD = Math.floor(diffH / 24);
-  if (diffD < 7) return `Il y a ${diffD}j`;
-  return new Date(dateStr).toLocaleDateString('fr-FR');
+  if (diffD < 7) return t('Il y a {n}j', { n: diffD });
+  return new Date(dateStr).toLocaleDateString(LOCALE);
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('fr-FR');
+  return new Date(dateStr).toLocaleString(LOCALE);
 }
 
 // ─── COMPONENT ──────────────────────────────────────────
@@ -143,11 +144,11 @@ export default function McpLogsPage() {
         title={
           <span className="flex items-center gap-2">
             <Terminal size={26} className="text-primary-500" />
-            Logs MCP
+            {t('Logs MCP')}
           </span>
         }
-        subtitle="Historique des appels aux outils MCP"
-        breadcrumbs={[{ label: 'Admin' }, { label: 'Logs MCP' }]}
+        subtitle={t('Historique des appels aux outils MCP')}
+        breadcrumbs={[{ label: t('Admin') }, { label: t('Logs MCP') }]}
       />
 
       {/* ─── STATS CARDS ───────────────────────────────── */}
@@ -158,30 +159,30 @@ export default function McpLogsPage() {
         transition={{ delay: 0.05 }}
       >
         <StatCard
-          label="Total appels"
+          label={t('Total appels')}
           value={stats?.total_calls ?? '-'}
-          sub="Tous les temps"
+          sub={t('Tous les temps')}
           icon={<Activity size={20} className="text-blue-500" />}
           color="blue"
         />
         <StatCard
-          label="Taux de succes"
+          label={t('Taux de succes')}
           value={`${successRate}%`}
-          sub={`${stats?.success_count ?? 0} succes`}
+          sub={t('{n} succes', { n: stats?.success_count ?? 0 })}
           icon={<CheckCircle size={20} className="text-green-500" />}
           color="green"
         />
         <StatCard
-          label="Erreurs"
+          label={t('Erreurs')}
           value={stats?.error_count ?? '-'}
-          sub={stats && stats.error_count > 0 ? 'A verifier' : 'Aucune erreur'}
+          sub={stats && stats.error_count > 0 ? t('A verifier') : t('Aucune erreur')}
           icon={<XCircle size={20} className={stats && stats.error_count > 0 ? 'text-red-500' : 'text-neutral-400'} />}
           color={stats && stats.error_count > 0 ? 'red' : 'neutral'}
         />
         <StatCard
-          label="Temps moyen"
+          label={t('Temps moyen')}
           value={stats ? `${Math.round(stats.avg_duration_ms)}ms` : '-'}
-          sub="Par appel"
+          sub={t('Par appel')}
           icon={<Clock size={20} className="text-purple-500" />}
           color="purple"
         />
@@ -197,47 +198,47 @@ export default function McpLogsPage() {
         {/* Par outil */}
         <div className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
           <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-neutral-700">
-            <BarChart3 size={16} /> Par outil
+            <BarChart3 size={16} /> {t('Par outil')}
           </h3>
           {stats?.by_tool?.length ? (
             <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
               {stats.by_tool
                 .sort((a, b) => b.count - a.count)
-                .map((t) => (
-                  <div key={t.tool} className="group">
+                .map((tl) => (
+                  <div key={tl.tool} className="group">
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="font-medium text-neutral-800 truncate max-w-[200px]">
-                        {t.tool}
+                        {tl.tool}
                       </span>
                       <span className="flex items-center gap-2 text-neutral-500">
-                        <span>{t.count} appels</span>
+                        <span>{t(tl.count > 1 ? '{n} appels' : '{n} appel', { n: tl.count })}</span>
                         <span className="text-neutral-300">|</span>
-                        <span>{Math.round(t.avg_ms)}ms moy.</span>
+                        <span>{t('{n}ms moy.', { n: Math.round(tl.avg_ms) })}</span>
                         <span
-                          className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${LEVEL_STYLES[t.level] || 'bg-gray-100 text-gray-600'}`}
+                          className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${LEVEL_STYLES[tl.level] || 'bg-gray-100 text-gray-600'}`}
                         >
-                          {t.level}
+                          {tl.level}
                         </span>
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-neutral-100 overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all ${LEVEL_BAR_COLORS[t.level] || 'bg-gray-400'}`}
-                        style={{ width: `${(t.count / maxToolCount) * 100}%` }}
+                        className={`h-full rounded-full transition-all ${LEVEL_BAR_COLORS[tl.level] || 'bg-gray-400'}`}
+                        style={{ width: `${(tl.count / maxToolCount) * 100}%` }}
                       />
                     </div>
                   </div>
                 ))}
             </div>
           ) : (
-            <p className="text-xs text-neutral-400">Aucune donnee</p>
+            <p className="text-xs text-neutral-400">{t('Aucune donnee')}</p>
           )}
         </div>
 
         {/* Par utilisateur */}
         <div className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
           <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-neutral-700">
-            <Activity size={16} /> Par utilisateur
+            <Activity size={16} /> {t('Par utilisateur')}
           </h3>
           {stats?.by_user?.length ? (
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
@@ -258,7 +259,7 @@ export default function McpLogsPage() {
                 ))}
             </div>
           ) : (
-            <p className="text-xs text-neutral-400">Aucune donnee</p>
+            <p className="text-xs text-neutral-400">{t('Aucune donnee')}</p>
           )}
         </div>
       </motion.div>
@@ -271,47 +272,47 @@ export default function McpLogsPage() {
         transition={{ delay: 0.15 }}
       >
         <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-500 uppercase tracking-wide">
-          <Filter size={14} /> Filtres
+          <Filter size={14} /> {t('Filtres')}
         </div>
 
         <FilterSelect
-          label="Outil"
+          label={t('Outil')}
           value={toolFilter}
           onChange={(v) => { setToolFilter(v); setPage(1); }}
           options={[
-            { value: '', label: 'Tous' },
-            ...(toolsData?.tools?.map((t) => ({ value: t, label: t })) ?? []),
+            { value: '', label: t('Tous') },
+            ...(toolsData?.tools?.map((tool) => ({ value: tool, label: tool })) ?? []),
           ]}
         />
         <FilterSelect
-          label="Niveau"
+          label={t('Niveau')}
           value={levelFilter}
           onChange={(v) => { setLevelFilter(v); setPage(1); }}
           options={[
-            { value: '', label: 'Tous' },
+            { value: '', label: t('Tous') },
             { value: 'free', label: 'Free' },
             { value: 'confirm', label: 'Confirm' },
             { value: 'blocked', label: 'Blocked' },
           ]}
         />
         <FilterSelect
-          label="Statut"
+          label={t('Statut')}
           value={successFilter}
           onChange={(v) => { setSuccessFilter(v); setPage(1); }}
           options={[
-            { value: '', label: 'Tous' },
-            { value: 'true', label: 'Succes' },
-            { value: 'false', label: 'Erreur' },
+            { value: '', label: t('Tous') },
+            { value: 'true', label: t('Succes') },
+            { value: 'false', label: t('Erreur') },
           ]}
         />
         <FilterInput
-          label="Du"
+          label={t('Du')}
           type="date"
           value={dateFrom}
           onChange={(v) => { setDateFrom(v); setPage(1); }}
         />
         <FilterInput
-          label="Au"
+          label={t('Au')}
           type="date"
           value={dateTo}
           onChange={(v) => { setDateTo(v); setPage(1); }}
@@ -330,19 +331,19 @@ export default function McpLogsPage() {
             <thead>
               <tr className="border-b border-neutral-100 bg-neutral-50/60 text-left text-xs font-semibold uppercase tracking-wider text-neutral-500">
                 <th className="px-4 py-3 w-8" />
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Utilisateur</th>
-                <th className="px-4 py-3">Outil</th>
-                <th className="px-4 py-3">Niveau</th>
-                <th className="px-4 py-3">Statut</th>
-                <th className="px-4 py-3 text-right">Duree</th>
+                <th className="px-4 py-3">{t('Date')}</th>
+                <th className="px-4 py-3">{t('Utilisateur')}</th>
+                <th className="px-4 py-3">{t('Outil')}</th>
+                <th className="px-4 py-3">{t('Niveau')}</th>
+                <th className="px-4 py-3">{t('Statut')}</th>
+                <th className="px-4 py-3 text-right">{t('Duree')}</th>
               </tr>
             </thead>
             <tbody>
               {logsLoading ? (
                 <tr>
                   <td colSpan={7} className="py-16 text-center text-neutral-400">
-                    Chargement...
+                    {t('Chargement...')}
                   </td>
                 </tr>
               ) : logs?.data?.length ? (
@@ -359,7 +360,7 @@ export default function McpLogsPage() {
               ) : (
                 <tr>
                   <td colSpan={7} className="py-16 text-center text-neutral-400">
-                    Aucun log
+                    {t('Aucun log')}
                   </td>
                 </tr>
               )}
@@ -371,13 +372,13 @@ export default function McpLogsPage() {
         {logs && logs.pages > 1 && (
           <div className="flex items-center justify-between border-t border-neutral-100 px-4 py-3">
             <span className="text-xs text-neutral-500">
-              {logs.total} resultat{logs.total > 1 ? 's' : ''} &mdash; page {logs.page}/{logs.pages}
+              {t(logs.total > 1 ? '{n} resultats' : '{n} resultat', { n: logs.total })} &mdash; {t('page {page}/{pages}', { page: logs.page, pages: logs.pages })}
             </span>
             <div className="flex items-center gap-1">
               <PaginationBtn
                 disabled={page <= 1}
                 onClick={() => setPage(page - 1)}
-                label="Prec."
+                label={t('Prec.')}
               />
               {Array.from({ length: Math.min(logs.pages, 7) }, (_, i) => {
                 let p: number;
@@ -402,7 +403,7 @@ export default function McpLogsPage() {
               <PaginationBtn
                 disabled={page >= logs.pages}
                 onClick={() => setPage(page + 1)}
-                label="Suiv."
+                label={t('Suiv.')}
               />
             </div>
           </div>
@@ -496,7 +497,7 @@ function LogRow({
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 text-red-600 text-xs font-medium">
-              <XCircle size={14} /> Erreur
+              <XCircle size={14} /> {t('Erreur')}
             </span>
           )}
         </td>
@@ -518,7 +519,7 @@ function LogRow({
                 <div className="border-b border-neutral-100 bg-neutral-50/40 px-6 py-4 space-y-3">
                   {log.errorMessage && (
                     <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                      <strong>Erreur :</strong> {log.errorMessage}
+                      <strong>{t('Erreur :')}</strong> {log.errorMessage}
                     </div>
                   )}
                   <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -529,7 +530,7 @@ function LogRow({
                       <pre className="rounded-lg bg-gray-50 p-3 text-xs text-neutral-700 overflow-auto max-h-60 border border-neutral-200">
                         {log.input
                           ? JSON.stringify(log.input, null, 2)
-                          : '(vide)'}
+                          : t('(vide)')}
                       </pre>
                     </div>
                     <div>
@@ -539,7 +540,7 @@ function LogRow({
                       <pre className="rounded-lg bg-gray-50 p-3 text-xs text-neutral-700 overflow-auto max-h-60 border border-neutral-200">
                         {log.output
                           ? JSON.stringify(log.output, null, 2)
-                          : '(vide)'}
+                          : t('(vide)')}
                       </pre>
                     </div>
                   </div>
