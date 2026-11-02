@@ -1,6 +1,7 @@
 import prisma from '../../lib/db.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../lib/errors.js';
 import { hashPassword } from '../../lib/password.js';
+import { sendEmail, renderBrandedEmail, escapeHtml } from '../../lib/mailer.js';
 import type { Role, Fonction } from '@prisma/client';
 
 // avatarUrl/avatarData/telephone : client Prisma régénéré au build prod (cast pour le dev local)
@@ -62,6 +63,7 @@ export async function createUser(data: {
   fonction?: Fonction;
   excludeFromTeamStats?: boolean;
   password: string;
+  sendInvite?: boolean;
 }) {
   const existing = await prisma.user.findUnique({ where: { email: data.email } });
   if (existing) {
@@ -70,7 +72,7 @@ export async function createUser(data: {
 
   const passwordHash = await hashPassword(data.password);
 
-  return prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       email: data.email,
       nom: data.nom,
@@ -83,6 +85,53 @@ export async function createUser(data: {
     },
     select: userSelect,
   });
+
+  // Email d'invitation (en anglais) avec les identifiants. Best-effort : un échec
+  // d'envoi ne doit pas annuler la création du compte.
+  let inviteSent = false;
+  if (data.sendInvite) {
+    try {
+      await sendInviteEmail({
+        email: data.email,
+        firstName: data.prenom || data.nom,
+        password: data.password,
+      });
+      inviteSent = true;
+    } catch (err) {
+      console.error(`[user-invite] échec de l'envoi à ${data.email}`, err);
+    }
+  }
+
+  return { ...user, inviteSent };
+}
+
+async function sendInviteEmail(params: { email: string; firstName: string; password: string }) {
+  const loginUrl = `${process.env.APP_URL || 'http://localhost:5173'}/login`;
+  const html = renderBrandedEmail({
+    title: 'Your HumanUp account is ready',
+    bodyHtml: `
+      <p>Hi ${escapeHtml(params.firstName)},</p>
+      <p>Your recruiter account on the HumanUp ATS has been created. Here are your login details:</p>
+      <p>
+        <strong>Email:</strong> ${escapeHtml(params.email)}<br>
+        <strong>Temporary password:</strong> ${escapeHtml(params.password)}
+      </p>
+      <p>You'll be asked to choose your own password the first time you sign in.</p>
+    `,
+    cta: { label: 'Sign in', href: loginUrl },
+    signature: 'Welcome aboard!',
+  });
+  const text = [
+    `Hi ${params.firstName},`,
+    '',
+    'Your recruiter account on the HumanUp ATS has been created.',
+    `Email: ${params.email}`,
+    `Temporary password: ${params.password}`,
+    '',
+    `Sign in: ${loginUrl}`,
+    "You'll be asked to choose your own password the first time you sign in.",
+  ].join('\n');
+  await sendEmail(params.email, 'Your HumanUp account is ready', html, text);
 }
 
 export async function updateUser(

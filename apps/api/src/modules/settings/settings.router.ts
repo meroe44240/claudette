@@ -14,6 +14,7 @@ const createUserSchema = z.object({
   fonction: fonctionEnum.optional(),
   excludeFromTeamStats: z.boolean().optional(),
   password: z.string().min(8),
+  sendInvite: z.boolean().optional(),
 });
 
 const updateUserSchema = z.object({
