@@ -9,6 +9,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { X, Check, MessageSquare, AtSign, Banknote, CalendarClock, ArrowRight, UserPlus, MessageCircle, Lock, BellRing, BadgeCheck, ChevronDown, Mail, Phone, Linkedin, FileText } from 'lucide-react';
 import { portalStore } from './portal-store';
 import { PortalTopBar, lastMandat, SHARED_CSS, CompanyLogo } from './portal-ui';
+import { t, isEn, LOCALE } from '../../lib/i18n';
 
 type Stage = 'SOURCING' | 'CONTACTE' | 'ENTRETIEN_1' | 'ENVOYE_CLIENT' | 'ENTRETIEN_CLIENT' | 'PROCESS' | 'OFFRE' | 'PLACE' | 'REFUSE';
 type Decision = 'RENCONTRER' | 'A_DISCUTER' | 'ECARTER';
@@ -36,7 +37,7 @@ type MoveExtra = { reason?: string; dateEntretienClient?: string; interlocuteurC
 
 // Libellés côté client : Inbox / Screening / Case / Culture Fit / Offre / Engagé / Perdu.
 const STAGE_LABELS: Record<Col, string> = {
-  INBOX: 'Inbox', SCREENING: 'Screening', CASE: 'Case', CULTURE_FIT: 'Culture Fit', OFFRE: 'Offre', ENGAGE: 'Engagé', PERDU: 'Perdu',
+  INBOX: 'Inbox', SCREENING: 'Screening', CASE: 'Case', CULTURE_FIT: 'Culture Fit', OFFRE: t('Offre'), ENGAGE: t('Engagé'), PERDU: t('Perdu'),
 };
 const STAGE_ACCENT: Record<Col, string> = {
   INBOX: '#475467', SCREENING: '#2A6BD8', CASE: '#D97F1E', CULTURE_FIT: '#7A5BD1', OFFRE: '#B8921A', ENGAGE: '#2F8A4A', PERDU: '#8A8699',
@@ -44,7 +45,7 @@ const STAGE_ACCENT: Record<Col, string> = {
 const STAGE_TINT: Record<Col, string> = {
   INBOX: '#EEF0F3', SCREENING: '#EAF1FC', CASE: '#FCF1E4', CULTURE_FIT: '#F1ECFC', OFFRE: '#FAF4DE', ENGAGE: '#E7F3EA', PERDU: '#F0EFF3',
 };
-const DECISION_LABEL: Record<Decision, string> = { RENCONTRER: 'À rencontrer', A_DISCUTER: 'À discuter', ECARTER: 'Écarté' };
+const DECISION_LABEL: Record<Decision, string> = { RENCONTRER: t('À rencontrer'), A_DISCUTER: t('À discuter'), ECARTER: t('Écarté') };
 const DECISION_TONE: Record<Decision, { bg: string; fg: string }> = {
   RENCONTRER: { bg: '#E6F2E9', fg: '#256238' }, A_DISCUTER: { bg: '#FAF0DF', fg: '#7A5A1E' }, ECARTER: { bg: '#F7E8E5', fg: '#9E2F1A' },
 };
@@ -66,7 +67,7 @@ function portalFetch(path: string, init?: RequestInit) {
   const token = portalStore.get('portal_token');
   return fetch(`/api/v1/portal${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers as Record<string, string> | undefined) } });
 }
-function fullName(c: Candidature) { return `${c.candidat.prenom || ''} ${c.candidat.nom}`.trim() || '(profil)'; }
+function fullName(c: Candidature) { return `${c.candidat.prenom || ''} ${c.candidat.nom}`.trim() || t('(profil)'); }
 function initials(c: Candidature) { return `${(c.candidat.prenom?.[0] ?? '')}${c.candidat.nom?.[0] ?? ''}`.toUpperCase() || '?'; }
 function initialsOf(name: string) { return name.split(/[\s.@]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?'; }
 
@@ -82,7 +83,7 @@ function salaryOf(c: Candidature): string | null {
 function daysIn(c: Candidature): string | null {
   if (!c.stageSince) return null;
   const d = Math.floor((Date.now() - new Date(c.stageSince).getTime()) / 86400000);
-  return d <= 0 ? 'Aujourd’hui' : d === 1 ? 'Depuis 1 j' : `Depuis ${d} j`;
+  return d <= 0 ? t('Aujourd’hui') : d === 1 ? t('Depuis 1 j') : t('Depuis {n} j', { n: d });
 }
 const needsReview = (c: Candidature) => c.column === 'INBOX' && c.portalDecisions.length === 0;
 
@@ -108,14 +109,14 @@ function relTime(iso: string | Date) {
   const d = new Date(iso);
   const diff = Date.now() - d.getTime();
   const min = Math.round(diff / 60000);
-  if (min >= 0 && min < 1) return 'à l’instant';
-  if (min >= 0 && min < 60) return `il y a ${min} min`;
-  if (min >= 0 && min < 60 * 24) return `il y a ${Math.round(min / 60)} h`;
-  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) })
-    + ` · ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+  if (min >= 0 && min < 1) return t('à l’instant');
+  if (min >= 0 && min < 60) return t('il y a {n} min', { n: min });
+  if (min >= 0 && min < 60 * 24) return t('il y a {n} h', { n: Math.round(min / 60) });
+  return d.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) })
+    + ` · ${d.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}`;
 }
 function fmtInterview(iso: string) {
-  return new Date(iso).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 function useIsMobile() {
@@ -171,7 +172,7 @@ export default function PortalMandatPage() {
 
   useEffect(() => {
     if (!portalStore.get('portal_token')) { navigate(`/portail/login?m=${mandatId ?? ''}`); return; }
-    document.title = 'Candidatures | HumanUp';
+    document.title = t('Candidatures | HumanUp');
     setSelectedId(null);
     if (mandatId) lastMandat.set(mandatId);
     void reload();
@@ -190,10 +191,10 @@ export default function PortalMandatPage() {
   // Interlocuteur du client côté HumanUp : le commercial (à défaut le consultant).
   const contactUser = data?.mandat.commercial ?? data?.mandat.consultant ?? null;
   const repFirst = contactUser?.prenom || contactUser?.nom || '';
-  function flash(t: Toast) {
+  function flash(next: Toast) {
     window.clearTimeout(toastTimer.current);
-    setToast(t);
-    toastTimer.current = window.setTimeout(() => setToast(null), t.undo ? 6500 : 4000);
+    setToast(next);
+    toastTimer.current = window.setTimeout(() => setToast(null), next.undo ? 6500 : 4000);
   }
   const allCards = useCallback(() => (data ? Object.values(data.byStage).flat() : []), [data]);
   const selected = selectedId ? allCards().find((c) => c.id === selectedId) ?? null : null;
@@ -217,7 +218,7 @@ export default function PortalMandatPage() {
   // Toute demande de déplacement passe par ici (drag, fiche, boutons d'avis).
   function requestMove(c: Candidature, to: Col) {
     if (c.column === to) return;
-    if (c.stage === 'PLACE') { flash({ msg: `L'embauche de ${fullName(c)} est validée : contactez ${repFirst || 'votre interlocuteur HumanUp'} pour la modifier.` }); return; }
+    if (c.stage === 'PLACE') { flash({ msg: t('L’embauche de {name} est validée : contactez {rep} pour la modifier.', { name: fullName(c), rep: repFirst || t('votre interlocuteur HumanUp') }) }); return; }
     if (to === 'SCREENING' || to === 'PERDU' || to === 'ENGAGE') { setPendingMove({ c, to }); return; }
     void doMove(c, to, {});
   }
@@ -243,16 +244,16 @@ export default function PortalMandatPage() {
     if (!res.ok) {
       setData(snapshot);
       const err = await res.json().catch(() => null);
-      flash({ msg: err?.message || 'Le déplacement n’a pas pu être enregistré.' });
+      flash({ msg: err?.message || t('Le déplacement n’a pas pu être enregistré.') });
       return;
     }
     const out = await res.json().catch(() => ({}));
     if (out?.pending) {
       flash({ msg: out.already
-        ? `Embauche déjà signalée à ${repFirst || 'HumanUp'}.`
-        : `Embauche signalée à ${repFirst || 'HumanUp'}.` });
+        ? t('Embauche déjà signalée à {rep}.', { rep: repFirst || 'HumanUp' })
+        : t('Embauche signalée à {rep}.', { rep: repFirst || 'HumanUp' }) });
     } else if (isUndo) {
-      flash({ msg: 'Déplacement annulé.' });
+      flash({ msg: t('Déplacement annulé.') });
     } else {
       flash({
         msg: `${fullName(c)} → ${STAGE_LABELS[to]}`,
@@ -267,24 +268,24 @@ export default function PortalMandatPage() {
     if (d === 'RENCONTRER' && c.column === 'INBOX') { setPendingMove({ c, to: 'SCREENING', fromDecision: true }); return; }
     if (d === 'ECARTER') { setPendingMove({ c, to: 'PERDU' }); return; }
     const res = await portalFetch(`/candidatures/${c.id}/decision`, { method: 'POST', body: JSON.stringify({ decision: d }) });
-    if (!res.ok) { flash({ msg: 'Votre avis n’a pas pu être enregistré.' }); return; }
+    if (!res.ok) { flash({ msg: t('Votre avis n’a pas pu être enregistré.') }); return; }
     if (d === 'A_DISCUTER') {
       setDrawerTab({ tab: 'commentaires', prefill: true });
-      flash({ msg: 'Avis enregistré.' });
+      flash({ msg: t('Avis enregistré.') });
     } else {
-      flash({ msg: 'Avis enregistré.' });
+      flash({ msg: t('Avis enregistré.') });
     }
     void reload(true);
   }
   async function decideOnly(c: Candidature, d: Decision) {
     const res = await portalFetch(`/candidatures/${c.id}/decision`, { method: 'POST', body: JSON.stringify({ decision: d }) });
-    if (res.ok) { flash({ msg: 'Avis enregistré.' }); void reload(true); }
+    if (res.ok) { flash({ msg: t('Avis enregistré.') }); void reload(true); }
   }
 
   if (loading || !data) return (
     <div style={{ background: BG, minHeight: '100vh', fontFamily: "'Manrope',sans-serif" }}>
       <PortalTopBar active="candidatures" mandatId={mandatId} />
-      <p style={{ padding: 40, textAlign: 'center', color: FAINT }}>Chargement…</p>
+      <p style={{ padding: 40, textAlign: 'center', color: FAINT }}>{t('Chargement…')}</p>
     </div>
   );
 
@@ -333,12 +334,12 @@ export default function PortalMandatPage() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: '9px 14px' }}>
-            <div style={LABEL}>En cours</div>
+            <div style={LABEL}>{t('En cours')}</div>
             <div style={{ fontFamily: DISPLAY, fontSize: FS.xl, marginTop: 2 }}>{enCours}</div>
           </div>
           {(rep || commercial) && (
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, padding: '9px 14px' }}>
-              {([[commercial, 'Votre commercial', BRAND, CREAM, com?.avatarUrl ?? null], [rep, 'Votre consultant', '#F2F3D8', BRAND, consultant?.avatarUrl ?? null]] as const).filter(([n]) => n).map(([n, label, bg, fg, photo]) => (
+              {([[commercial, t('Votre commercial'), BRAND, CREAM, com?.avatarUrl ?? null], [rep, t('Votre consultant'), '#F2F3D8', BRAND, consultant?.avatarUrl ?? null]] as const).filter(([n]) => n).map(([n, label, bg, fg, photo]) => (
                 <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <PersonAvatar name={n} photo={photo} size={38} bg={bg} fg={fg} />
                   <div>
@@ -358,25 +359,25 @@ export default function PortalMandatPage() {
           <div role="status" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, background: '#fff', border: `1px solid ${LINE}`, borderLeft: `4px solid ${BRAND}`, borderRadius: 14, padding: '12px 14px' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: FS.md, fontWeight: 800, color: INK }}>
               <BellRing size={17} color={BRAND} />
-              {toReview.length} profil{toReview.length > 1 ? 's attendent' : ' attend'} votre avis
+              {t(toReview.length > 1 ? '{n} profils attendent votre avis' : '{n} profil attend votre avis', { n: toReview.length })}
             </span>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {toReview.map((c) => (
                 <button key={c.id} className="pm-chip" onClick={() => openCard(c)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: FS.base, fontWeight: 700, color: INK, background: BG, border: `1px solid ${LINE}`, borderRadius: 999, padding: '4px 12px 4px 4px', cursor: 'pointer' }}>
                   <Avatar c={c} size={24} radius="50%" bg={BRAND} fg={CREAM} fontSize={9} />{fullName(c)}
-                  {!c.seen && <span style={{ fontSize: FS.xs, fontWeight: 800, color: BRAND }}>· Nouveau</span>}
+                  {!c.seen && <span style={{ fontSize: FS.xs, fontWeight: 800, color: BRAND }}>· {t('Nouveau')}</span>}
                 </button>
               ))}
             </div>
-            {nextInterview && <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: FS.base, color: MUTED }}><CalendarClock size={15} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span>Prochain entretien : <strong style={{ color: INK }}>{fullName(nextInterview)}</strong>, {fmtInterview(nextInterview.dateEntretienClient!)}</span></span>}
+            {nextInterview && <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: FS.base, color: MUTED }}><CalendarClock size={15} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span>{t('Prochain entretien :')} <strong style={{ color: INK }}>{fullName(nextInterview)}</strong>, {fmtInterview(nextInterview.dateEntretienClient!)}</span></span>}
           </div>
         ) : cards.length > 0 ? (
           <div role="status" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: FS.base, color: MUTED }}>
-            <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}><Check size={16} color="#2F8A4A" strokeWidth={2.6} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span>Aucun profil en attente d’avis.</span></span>
-            {nextInterview && <span style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}><CalendarClock size={15} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span>Prochain entretien : <strong style={{ color: INK }}>{fullName(nextInterview)}</strong>, {fmtInterview(nextInterview.dateEntretienClient!)}</span></span>}
+            <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}><Check size={16} color="#2F8A4A" strokeWidth={2.6} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span>{t('Aucun profil en attente d’avis.')}</span></span>
+            {nextInterview && <span style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}><CalendarClock size={15} aria-hidden style={{ flexShrink: 0, marginTop: 1 }} /><span>{t('Prochain entretien :')} <strong style={{ color: INK }}>{fullName(nextInterview)}</strong>, {fmtInterview(nextInterview.dateEntretienClient!)}</span></span>}
           </div>
         ) : (
-          <div style={{ fontSize: FS.base, color: MUTED }}>Aucun profil pour l’instant.</div>
+          <div style={{ fontSize: FS.base, color: MUTED }}>{t('Aucun profil pour l’instant.')}</div>
         )}
       </div>
 
@@ -412,7 +413,7 @@ export default function PortalMandatPage() {
       {toast && (
         <div role="status" aria-live="polite" style={{ position: 'fixed', left: '50%', bottom: isMobile ? 84 : 24, transform: 'translateX(-50%)', zIndex: 90, display: 'flex', alignItems: 'center', gap: 14, background: INK, color: '#F4F4EA', fontSize: FS.md, fontWeight: 600, padding: '12px 14px 12px 18px', borderRadius: 12, boxShadow: '0 18px 40px -18px rgba(26,21,51,.6)', maxWidth: 'calc(100vw - 32px)' }}>
           <span>{toast.msg}</span>
-          {toast.undo && <button className="pm-btn" onClick={toast.undo} style={{ flexShrink: 0, fontSize: FS.base, fontWeight: 800, color: INK, background: CREAM, border: 'none', borderRadius: 8, padding: '6px 11px', cursor: 'pointer' }}>Annuler</button>}
+          {toast.undo && <button className="pm-btn" onClick={toast.undo} style={{ flexShrink: 0, fontSize: FS.base, fontWeight: 800, color: INK, background: CREAM, border: 'none', borderRadius: 8, padding: '6px 11px', cursor: 'pointer' }}>{isEn ? 'Undo' : 'Annuler'}</button>}
         </div>
       )}
 
@@ -440,7 +441,7 @@ function StageColumn({ stage, count, dragging, children }: { stage: Col; count: 
   const accent = STAGE_ACCENT[stage];
   const empty = count === 0;
   return (
-    <section aria-label={`${STAGE_LABELS[stage]}, ${count} profil${count > 1 ? 's' : ''}`} style={{ flex: empty ? '0 1 170px' : '1 1 250px', minWidth: empty ? 140 : 215, maxWidth: 340, display: 'flex', flexDirection: 'column' }}>
+    <section aria-label={`${STAGE_LABELS[stage]}, ${t(count > 1 ? '{n} profils' : '{n} profil', { n: count })}`} style={{ flex: empty ? '0 1 170px' : '1 1 250px', minWidth: empty ? 140 : 215, maxWidth: 340, display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px 9px' }}>
         <span aria-hidden style={{ width: 8, height: 8, borderRadius: 99, background: accent }} />
         <span style={{ fontWeight: 800, fontSize: FS.md, color: INK }}>{STAGE_LABELS[stage]}</span>
@@ -457,7 +458,7 @@ function StageColumn({ stage, count, dragging, children }: { stage: Col; count: 
       >
         {empty && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: FAINT, fontSize: FS.sm, textAlign: 'center', padding: '0 6px' }}>
-            {dragging ? 'Déposez le profil ici' : 'Aucun profil'}
+            {dragging ? t('Déposez le profil ici') : t('Aucun profil')}
           </div>
         )}
         {children}
@@ -497,15 +498,15 @@ function CardBody({ c, lifted }: { c: Candidature; lifted?: boolean }) {
             <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{salary}</span>
           </span>
         )}
-        {c.hireAnnounced && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: FS.sm, fontWeight: 800, borderRadius: 8, padding: '3px 8px', background: '#E7F3EA', color: '#256238' }}><BadgeCheck size={13} aria-hidden />Embauche annoncée</span>}
-        {locked && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: FS.sm, fontWeight: 800, borderRadius: 8, padding: '3px 8px', background: '#E7F3EA', color: '#256238' }}><Lock size={12} aria-hidden />Embauche validée</span>}
+        {c.hireAnnounced && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: FS.sm, fontWeight: 800, borderRadius: 8, padding: '3px 8px', background: '#E7F3EA', color: '#256238' }}><BadgeCheck size={13} aria-hidden />{t('Embauche annoncée')}</span>}
+        {locked && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: FS.sm, fontWeight: 800, borderRadius: 8, padding: '3px 8px', background: '#E7F3EA', color: '#256238' }}><Lock size={12} aria-hidden />{t('Embauche validée')}</span>}
         {!c.hireAnnounced && !locked && last && <span style={{ fontSize: FS.sm, fontWeight: 800, borderRadius: 8, padding: '3px 8px', background: DECISION_TONE[last].bg, color: DECISION_TONE[last].fg, whiteSpace: 'nowrap' }}>{DECISION_LABEL[last]}</span>}
       </div>
       {(since || nbComments > 0 || isNew) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, paddingTop: 9, borderTop: `1px solid ${LINE}`, fontSize: FS.sm, color: FAINT }}>
-          {isNew && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 800, color: BRAND }}><span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: BRAND }} />Nouveau</span>}
+          {isNew && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 800, color: BRAND }}><span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: BRAND }} />{t('Nouveau')}</span>}
           {since && <span>{since}</span>}
-          {nbComments > 0 && <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700 }}><MessageCircle size={13} strokeWidth={2.2} aria-hidden />{nbComments}<span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}> commentaire{nbComments > 1 ? 's' : ''}</span></span>}
+          {nbComments > 0 && <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700 }}><MessageCircle size={13} strokeWidth={2.2} aria-hidden />{nbComments}<span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}> {t(nbComments > 1 ? 'commentaires' : 'commentaire')}</span></span>}
         </div>
       )}
     </div>
@@ -518,7 +519,7 @@ function DraggableCard({ c, onOpen }: { c: Candidature; onOpen: () => void }) {
     <div
       ref={setNodeRef} {...listeners} {...attributes}
       role="button" tabIndex={0}
-      aria-label={`${fullName(c)}, ${c.candidat.posteActuel ?? ''}. Ouvrir le dossier`}
+      aria-label={`${fullName(c)}, ${c.candidat.posteActuel ?? ''}. ${t('Ouvrir le dossier')}`}
       className="pm-focus"
       onClick={onOpen}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
@@ -548,7 +549,7 @@ function MobileList({ data, onOpen }: { data: KanbanResponse; onOpen: (c: Candid
             {isOpen && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 10px 10px' }}>
                 {items.map((c) => (
-                  <div key={c.id} role="button" tabIndex={0} className="pm-focus" aria-label={`${fullName(c)}. Ouvrir le dossier`} onClick={() => onOpen(c)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(c); } }} style={{ borderRadius: 14 }}>
+                  <div key={c.id} role="button" tabIndex={0} className="pm-focus" aria-label={`${fullName(c)}. ${t('Ouvrir le dossier')}`} onClick={() => onOpen(c)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(c); } }} style={{ borderRadius: 14 }}>
                     <CardBody c={c} />
                   </div>
                 ))}
@@ -567,13 +568,13 @@ function ContactBlock({ contact, cvUrl }: { contact?: Candidature['candidat']['c
   const rows = [
     contact?.email && { Icon: Mail, label: contact.email, href: `mailto:${contact.email}` },
     contact?.telephone && { Icon: Phone, label: contact.telephone, href: `tel:${contact.telephone.replace(/\s+/g, '')}` },
-    linkedin && { Icon: Linkedin, label: 'Profil LinkedIn', href: linkedin, ext: true },
-    cvUrl && { Icon: FileText, label: 'Télécharger le CV', href: cvUrl, ext: true },
+    linkedin && { Icon: Linkedin, label: t('Profil LinkedIn'), href: linkedin, ext: true },
+    cvUrl && { Icon: FileText, label: t('Télécharger le CV'), href: cvUrl, ext: true },
   ].filter(Boolean) as Array<{ Icon: typeof Mail; label: string; href: string; ext?: boolean }>;
   if (rows.length === 0) return null;
   return (
     <div style={{ marginBottom: 24, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, padding: 16 }}>
-      <div style={LABEL}>{contact ? 'Coordonnées' : 'CV'}</div>
+      <div style={LABEL}>{contact ? t('Coordonnées') : 'CV'}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 8, marginTop: 10 }}>
         {rows.map(({ Icon, label, href, ext }) => (
           <a key={href} href={href} {...(ext ? { target: '_blank', rel: 'noopener noreferrer' } : {})} className="pm-btn"
@@ -591,7 +592,7 @@ function ContactBlock({ contact, cvUrl }: { contact?: Candidature['candidat']['c
 function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, onTab, onClose, onDecision, onMove }: {
   candidature: Candidature; stages: Col[]; repName: string;
   tab: 'activite' | 'commentaires'; prefillMention?: boolean;
-  onTab: (t: 'activite' | 'commentaires') => void;
+  onTab: (next: 'activite' | 'commentaires') => void;
   onClose: () => void;
   onDecision: (d: Decision) => void;
   onMove: (to: Col) => void;
@@ -628,16 +629,16 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
       {confirmClose && (
         <div role="alertdialog" aria-modal="true" aria-labelledby="pm-draft-title" style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(26,21,51,.5)' }}>
           <div style={{ width: 420, maxWidth: '100%', background: '#fff', borderRadius: 16, padding: 22, boxShadow: '0 30px 70px -30px rgba(26,21,51,.6)', fontFamily: "'Manrope',sans-serif" }}>
-            <h3 id="pm-draft-title" style={{ fontSize: FS.lg, fontWeight: 800, color: INK }}>Commentaire non envoyé</h3>
-            <p style={{ fontSize: FS.md, lineHeight: 1.5, color: TEXT, marginTop: 8 }}>Votre commentaire sur {fullName(c)} n’a pas été envoyé. Il reste enregistré en brouillon.</p>
+            <h3 id="pm-draft-title" style={{ fontSize: FS.lg, fontWeight: 800, color: INK }}>{t('Commentaire non envoyé')}</h3>
+            <p style={{ fontSize: FS.md, lineHeight: 1.5, color: TEXT, marginTop: 8 }}>{t('Votre commentaire sur {name} n’a pas été envoyé. Il reste enregistré en brouillon.', { name: fullName(c) })}</p>
             <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
-              <button className="pm-btn" onClick={() => { setConfirmClose(false); onClose(); }} style={{ flex: 1, fontSize: FS.md, fontWeight: 700, background: '#F2F3D8', color: BRAND, border: 'none', borderRadius: 11, padding: 11, cursor: 'pointer' }}>Fermer</button>
-              <button className="pm-btn" autoFocus onClick={() => { setConfirmClose(false); onTab('commentaires'); }} style={{ flex: 1.4, fontSize: FS.md, fontWeight: 800, background: BRAND, color: CREAM, border: 'none', borderRadius: 11, padding: 11, cursor: 'pointer' }}>Revenir au commentaire</button>
+              <button className="pm-btn" onClick={() => { setConfirmClose(false); onClose(); }} style={{ flex: 1, fontSize: FS.md, fontWeight: 700, background: '#F2F3D8', color: BRAND, border: 'none', borderRadius: 11, padding: 11, cursor: 'pointer' }}>{t('Fermer')}</button>
+              <button className="pm-btn" autoFocus onClick={() => { setConfirmClose(false); onTab('commentaires'); }} style={{ flex: 1.4, fontSize: FS.md, fontWeight: 800, background: BRAND, color: CREAM, border: 'none', borderRadius: 11, padding: 11, cursor: 'pointer' }}>{t('Revenir au commentaire')}</button>
             </div>
           </div>
         </div>
       )}
-      <aside ref={ref} role="dialog" aria-modal="true" aria-label={`Dossier de ${fullName(c)}`} className="pm-drawer" style={{ position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 61, width: 1000, maxWidth: '96vw', background: '#FCFCF7', boxShadow: '-26px 0 70px -30px rgba(26,21,51,.55)', display: 'flex', flexDirection: 'column' }}>
+      <aside ref={ref} role="dialog" aria-modal="true" aria-label={t('Dossier de {name}', { name: fullName(c) })} className="pm-drawer" style={{ position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 61, width: 1000, maxWidth: '96vw', background: '#FCFCF7', boxShadow: '-26px 0 70px -30px rgba(26,21,51,.55)', display: 'flex', flexDirection: 'column' }}>
         {/* En-tête */}
         <div style={{ flexShrink: 0, background: BRAND, padding: '18px 20px 14px', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -646,24 +647,24 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
               <h2 style={{ fontWeight: 800, fontSize: FS.xl, color: '#fff', lineHeight: 1.2 }}>{fullName(c)}</h2>
               {(c.candidat.posteActuel || c.candidat.entrepriseActuelle) && <div style={{ fontSize: FS.base, color: CREAM, fontWeight: 600, marginTop: 3 }}>{[c.candidat.posteActuel, c.candidat.entrepriseActuelle].filter(Boolean).join(' · ')}</div>}
             </div>
-            <button className="pm-btn" data-autofocus onClick={requestClose} aria-label="Fermer le dossier" style={{ alignSelf: 'flex-start', width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(230,233,175,.3)', background: 'transparent', color: CREAM, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} strokeWidth={2.4} /></button>
+            <button className="pm-btn" data-autofocus onClick={requestClose} aria-label={t('Fermer le dossier')} style={{ alignSelf: 'flex-start', width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(230,233,175,.3)', background: 'transparent', color: CREAM, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} strokeWidth={2.4} /></button>
           </div>
           {/* Étapes : cliquer pour faire avancer (alternative au glisser-déposer) */}
-          <div role="group" aria-label="Étape du recrutement" className="pm-scroll" style={{ position: 'relative', display: 'flex', gap: 6, marginTop: 14, overflowX: 'auto', paddingBottom: 2 }}>
+          <div role="group" aria-label={t('Étape du recrutement')} className="pm-scroll" style={{ position: 'relative', display: 'flex', gap: 6, marginTop: 14, overflowX: 'auto', paddingBottom: 2 }}>
             {stages.map((s) => {
               const on = c.column === s;
               return (
                 <button key={s} className="pm-chip" disabled={locked || on} aria-current={on ? 'step' : undefined} onClick={() => onMove(s)}
-                  aria-label={on ? `${STAGE_LABELS[s]}, étape actuelle` : locked ? STAGE_LABELS[s] : `Passer en « ${STAGE_LABELS[s]} »`}
-                  title={locked ? 'Embauche validée' : on ? 'Étape actuelle' : `Passer en « ${STAGE_LABELS[s]} »`}
+                  aria-label={on ? t('{stage}, étape actuelle', { stage: STAGE_LABELS[s] }) : locked ? STAGE_LABELS[s] : t('Passer en « {stage} »', { stage: STAGE_LABELS[s] })}
+                  title={locked ? t('Embauche validée') : on ? t('Étape actuelle') : t('Passer en « {stage} »', { stage: STAGE_LABELS[s] })}
                   style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FS.sm, fontWeight: 800, padding: '6px 11px', borderRadius: 999, cursor: locked || on ? 'default' : 'pointer', border: `1px solid ${on ? CREAM : 'rgba(230,233,175,.28)'}`, background: on ? CREAM : 'transparent', color: on ? BRAND : CREAM, opacity: locked && !on ? 0.5 : 1 }}>
                   <span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: on ? STAGE_ACCENT[s] : 'rgba(230,233,175,.6)' }} />{STAGE_LABELS[s]}
                 </button>
               );
             })}
           </div>
-          {locked && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><Lock size={13} aria-hidden />Embauche validée</div>}
-          {c.hireAnnounced && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><BadgeCheck size={13} aria-hidden />Embauche annoncée, en cours de validation par HumanUp</div>}
+          {locked && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><Lock size={13} aria-hidden />{t('Embauche validée')}</div>}
+          {c.hireAnnounced && <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: FS.sm, color: CREAM }}><BadgeCheck size={13} aria-hidden />{t('Embauche annoncée, en cours de validation par HumanUp')}</div>}
         </div>
 
         <div className="pm-drawer-body" style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 380px' }}>
@@ -673,13 +674,13 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
             {c.stage !== 'PLACE' && c.stage !== 'REFUSE' && (
               <div style={{ marginBottom: 24, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-                  <div style={LABEL}>Votre avis</div>
-                  {last && <span style={{ fontSize: FS.sm, color: MUTED }}>Actuel : <strong style={{ color: DECISION_TONE[last].fg }}>{DECISION_LABEL[last]}</strong></span>}
+                  <div style={LABEL}>{t('Votre avis')}</div>
+                  {last && <span style={{ fontSize: FS.sm, color: MUTED }}>{t('Actuel :')} <strong style={{ color: DECISION_TONE[last].fg }}>{DECISION_LABEL[last]}</strong></span>}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginTop: 10 }}>
-                  {decisionBtn('RENCONTRER', <Check size={17} aria-hidden />, 'Rencontrer', DECISION_TONE.RENCONTRER)}
-                  {decisionBtn('A_DISCUTER', <MessageSquare size={17} aria-hidden />, 'À discuter', DECISION_TONE.A_DISCUTER)}
-                  {decisionBtn('ECARTER', <X size={17} aria-hidden />, 'Écarter', DECISION_TONE.ECARTER)}
+                  {decisionBtn('RENCONTRER', <Check size={17} aria-hidden />, t('Rencontrer'), DECISION_TONE.RENCONTRER)}
+                  {decisionBtn('A_DISCUTER', <MessageSquare size={17} aria-hidden />, t('À discuter'), DECISION_TONE.A_DISCUTER)}
+                  {decisionBtn('ECARTER', <X size={17} aria-hidden />, t('Écarter'), DECISION_TONE.ECARTER)}
                 </div>
               </div>
             )}
@@ -688,7 +689,7 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
 
             {c.candidat.aiPitchShort && (
               <>
-                <div style={LABEL}>Synthèse</div>
+                <div style={LABEL}>{t('Synthèse')}</div>
                 <p style={{ fontSize: FS.md, lineHeight: 1.65, color: TEXT, marginTop: 8 }}>{c.candidat.aiPitchShort}</p>
               </>
             )}
@@ -702,7 +703,7 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
                 ))}
               </div>
             )}
-            {bullets.length > 0 && (sections.length > 0 || infos.length > 0) && <div style={{ ...LABEL, marginTop: 24 }}>Adéquation au poste</div>}
+            {bullets.length > 0 && (sections.length > 0 || infos.length > 0) && <div style={{ ...LABEL, marginTop: 24 }}>{t('Adéquation au poste')}</div>}
             {bullets.length > 0 && (
               <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {bullets.slice(0, 8).map((b, i) => (
@@ -721,13 +722,13 @@ function ProfileDrawer({ candidature: c, stages, repName, tab, prefillMention, o
                 </ul>
               </div>
             ))}
-            {!c.candidat.aiPitchShort && bullets.length === 0 && sections.length === 0 && <p style={{ fontSize: FS.md, color: MUTED }}>Le dossier détaillé sera disponible sous peu.</p>}
+            {!c.candidat.aiPitchShort && bullets.length === 0 && sections.length === 0 && <p style={{ fontSize: FS.md, color: MUTED }}>{t('Le dossier détaillé sera disponible sous peu.')}</p>}
           </div>
 
           {/* Panneau latéral : Activité / Commentaires */}
           <div className="pm-drawer-side" style={{ minHeight: 0, display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${LINE}`, background: '#F7F6F0' }}>
-            <div role="tablist" aria-label="Suivi du profil" style={{ flexShrink: 0, display: 'flex', gap: 6, padding: '12px 16px', borderBottom: `1px solid ${LINE}`, background: '#FCFCF7' }}>
-              {([['activite', 'Activité'], ['commentaires', 'Commentaires']] as const).map(([k, label]) => {
+            <div role="tablist" aria-label={t('Suivi du profil')} style={{ flexShrink: 0, display: 'flex', gap: 6, padding: '12px 16px', borderBottom: `1px solid ${LINE}`, background: '#FCFCF7' }}>
+              {([['activite', t('Activité')], ['commentaires', t('Commentaires')]] as const).map(([k, label]) => {
                 const on = tab === k;
                 return (
                   <button key={k} role="tab" aria-selected={on} className="pm-tab" onClick={() => onTab(k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FS.md, fontWeight: on ? 800 : 600, padding: '7px 13px', borderRadius: 9, border: 'none', cursor: 'pointer', background: on ? '#EDEBFA' : 'transparent', color: on ? BRAND : MUTED }}>
@@ -771,8 +772,8 @@ function ActivityFeed({ candidatureId }: { candidatureId: string }) {
     return { el: <ArrowRight {...s} />, bg: STAGE_TINT[st], fg: STAGE_ACCENT[st] };
   };
 
-  if (!items) return <div style={{ padding: 20, fontSize: FS.base, color: FAINT }}>Chargement…</div>;
-  if (items.length === 0) return <div style={{ padding: 20, fontSize: FS.base, color: FAINT }}>Pas encore d’activité sur ce profil.</div>;
+  if (!items) return <div style={{ padding: 20, fontSize: FS.base, color: FAINT }}>{t('Chargement…')}</div>;
+  if (items.length === 0) return <div style={{ padding: 20, fontSize: FS.base, color: FAINT }}>{t('Pas encore d’activité sur ce profil.')}</div>;
   return (
     <ol className="pm-scroll pm-thread-list" style={{ listStyle: 'none', margin: 0, flex: 1, overflowY: 'auto', padding: '18px 18px 24px' }}>
       {items.map((it, i) => {
@@ -789,7 +790,7 @@ function ActivityFeed({ candidatureId }: { candidatureId: string }) {
                 {it.kind === 'INTERVIEW' && <strong style={{ color: INK }}> · {fmtInterview(it.at)}</strong>}
               </div>
               {it.detail && <div style={{ fontSize: FS.base, lineHeight: 1.5, color: MUTED, marginTop: 5, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 10, padding: '7px 10px' }}>{it.detail}</div>}
-              <div style={{ fontSize: FS.sm, color: FAINT, marginTop: 4 }}>{upcoming ? 'À venir' : relTime(it.at)}</div>
+              <div style={{ fontSize: FS.sm, color: FAINT, marginTop: 4 }}>{upcoming ? t('À venir') : relTime(it.at)}</div>
             </div>
           </li>
         );
@@ -813,7 +814,7 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
   const ok = to === 'PERDU' ? reason.trim().length > 0 : to === 'SCREENING' ? !!date && who.trim().length > 0 : true;
   const field: React.CSSProperties = { width: '100%', marginTop: 6, fontSize: FS.md, padding: '11px 13px', borderRadius: 11, border: '1.5px solid rgba(34,23,122,.18)', background: '#fff', outline: 'none', fontFamily: "'Manrope',sans-serif", color: INK };
   const label: React.CSSProperties = { fontSize: FS.sm, fontWeight: 800, color: MUTED, marginTop: 14, display: 'block' };
-  const title = to === 'PERDU' ? `Écarter ${fullName(c)} ?` : to === 'ENGAGE' ? `Annoncer l'embauche de ${fullName(c)} ?` : `Planifier le Screening avec ${fullName(c)}`;
+  const title = to === 'PERDU' ? t('Écarter {name} ?', { name: fullName(c) }) : to === 'ENGAGE' ? t('Annoncer l’embauche de {name} ?', { name: fullName(c) }) : t('Planifier le Screening avec {name}', { name: fullName(c) });
   return (
     <>
       <div onClick={onCancel} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(26,21,51,.42)' }} />
@@ -821,35 +822,35 @@ function MoveDialog({ c, to, repName, fromDecision, onCancel, onConfirm, onSkip 
         <h3 id="pm-move-title" style={{ fontFamily: DISPLAY, fontSize: FS.lg + 2, color: INK, letterSpacing: '-.01em', lineHeight: 1.25 }}>{title}</h3>
         {to === 'PERDU' && (
           <>
-            <label htmlFor="pm-reason" style={label}>Pourquoi ?</label>
-            <textarea id="pm-reason" data-autofocus value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex. : expérience trop éloignée des grands comptes…" style={{ ...field, minHeight: 84, resize: 'vertical' }} />
+            <label htmlFor="pm-reason" style={label}>{t('Pourquoi ?')}</label>
+            <textarea id="pm-reason" data-autofocus value={reason} onChange={e => setReason(e.target.value)} placeholder={t('Ex. : expérience trop éloignée des grands comptes…')} style={{ ...field, minHeight: 84, resize: 'vertical' }} />
           </>
         )}
         {to === 'SCREENING' && (
           <>
-            <label htmlFor="pm-date" style={label}>Date et heure de l'entretien</label>
+            <label htmlFor="pm-date" style={label}>{t('Date et heure de l’entretien')}</label>
             <input id="pm-date" data-autofocus type="datetime-local" value={date} onChange={e => setDate(e.target.value)} style={field} />
-            <label htmlFor="pm-who" style={label}>Avec qui chez vous ?</label>
-            <input id="pm-who" value={who} onChange={e => setWho(e.target.value)} placeholder="Prénom Nom, fonction" style={field} />
+            <label htmlFor="pm-who" style={label}>{t('Avec qui chez vous ?')}</label>
+            <input id="pm-who" value={who} onChange={e => setWho(e.target.value)} placeholder={t('Prénom Nom, fonction')} style={field} />
           </>
         )}
         {to === 'ENGAGE' && (
           <p style={{ fontSize: FS.md, lineHeight: 1.6, color: TEXT, marginTop: 12 }}>
-            {repName || 'HumanUp'} finalise l’embauche avec vous (date de démarrage, contrat). La carte passera en « Engagé » une fois validée.
+            {t('{rep} finalise l’embauche avec vous (date de démarrage, contrat). La carte passera en « Engagé » une fois validée.', { rep: repName || 'HumanUp' })}
           </p>
         )}
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-          <button className="pm-btn" onClick={onCancel} style={{ flex: 1, fontSize: FS.md, fontWeight: 700, background: 'transparent', color: MUTED, border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 11, padding: 11, cursor: 'pointer' }}>Annuler</button>
+          <button className="pm-btn" onClick={onCancel} style={{ flex: 1, fontSize: FS.md, fontWeight: 700, background: 'transparent', color: MUTED, border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 11, padding: 11, cursor: 'pointer' }}>{t('Annuler')}</button>
           <button
             className="pm-btn"
             disabled={!ok}
             onClick={() => onConfirm(to === 'PERDU' ? { reason: reason.trim() } : to === 'SCREENING' ? { dateEntretienClient: new Date(date).toISOString(), interlocuteurClient: who.trim() } : {})}
             style={{ flex: 1, fontSize: FS.md, fontWeight: 800, background: ok ? BRAND : '#C4C1D0', color: CREAM, border: 'none', borderRadius: 11, padding: 11, cursor: ok ? 'pointer' : 'default' }}
-          >{to === 'PERDU' ? 'Écarter' : to === 'ENGAGE' ? 'Annoncer' : 'Planifier'}</button>
+          >{to === 'PERDU' ? t('Écarter') : to === 'ENGAGE' ? t('Annoncer') : t('Planifier')}</button>
         </div>
         {to === 'SCREENING' && fromDecision && (
           <button className="pm-btn" onClick={onSkip} style={{ width: '100%', marginTop: 10, fontSize: FS.base, fontWeight: 700, background: 'transparent', color: BRAND, border: 'none', padding: 8, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}>
-            Je n’ai pas encore de date
+            {t('Je n’ai pas encore de date')}
           </button>
         )}
       </div>
@@ -927,7 +928,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
     const q = query.toLowerCase();
     const list = people.filter((p) => p.label.toLowerCase().includes(q) || p.sub.toLowerCase().includes(q)).slice(0, 6);
     if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(query) && !list.some((p) => p.sub.toLowerCase() === q)) {
-      list.push({ key: q, label: query, sub: 'Inviter par email', mention: { kind: 'external', email: query } });
+      list.push({ key: q, label: query, sub: t('Inviter par email'), mention: { kind: 'external', email: query } });
     }
     return list;
   }, [query, people]);
@@ -959,7 +960,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
     const res = await portalFetch(`/candidatures/${candidatureId}/comment`, { method: 'POST', body: JSON.stringify({ content, mentions }) });
     setBusy(false);
     if (res.ok) { setText(''); setPicked([]); setQuery(null); setRestored(false); void load(); onPosted(); }
-    else { const err = await res.json().catch(() => null); setError(err?.message || 'Le commentaire n’a pas pu être envoyé.'); }
+    else { const err = await res.json().catch(() => null); setError(err?.message || t('Le commentaire n’a pas pu être envoyé.')); }
   }
 
   const renderContent = (content: string, mentions: PortalCommentRow['mentions']) => {
@@ -974,10 +975,10 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
   return (
     <>
       <div className="pm-scroll pm-thread-list" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 16px 8px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {rows === null && <p style={{ fontSize: FS.base, color: FAINT }}>Chargement…</p>}
+        {rows === null && <p style={{ fontSize: FS.base, color: FAINT }}>{t('Chargement…')}</p>}
         {rows?.length === 0 && (
           <div style={{ margin: 'auto 0', textAlign: 'center', color: FAINT, fontSize: FS.base, lineHeight: 1.6, padding: '24px 8px' }}>
-            Aucun commentaire.
+            {t('Aucun commentaire.')}
           </div>
         )}
         {rows?.map((r) => (
@@ -997,7 +998,7 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
 
       <div style={{ flexShrink: 0, padding: '12px 16px 16px', borderTop: `1px solid ${LINE}`, background: '#FCFCF7' }}>
         <div style={{ position: 'relative' }}>
-          <label htmlFor="pm-comment" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Écrire un commentaire</label>
+          <label htmlFor="pm-comment" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>{t('Écrire un commentaire')}</label>
           <textarea
             id="pm-comment" ref={ta} value={text}
             onChange={(e) => onChange(e.target.value)}
@@ -1006,11 +1007,11 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
               if (e.key === 'Enter' && suggestions.length > 0 && query !== null) { e.preventDefault(); pick(suggestions[0]); return; }
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); }
             }}
-            placeholder="Écrire un commentaire, @ pour mentionner"
+            placeholder={t('Écrire un commentaire, @ pour mentionner')}
             style={{ width: '100%', minHeight: 76, resize: 'vertical', fontFamily: "'Manrope',sans-serif", fontSize: FS.md, lineHeight: 1.5, padding: '11px 13px', borderRadius: 12, border: '1.5px solid rgba(34,23,122,.18)', background: '#fff', outline: 'none', color: INK }}
           />
           {query !== null && suggestions.length > 0 && (
-            <div role="listbox" aria-label="Personnes à identifier" style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', marginBottom: 6, background: '#fff', border: '1px solid rgba(34,23,122,.14)', borderRadius: 12, boxShadow: '0 18px 40px -20px rgba(26,21,51,.45)', overflow: 'hidden', zIndex: 5 }}>
+            <div role="listbox" aria-label={t('Personnes à identifier')} style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', marginBottom: 6, background: '#fff', border: '1px solid rgba(34,23,122,.14)', borderRadius: 12, boxShadow: '0 18px 40px -20px rgba(26,21,51,.45)', overflow: 'hidden', zIndex: 5 }}>
               {suggestions.map((p) => (
                 <button key={p.key} role="option" aria-selected={false} onMouseDown={(e) => { e.preventDefault(); pick(p); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '9px 12px', background: 'transparent', border: 'none', borderBottom: '1px solid rgba(34,23,122,.06)', cursor: 'pointer' }}>
                   <PersonAvatar name={p.label} photo={p.photo} size={28} bg={p.mention.kind === 'internal' ? BRAND : '#F2F3D8'} fg={p.mention.kind === 'internal' ? CREAM : BRAND} />
@@ -1024,10 +1025,10 @@ function CommentThread({ candidatureId, repName, prefillMention, onCount, onPost
           )}
         </div>
         {error && <p role="alert" style={{ fontSize: FS.sm, color: '#9E2F1A', fontWeight: 700, marginTop: 8 }}>{error}</p>}
-        {restored && text.trim() && !error && <p style={{ fontSize: FS.sm, color: MUTED, fontWeight: 700, marginTop: 8 }}>Brouillon non envoyé</p>}
+        {restored && text.trim() && !error && <p style={{ fontSize: FS.sm, color: MUTED, fontWeight: 700, marginTop: 8 }}>{t('Brouillon non envoyé')}</p>}
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button className="pm-btn" onClick={startMention} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FS.base, fontWeight: 700, background: '#F2F3D8', color: BRAND, border: 'none', borderRadius: 11, padding: '0 14px', cursor: 'pointer' }}><AtSign size={14} aria-hidden />Mentionner</button>
-          <button className="pm-btn" disabled={busy || !text.trim()} onClick={send} style={{ flex: 1, fontSize: FS.md, fontWeight: 800, background: text.trim() ? BRAND : '#C4C1D0', color: CREAM, border: 'none', borderRadius: 11, padding: 11, cursor: text.trim() ? 'pointer' : 'default' }}>Envoyer</button>
+          <button className="pm-btn" onClick={startMention} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FS.base, fontWeight: 700, background: '#F2F3D8', color: BRAND, border: 'none', borderRadius: 11, padding: '0 14px', cursor: 'pointer' }}><AtSign size={14} aria-hidden />{t('Mentionner')}</button>
+          <button className="pm-btn" disabled={busy || !text.trim()} onClick={send} style={{ flex: 1, fontSize: FS.md, fontWeight: 800, background: text.trim() ? BRAND : '#C4C1D0', color: CREAM, border: 'none', borderRadius: 11, padding: 11, cursor: text.trim() ? 'pointer' : 'default' }}>{t('Envoyer')}</button>
         </div>
       </div>
     </>
@@ -1054,19 +1055,19 @@ function OfferSwitcher({ current, title, logo, company, compact }: { current: st
       {open && (
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 50 }} />
-          <div role="listbox" aria-label="Changer d'offre" style={{ position: 'absolute', left: 0, top: 'calc(100% + 6px)', zIndex: 51, width: 360, maxWidth: 'calc(100vw - 32px)', background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, boxShadow: '0 18px 40px -20px rgba(26,21,51,.45)', padding: 6 }}>
-            {!offres && <p style={{ padding: 10, fontSize: FS.base, color: FAINT }}>Chargement…</p>}
+          <div role="listbox" aria-label={t('Changer d’offre')} style={{ position: 'absolute', left: 0, top: 'calc(100% + 6px)', zIndex: 51, width: 360, maxWidth: 'calc(100vw - 32px)', background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, boxShadow: '0 18px 40px -20px rgba(26,21,51,.45)', padding: 6 }}>
+            {!offres && <p style={{ padding: 10, fontSize: FS.base, color: FAINT }}>{t('Chargement…')}</p>}
             {offres?.map((o) => (
               <button key={o.id} role="option" aria-selected={o.id === current} onClick={() => { setOpen(false); if (o.id !== current) navigate(`/portail/mandat/${o.id}`); }}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', background: o.id === current ? '#EDEBFA' : 'transparent', border: 'none', borderRadius: 8, padding: '9px 10px', cursor: 'pointer' }}>
                 <span style={{ minWidth: 0, flex: 1 }}>
                   <span style={{ display: 'block', fontSize: FS.base, fontWeight: 800, color: o.id === current ? BRAND : INK }}>{o.titrePoste}</span>
-                  {!['OUVERT', 'EN_COURS'].includes(o.statut) && <span style={{ display: 'block', fontSize: FS.sm, color: FAINT }}>{o.statut === 'GAGNE' ? 'Pourvue' : 'Terminée'}</span>}
+                  {!['OUVERT', 'EN_COURS'].includes(o.statut) && <span style={{ display: 'block', fontSize: FS.sm, color: FAINT }}>{o.statut === 'GAGNE' ? t('Pourvue') : t('Terminée')}</span>}
                 </span>
                 {o.toReview > 0 && <span style={{ fontSize: FS.xs, fontWeight: 800, color: BRAND, background: '#EDEBFA', borderRadius: 99, padding: '2px 8px' }}>{o.toReview}</span>}
               </button>
             ))}
-            <button onClick={() => { setOpen(false); navigate('/portail/offres'); }} style={{ width: '100%', textAlign: 'left', fontSize: FS.base, fontWeight: 700, color: BRAND, background: 'transparent', border: 'none', borderTop: `1px solid ${LINE}`, marginTop: 4, padding: '10px 10px 6px', cursor: 'pointer' }}>Voir toutes les offres</button>
+            <button onClick={() => { setOpen(false); navigate('/portail/offres'); }} style={{ width: '100%', textAlign: 'left', fontSize: FS.base, fontWeight: 700, color: BRAND, background: 'transparent', border: 'none', borderTop: `1px solid ${LINE}`, marginTop: 4, padding: '10px 10px 6px', cursor: 'pointer' }}>{t('Voir toutes les offres')}</button>
           </div>
         </>
       )}

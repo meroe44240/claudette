@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router';
+// Libellés attendus en français : on fixe la langue avant le chargement des modules.
+vi.hoisted(() => { localStorage.setItem('ats.lang', 'fr'); });
 import PortalMandatPage from './mandat';
 
 const candidature = {

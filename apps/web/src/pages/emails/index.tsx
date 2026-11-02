@@ -18,6 +18,7 @@ import {
 import { api } from '../../lib/api-client';
 import { toast, ToastContainer } from '../../components/ui/Toast';
 import PageHeader from '../../components/ui/PageHeader';
+import { t, LOCALE } from '../../lib/i18n';
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -50,9 +51,9 @@ interface EmailsResponse {
 type FilterType = 'all' | 'inbox' | 'sent';
 
 const FILTER_OPTIONS: { value: FilterType; label: string; icon: typeof Mail }[] = [
-  { value: 'all', label: 'Tous', icon: Mail },
-  { value: 'inbox', label: 'Reçus', icon: Inbox },
-  { value: 'sent', label: 'Envoyés', icon: Send },
+  { value: 'all', label: t('Tous'), icon: Mail },
+  { value: 'inbox', label: t('Reçus'), icon: Inbox },
+  { value: 'sent', label: t('Envoyés'), icon: Send },
 ];
 
 // ─── HELPER ──────────────────────────────────────────────────────────────────
@@ -65,15 +66,15 @@ function formatEmailDate(dateStr: string): string {
     const diffMin = Math.floor(diffMs / 60000);
     const diffH = Math.floor(diffMs / 3600000);
 
-    if (diffMin < 1) return 'À l\'instant';
-    if (diffMin < 60) return `Il y a ${diffMin} min`;
-    if (diffH < 24) return `Il y a ${diffH}h`;
+    if (diffMin < 1) return t("À l'instant");
+    if (diffMin < 60) return t('Il y a {n} min', { n: diffMin });
+    if (diffH < 24) return t('Il y a {n}h', { n: diffH });
 
     // Same year? Show day + month
     if (d.getFullYear() === now.getFullYear()) {
-      return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+      return d.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' });
     }
-    return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+    return d.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
   } catch {
     return dateStr;
   }
@@ -119,7 +120,7 @@ export default function EmailsPage() {
         setConnected(false);
         setMessages([]);
       } else {
-        toast('error', err?.message || 'Impossible de charger les emails.');
+        toast('error', err?.message || t('Impossible de charger les emails.'));
       }
     } finally {
       setLoading(false);
@@ -138,10 +139,10 @@ export default function EmailsPage() {
     setSyncing(true);
     try {
       await api.post('/integrations/email/sync', {});
-      toast('success', 'Synchronisation terminée !');
+      toast('success', t('Synchronisation terminée !'));
       fetchEmails();
     } catch (err: any) {
-      toast('error', err?.message || 'Erreur de synchronisation.');
+      toast('error', err?.message || t('Erreur de synchronisation.'));
     } finally {
       setSyncing(false);
     }
@@ -183,22 +184,22 @@ export default function EmailsPage() {
       <div>
         <ToastContainer />
         <div className="mb-6">
-          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 32, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1.05 }}>Emails</h1>
-          <p className="mt-1" style={{ fontSize: 14, color: '#6E6A85' }}>Vos emails Gmail synchronisés</p>
+          <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 32, letterSpacing: '-0.03em', color: '#1A1533', lineHeight: 1.05 }}>{t('Emails')}</h1>
+          <p className="mt-1" style={{ fontSize: 14, color: '#6E6A85' }}>{t('Vos emails Gmail synchronisés')}</p>
         </div>
         <div className="bg-white rounded-xl border border-neutral-100 p-12 text-center">
           <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
             <AlertCircle size={32} className="text-amber-500" />
           </div>
-          <h2 className="text-[17px] font-semibold text-neutral-900 mb-2">Gmail non connecté</h2>
+          <h2 className="text-[17px] font-semibold text-neutral-900 mb-2">{t('Gmail non connecté')}</h2>
           <p className="text-[14px] text-neutral-500 mb-6 max-w-md mx-auto">
-            Connectez votre compte Gmail dans les paramètres pour synchroniser vos emails.
+            {t('Connectez votre compte Gmail dans les paramètres pour synchroniser vos emails.')}
           </p>
           <button
             onClick={() => navigate('/settings/integrations')}
             className="h-10 px-5 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-[14px] font-medium transition-colors"
           >
-            Configurer Gmail
+            {t('Configurer Gmail')}
           </button>
         </div>
       </div>
@@ -210,9 +211,9 @@ export default function EmailsPage() {
       <ToastContainer />
 
       <PageHeader
-        title="Emails"
-        subtitle="Vos emails Gmail synchronisés"
-        breadcrumbs={[{ label: 'Emails' }]}
+        title={t('Emails')}
+        subtitle={t('Vos emails Gmail synchronisés')}
+        breadcrumbs={[{ label: t('Emails') }]}
         actions={
           <button
             onClick={handleSync}
@@ -220,7 +221,7 @@ export default function EmailsPage() {
             className="flex items-center gap-2 h-9 px-4 bg-white border border-neutral-200 rounded-lg text-[13px] font-medium text-neutral-600 hover:bg-neutral-50 transition-colors disabled:opacity-60"
           >
             <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-            {syncing ? 'Sync...' : 'Synchroniser'}
+            {syncing ? t('Sync...') : t('Synchroniser')}
           </button>
         }
       />
@@ -256,7 +257,7 @@ export default function EmailsPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher par nom ou sujet..."
+            placeholder={t('Rechercher par nom ou sujet...')}
             className="w-full h-9 pl-9 pr-3 text-[13px] border border-neutral-200 rounded-lg focus:border-primary-400 focus:ring-2 focus:ring-primary-100 outline-none transition-all placeholder:text-neutral-400"
           />
         </div>
@@ -267,13 +268,13 @@ export default function EmailsPage() {
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 size={24} className="animate-spin text-neutral-400" />
-            <span className="ml-3 text-[14px] text-neutral-500">Chargement des emails...</span>
+            <span className="ml-3 text-[14px] text-neutral-500">{t('Chargement des emails...')}</span>
           </div>
         ) : messages.length === 0 ? (
           <div className="text-center py-16">
             <MailOpen size={32} className="text-neutral-300 mx-auto mb-3" />
             <p className="text-[14px] text-neutral-500">
-              {searchDebounced ? 'Aucun email trouvé pour cette recherche.' : 'Aucun email à afficher.'}
+              {searchDebounced ? t('Aucun email trouvé pour cette recherche.') : t('Aucun email à afficher.')}
             </p>
           </div>
         ) : (
@@ -316,7 +317,7 @@ export default function EmailsPage() {
                     <div className="flex items-center gap-2 mb-0.5">
                       {/* Sender name */}
                       <span className={`text-[14px] truncate ${!msg.isRead ? 'font-semibold text-neutral-900' : 'font-medium text-neutral-700'}`}>
-                        {msg.isSent ? `À : ${msg.to?.split('<')[0]?.trim() || msg.to || ''}` : msg.from.name}
+                        {msg.isSent ? t('À : {to}', { to: msg.to?.split('<')[0]?.trim() || msg.to || '' }) : msg.from.name}
                       </span>
 
                       {/* Contact badge */}
@@ -327,7 +328,7 @@ export default function EmailsPage() {
                             goToContact(msg.contact!);
                           }}
                           className="shrink-0 flex items-center gap-1 px-2 py-0.5 bg-primary-50 text-primary-600 rounded-md text-[11px] font-medium hover:bg-primary-100 transition-colors"
-                          title={`Voir la fiche ${msg.contact.type}`}
+                          title={msg.contact.type === 'candidat' ? t('Voir la fiche candidat') : t('Voir la fiche client')}
                         >
                           <User size={10} />
                           {msg.contact.prenom} {msg.contact.nom}
@@ -368,15 +369,15 @@ export default function EmailsPage() {
               className="flex items-center gap-1.5 text-[13px] font-medium text-neutral-600 hover:text-neutral-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft size={14} />
-              Précédent
+              {t('Précédent')}
             </button>
-            <span className="text-[12px] text-neutral-400">Page {currentPage + 1}</span>
+            <span className="text-[12px] text-neutral-400">{t('Page {n}', { n: currentPage + 1 })}</span>
             <button
               onClick={handleNextPage}
               disabled={!nextPageToken}
               className="flex items-center gap-1.5 text-[13px] font-medium text-neutral-600 hover:text-neutral-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              Suivant
+              {t('Suivant')}
               <ChevronRight size={14} />
             </button>
           </div>

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { toast } from '../ui/Toast';
+import { t, LOCALE } from '../../lib/i18n';
 
 // ─── TYPES ──────────────────────────────────────────
 
@@ -158,17 +159,17 @@ function BriefSkeleton() {
 function formatBriefAsText(brief: BriefData, entityName: string): string {
   const lines: string[] = [];
 
-  lines.push(`BRIEF PRE-APPEL - ${entityName}`);
+  lines.push(t('BRIEF PRE-APPEL - {name}', { name: entityName }));
   lines.push('='.repeat(50));
   lines.push('');
 
   // Contact snapshot
   const cs = brief.contact_snapshot;
-  lines.push('QUI');
+  lines.push(t('QUI'));
   lines.push(`  ${cs.name} - ${cs.title}`);
   lines.push(`  ${cs.company}`);
-  lines.push(`  Statut : ${cs.relationship_status}`);
-  lines.push(`  Dernier contact : ${cs.last_interaction}`);
+  lines.push(t('  Statut : {v}', { v: cs.relationship_status }));
+  lines.push(t('  Dernier contact : {v}', { v: cs.last_interaction }));
   if (cs.key_info?.length > 0) {
     cs.key_info.forEach((info) => lines.push(`  - ${info}`));
   }
@@ -176,7 +177,7 @@ function formatBriefAsText(brief: BriefData, entityName: string): string {
 
   // Events since last contact
   if (brief.what_happened_since_last_contact?.length > 0) {
-    lines.push('DEPUIS VOTRE DERNIER ECHANGE');
+    lines.push(t('DEPUIS VOTRE DERNIER ECHANGE'));
     brief.what_happened_since_last_contact.forEach((e) => lines.push(`  - ${e}`));
     lines.push('');
   }
@@ -184,21 +185,21 @@ function formatBriefAsText(brief: BriefData, entityName: string): string {
   // Web intelligence
   const wi = brief.web_intelligence;
   if (wi) {
-    lines.push('INTELLIGENCE WEB');
+    lines.push(t('INTELLIGENCE WEB'));
     if (wi.company_news?.length > 0) {
-      lines.push('  Actualites :');
+      lines.push(t('  Actualites :'));
       wi.company_news.forEach((n) => {
         lines.push(`    - ${n.headline}`);
         lines.push(`      ${n.summary}`);
-        lines.push(`      Pertinence : ${n.relevance}`);
+        lines.push(t('      Pertinence : {v}', { v: n.relevance }));
       });
     }
     if (wi.hiring_signals?.length > 0) {
-      lines.push('  Signaux recrutement :');
+      lines.push(t('  Signaux recrutement :'));
       wi.hiring_signals.forEach((s) => lines.push(`    - ${s}`));
     }
     if (wi.contact_activity?.length > 0) {
-      lines.push('  Activite du contact :');
+      lines.push(t('  Activite du contact :'));
       wi.contact_activity.forEach((a) => lines.push(`    - ${a}`));
     }
     lines.push('');
@@ -206,25 +207,25 @@ function formatBriefAsText(brief: BriefData, entityName: string): string {
 
   // Talking points
   if (brief.talking_points?.length > 0) {
-    lines.push('POINTS A ABORDER');
+    lines.push(t('POINTS A ABORDER'));
     brief.talking_points.forEach((tp, i) => {
       lines.push(`  ${i + 1}. ${tp.topic}`);
-      lines.push(`     Contexte : ${tp.context}`);
-      lines.push(`     Angle : ${tp.suggested_angle}`);
+      lines.push(t('     Contexte : {v}', { v: tp.context }));
+      lines.push(t('     Angle : {v}', { v: tp.suggested_angle }));
     });
     lines.push('');
   }
 
   // Risks
   if (brief.risks_and_warnings?.length > 0) {
-    lines.push('RISQUES ET AVERTISSEMENTS');
+    lines.push(t('RISQUES ET AVERTISSEMENTS'));
     brief.risks_and_warnings.forEach((r) => lines.push(`  - ${r}`));
     lines.push('');
   }
 
   // Objective
   if (brief.objective_suggestion) {
-    lines.push(`OBJECTIF RECOMMANDE : ${brief.objective_suggestion}`);
+    lines.push(t('OBJECTIF RECOMMANDE : {v}', { v: brief.objective_suggestion }));
   }
 
   return lines.join('\n');
@@ -261,7 +262,7 @@ export default function CallBriefPanel({
         forceRefresh,
       }),
     onError: (error: any) => {
-      toast('error', error.message || 'Erreur lors de la generation du brief');
+      toast('error', error.message || t('Erreur lors de la generation du brief'));
     },
   });
 
@@ -282,9 +283,9 @@ export default function CallBriefPanel({
     const text = formatBriefAsText(brief, entityName);
     try {
       await navigator.clipboard.writeText(text);
-      toast('success', 'Brief copie dans le presse-papiers');
+      toast('success', t('Brief copie dans le presse-papiers'));
     } catch {
-      toast('error', 'Impossible de copier le brief');
+      toast('error', t('Impossible de copier le brief'));
     }
   };
 
@@ -318,7 +319,7 @@ export default function CallBriefPanel({
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="text-[15px] font-semibold text-neutral-900 truncate">
-                  Brief pre-appel
+                  {t('Brief pre-appel')}
                 </h2>
                 <p className="text-[12px] text-neutral-400 truncate">
                   {entityName}
@@ -326,6 +327,7 @@ export default function CallBriefPanel({
               </div>
               <button
                 onClick={onClose}
+                aria-label={t('Fermer')}
                 className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-neutral-50 transition-colors"
               >
                 <X size={18} className="text-neutral-400" />
@@ -341,17 +343,17 @@ export default function CallBriefPanel({
                     <Sparkles size={28} className="text-violet-400" />
                   </div>
                   <h3 className="text-[15px] font-semibold text-neutral-800 mb-2">
-                    Preparer votre appel
+                    {t('Preparer votre appel')}
                   </h3>
                   <p className="text-[13px] text-neutral-500 mb-6 leading-relaxed">
-                    L'IA va analyser le profil, les interactions passees et rechercher des actualites pertinentes pour vous preparer en 30 secondes.
+                    {t("L'IA va analyser le profil, les interactions passees et rechercher des actualites pertinentes pour vous preparer en 30 secondes.")}
                   </p>
                   <button
                     onClick={() => handleGenerate(false)}
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-500 text-white text-[13px] font-semibold hover:bg-violet-600 transition-colors shadow-md shadow-violet-500/20"
                   >
                     <Sparkles size={15} />
-                    Generer le brief
+                    {t('Generer le brief')}
                   </button>
                 </div>
               )}
@@ -363,7 +365,7 @@ export default function CallBriefPanel({
               {brief && (
                 <div className="space-y-3 p-4">
                   {/* Contact Snapshot */}
-                  <CollapsibleSection title="Qui" icon={User} iconColor="text-blue-500">
+                  <CollapsibleSection title={t('Qui')} icon={User} iconColor="text-blue-500">
                     <div className="space-y-2">
                       <div className="text-[13px] font-medium text-neutral-800">
                         {brief.contact_snapshot?.name}
@@ -381,13 +383,13 @@ export default function CallBriefPanel({
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
                         {brief.contact_snapshot?.relationship_status && (
                           <span className="text-neutral-600">
-                            <span className="text-neutral-400">Statut : </span>
+                            <span className="text-neutral-400">{t('Statut : ')}</span>
                             {brief.contact_snapshot.relationship_status}
                           </span>
                         )}
                         {brief.contact_snapshot?.last_interaction && (
                           <span className="text-neutral-600">
-                            <span className="text-neutral-400">Dernier contact : </span>
+                            <span className="text-neutral-400">{t('Dernier contact : ')}</span>
                             {brief.contact_snapshot.last_interaction}
                           </span>
                         )}
@@ -407,7 +409,7 @@ export default function CallBriefPanel({
 
                   {/* What happened since last contact */}
                   {brief.what_happened_since_last_contact && brief.what_happened_since_last_contact.length > 0 && (
-                    <CollapsibleSection title="Depuis votre dernier echange" icon={Clock} iconColor="text-amber-500">
+                    <CollapsibleSection title={t('Depuis votre dernier echange')} icon={Clock} iconColor="text-amber-500">
                       <ul className="space-y-1.5">
                         {brief.what_happened_since_last_contact.map((event, i) => (
                           <li key={i} className="flex items-start gap-2 text-[12px] text-neutral-700">
@@ -421,7 +423,7 @@ export default function CallBriefPanel({
 
                   {/* Web Intelligence */}
                   {brief.web_intelligence && (
-                    <CollapsibleSection title="Intelligence web" icon={Globe} iconColor="text-emerald-500">
+                    <CollapsibleSection title={t('Intelligence web')} icon={Globe} iconColor="text-emerald-500">
                       <div className="space-y-3">
                         {/* Company news */}
                         {brief.web_intelligence.company_news && brief.web_intelligence.company_news.length > 0 && (
@@ -429,7 +431,7 @@ export default function CallBriefPanel({
                             <div className="flex items-center gap-1.5 mb-1.5">
                               <Newspaper size={12} className="text-neutral-400" />
                               <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wide">
-                                Actualites
+                                {t('Actualites')}
                               </span>
                             </div>
                             <div className="space-y-2">
@@ -472,7 +474,7 @@ export default function CallBriefPanel({
                             <div className="flex items-center gap-1.5 mb-1.5">
                               <Briefcase size={12} className="text-neutral-400" />
                               <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wide">
-                                Signaux recrutement
+                                {t('Signaux recrutement')}
                               </span>
                             </div>
                             <ul className="space-y-1">
@@ -492,7 +494,7 @@ export default function CallBriefPanel({
                             <div className="flex items-center gap-1.5 mb-1.5">
                               <MessageSquare size={12} className="text-neutral-400" />
                               <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wide">
-                                Activite du contact
+                                {t('Activite du contact')}
                               </span>
                             </div>
                             <ul className="space-y-1">
@@ -511,7 +513,7 @@ export default function CallBriefPanel({
                          (!brief.web_intelligence.hiring_signals || brief.web_intelligence.hiring_signals.length === 0) &&
                          (!brief.web_intelligence.contact_activity || brief.web_intelligence.contact_activity.length === 0) && (
                           <p className="text-[12px] text-neutral-400 italic">
-                            Aucune information web trouvee.
+                            {t('Aucune information web trouvee.')}
                           </p>
                         )}
                       </div>
@@ -520,7 +522,7 @@ export default function CallBriefPanel({
 
                   {/* Talking Points */}
                   {brief.talking_points && brief.talking_points.length > 0 && (
-                    <CollapsibleSection title="Points a aborder" icon={Target} iconColor="text-violet-500">
+                    <CollapsibleSection title={t('Points a aborder')} icon={Target} iconColor="text-violet-500">
                       <div className="space-y-2.5">
                         {brief.talking_points.map((tp, i) => (
                           <div key={i} className="flex gap-2.5">
@@ -554,7 +556,7 @@ export default function CallBriefPanel({
                       <div className="flex items-center gap-2 mb-2">
                         <AlertTriangle size={14} className="text-amber-500" />
                         <span className="text-[12px] font-semibold text-amber-700 uppercase tracking-wide">
-                          Risques et avertissements
+                          {t('Risques et avertissements')}
                         </span>
                       </div>
                       <ul className="space-y-1">
@@ -574,7 +576,7 @@ export default function CallBriefPanel({
                       <div className="flex items-center gap-2 mb-1.5">
                         <Target size={14} className="text-emerald-500" />
                         <span className="text-[12px] font-semibold text-emerald-700 uppercase tracking-wide">
-                          Objectif recommande
+                          {t('Objectif recommande')}
                         </span>
                       </div>
                       <p className="text-[12px] text-emerald-800 leading-relaxed">
@@ -595,7 +597,7 @@ export default function CallBriefPanel({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-neutral-600 bg-white border border-neutral-200 hover:bg-neutral-50 hover:border-neutral-300 transition-colors"
                   >
                     <Copy size={13} />
-                    Copier le brief
+                    {t('Copier le brief')}
                   </button>
                   <button
                     onClick={() => handleGenerate(true)}
@@ -603,13 +605,13 @@ export default function CallBriefPanel({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-neutral-600 bg-white border border-neutral-200 hover:bg-neutral-50 hover:border-neutral-300 transition-colors disabled:opacity-50"
                   >
                     <RefreshCw size={13} className={isGenerating ? 'animate-spin' : ''} />
-                    Rafraichir
+                    {t('Rafraichir')}
                   </button>
                 </>
               )}
               {isCached && briefData?.generatedAt && (
                 <span className="ml-auto text-[10px] text-neutral-400">
-                  Genere le {new Date(briefData.generatedAt).toLocaleDateString('fr-FR', {
+                  {t('Genere le')} {new Date(briefData.generatedAt).toLocaleDateString(LOCALE, {
                     day: 'numeric',
                     month: 'short',
                     hour: '2-digit',

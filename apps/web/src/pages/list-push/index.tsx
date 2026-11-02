@@ -21,6 +21,7 @@ import Input from '../../components/ui/Input';
 import Skeleton from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import { toast } from '../../components/ui/Toast';
+import { t } from '../../lib/i18n';
 
 type EstablishmentStatus = 'NEW' | 'EXCLUDED' | 'PROSPECTION' | 'CLIENT_EXISTING';
 
@@ -64,10 +65,10 @@ interface MarketListDetail {
 }
 
 const STATUS_LABELS: Record<EstablishmentStatus, string> = {
-  NEW: 'Nouveau',
-  EXCLUDED: 'Exclu',
-  PROSPECTION: 'En prospection',
-  CLIENT_EXISTING: 'Déjà client',
+  NEW: t('Nouveau'),
+  EXCLUDED: t('Exclu'),
+  PROSPECTION: t('En prospection'),
+  CLIENT_EXISTING: t('Déjà client'),
 };
 const STATUS_TONE: Record<EstablishmentStatus, { bg: string; fg: string }> = {
   NEW:             { bg: '#eceaf2', fg: '#4b3fb0' },
@@ -133,7 +134,7 @@ function buildPushEmail(o: { role?: string | null; exp?: string | null; dispo?: 
 }
 
 export default function ListPushPage() {
-  usePageTitle('List Push — Sourcing');
+  usePageTitle(t('List Push — Sourcing'));
   const qc = useQueryClient();
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -177,9 +178,9 @@ export default function ListPushPage() {
       setCreateOpen(false);
       setForm({ name: '', sectorTags: '', zones: '', excludedCompanies: '' });
       setSelectedCand(null); setCandQuery('');
-      toast('success', `Liste "${list.name}" créée`);
+      toast('success', t('Liste "{name}" créée', { name: list.name }));
     },
-    onError: () => toast('error', 'Erreur lors de la création'),
+    onError: () => toast('error', t('Erreur lors de la création')),
   });
 
   const ingestMutation = useMutation({
@@ -201,10 +202,10 @@ export default function ListPushPage() {
       qc.invalidateQueries({ queryKey: ['market-lists'] });
       toast(
         'success',
-        `CV ingéré : ${data.summary.new} nouvelles boîtes, ${data.summary.incremented} incrémentées`,
+        t('CV ingéré : {n} nouvelles boîtes, {m} incrémentées', { n: data.summary.new, m: data.summary.incremented }),
       );
     },
-    onError: () => toast('error', "Erreur lors de l'ingestion CV"),
+    onError: () => toast('error', t("Erreur lors de l'ingestion CV")),
   });
 
   const statusMutation = useMutation({
@@ -221,9 +222,9 @@ export default function ListPushPage() {
     ),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['market-lists', selectedListId] });
-      toast('success', `${res.created} leads créés dans le CRM (Prospection)`);
+      toast('success', t('{n} leads créés dans le CRM (Prospection)', { n: res.created }));
     },
-    onError: () => toast('error', 'Erreur lors de la génération des leads'),
+    onError: () => toast('error', t('Erreur lors de la génération des leads')),
   });
 
   const pushMutation = useMutation({
@@ -232,7 +233,7 @@ export default function ListPushPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['market-lists', selectedListId] });
     },
-    onError: () => toast('error', 'Erreur lors du push'),
+    onError: () => toast('error', t('Erreur lors du push')),
   });
 
   // Ouvre la modale de push : pré-remplit décideur (depuis e.contact), highlights (∩) et email généré.
@@ -258,14 +259,14 @@ export default function ListPushPage() {
   const serieAdvance = () => {
     if (!serie) { setPushFor(null); return; }
     const next = serie.idx + 1;
-    if (next >= serie.queue.length) { setSerie(null); setPushFor(null); toast('success', `File terminée — ${serie.queue.length} établissement(s) traité(s)`); return; }
+    if (next >= serie.queue.length) { setSerie(null); setPushFor(null); toast('success', t('File terminée — {n} établissement(s) traité(s)', { n: serie.queue.length })); return; }
     setSerie({ ...serie, idx: next });
     openPush(serie.queue[next]);
   };
   const startSerie = () => {
-    if (!detail?.candidat) { toast('error', 'Rattache un profil à cette liste'); return; }
+    if (!detail?.candidat) { toast('error', t('Rattache un profil à cette liste')); return; }
     const q = detail.establishments.filter((e) => e.status === 'NEW' || e.status === 'PROSPECTION');
-    if (!q.length) { toast('info', 'Aucun établissement à pusher'); return; }
+    if (!q.length) { toast('info', t('Aucun établissement à pusher')); return; }
     setSerie({ queue: q, idx: 0 });
     openPush(q[0]);
   };
@@ -273,7 +274,7 @@ export default function ListPushPage() {
   const submitPush = () => {
     if (!pushFor) return;
     const decideurName = `${pushForm.prenom} ${pushForm.nom}`.trim() || `${pushForm.civilite} ${pushForm.nom}`.trim();
-    if (!decideurName.trim()) { toast('error', 'Nom du décideur requis'); return; }
+    if (!decideurName.trim()) { toast('error', t('Nom du décideur requis')); return; }
     const cand = detail?.candidat;
     pushMutation.mutate({
       estId: pushFor.id,
@@ -284,7 +285,7 @@ export default function ListPushPage() {
         candidat: cand ? { name: `${cand.prenom || ''} ${cand.nom}`.trim(), role: cand.posteActuel ?? null } : null,
       },
     }, {
-      onSuccess: () => { toast('success', 'Lead créé — visible dans Leads'); if (serie) serieAdvance(); else setPushFor(null); },
+      onSuccess: () => { toast('success', t('Lead créé — visible dans Leads')); if (serie) serieAdvance(); else setPushFor(null); },
     });
   };
 
@@ -301,7 +302,7 @@ export default function ListPushPage() {
                 textTransform: 'uppercase', color: '#22177A',
               }}
             >
-              Reverse Sourcing
+              {t('Reverse Sourcing')}
             </span>
           </div>
           <h1
@@ -314,7 +315,7 @@ export default function ListPushPage() {
             List Push
           </h1>
           <p style={{ marginTop: 8, fontSize: 14, color: '#6E6A85' }}>
-            Uploade des CV — HumanUp extrait les employeurs de chaque candidat et agrège les boîtes cibles pour ta campagne de prospection commerciale.
+            {t('Uploade des CV — HumanUp extrait les employeurs de chaque candidat et agrège les boîtes cibles pour ta campagne de prospection commerciale.')}
           </p>
         </div>
         <button
@@ -322,7 +323,7 @@ export default function ListPushPage() {
           className="btn-primary"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, cursor: 'pointer', border: 'none', flexShrink: 0 }}
         >
-          <Plus size={15} /> Nouvelle liste
+          <Plus size={15} /> {t('Nouvelle liste')}
         </button>
       </div>
 
@@ -331,28 +332,28 @@ export default function ListPushPage() {
         <div className="kpi">
           <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Target size={12} style={{ color: '#22177A' }} />
-            <span>Listes</span>
+            <span>{t('Listes')}</span>
           </div>
           <div className="kpi-value" style={{ marginTop: 12 }}>{lists?.length ?? 0}</div>
-          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>en portefeuille</div>
+          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>{t('en portefeuille')}</div>
         </div>
         <div className="kpi">
           <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Users size={12} style={{ color: '#22177A' }} />
-            <span>Établissements</span>
+            <span>{t('Établissements')}</span>
           </div>
           <div className="kpi-value" style={{ marginTop: 12 }}>
             {(lists ?? []).reduce((sum, l) => sum + (l._count?.establishments ?? 0), 0)}
           </div>
-          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>agrégés</div>
+          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>{t('agrégés')}</div>
         </div>
         <div className="kpi">
           <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Upload size={12} style={{ color: '#22177A' }} />
-            <span>CV traités</span>
+            <span>{t('CV traités')}</span>
           </div>
           <div className="kpi-value" style={{ marginTop: 12 }}>—</div>
-          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>via bouton "Alimenter"</div>
+          <div style={{ fontSize: 12, color: '#9A96AE', marginTop: 3 }}>{t('via bouton "Alimenter"')}</div>
         </div>
       </div>
 
@@ -360,7 +361,7 @@ export default function ListPushPage() {
         {/* Colonne gauche : mes listes */}
         <aside className="space-y-2">
           <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-text-tertiary">
-            Mes listes
+            {t('Mes listes')}
           </h2>
           {listsLoading ? (
             <>
@@ -369,7 +370,7 @@ export default function ListPushPage() {
             </>
           ) : !lists || lists.length === 0 ? (
             <p className="text-sm text-text-tertiary">
-              Crée ta première liste pour démarrer.
+              {t('Crée ta première liste pour démarrer.')}
             </p>
           ) : (
             lists.map((l) => (
@@ -384,7 +385,7 @@ export default function ListPushPage() {
               >
                 <p className="text-sm font-semibold text-text-primary">{l.name}</p>
                 <p className="mt-0.5 text-[11px] text-text-tertiary">
-                  {l._count.establishments} établissement{l._count.establishments > 1 ? 's' : ''}
+                  {t(l._count.establishments > 1 ? '{n} établissements' : '{n} établissement', { n: l._count.establishments })}
                   {l.sectorTags.length > 0 && ` · ${l.sectorTags.join(', ')}`}
                 </p>
               </button>
@@ -396,9 +397,9 @@ export default function ListPushPage() {
         <section>
           {!selectedListId ? (
             <EmptyState
-              title="Sélectionne une liste"
-              description="Ou crée une nouvelle liste pour commencer une campagne de sourcing."
-              actionLabel="+ Nouvelle liste"
+              title={t('Sélectionne une liste')}
+              description={t('Ou crée une nouvelle liste pour commencer une campagne de sourcing.')}
+              actionLabel={`+ ${t('Nouvelle liste')}`}
               onAction={() => setCreateOpen(true)}
             />
           ) : detailLoading || !detail ? (
@@ -431,7 +432,7 @@ export default function ListPushPage() {
                         </span>
                       )}
                       <span className="inline-flex items-center gap-1">
-                        <Users size={12} strokeWidth={2} /> {detail.establishments.length} boîtes
+                        <Users size={12} strokeWidth={2} /> {t('{n} boîtes', { n: detail.establishments.length })}
                       </span>
                     </div>
 
@@ -442,14 +443,14 @@ export default function ListPushPage() {
                           ? <img src={detail.candidat.photoUrl} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
                           : <span style={{ width: 38, height: 38, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, flexShrink: 0 }}>{`${(detail.candidat.prenom?.[0] || '')}${detail.candidat.nom[0] || ''}`.toUpperCase()}</span>}
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: '#8A6A2E' }}>Profil rattaché — la liste lui appartient</div>
+                          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: '#8A6A2E' }}>{t('Profil rattaché — la liste lui appartient')}</div>
                           <div style={{ fontSize: 14, fontWeight: 800, color: '#1A1533' }}>{`${detail.candidat.prenom || ''} ${detail.candidat.nom}`.trim()}{detail.candidat.posteActuel ? ` · ${detail.candidat.posteActuel}` : ''}</div>
                           {ctxLine(detail.candidatCtx) && <div style={{ fontSize: 12, color: '#5B4B9E', marginTop: 1 }}>{ctxLine(detail.candidatCtx)}</div>}
                         </div>
                       </div>
                     ) : (
                       <div style={{ marginTop: 14, background: '#FBF3E7', border: '1px solid #F0D9B5', borderRadius: 12, padding: '10px 14px', fontSize: 12.5, color: '#8A6A2E' }}>
-                        ⚠ Aucun profil rattaché — le matching et le push ciblé sont désactivés. Rattache un A-player à cette liste.
+                        ⚠ {t('Aucun profil rattaché — le matching et le push ciblé sont désactivés. Rattache un A-player à cette liste.')}
                       </div>
                     )}
                   </div>
@@ -470,7 +471,7 @@ export default function ListPushPage() {
                       onClick={() => fileInputRef.current?.click()}
                       disabled={ingestMutation.isPending}
                     >
-                      <Upload size={14} /> {ingestMutation.isPending ? 'Analyse…' : 'Ingérer un CV'}
+                      <Upload size={14} /> {ingestMutation.isPending ? t('Analyse…') : t('Ingérer un CV')}
                     </Button>
                     <Button
                       variant="primary"
@@ -480,16 +481,16 @@ export default function ListPushPage() {
                         !detail.establishments.some((e) => e.status === 'NEW')
                       }
                     >
-                      <ArrowRight size={14} /> Générer les leads
+                      <ArrowRight size={14} /> {t('Générer les leads')}
                     </Button>
                     {(() => { const n = detail.establishments.filter((e) => e.status === 'NEW' || e.status === 'PROSPECTION').length; return (
                       <button
                         onClick={startSerie}
                         disabled={!detail.candidat || n === 0}
-                        title={!detail.candidat ? 'Rattache un profil à cette liste' : 'Enchaîner les pushs un par un'}
+                        title={!detail.candidat ? t('Rattache un profil à cette liste') : t('Enchaîner les pushs un par un')}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 13.5, background: (!detail.candidat || n === 0) ? '#EDEAF9' : '#E6E9AF', color: '#22177A', border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 11, padding: '9px 15px', cursor: (!detail.candidat || n === 0) ? 'not-allowed' : 'pointer', opacity: (!detail.candidat || n === 0) ? 0.6 : 1 }}
                       >
-                        <Send size={14} /> Push en série ({n})
+                        <Send size={14} /> {t('Push en série ({n})', { n })}
                       </button>
                     ); })()}
                   </div>
@@ -499,24 +500,24 @@ export default function ListPushPage() {
               {/* Etablissements */}
               <Card>
                 <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-text-tertiary">
-                  Établissements identifiés ({detail.establishments.length})
+                  {t('Établissements identifiés ({n})', { n: detail.establishments.length })}
                 </h3>
                 {detail.establishments.length === 0 ? (
                   <p className="py-6 text-center text-sm italic text-text-tertiary">
-                    Aucun établissement pour l'instant. Ingère des CV pour peupler cette liste.
+                    {t("Aucun établissement pour l'instant. Ingère des CV pour peupler cette liste.")}
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-neutral-100 text-left text-[11px] uppercase tracking-wider text-text-tertiary">
-                          <th className="py-2 pr-3 font-semibold">Boîte</th>
-                          <th className="py-2 pr-3 font-semibold">Ville / Secteur</th>
-                          <th className="py-2 pr-3 font-semibold">Postes recrutés</th>
-                          <th className="py-2 pr-3 font-semibold">Contexte technique</th>
-                          <th className="py-2 pr-3 font-semibold text-right">Cand.</th>
-                          <th className="py-2 pr-3 font-semibold">Statut</th>
-                          <th className="py-2 font-semibold">Action</th>
+                          <th className="py-2 pr-3 font-semibold">{t('Boîte')}</th>
+                          <th className="py-2 pr-3 font-semibold">{t('Ville / Secteur')}</th>
+                          <th className="py-2 pr-3 font-semibold">{t('Postes recrutés')}</th>
+                          <th className="py-2 pr-3 font-semibold">{t('Contexte technique')}</th>
+                          <th className="py-2 pr-3 font-semibold text-right">{t('Cand.')}</th>
+                          <th className="py-2 pr-3 font-semibold">{t('Statut')}</th>
+                          <th className="py-2 font-semibold">{t('Action')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -528,8 +529,8 @@ export default function ListPushPage() {
                             </td>
                             <td className="py-3 pr-3">
                               <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
-                                {e.titles.slice(0, 3).map((t) => (
-                                  <span key={t} style={{ background: '#EDEAF9', color: '#5B4B9E', borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>{t}</span>
+                                {e.titles.slice(0, 3).map((title) => (
+                                  <span key={title} style={{ background: '#EDEAF9', color: '#5B4B9E', borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>{title}</span>
                                 ))}
                                 {e.titles.length > 3 && <span style={{ fontSize: 11, color: '#8A8699', alignSelf: 'center' }}>+{e.titles.length - 3}</span>}
                                 {e.titles.length === 0 && <span style={{ fontSize: 12, color: '#C4C1D0' }}>—</span>}
@@ -537,7 +538,7 @@ export default function ListPushPage() {
                             </td>
                             <td className="py-3 pr-3">
                               {ctxValues(e.contexte).length === 0 ? (
-                                <span style={{ fontSize: 11.5, color: '#C4C1D0' }}>non renseigné</span>
+                                <span style={{ fontSize: 11.5, color: '#C4C1D0' }}>{t('non renseigné')}</span>
                               ) : (
                                 <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4, maxWidth: 260 }}>
                                   {CTX_CATS.flatMap((c) => (e.contexte?.[c.key] ?? []).slice(0, 2).map((v) => (
@@ -559,15 +560,15 @@ export default function ListPushPage() {
                             </td>
                             <td className="py-3">
                               {(() => { const sc = matchScore(detail.candidatCtx, e.contexte); return sc !== null ? (
-                                <span title="Recoupement contexte candidat ∩ établissement" style={{ display: 'inline-block', marginRight: 8, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 800, background: matchTone(sc).bg, color: matchTone(sc).fg }}>Match {sc}%</span>
+                                <span title={t('Recoupement contexte candidat ∩ établissement')} style={{ display: 'inline-block', marginRight: 8, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 800, background: matchTone(sc).bg, color: matchTone(sc).fg }}>Match {sc}%</span>
                               ) : null; })()}
                               {(e.status === 'NEW' || e.status === 'PROSPECTION' || e.status === 'CLIENT_EXISTING') && (
                                 <button
                                   onClick={() => openPush(e)}
                                   className="mr-1 inline-flex items-center gap-1 rounded-md bg-primary-800 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-primary-900"
-                                  title="Pusher un candidat à cet établissement"
+                                  title={t('Pusher un candidat à cet établissement')}
                                 >
-                                  <Send size={12} /> Pusher
+                                  <Send size={12} /> {t('Pusher')}
                                 </button>
                               )}
                               {e.status === 'NEW' && (
@@ -576,7 +577,7 @@ export default function ListPushPage() {
                                     statusMutation.mutate({ id: e.id, status: 'EXCLUDED' })
                                   }
                                   className="rounded p-1 text-neutral-300 hover:bg-red-50 hover:text-red-500"
-                                  title="Exclure de la campagne"
+                                  title={t('Exclure de la campagne')}
                                 >
                                   <Trash2 size={14} strokeWidth={2} />
                                 </button>
@@ -588,7 +589,7 @@ export default function ListPushPage() {
                                   }
                                   className="text-[11px] text-primary-800 hover:underline"
                                 >
-                                  Réinclure
+                                  {t('Réinclure')}
                                 </button>
                               )}
                             </td>
@@ -608,17 +609,17 @@ export default function ListPushPage() {
       <Modal
         isOpen={createOpen}
         onClose={() => setCreateOpen(false)}
-        title="Nouvelle liste de sourcing"
+        title={t('Nouvelle liste de sourcing')}
         size="md"
       >
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
-            Une liste = une campagne de reverse-sourcing (ex : "SDR Paris Q3", "CTO SaaS France").
+            {t('Une liste = une campagne de reverse-sourcing (ex : "SDR Paris Q3", "CTO SaaS France").')}
           </p>
 
           {/* 1. Le profil à placer — choisi en premier (il définit le métier) */}
           <div>
-            <label className="mb-1.5 block text-xs font-semibold text-text-secondary">Profil à placer (A-player)</label>
+            <label className="mb-1.5 block text-xs font-semibold text-text-secondary">{t('Profil à placer (A-player)')}</label>
             {selectedCand ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F2F3D8', border: '1px solid rgba(34,23,122,.16)', borderRadius: 11, padding: '9px 12px' }}>
                 <span style={{ width: 30, height: 30, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 11, flexShrink: 0 }}>{`${(selectedCand.prenom?.[0] || '')}${selectedCand.nom[0] || ''}`.toUpperCase()}</span>
@@ -627,7 +628,7 @@ export default function ListPushPage() {
               </div>
             ) : (
               <div style={{ position: 'relative' }}>
-                <input value={candQuery} onChange={(e) => setCandQuery(e.target.value)} placeholder="Rechercher un candidat…" style={pushInputStyle} />
+                <input value={candQuery} onChange={(e) => setCandQuery(e.target.value)} placeholder={t('Rechercher un candidat…')} style={pushInputStyle} />
                 {candQuery.trim().length >= 2 && (candResults?.data?.length ?? 0) > 0 && (
                   <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 20, background: '#fff', border: '1px solid rgba(34,23,122,.14)', borderRadius: 11, boxShadow: '0 20px 44px -20px rgba(34,23,122,.4)', padding: 5, maxHeight: 220, overflowY: 'auto' }}>
                     {candResults!.data.map((c) => (
@@ -638,41 +639,41 @@ export default function ListPushPage() {
                     ))}
                   </div>
                 )}
-                <p className="text-[11px] text-text-tertiary" style={{ marginTop: 4 }}>La liste appartient au candidat — c'est lui qui définit le métier ciblé.</p>
+                <p className="text-[11px] text-text-tertiary" style={{ marginTop: 4 }}>{t("La liste appartient au candidat — c'est lui qui définit le métier ciblé.")}</p>
               </div>
             )}
           </div>
 
           <Input
-            label="Nom de la liste"
+            label={t('Nom de la liste')}
             placeholder="SDR Paris Q3 2026"
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             required
           />
           <Input
-            label="Secteurs / métiers (séparés par virgule)"
+            label={t('Secteurs / métiers (séparés par virgule)')}
             placeholder="Sales, SaaS, Fintech"
             value={form.sectorTags}
             onChange={(e) => setForm((f) => ({ ...f, sectorTags: e.target.value }))}
           />
           <Input
-            label="Zones (villes ou départements, séparés par virgule)"
+            label={t('Zones (villes ou départements, séparés par virgule)')}
             placeholder="Paris, 75, 92, Lyon"
             value={form.zones}
             onChange={(e) => setForm((f) => ({ ...f, zones: e.target.value }))}
           />
           <Input
-            label="Sociétés exclues (séparées par virgule)"
+            label={t('Sociétés exclues (séparées par virgule)')}
             placeholder="ACME, Globex, Initech"
             value={form.excludedCompanies}
             onChange={(e) => setForm((f) => ({ ...f, excludedCompanies: e.target.value }))}
           />
           <p className="text-[11px] text-text-tertiary">
-            Les sociétés exclues ne remonteront pas dans les cibles quand tu ingères un CV.
+            {t('Les sociétés exclues ne remonteront pas dans les cibles quand tu ingères un CV.')}
           </p>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={() => setCreateOpen(false)}>Annuler</Button>
+            <Button variant="ghost" onClick={() => setCreateOpen(false)}>{t('Annuler')}</Button>
             <Button
               variant="primary"
               onClick={() =>
@@ -686,7 +687,7 @@ export default function ListPushPage() {
               }
               disabled={!form.name.trim() || createMutation.isPending}
             >
-              {createMutation.isPending ? 'Création…' : 'Créer la liste'}
+              {createMutation.isPending ? t('Création…') : t('Créer la liste')}
             </Button>
           </div>
         </div>
@@ -699,7 +700,7 @@ export default function ListPushPage() {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 19, color: '#1A1533' }}>Pusher un profil</span>
+                  <span style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 19, color: '#1A1533' }}>{t('Pusher un profil')}</span>
                   {serie && <span style={{ fontSize: 11, fontWeight: 800, color: '#22177A', background: '#E6E9AF', borderRadius: 999, padding: '3px 10px' }}>Push {serie.idx + 1} / {serie.queue.length}</span>}
                 </div>
                 <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 3 }}>{pushFor.name}{pushFor.city ? ` · ${pushFor.city}` : ''}</div>
@@ -707,11 +708,11 @@ export default function ListPushPage() {
               <button onClick={() => { setPushFor(null); setSerie(null); }} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer' }}><X size={15} /></button>
             </div>
             {(() => { const sc = matchScore(detail?.candidatCtx, pushFor.contexte); return sc !== null ? (
-              <div style={{ marginTop: 12, fontSize: 12, color: matchTone(sc).fg, background: matchTone(sc).bg, borderRadius: 10, padding: '8px 12px', fontWeight: 700 }}>Match {sc}% — {sc >= 75 ? 'recoupement fort, les points communs sont repris tels quels.' : sc >= 40 ? 'recoupement partiel, vérifie les highlights.' : 'peu de recoupement — ce profil n\'est peut-être pas le bon.'}</div>
+              <div style={{ marginTop: 12, fontSize: 12, color: matchTone(sc).fg, background: matchTone(sc).bg, borderRadius: 10, padding: '8px 12px', fontWeight: 700 }}>Match {sc}% — {sc >= 75 ? t('recoupement fort, les points communs sont repris tels quels.') : sc >= 40 ? t('recoupement partiel, vérifie les highlights.') : t('peu de recoupement — ce profil n\'est peut-être pas le bon.')}</div>
             ) : null; })()}
 
             {/* Profil poussé = candidat de la liste (verrouillé) */}
-            <div style={pushLabel}>Le profil poussé</div>
+            <div style={pushLabel}>{t('Le profil poussé')}</div>
             {detail?.candidat ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F2F3D8', border: '1px solid rgba(34,23,122,.14)', borderRadius: 11, padding: '10px 13px' }}>
                 <span style={{ width: 32, height: 32, borderRadius: '50%', background: '#22177A', color: '#E6E9AF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 11, flexShrink: 0 }}>{`${(detail.candidat.prenom?.[0] || '')}${detail.candidat.nom[0] || ''}`.toUpperCase()}</span>
@@ -719,41 +720,41 @@ export default function ListPushPage() {
                   <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1A1533' }}>{`${detail.candidat.prenom || ''} ${detail.candidat.nom}`.trim()}</div>
                   {detail.candidat.posteActuel && <div style={{ fontSize: 12, color: '#8A8699' }}>{detail.candidat.posteActuel}</div>}
                 </div>
-                <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 800, color: '#2C6B3F', background: '#EAF3EC', borderRadius: 999, padding: '3px 9px', whiteSpace: 'nowrap' }}>Dossier prêt · anonymisé</span>
+                <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 800, color: '#2C6B3F', background: '#EAF3EC', borderRadius: 999, padding: '3px 9px', whiteSpace: 'nowrap' }}>{t('Dossier prêt · anonymisé')}</span>
               </div>
             ) : (
-              <div style={{ background: '#FBF3E7', border: '1px solid #F0D9B5', borderRadius: 11, padding: '10px 13px', fontSize: 12.5, color: '#8A6A2E' }}>Rattache un profil à cette liste pour pouvoir pusher.</div>
+              <div style={{ background: '#FBF3E7', border: '1px solid #F0D9B5', borderRadius: 11, padding: '10px 13px', fontSize: 12.5, color: '#8A6A2E' }}>{t('Rattache un profil à cette liste pour pouvoir pusher.')}</div>
             )}
 
             {/* Décideur */}
-            <div style={pushLabel}>Le décideur</div>
+            <div style={pushLabel}>{t('Le décideur')}</div>
             <div style={{ display: 'grid', gridTemplateColumns: '78px 1fr 1fr', gap: 10 }}>
-              <input value={pushForm.civilite} onChange={(e) => setPushForm((f) => ({ ...f, civilite: e.target.value }))} placeholder="Civ." style={pushInputStyle} />
-              <input value={pushForm.prenom} onChange={(e) => setPushForm((f) => ({ ...f, prenom: e.target.value }))} placeholder="Prénom" style={pushInputStyle} />
-              <input value={pushForm.nom} onChange={(e) => setPushForm((f) => ({ ...f, nom: e.target.value }))} placeholder="Nom *" style={pushInputStyle} />
+              <input value={pushForm.civilite} onChange={(e) => setPushForm((f) => ({ ...f, civilite: e.target.value }))} placeholder={t('Civ.')} style={pushInputStyle} />
+              <input value={pushForm.prenom} onChange={(e) => setPushForm((f) => ({ ...f, prenom: e.target.value }))} placeholder={t('Prénom')} style={pushInputStyle} />
+              <input value={pushForm.nom} onChange={(e) => setPushForm((f) => ({ ...f, nom: e.target.value }))} placeholder={t('Nom *')} style={pushInputStyle} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
-              <input value={pushForm.email} onChange={(e) => setPushForm((f) => ({ ...f, email: e.target.value }))} placeholder="Email pro" style={pushInputStyle} />
-              <input value={pushForm.phone} onChange={(e) => setPushForm((f) => ({ ...f, phone: e.target.value }))} placeholder="Téléphone" style={pushInputStyle} />
+              <input value={pushForm.email} onChange={(e) => setPushForm((f) => ({ ...f, email: e.target.value }))} placeholder={t('Email pro')} style={pushInputStyle} />
+              <input value={pushForm.phone} onChange={(e) => setPushForm((f) => ({ ...f, phone: e.target.value }))} placeholder={t('Téléphone')} style={pushInputStyle} />
             </div>
 
             {/* Highlights */}
-            <div style={pushLabel}>Highlights (recoupement)</div>
+            <div style={pushLabel}>{t('Highlights (recoupement)')}</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {pushForm.highlights.length ? pushForm.highlights.map((h) => (
                 <span key={h} style={{ background: '#EAF3EC', color: '#2C6B3F', borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 700 }}>{h}</span>
-              )) : <span style={{ fontSize: 12, color: '#8A8699' }}>Points forts génériques du candidat (pas de contexte établissement).</span>}
+              )) : <span style={{ fontSize: 12, color: '#8A8699' }}>{t('Points forts génériques du candidat (pas de contexte établissement).')}</span>}
             </div>
 
             {/* Email anonyme généré (éditable) */}
-            <div style={pushLabel}>Email de push (anonyme)</div>
+            <div style={pushLabel}>{t('Email de push (anonyme)')}</div>
             <textarea value={pushForm.emailBody} onChange={(e) => setPushForm((f) => ({ ...f, emailBody: e.target.value }))} style={{ ...pushInputStyle, minHeight: 190, resize: 'vertical', lineHeight: 1.5 }} />
-            <div style={{ fontSize: 11, color: '#8A8699', marginTop: 4 }}>Le nom du candidat n'apparaît jamais. Pièce jointe : dossier de compétences anonymisé.</div>
+            <div style={{ fontSize: 11, color: '#8A8699', marginTop: 4 }}>{t("Le nom du candidat n'apparaît jamais. Pièce jointe : dossier de compétences anonymisé.")}</div>
 
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-              <button onClick={() => { setPushFor(null); setSerie(null); }} style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 14, background: '#fff', color: '#22177A', border: '1.5px solid rgba(34,23,122,.2)', borderRadius: 12, padding: '12px 18px', cursor: 'pointer' }}>Annuler</button>
-              {serie && <button onClick={serieAdvance} style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 14, background: '#F5F4EA', color: '#6E6A85', border: 'none', borderRadius: 12, padding: '12px 18px', cursor: 'pointer' }}>Passer</button>}
-              <button onClick={submitPush} disabled={pushMutation.isPending || !detail?.candidat} style={{ flex: 1, fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 15, background: detail?.candidat ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 13, cursor: detail?.candidat ? 'pointer' : 'not-allowed', opacity: pushMutation.isPending ? 0.6 : 1 }}>{pushMutation.isPending ? 'Envoi…' : (serie ? 'Envoyer et suivant' : 'Envoyer et créer le lead')}</button>
+              <button onClick={() => { setPushFor(null); setSerie(null); }} style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 14, background: '#fff', color: '#22177A', border: '1.5px solid rgba(34,23,122,.2)', borderRadius: 12, padding: '12px 18px', cursor: 'pointer' }}>{t('Annuler')}</button>
+              {serie && <button onClick={serieAdvance} style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 14, background: '#F5F4EA', color: '#6E6A85', border: 'none', borderRadius: 12, padding: '12px 18px', cursor: 'pointer' }}>{t('Passer')}</button>}
+              <button onClick={submitPush} disabled={pushMutation.isPending || !detail?.candidat} style={{ flex: 1, fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: 15, background: detail?.candidat ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 13, cursor: detail?.candidat ? 'pointer' : 'not-allowed', opacity: pushMutation.isPending ? 0.6 : 1 }}>{pushMutation.isPending ? t('Envoi…') : (serie ? t('Envoyer et suivant') : t('Envoyer et créer le lead'))}</button>
             </div>
           </div>
         </div>

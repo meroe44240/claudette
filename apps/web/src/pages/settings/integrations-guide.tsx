@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router';
 import { Mail, Calendar, Phone, ArrowRight, CheckCircle2, ExternalLink } from 'lucide-react';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { t } from '../../lib/i18n';
 
 const NAVY = '#22177A';
 const LIME = '#E6E9AF';
@@ -109,22 +110,22 @@ function GuideCard({
 }
 
 export default function IntegrationsGuidePage() {
-  usePageTitle('Guide — Connecter mes outils');
+  usePageTitle(t('Guide — Connecter mes outils'));
   const navigate = useNavigate();
 
-  const b = (t: string) => <strong style={{ color: INK }}>{t}</strong>;
+  const b = (s: string) => <strong style={{ color: INK }}>{s}</strong>;
 
   return (
     <div style={{ maxWidth: 760 }}>
       {/* HEADER */}
       <div>
-        <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>Intégrations</div>
+        <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>{t('Intégrations')}</div>
         <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 34, letterSpacing: '-0.03em', color: INK, marginTop: 4 }}>
-          Connecter mes outils
+          {t('Connecter mes outils')}
         </h1>
         <p style={{ fontSize: 14.5, color: '#6E6A85', marginTop: 6, lineHeight: 1.6 }}>
-          Chaque membre connecte <strong>son propre</strong> compte : ta boîte Gmail, ton agenda Google et ta téléphonie
-          Allo. Ça prend 2 minutes et ça active la synchro des mails, des RDV et des appels dans l'ATS.
+          {t('Chaque membre connecte')} <strong>{t('son propre')}</strong>{' '}
+          {t("compte : ta boîte Gmail, ton agenda Google et ta téléphonie Allo. Ça prend 2 minutes et ça active la synchro des mails, des RDV et des appels dans l'ATS.")}
         </p>
       </div>
 
@@ -146,7 +147,7 @@ export default function IntegrationsGuidePage() {
           cursor: 'pointer',
         }}
       >
-        Ouvrir mes intégrations <ArrowRight size={16} />
+        {t('Ouvrir mes intégrations')} <ArrowRight size={16} />
       </button>
 
       {/* CARTES */}
@@ -155,40 +156,40 @@ export default function IntegrationsGuidePage() {
           icon={<Mail size={22} />}
           color="#D93F3F"
           title="Gmail"
-          subtitle="Ta boîte mail dans l'ATS + auto-log des échanges"
+          subtitle={t("Ta boîte mail dans l'ATS + auto-log des échanges")}
           steps={[
-            { n: 1, text: <>Va dans {b('Paramètres → Intégrations')} (ou clique « Ouvrir mes intégrations » ci-dessus).</> },
-            { n: 2, text: <>Sur la carte {b('Gmail')}, clique {b('« Connecter Gmail »')}.</> },
-            { n: 3, text: <>Une fenêtre Google s'ouvre : choisis <strong>ton compte HumanUp</strong> et clique {b('« Autoriser »')}.</> },
-            { n: 4, text: <>Tu reviens sur l'ATS, la carte passe en {b('« Connecté »')} ✅.</> },
+            { n: 1, text: <>{t('Va dans')} {b(t('Paramètres → Intégrations'))} {t('(ou clique « Ouvrir mes intégrations » ci-dessus).')}</> },
+            { n: 2, text: <>{t('Sur la carte')} {b('Gmail')}{t(', clique')} {b(t('« Connecter Gmail »'))}.</> },
+            { n: 3, text: <>{t("Une fenêtre Google s'ouvre : choisis")} <strong>{t('ton compte HumanUp')}</strong> {t('et clique')} {b(t('« Autoriser »'))}.</> },
+            { n: 4, text: <>{t("Tu reviens sur l'ATS, la carte passe en")} {b(t('« Connecté »'))} ✅.</> },
           ]}
-          note={<>Autorise bien avec ton adresse <strong>@humanup.io</strong>, pas un compte perso.</>}
+          note={<>{t('Autorise bien avec ton adresse')} <strong>@humanup.io</strong>{t(', pas un compte perso.')}</>}
         />
 
         <GuideCard
           icon={<Calendar size={22} />}
           color="#2A6BD8"
-          title="Google Agenda"
-          subtitle="Tes RDV + le lien Google Meet auto des réservations"
+          title={t('Google Agenda')}
+          subtitle={t('Tes RDV + le lien Google Meet auto des réservations')}
           steps={[
-            { n: 1, text: <>Toujours dans {b('Paramètres → Intégrations')}, carte {b('Google Agenda')}.</> },
-            { n: 2, text: <>Clique {b('« Connecter »')} et autorise avec <strong>le même compte Google</strong> que Gmail.</> },
-            { n: 3, text: <>C'est bon : tes RDV se synchronisent et tes pages de réservation généreront un lien Meet automatiquement.</> },
+            { n: 1, text: <>{t('Toujours dans')} {b(t('Paramètres → Intégrations'))}{t(', carte')} {b(t('Google Agenda'))}.</> },
+            { n: 2, text: <>{t('Clique')} {b(t('« Connecter »'))} {t('et autorise avec')} <strong>{t('le même compte Google')}</strong> {t('que Gmail.')}</> },
+            { n: 3, text: <>{t("C'est bon : tes RDV se synchronisent et tes pages de réservation généreront un lien Meet automatiquement.")}</> },
           ]}
-          note={<>Gmail et Agenda utilisent le même compte Google — souvent connectés d'un coup.</>}
+          note={<>{t("Gmail et Agenda utilisent le même compte Google — souvent connectés d'un coup.")}</>}
         />
 
         <GuideCard
           icon={<Phone size={22} />}
           color="#3B9A54"
-          title="Allo (Téléphonie)"
-          subtitle="Click-to-call + logs d'appels automatiques"
+          title={t('Allo (Téléphonie)')}
+          subtitle={t("Click-to-call + logs d'appels automatiques")}
           steps={[
-            { n: 1, text: <>Récupère ta {b('clé API Allo')} dans ton compte Allo (rubrique paramètres / API).</> },
-            { n: 2, text: <>Dans l'ATS : carte {b('Allo (Téléphonie)')} → {b('« Configurer Allo »')}.</> },
-            { n: 3, text: <>Colle ta clé API et {b('valide')}. La carte passe en {b('« Connecté »')} ✅.</> },
+            { n: 1, text: <>{t('Récupère ta')} {b(t('clé API Allo'))} {t('dans ton compte Allo (rubrique paramètres / API).')}</> },
+            { n: 2, text: <>{t("Dans l'ATS : carte")} {b(t('Allo (Téléphonie)'))} → {b(t('« Configurer Allo »'))}.</> },
+            { n: 3, text: <>{t('Colle ta clé API et')} {b(t('valide'))}. {t('La carte passe en')} {b(t('« Connecté »'))} ✅.</> },
           ]}
-          note={<>La clé Allo ne « expire » pas comme Gmail : une fois posée, c'est bon durablement.</>}
+          note={<>{t("La clé Allo ne « expire » pas comme Gmail : une fois posée, c'est bon durablement.")}</>}
         />
       </div>
 
@@ -206,16 +207,15 @@ export default function IntegrationsGuidePage() {
           lineHeight: 1.6,
         }}
       >
-        <strong style={{ color: INK }}>Ça bloque ?</strong> Si la fenêtre Google se ferme sans rien, vérifie que tu es
-        déconnecté d'un compte perso Google, puis réessaie. Pour Allo, si la clé est refusée, re-copie-la sans espace.
-        En cas de souci, préviens l'admin.
+        <strong style={{ color: INK }}>{t('Ça bloque ?')}</strong>{' '}
+        {t("Si la fenêtre Google se ferme sans rien, vérifie que tu es déconnecté d'un compte perso Google, puis réessaie. Pour Allo, si la clé est refusée, re-copie-la sans espace. En cas de souci, préviens l'admin.")}
         <a
           href="https://ats.propium.co/settings/integrations"
           target="_blank"
           rel="noreferrer"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: NAVY, fontWeight: 700, marginLeft: 6 }}
         >
-          Page intégrations <ExternalLink size={13} />
+          {t('Page intégrations')} <ExternalLink size={13} />
         </a>
       </div>
     </div>

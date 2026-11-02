@@ -1,4 +1,4 @@
-// Langue de l'interface interne, choisie par chaque utilisateur (FR par défaut).
+// Langue de l'interface, choisie par chaque utilisateur (EN par défaut).
 // La clé de traduction est le texte français lui-même : `t('Candidats')` rend
 // « Candidates » en anglais et « Candidats » en français. Une clé absente du
 // dictionnaire retombe sur le français. Le changement de langue recharge la page,
@@ -11,9 +11,9 @@ const STORAGE_KEY = 'ats.lang';
 
 function readLang(): Lang {
   try {
-    return localStorage.getItem(STORAGE_KEY) === 'en' ? 'en' : 'fr';
+    return localStorage.getItem(STORAGE_KEY) === 'fr' ? 'fr' : 'en';
   } catch {
-    return 'fr';
+    return 'en';
   }
 }
 

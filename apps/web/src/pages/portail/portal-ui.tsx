@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Bell, ChevronDown, LogOut, UserPlus, ArrowRight, MessageCircle, AtSign, Columns3, Briefcase, Users } from 'lucide-react';
 import { portalStore } from './portal-store';
+import { t, LOCALE } from '../../lib/i18n';
+import LangSwitch from '../../components/ui/LangSwitch';
 
 // ── Charte (contrastes ≥ 4,5:1 sur le fond) ──
 export const INK = '#1A1533';
@@ -25,7 +27,7 @@ export const LABEL: React.CSSProperties = { fontSize: FS.sm, fontWeight: 700, co
 // ── Colonnes du portail ──
 export type Col = 'INBOX' | 'SCREENING' | 'CASE' | 'CULTURE_FIT' | 'OFFRE' | 'ENGAGE' | 'PERDU';
 export const COL_LABELS: Record<Col, string> = {
-  INBOX: 'Inbox', SCREENING: 'Screening', CASE: 'Case', CULTURE_FIT: 'Culture Fit', OFFRE: 'Offre', ENGAGE: 'Engagé', PERDU: 'Perdu',
+  INBOX: 'Inbox', SCREENING: 'Screening', CASE: 'Case', CULTURE_FIT: 'Culture Fit', OFFRE: t('Offre'), ENGAGE: t('Engagé'), PERDU: t('Perdu'),
 };
 export const COL_ACCENT: Record<Col, string> = {
   INBOX: '#475467', SCREENING: '#2A6BD8', CASE: '#D97F1E', CULTURE_FIT: '#7A5BD1', OFFRE: '#B8921A', ENGAGE: '#2F8A4A', PERDU: '#8A8699',
@@ -36,7 +38,7 @@ export const COL_TINT: Record<Col, string> = {
 export const COL_ORDER: Col[] = ['INBOX', 'SCREENING', 'CASE', 'CULTURE_FIT', 'OFFRE', 'ENGAGE', 'PERDU'];
 
 export type Decision = 'RENCONTRER' | 'A_DISCUTER' | 'ECARTER';
-export const DECISION_LABEL: Record<Decision, string> = { RENCONTRER: 'À rencontrer', A_DISCUTER: 'À discuter', ECARTER: 'Écarté' };
+export const DECISION_LABEL: Record<Decision, string> = { RENCONTRER: t('À rencontrer'), A_DISCUTER: t('À discuter'), ECARTER: t('Écarté') };
 export const DECISION_TONE: Record<Decision, { bg: string; fg: string }> = {
   RENCONTRER: { bg: '#E6F2E9', fg: '#256238' }, A_DISCUTER: { bg: '#FAF0DF', fg: '#7A5A1E' }, ECARTER: { bg: '#F7E8E5', fg: '#9E2F1A' },
 };
@@ -57,11 +59,11 @@ export function initialsOf(name: string) { return name.split(/[\s.@]+/).filter(B
 export function relTime(iso: string | Date) {
   const d = new Date(iso);
   const min = Math.round((Date.now() - d.getTime()) / 60000);
-  if (min >= 0 && min < 1) return 'à l’instant';
-  if (min >= 0 && min < 60) return `il y a ${min} min`;
-  if (min >= 0 && min < 60 * 24) return `il y a ${Math.round(min / 60)} h`;
-  if (min >= 0 && min < 60 * 24 * 7) return `il y a ${Math.round(min / 1440)} j`;
-  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) });
+  if (min >= 0 && min < 1) return t('à l’instant');
+  if (min >= 0 && min < 60) return t('il y a {n} min', { n: min });
+  if (min >= 0 && min < 60 * 24) return t('il y a {n} h', { n: Math.round(min / 60) });
+  if (min >= 0 && min < 60 * 24 * 7) return t('il y a {n} j', { n: Math.round(min / 1440) });
+  return d.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) });
 }
 export function useIsMobile(max = 760) {
   const q = `(max-width: ${max}px)`;
@@ -126,15 +128,15 @@ export function PortalTopBar({ active, mandatId }: { active: Tab; mandatId?: str
   }, [navigate]);
   const candidaturesHref = `/portail/mandat/${mandatId || lastMandat.get() || me?.homeMandatId || ''}`;
   const items: Array<[Tab, string, string, React.ReactNode]> = [
-    ['candidatures', 'Candidatures', candidaturesHref, <Columns3 size={19} aria-hidden />],
-    ['offres', 'Offres d’emploi', '/portail/offres', <Briefcase size={19} aria-hidden />],
-    ['candidats', 'Candidats', '/portail/candidats', <Users size={19} aria-hidden />],
+    ['candidatures', t('Candidatures'), candidaturesHref, <Columns3 size={19} aria-hidden />],
+    ['offres', t('Offres d’emploi'), '/portail/offres', <Briefcase size={19} aria-hidden />],
+    ['candidats', t('Candidats'), '/portail/candidats', <Users size={19} aria-hidden />],
   ];
   function logout() { const m = lastMandat.get(); portalStore.clear(); navigate(`/portail/login${m ? `?m=${m}` : ''}`); }
 
   return (
     <header style={{ position: 'sticky', top: 0, zIndex: 40, display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 18, height: 58, padding: isMobile ? '0 12px' : '0 24px', background: '#fff', borderBottom: `1px solid ${LINE}` }}>
-      <Link to="/portail/offres" aria-label="HumanUp, accueil" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+      <Link to="/portail/offres" aria-label={t('HumanUp, accueil')} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         <span style={{ width: 32, height: 32, borderRadius: 9, background: BRAND, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <img src="/brand/logo-mark-cream.png" alt="" style={{ width: 19, height: 19 }} />
         </span>
@@ -142,19 +144,19 @@ export function PortalTopBar({ active, mandatId }: { active: Tab; mandatId?: str
       {isMobile && <span style={{ fontFamily: DISPLAY, fontSize: 15, color: BRAND, letterSpacing: '.01em' }}>HUMANUP</span>}
       {/* Mobile : barre d'onglets en bas de l'écran */}
       {isMobile && (
-        <nav aria-label="Navigation principale" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 45, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: '#fff', borderTop: `1px solid ${LINE}`, paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <nav aria-label={t('Navigation principale')} style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 45, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: '#fff', borderTop: `1px solid ${LINE}`, paddingBottom: 'env(safe-area-inset-bottom)' }}>
           {items.map(([key, label, href, icon]) => {
             const on = active === key;
             return (
               <Link key={key} to={href} className="pm-nav" aria-current={on ? 'page' : undefined}
                 style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '9px 4px 8px', fontSize: FS.xs, fontWeight: on ? 800 : 600, color: on ? BRAND : MUTED, textDecoration: 'none' }}>
-                {icon}{label === 'Offres d’emploi' ? 'Offres' : label}
+                {icon}{key === 'offres' ? t('Offres') : label}
               </Link>
             );
           })}
         </nav>
       )}
-      <nav aria-label="Navigation principale" className="pm-scroll pm-hide-sm" style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', minWidth: 0 }}>
+      <nav aria-label={t('Navigation principale')} className="pm-scroll pm-hide-sm" style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', minWidth: 0 }}>
         {items.map(([key, label, href]) => {
           const on = active === key;
           return (
@@ -166,6 +168,7 @@ export function PortalTopBar({ active, mandatId }: { active: Tab; mandatId?: str
         })}
       </nav>
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 10 }}>
+        <LangSwitch />
         <NotificationsBell />
         <div style={{ position: 'relative' }}>
           <button className="pm-icon" onClick={() => setMenu((v) => !v)} aria-haspopup="menu" aria-expanded={menu}
@@ -184,7 +187,7 @@ export function PortalTopBar({ active, mandatId }: { active: Tab; mandatId?: str
                   {me?.entreprise && <div style={{ fontSize: FS.sm, color: MUTED, marginTop: 2 }}>{me.entreprise}</div>}
                 </div>
                 <button role="menuitem" onClick={logout} className="pm-icon" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, fontSize: FS.base, fontWeight: 600, color: INK, background: 'transparent', border: 'none', borderRadius: 8, padding: '8px 10px', cursor: 'pointer', textAlign: 'left' }}>
-                  <LogOut size={15} aria-hidden />Déconnexion
+                  <LogOut size={15} aria-hidden />{t('Déconnexion')}
                 </button>
               </div>
             </>
@@ -210,16 +213,16 @@ export function NotificationsBell() {
   }
   useEffect(() => {
     void load();
-    const t = window.setInterval(() => void load(), 60_000);
-    return () => window.clearInterval(t);
+    const timer = window.setInterval(() => void load(), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
     if (!open) return;
     // À l'ouverture : tout est lu (les points restent visibles jusqu'à la fermeture).
-    const t = window.setTimeout(() => { void portalFetch('/notifications/seen', { method: 'POST', body: '{}' }); }, 800);
+    const timer = window.setTimeout(() => { void portalFetch('/notifications/seen', { method: 'POST', body: '{}' }); }, 800);
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
     window.addEventListener('keydown', onKey);
-    return () => { window.clearTimeout(t); window.removeEventListener('keydown', onKey); };
+    return () => { window.clearTimeout(timer); window.removeEventListener('keydown', onKey); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   function close() { setOpen(false); setData((d) => (d ? { unread: 0, items: d.items.map((i) => ({ ...i, unread: false })) } : d)); }
@@ -233,7 +236,7 @@ export function NotificationsBell() {
   return (
     <div style={{ position: 'relative' }}>
       <button className="pm-icon" onClick={() => (open ? close() : setOpen(true))} aria-haspopup="dialog" aria-expanded={open}
-        aria-label={unread > 0 ? `Notifications, ${unread} non lue${unread > 1 ? 's' : ''}` : 'Notifications'}
+        aria-label={unread > 0 ? t(unread > 1 ? 'Notifications, {n} non lues' : 'Notifications, {n} non lue', { n: unread }) : 'Notifications'}
         style={{ position: 'relative', width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: open ? 'rgba(34,23,122,.06)' : 'transparent', borderRadius: 10, cursor: 'pointer', color: INK }}>
         <Bell size={19} aria-hidden />
         {unread > 0 && <span aria-hidden style={{ position: 'absolute', top: 5, right: 5, minWidth: 16, height: 16, borderRadius: 99, background: '#D1356B', color: '#fff', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', border: '2px solid #fff' }}>{unread > 9 ? '9+' : unread}</span>}
@@ -244,13 +247,13 @@ export function NotificationsBell() {
           <div ref={panel} role="dialog" aria-label="Notifications" style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 51, width: 380, maxWidth: 'calc(100vw - 24px)', background: '#fff', border: `1px solid ${LINE}`, borderRadius: 14, boxShadow: '0 24px 50px -24px rgba(26,21,51,.5)', overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: `1px solid ${LINE}` }}>
               <span style={{ fontSize: FS.md, fontWeight: 800, color: INK }}>Notifications</span>
-              {unread > 0 && <span style={{ fontSize: FS.sm, color: FAINT }}>{unread} nouvelle{unread > 1 ? 's' : ''}</span>}
+              {unread > 0 && <span style={{ fontSize: FS.sm, color: FAINT }}>{t(unread > 1 ? '{n} nouvelles' : '{n} nouvelle', { n: unread })}</span>}
             </div>
             <div className="pm-scroll" style={{ maxHeight: 440, overflowY: 'auto' }}>
-              {!data && <p style={{ padding: 16, fontSize: FS.base, color: FAINT }}>Chargement…</p>}
+              {!data && <p style={{ padding: 16, fontSize: FS.base, color: FAINT }}>{t('Chargement…')}</p>}
               {data?.items.length === 0 && (
                 <div style={{ padding: '28px 16px', textAlign: 'center', fontSize: FS.base, color: FAINT }}>
-                  Aucune notification.
+                  {t('Aucune notification.')}
                 </div>
               )}
               {data?.items.map((n) => (
@@ -264,7 +267,7 @@ export function NotificationsBell() {
                     {n.body && <span style={{ display: 'block', fontSize: FS.sm, color: MUTED, marginTop: 2, lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.body}</span>}
                     <span style={{ display: 'block', fontSize: FS.xs, color: FAINT, marginTop: 3 }}>{relTime(n.at)}</span>
                   </span>
-                  {n.unread && <span aria-label="Non lue" style={{ flexShrink: 0, width: 8, height: 8, borderRadius: 99, background: '#D1356B', marginTop: 6 }} />}
+                  {n.unread && <span aria-label={t('Non lue')} style={{ flexShrink: 0, width: 8, height: 8, borderRadius: 99, background: '#D1356B', marginTop: 6 }} />}
                 </button>
               ))}
             </div>

@@ -11,6 +11,7 @@ import {
   BG, BRAND, COL_ACCENT, COL_LABELS, COL_ORDER, COL_TINT, DECISION_LABEL, DECISION_TONE, DISPLAY, FAINT, FONT, FS, INK, LABEL, LINE, MUTED, SHARED_CSS,
   PersonAvatar, PortalTopBar, portalFetch, relTime, useIsMobile, type Col, type Decision,
 } from './portal-ui';
+import { t } from '../../lib/i18n';
 
 interface Row {
   id: string; mandatId: string; mandatTitre: string; stage: string; column: Col | null; decision: Decision | null;
@@ -29,7 +30,7 @@ export default function PortalCandidatsPage() {
 
   useEffect(() => {
     if (!portalStore.get('portal_token')) { navigate('/portail/login'); return; }
-    document.title = 'Candidats | HumanUp';
+    document.title = t('Candidats | HumanUp');
     void portalFetch('/candidats').then(async (r) => {
       if (r.status === 401) { portalStore.clear(); navigate('/portail/login?expired=1'); return; }
       setRows(r.ok ? await r.json() : []);
@@ -53,33 +54,33 @@ export default function PortalCandidatsPage() {
       <style>{SHARED_CSS}</style>
       <PortalTopBar active="candidats" />
       <main style={{ maxWidth: 1200, margin: '0 auto', padding: isMobile ? '22px 16px 40px' : '32px 32px 56px' }}>
-        <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 22 : FS.xxl, letterSpacing: '-.025em' }}>Candidats</h1>
+        <h1 style={{ fontFamily: DISPLAY, fontSize: isMobile ? 22 : FS.xxl, letterSpacing: '-.025em' }}>{t('Candidats')}</h1>
 
         {/* Recherche + filtres */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 20 }}>
           <label style={{ position: 'relative', flex: '1 1 240px', minWidth: 0 }}>
-            <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Rechercher un candidat</span>
+            <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>{t('Rechercher un candidat')}</span>
             <Search size={16} aria-hidden style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: FAINT }} />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un nom, un poste, une entreprise…" style={{ ...selectStyle, width: '100%', paddingLeft: 36, fontWeight: 500 }} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Rechercher un nom, un poste, une entreprise…')} style={{ ...selectStyle, width: '100%', paddingLeft: 36, fontWeight: 500 }} />
           </label>
-          <select aria-label="Filtrer par offre" value={offre} onChange={(e) => setOffre(e.target.value)} style={{ ...selectStyle, flex: '0 1 240px' }}>
-            <option value="">Toutes les offres</option>
-            {offres.map(([id, t]) => <option key={id} value={id}>{t}</option>)}
+          <select aria-label={t('Filtrer par offre')} value={offre} onChange={(e) => setOffre(e.target.value)} style={{ ...selectStyle, flex: '0 1 240px' }}>
+            <option value="">{t('Toutes les offres')}</option>
+            {offres.map(([id, title]) => <option key={id} value={id}>{title}</option>)}
           </select>
-          <select aria-label="Filtrer par étape" value={col} onChange={(e) => setCol(e.target.value as '' | Col | 'ACTIFS')} style={{ ...selectStyle, flex: '0 1 190px' }}>
-            <option value="ACTIFS">En cours</option>
-            <option value="">Toutes les étapes</option>
+          <select aria-label={t('Filtrer par étape')} value={col} onChange={(e) => setCol(e.target.value as '' | Col | 'ACTIFS')} style={{ ...selectStyle, flex: '0 1 190px' }}>
+            <option value="ACTIFS">{t('En cours')}</option>
+            <option value="">{t('Toutes les étapes')}</option>
             {COL_ORDER.map((c) => <option key={c} value={c}>{COL_LABELS[c]}</option>)}
           </select>
         </div>
 
-        {rows === null && <p style={{ marginTop: 24, fontSize: FS.base, color: FAINT }}>Chargement…</p>}
+        {rows === null && <p style={{ marginTop: 24, fontSize: FS.base, color: FAINT }}>{t('Chargement…')}</p>}
         {rows !== null && (
-          <p style={{ ...LABEL, marginTop: 20 }}>{filtered.length} candidat{filtered.length > 1 ? 's' : ''}</p>
+          <p style={{ ...LABEL, marginTop: 20 }}>{t(filtered.length > 1 ? '{n} candidats' : '{n} candidat', { n: filtered.length })}</p>
         )}
         {rows !== null && filtered.length === 0 && (
           <div style={{ marginTop: 10, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, padding: 28, textAlign: 'center', color: MUTED, fontSize: FS.md }}>
-            Aucun candidat ne correspond à ces critères.
+            {t('Aucun candidat ne correspond à ces critères.')}
           </div>
         )}
 
@@ -102,7 +103,7 @@ export default function PortalCandidatsPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: FS.base }}>
               <thead>
                 <tr style={{ background: '#FAFAF6', borderBottom: `1px solid ${LINE}` }}>
-                  {['Candidat', 'Offre', 'Étape', 'Avis', 'Salaire', 'Mis à jour'].map((h) => (
+                  {[t('Candidat'), t('Offre'), t('Étape'), t('Avis'), t('Salaire'), t('Mis à jour')].map((h) => (
                     <th key={h} scope="col" style={{ ...LABEL, textAlign: 'left', padding: '11px 14px', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
@@ -110,7 +111,7 @@ export default function PortalCandidatsPage() {
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.id} className="pm-row" tabIndex={0} onClick={() => open(r)} onKeyDown={(e) => { if (e.key === 'Enter') open(r); }}
-                    aria-label={`${fullName(r)}, ${r.mandatTitre}. Ouvrir le dossier`} style={{ borderBottom: `1px solid ${LINE}`, cursor: 'pointer' }}>
+                    aria-label={`${fullName(r)}, ${r.mandatTitre}. ${t('Ouvrir le dossier')}`} style={{ borderBottom: `1px solid ${LINE}`, cursor: 'pointer' }}>
                     <td style={{ padding: '11px 14px' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
                         <PersonAvatar name={fullName(r)} photo={r.candidat.photoUrl} size={36} radius={10} />

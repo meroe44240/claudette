@@ -5,6 +5,7 @@ import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import Skeleton from '../../components/ui/Skeleton';
 import Badge from '../../components/ui/Badge';
+import { t } from '../../lib/i18n';
 
 interface Placement {
   candidatureId: string;
@@ -27,16 +28,16 @@ export default function PlacementsPage() {
   return (
     <div className="space-y-6 p-6">
       <PageHeader
-        title="Suivi des placements"
-        subtitle="Follow-up post-embauche de vos candidats placés"
-        breadcrumbs={[{ label: 'Stats', href: '/stats' }, { label: 'Placements' }]}
+        title={t('Suivi des placements')}
+        subtitle={t('Follow-up post-embauche de vos candidats placés')}
+        breadcrumbs={[{ label: t('Statistiques'), href: '/stats' }, { label: t('Placements') }]}
       />
 
       {isLoading ? (
         <div className="space-y-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
       ) : !data?.placements.length ? (
         <div className="rounded-xl border border-neutral-200 bg-white p-12 text-center">
-          <p className="text-neutral-500">Aucun placement à suivre</p>
+          <p className="text-neutral-500">{t('Aucun placement à suivre')}</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -53,16 +54,16 @@ export default function PlacementsPage() {
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 text-neutral-400" />
                     <span className="font-semibold text-neutral-900">{p.candidatNom}</span>
-                    {p.followUpDue && <Badge variant="warning">Follow-up requis</Badge>}
+                    {p.followUpDue && <Badge variant="warning">{t('Follow-up requis')}</Badge>}
                   </div>
                   <div className="mt-1 flex items-center gap-4 text-sm text-neutral-500">
                     <span className="flex items-center gap-1"><Building className="h-3.5 w-3.5" />{p.mandatTitre}{p.entrepriseNom ? ` · ${p.entrepriseNom}` : ''}</span>
-                    <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />Place il y a {p.daysSincePlacement}j</span>
+                    <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{t('Placé il y a {n}j', { n: p.daysSincePlacement })}</span>
                   </div>
                   <p className="mt-2 text-sm font-medium text-violet-600">{p.nextFollowUp}</p>
                 </div>
                 <div className="flex gap-2">
-                  {(['1S', '1M', '3M', '6M'] as const).map((label, idx) => {
+                  {[t('1S'), '1M', '3M', '6M'].map((label, idx) => {
                     const checked = [p.checks.oneWeek, p.checks.oneMonth, p.checks.threeMonths, p.checks.sixMonths][idx];
                     return (
                       <div key={label} className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${checked ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-400'}`}>

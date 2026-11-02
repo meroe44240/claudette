@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
+import { t, isEn, LOCALE } from '../../lib/i18n';
 
 // ─── BRAND TOKENS ───────────────────────────────────
 const NAVY = '#22177A';
@@ -19,7 +20,7 @@ const MANROPE = "'Manrope', sans-serif";
 const ARCHIVO = "'Archivo Black', sans-serif";
 
 // fr-FR thousands separator is a (narrow) no-break space -> normalise to a normal space
-const fmt = (v: number) => v.toLocaleString('fr-FR').replace(/[  ]/g, ' ');
+const fmt = (v: number) => v.toLocaleString(LOCALE).replace(/[  ]/g, ' ');
 
 // Palette avatars (le leaderboard ne fournit pas de couleur)
 const AV: [string, string][] = [
@@ -44,9 +45,9 @@ interface LbEntry {
 }
 
 const RDV_META: Record<string, { label: string; accent: string; bg: string }> = {
-  MEETING: { label: 'Meetings', accent: '#2A6BD8', bg: '#E8EEF9' },
-  APPEL: { label: 'Appels', accent: NAVY, bg: 'rgba(34,23,122,.08)' },
-  EMAIL: { label: 'Emails', accent: '#3B9A54', bg: '#EAF3EC' },
+  MEETING: { label: t('Meetings'), accent: '#2A6BD8', bg: '#E8EEF9' },
+  APPEL: { label: t('Appels'), accent: NAVY, bg: 'rgba(34,23,122,.08)' },
+  EMAIL: { label: t('Emails'), accent: '#3B9A54', bg: '#EAF3EC' },
 };
 
 export default function AnalyticsPage() {
@@ -79,19 +80,19 @@ export default function AnalyticsPage() {
       .map((e, i) => ({ ...e, pos: i + 1 }));
   }, [lbResp, sortKey]);
   const rankCols: { key: SortKey; label: string; ca?: boolean }[] = [
-    { key: 'calls', label: 'Calls' },
-    { key: 'meetings', label: 'RDV' },
-    { key: 'presentations', label: 'Présent.' },
-    { key: 'placements', label: 'Placés' },
-    { key: 'activeCandidatures', label: 'Actifs' },
-    { key: 'revenue', label: 'CA', ca: true },
+    { key: 'calls', label: t('Calls') },
+    { key: 'meetings', label: t('RDV') },
+    { key: 'presentations', label: t('Présent.') },
+    { key: 'placements', label: t('Placés') },
+    { key: 'activeCandidatures', label: t('Actifs') },
+    { key: 'revenue', label: t('CA'), ca: true },
   ];
   const RANK_GRID = 'minmax(46px,.42fr) minmax(150px,1.5fr) repeat(5,minmax(62px,.58fr)) minmax(96px,.84fr)';
   const medal = (p: number) => (p === 1 ? '🥇' : p === 2 ? '🥈' : p === 3 ? '🥉' : null);
-  const sortLabel = rankCols.find((c) => c.key === sortKey)?.label ?? 'CA';
+  const sortLabel = rankCols.find((c) => c.key === sortKey)?.label ?? t('CA');
 
   const people = (lbResp?.leaderboard || []).map((e) => ({ id: e.userId, name: `${e.prenom || ''} ${e.nom}`.trim() }));
-  const periodLabel = period === 'week' ? 'cette semaine' : period === 'quarter' ? 'ce trimestre' : 'ce mois';
+  const periodLabel = period === 'week' ? t('cette semaine') : period === 'quarter' ? t('ce trimestre') : t('ce mois');
 
   const v = useMemo(() => {
     const sd = statsResp?.data;
@@ -110,12 +111,12 @@ export default function AnalyticsPage() {
     const trendCol = (t?: number) => (t && t > 0 ? GREEN : t && t < 0 ? '#B3261E' : FAINT);
 
     const kpis = [
-      { label: 'Calls', value: String(calls), delta: trendStr(sc?.appels.trend), deltaColor: trendCol(sc?.appels.trend), pct: pctOf(calls, 200), bar: '#C9A227', note: 'objectif 200', iconBg: '#F2F3D8', icon: <Phone size={14} color={NAVY} strokeWidth={2} /> },
-      { label: 'Push prospection', value: '—', delta: 'à venir', deltaColor: FAINT, pct: 0, bar: '#8E7CC3', note: 'via List Push', iconBg: '#EDEAF9', icon: <Send size={14} color="#5B4B9E" strokeWidth={2} /> },
-      { label: 'Push shortlist', value: '—', delta: 'à venir', deltaColor: FAINT, pct: 0, bar: '#3B9A54', note: 'via List Push', iconBg: '#EAF3EC', icon: <UserPlus size={14} color={GREEN} strokeWidth={2} /> },
-      { label: 'Présentations', value: String(presn), delta: 'pipeline', deltaColor: FAINT, pct: pctOf(presn, 12), bar: '#2A6BD8', note: 'présentés au client', iconBg: '#E8EEF9', icon: <Presentation size={14} color="#2A4A8A" strokeWidth={2} /> },
-      { label: 'Mandats', value: String(mandats), delta: trendStr(sc?.mandats.trend), deltaColor: trendCol(sc?.mandats.trend), pct: pctOf(mandats, 5), bar: '#E08A2B', note: places + ' placements', iconBg: '#FBF3E7', icon: <FileText size={14} color="#8A6A2E" strokeWidth={2} /> },
-      { label: 'CA facturé', value: fmt(caNum) + ' €', delta: trendStr(sc?.ca.trend), deltaColor: trendCol(sc?.ca.trend), pct: pctOf(caNum, 20000), bar: NAVY, note: 'objectif 20 000 €', iconBg: '#E6E9AF', icon: <DollarSign size={14} color={NAVY} strokeWidth={2} /> },
+      { label: t('Calls'), value: String(calls), delta: trendStr(sc?.appels.trend), deltaColor: trendCol(sc?.appels.trend), pct: pctOf(calls, 200), bar: '#C9A227', note: t('objectif {n}', { n: 200 }), iconBg: '#F2F3D8', icon: <Phone size={14} color={NAVY} strokeWidth={2} /> },
+      { label: t('Push prospection'), value: '—', delta: t('à venir'), deltaColor: FAINT, pct: 0, bar: '#8E7CC3', note: t('via List Push'), iconBg: '#EDEAF9', icon: <Send size={14} color="#5B4B9E" strokeWidth={2} /> },
+      { label: t('Push shortlist'), value: '—', delta: t('à venir'), deltaColor: FAINT, pct: 0, bar: '#3B9A54', note: t('via List Push'), iconBg: '#EAF3EC', icon: <UserPlus size={14} color={GREEN} strokeWidth={2} /> },
+      { label: t('Présentations'), value: String(presn), delta: t('pipeline'), deltaColor: FAINT, pct: pctOf(presn, 12), bar: '#2A6BD8', note: t('présentés au client'), iconBg: '#E8EEF9', icon: <Presentation size={14} color="#2A4A8A" strokeWidth={2} /> },
+      { label: t('Mandats'), value: String(mandats), delta: trendStr(sc?.mandats.trend), deltaColor: trendCol(sc?.mandats.trend), pct: pctOf(mandats, 5), bar: '#E08A2B', note: t(places > 1 ? '{n} placements' : '{n} placement', { n: places }), iconBg: '#FBF3E7', icon: <FileText size={14} color="#8A6A2E" strokeWidth={2} /> },
+      { label: t('CA facturé'), value: fmt(caNum) + ' €', delta: trendStr(sc?.ca.trend), deltaColor: trendCol(sc?.ca.trend), pct: pctOf(caNum, 20000), bar: NAVY, note: t('objectif {n}', { n: fmt(20000) + ' €' }), iconBg: '#E6E9AF', icon: <DollarSign size={14} color={NAVY} strokeWidth={2} /> },
     ];
 
     const rdvRaw = sd?.rdvByType || [];
@@ -135,7 +136,7 @@ export default function AnalyticsPage() {
     });
 
     const team = lb.map((e, i) => ({
-      name: `${e.prenom || ''} ${e.nom}`.trim(), role: 'Recruteur', ini: initials(`${e.prenom || ''} ${e.nom}`),
+      name: `${e.prenom || ''} ${e.nom}`.trim(), role: t('Recruteur'), ini: initials(`${e.prenom || ''} ${e.nom}`),
       avBg: AV[i % AV.length][0], avFg: AV[i % AV.length][1],
       calls: String(e.stats.calls), pushProsp: '—', pushShort: '—', presn: '—',
       rdv: String(e.stats.meetings), places: String(e.stats.placements), ca: fmt(e.stats.revenue) + ' €',
@@ -152,7 +153,7 @@ export default function AnalyticsPage() {
     const maxMo = Math.max(1, ...last6.map((m) => m.facture));
     const months = last6.map((m, i) => ({
       name: m.month,
-      label: (m.facture / 1000).toFixed(m.facture >= 10000 ? 0 : 1).replace('.', ',') + 'k',
+      label: (m.facture / 1000).toFixed(m.facture >= 10000 ? 0 : 1).replace('.', isEn ? '.' : ',') + 'k',
       h: Math.round((m.facture / maxMo) * 100),
       bg: i === last6.length - 1 ? NAVY : 'rgba(34,23,122,.16)',
     }));
@@ -165,8 +166,8 @@ export default function AnalyticsPage() {
     return {
       showTeam: isAdmin,
       showRoles: false,
-      title: selName || 'Mon activité',
-      subtitle: (isAdmin ? 'Vue admin' : 'Recruteur') + ' · ' + periodLabel,
+      title: selName || t('Mon activité'),
+      subtitle: (isAdmin ? t('Vue admin') : t('Recruteur')) + ' · ' + periodLabel,
       periodLabel, caTotal,
       kpis, rdvTypes, rdvTotal, team, tot, months, hats: [] as any[],
     };
@@ -209,19 +210,19 @@ export default function AnalyticsPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {realAdmin && (
             <div style={{ display: 'flex', gap: 4, background: '#EFEFE6', borderRadius: 11, padding: 4 }}>
-              {([['overview', "Vue d'ensemble"], ['ranking', 'Classement']] as ['overview' | 'ranking', string][]).map(([k, label]) => (
+              {([['overview', t("Vue d'ensemble")], ['ranking', t('Classement')]] as ['overview' | 'ranking', string][]).map(([k, label]) => (
                 <button key={k} onClick={() => setView(k)} style={segBtn(view === k)}>{label}</button>
               ))}
             </div>
           )}
           <div style={{ display: 'flex', gap: 4, background: '#EFEFE6', borderRadius: 11, padding: 4 }}>
-            {([['week', 'Semaine'], ['month', 'Mois'], ['quarter', 'Trimestre']] as [Period, string][]).map(([k, label]) => (
+            {([['week', t('Semaine')], ['month', t('Mois')], ['quarter', t('Trimestre')]] as [Period, string][]).map(([k, label]) => (
               <button key={k} onClick={() => setPeriod(k)} style={segBtn(period === k)}>{label}</button>
             ))}
           </div>
           {realAdmin && view === 'overview' && (
             <div style={{ display: 'flex', gap: 4, background: '#EFEFE6', borderRadius: 11, padding: 4 }}>
-              {([['admin', 'Admin'], ['rec', 'Recruteur']] as ['admin' | 'rec', string][]).map(([k, label]) => (
+              {([['admin', t('Admin')], ['rec', t('Recruteur')]] as ['admin' | 'rec', string][]).map(([k, label]) => (
                 <button
                   key={k}
                   onClick={() => {
@@ -256,14 +257,14 @@ export default function AnalyticsPage() {
       {view === 'ranking' && (
         <div className="ana-rise" style={{ marginTop: 22 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: INK }}>Classement de l'équipe</span>
-            <span style={{ fontSize: 12, color: MUTED }}>trié par {sortLabel} · {periodLabel}</span>
+            <span style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: INK }}>{t("Classement de l'équipe")}</span>
+            <span style={{ fontSize: 12, color: MUTED }}>{t('trié par {col}', { col: sortLabel })} · {periodLabel}</span>
           </div>
           <div className="ana-scroll" style={{ background: '#fff', border: CARD_BORDER, borderRadius: 16, overflowX: 'auto', boxShadow: CARD_SHADOW }}>
             {/* header */}
             <div style={{ display: 'grid', gridTemplateColumns: RANK_GRID, gap: 12, padding: '12px 20px', borderBottom: '1.5px solid rgba(34,23,122,.1)', background: '#FCFCF5', fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: FAINT, minWidth: 720 }}>
               <span style={{ textAlign: 'center' }}>#</span>
-              <span>Personne</span>
+              <span>{t('Personne')}</span>
               {rankCols.map((c) => (
                 <button
                   key={c.key}
@@ -275,7 +276,7 @@ export default function AnalyticsPage() {
               ))}
             </div>
             {ranking.length === 0 && (
-              <div style={{ padding: '28px 20px', textAlign: 'center', fontSize: 13, color: MUTED }}>Aucune donnée sur la période.</div>
+              <div style={{ padding: '28px 20px', textAlign: 'center', fontSize: 13, color: MUTED }}>{t('Aucune donnée sur la période.')}</div>
             )}
             {ranking.map((r) => {
               const name = `${r.prenom || ''} ${r.nom}`.trim();
@@ -288,8 +289,8 @@ export default function AnalyticsPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
                     <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: '50%', background: av[0], color: av[1], display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MANROPE, fontWeight: 800, fontSize: 11 }}>{initials(name)}</span>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 800, color: INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}{isMe && <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 800, color: NAVY, background: '#E6E9AF', borderRadius: 999, padding: '2px 7px' }}>VOUS</span>}</div>
-                      <div style={{ fontSize: 11, color: FAINT }}>{r.fonction === 'SALES' ? 'Sales' : r.fonction === 'LES_DEUX' ? 'Sales + Recruteur' : 'Recruteur'}</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 800, color: INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}{isMe && <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 800, color: NAVY, background: '#E6E9AF', borderRadius: 999, padding: '2px 7px' }}>{t('VOUS')}</span>}</div>
+                      <div style={{ fontSize: 11, color: FAINT }}>{r.fonction === 'SALES' ? t('Sales') : r.fonction === 'LES_DEUX' ? t('Sales + Recruteur') : t('Recruteur')}</div>
                     </div>
                   </div>
                   {rankCols.map((c) => {
@@ -304,7 +305,7 @@ export default function AnalyticsPage() {
               );
             })}
           </div>
-          <p style={{ fontSize: 12, color: FAINT, marginTop: 10 }}>Clique une colonne pour trier le classement. Le CA correspond au CA « gagné » (mandats gagnés) sur la période.</p>
+          <p style={{ fontSize: 12, color: FAINT, marginTop: 10 }}>{t('Clique une colonne pour trier le classement. Le CA correspond au CA « gagné » (mandats gagnés) sur la période.')}</p>
         </div>
       )}
 
@@ -338,8 +339,8 @@ export default function AnalyticsPage() {
       {/* RENDEZ-VOUS PAR TYPE */}
       <div className="ana-rise" style={{ marginTop: 22, animationDelay: '.2s' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-          <span style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: INK }}>Rendez-vous par type</span>
-          <span style={{ fontSize: 12, color: MUTED }}>{v.rdvTotal} au total · {v.periodLabel}</span>
+          <span style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: INK }}>{t('Rendez-vous par type')}</span>
+          <span style={{ fontSize: 12, color: MUTED }}>{t('{n} au total', { n: v.rdvTotal })} · {v.periodLabel}</span>
         </div>
         <div className="ana-scroll" style={{ overflowX: 'auto', paddingBottom: 4 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 13, minWidth: 840 }}>
@@ -367,8 +368,8 @@ export default function AnalyticsPage() {
       {v.showTeam && (
         <div className="ana-rise" style={{ marginTop: 26, animationDelay: '.26s' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-            <span style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: INK }}>Par recruteur</span>
-            <span style={{ fontSize: 12, color: MUTED }}>vue administrateur</span>
+            <span style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: INK }}>{t('Par recruteur')}</span>
+            <span style={{ fontSize: 12, color: MUTED }}>{t('vue administrateur')}</span>
           </div>
           <div className="ana-scroll" style={{ background: '#fff', border: CARD_BORDER, borderRadius: 16, overflowX: 'auto', boxShadow: CARD_SHADOW }}>
             <TeamHeader />
@@ -394,7 +395,7 @@ export default function AnalyticsPage() {
             ))}
             {/* Total row — lime */}
             <div style={{ display: 'grid', gridTemplateColumns: TEAM_COLS, gap: 12, alignItems: 'center', padding: '13px 20px', background: '#F2F3D8' }}>
-              <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: NAVY }}>Total équipe</span>
+              <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: NAVY }}>{t('Total équipe')}</span>
               <TotTd>{v.tot.calls}</TotTd>
               <TotTd>{v.tot.pushProsp}</TotTd>
               <TotTd>{v.tot.pushShort}</TotTd>
@@ -410,8 +411,8 @@ export default function AnalyticsPage() {
       {/* CA FACTURÉ PAR MOIS */}
       <div className="ana-rise" style={{ marginTop: 26, animationDelay: '.32s' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-          <span style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: INK }}>CA facturé par mois</span>
-          <span style={{ fontSize: 12, color: MUTED }}>{v.caTotal} sur 6 mois</span>
+          <span style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 17, letterSpacing: '-.015em', color: INK }}>{t('CA facturé par mois')}</span>
+          <span style={{ fontSize: 12, color: MUTED }}>{t('{amount} sur 6 mois', { amount: v.caTotal })}</span>
         </div>
         <div style={{ background: '#fff', border: CARD_BORDER, borderRadius: 16, padding: '22px 24px 18px', boxShadow: CARD_SHADOW }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, height: 150 }}>
@@ -437,14 +438,14 @@ function TeamHeader() {
   const th: React.CSSProperties = { textAlign: 'center' };
   return (
     <div style={{ display: 'grid', gridTemplateColumns: TEAM_COLS, gap: 12, padding: '12px 20px', borderBottom: '1.5px solid rgba(34,23,122,.1)', background: '#FCFCF5', fontSize: 9.5, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: FAINT }}>
-      <span>Recruteur</span>
-      <span style={th}>Calls</span>
-      <span style={th}>Push prosp.</span>
-      <span style={th}>Push short.</span>
-      <span style={th}>Présent.</span>
-      <span style={th}>RDV</span>
-      <span style={th}>Placés</span>
-      <span style={{ textAlign: 'right' }}>CA facturé</span>
+      <span>{t('Recruteur')}</span>
+      <span style={th}>{t('Calls')}</span>
+      <span style={th}>{t('Push prosp.')}</span>
+      <span style={th}>{t('Push short.')}</span>
+      <span style={th}>{t('Présent.')}</span>
+      <span style={th}>{t('RDV')}</span>
+      <span style={th}>{t('Placés')}</span>
+      <span style={{ textAlign: 'right' }}>{t('CA facturé')}</span>
     </div>
   );
 }

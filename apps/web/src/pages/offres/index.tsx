@@ -4,6 +4,7 @@ import { Plus, Eye, EyeOff, Pencil, Trash2, X, Link2, MapPin, Copy, Check } from
 import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
+import { t } from '../../lib/i18n';
 
 interface JobOffer {
   id: string; slug: string; titre: string; description: string;
@@ -20,7 +21,8 @@ interface MandatOpt { id: string; titrePoste: string; entreprise: { nom: string 
 type Form = Omit<JobOffer, 'id' | 'slug' | 'createdAt'> & { id?: string };
 
 const CONTRACTS = ['CDI', 'CDD', 'FREELANCE', 'ALTERNANCE', 'STAGE'];
-const REMOTES = [{ v: 'ONSITE', l: 'Sur site' }, { v: 'HYBRID', l: 'Hybride' }, { v: 'REMOTE', l: 'Full remote' }];
+const CONTRACT_LABEL: Record<string, string> = { CDI: t('CDI'), CDD: t('CDD'), FREELANCE: t('Freelance'), ALTERNANCE: t('Alternance'), STAGE: t('Stage') };
+const REMOTES = [{ v: 'ONSITE', l: t('Sur site') }, { v: 'HYBRID', l: t('Hybride') }, { v: 'REMOTE', l: t('Full remote') }];
 
 function empty(): Form { return { titre: '', description: '', descriptionSociete: '', missions: '', packageInfo: '', localisation: '', titreEn: '', descriptionEn: '', descriptionSocieteEn: '', missionsEn: '', packageInfoEn: '', localisationEn: '', contractType: 'CDI', remote: 'HYBRID', salaireMin: null, salaireMax: null, currency: 'EUR', secteur: '', entrepriseNom: '', tags: [], published: false, mandatId: null }; }
 function salaire(min: number | null, max: number | null) { if (min && max) return `${(min / 1000).toFixed(0)}–${(max / 1000).toFixed(0)}k€`; if (min) return `≥ ${(min / 1000).toFixed(0)}k€`; if (max) return `≤ ${(max / 1000).toFixed(0)}k€`; return null; }
@@ -39,10 +41,10 @@ export default function OffresPage() {
   const inv = () => qc.invalidateQueries({ queryKey: ['job-offers'] });
   const saveMut = useMutation({
     mutationFn: (f: Form) => f.id ? api.put(`/job-offers/${f.id}`, f) : api.post('/job-offers', f),
-    onSuccess: () => { inv(); setModal(null); toast('success', 'Offre enregistrée'); },
+    onSuccess: () => { inv(); setModal(null); toast('success', t('Offre enregistrée')); },
   });
   const pubMut = useMutation({ mutationFn: ({ id, published }: { id: string; published: boolean }) => api.patch(`/job-offers/${id}/publish`, { published }), onSuccess: inv });
-  const delMut = useMutation({ mutationFn: (id: string) => api.delete(`/job-offers/${id}`), onSuccess: () => { inv(); toast('success', 'Offre supprimée'); } });
+  const delMut = useMutation({ mutationFn: (id: string) => api.delete(`/job-offers/${id}`), onSuccess: () => { inv(); toast('success', t('Offre supprimée')); } });
 
   const list = offers ?? [];
   const publishedCount = list.filter(o => o.published).length;
@@ -58,12 +60,12 @@ export default function OffresPage() {
       {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>Recrutement</div>
+          <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>{t('Recrutement')}</div>
           <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 38, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>Job board</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{publishedCount} publiée{publishedCount > 1 ? 's' : ''} · {list.length} au total</span>
-          <button onClick={() => setModal(empty())} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />Nouvelle offre</button>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,0.12)', borderRadius: 999, padding: '8px 15px' }}>{t(publishedCount > 1 ? '{n} publiées' : '{n} publiée', { n: publishedCount })} · {t('{n} au total', { n: list.length })}</span>
+          <button onClick={() => setModal(empty())} style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: 14, background: '#22177A', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: '12px 20px', cursor: 'pointer', boxShadow: '0 10px 22px -14px rgba(34,23,122,0.7)' }}><Plus size={16} strokeWidth={2.4} />{t('Nouvelle offre')}</button>
         </div>
       </div>
 
@@ -71,34 +73,34 @@ export default function OffresPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 20, padding: '13px 18px', background: '#F2F3D8', border: '1px solid rgba(34,23,122,.14)', borderRadius: 14 }}>
         <Link2 size={17} color="#22177A" style={{ flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 800, color: '#22177A' }}>API publique — à brancher sur le job board de votre landing</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: '#22177A' }}>{t('API publique — à brancher sur le job board de votre landing')}</div>
           <code style={{ fontSize: 12, color: '#4A4568', wordBreak: 'break-all' }}>{publicUrl}</code>
         </div>
-        <button onClick={() => { navigator.clipboard?.writeText(publicUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); }} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '7px 12px', cursor: 'pointer' }}>{copied ? <><Check size={13} />Copié</> : <><Copy size={13} />Copier</>}</button>
+        <button onClick={() => { navigator.clipboard?.writeText(publicUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); }} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '7px 12px', cursor: 'pointer' }}>{copied ? <><Check size={13} />{t('Copié')}</> : <><Copy size={13} />{t('Copier')}</>}</button>
       </div>
 
       {/* LIST */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 14, marginTop: 20 }}>
-        {list.length === 0 && <div style={{ gridColumn: '1 / -1', border: '1.5px dashed rgba(34,23,122,.2)', borderRadius: 16, padding: '40px 20px', textAlign: 'center', color: '#8A8699', fontSize: 14 }}>Aucune offre. Créez-en une, puis publiez-la pour qu'elle apparaisse sur votre job board.</div>}
+        {list.length === 0 && <div style={{ gridColumn: '1 / -1', border: '1.5px dashed rgba(34,23,122,.2)', borderRadius: 16, padding: '40px 20px', textAlign: 'center', color: '#8A8699', fontSize: 14 }}>{t('Aucune offre. Créez-en une, puis publiez-la pour qu’elle apparaisse sur votre job board.')}</div>}
         {list.map(o => (
           <div key={o.id} className="off-card" style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 16, padding: 18, boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 15.5, fontWeight: 800, color: '#1A1533' }}>{o.titre}</div>
-                <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{[o.entrepriseNom || 'Entreprise confidentielle', o.contractType].filter(Boolean).join(' · ')}</div>
+                <div style={{ fontSize: 12.5, color: '#8A8699', marginTop: 2 }}>{[o.entrepriseNom || t('Entreprise confidentielle'), o.contractType ? (CONTRACT_LABEL[o.contractType] ?? o.contractType) : null].filter(Boolean).join(' · ')}</div>
               </div>
-              <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '4px 10px', background: o.published ? '#EAF3EC' : 'rgba(34,23,122,.06)', color: o.published ? '#2C6B3F' : '#8A8699' }}>{o.published ? 'Publiée' : 'Brouillon'}</span>
+              <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '4px 10px', background: o.published ? '#EAF3EC' : 'rgba(34,23,122,.06)', color: o.published ? '#2C6B3F' : '#8A8699' }}>{o.published ? t('Publiée') : t('Brouillon')}</span>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12, fontSize: 12, color: '#6E6A85' }}>
               {o.localisation && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><MapPin size={12} color="#9A96AE" />{o.localisation}</span>}
               {salaire(o.salaireMin, o.salaireMax) && <span style={{ fontWeight: 700, color: '#2C6B3F' }}>{salaire(o.salaireMin, o.salaireMax)}</span>}
               {o.remote && <span>{REMOTES.find(r => r.v === o.remote)?.l ?? o.remote}</span>}
             </div>
-            {o.tags.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 11 }}>{o.tags.slice(0, 5).map(t => <span key={t} style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '3px 9px', background: '#F2F3D8', color: '#22177A' }}>{t}</span>)}</div>}
+            {o.tags.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 11 }}>{o.tags.slice(0, 5).map(tag => <span key={tag} style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: '3px 9px', background: '#F2F3D8', color: '#22177A' }}>{tag}</span>)}</div>}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(34,23,122,.07)' }}>
-              <button onClick={() => pubMut.mutate({ id: o.id, published: !o.published })} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: o.published ? '#8A6A2E' : '#22177A', background: o.published ? '#FBF3E7' : '#F0EFC4', border: 'none', borderRadius: 9, padding: '7px 12px', cursor: 'pointer' }}>{o.published ? <><EyeOff size={13} />Dépublier</> : <><Eye size={13} />Publier</>}</button>
-              <button onClick={() => setModal({ ...o })} style={{ marginLeft: 'auto', width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(34,23,122,.14)', background: '#fff', color: '#22177A', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={14} /></button>
-              <button onClick={() => { if (confirm('Supprimer cette offre ?')) delMut.mutate(o.id); }} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(176,54,31,.18)', background: '#fff', color: '#B3261E', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={14} /></button>
+              <button onClick={() => pubMut.mutate({ id: o.id, published: !o.published })} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: o.published ? '#8A6A2E' : '#22177A', background: o.published ? '#FBF3E7' : '#F0EFC4', border: 'none', borderRadius: 9, padding: '7px 12px', cursor: 'pointer' }}>{o.published ? <><EyeOff size={13} />{t('Dépublier')}</> : <><Eye size={13} />{t('Publier')}</>}</button>
+              <button onClick={() => setModal({ ...o })} style={{ marginLeft: 'auto', width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(34,23,122,.14)', background: '#fff', color: '#22177A', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} aria-label={t('Modifier')} title={t('Modifier')}><Pencil size={14} /></button>
+              <button onClick={() => { if (confirm(t('Supprimer cette offre ?'))) delMut.mutate(o.id); }} aria-label={t('Supprimer')} title={t('Supprimer')} style={{ width: 32, height: 32, borderRadius: 9, border: '1px solid rgba(176,54,31,.18)', background: '#fff', color: '#B3261E', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={14} /></button>
             </div>
           </div>
         ))}
@@ -128,54 +130,54 @@ function OfferModal({ form, mandats, onClose, onSave, saving }: { form: Form; ma
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(26,21,51,.42)' }} />
       <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 91, width: 620, maxWidth: '94vw', maxHeight: '92vh', overflowY: 'auto', background: '#fff', borderRadius: 22, boxShadow: '0 44px 96px -40px rgba(0,0,0,.55)', padding: '26px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ fontWeight: 800, fontSize: 18, color: '#1A1533' }}>{f.id ? 'Modifier l\'offre' : 'Nouvelle offre'}</div>
-          <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid rgba(34,23,122,.14)', background: '#fff', color: '#22177A', cursor: 'pointer' }}>✕</button>
+          <div style={{ fontWeight: 800, fontSize: 18, color: '#1A1533' }}>{f.id ? t('Modifier l’offre') : t('Nouvelle offre')}</div>
+          <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid rgba(34,23,122,.14)', background: '#fff', color: '#22177A', cursor: 'pointer' }} aria-label={t('Fermer')}>✕</button>
         </div>
         <div style={{ display: 'inline-flex', gap: 3, background: '#EFEFE6', borderRadius: 10, padding: 3, marginTop: 14 }}>
           {([['fr', 'Français'], ['en', 'English']] as ['fr' | 'en', string][]).map(([k, label]) => (
             <button key={k} onClick={() => setLang(k)} style={{ fontSize: 12.5, fontWeight: 700, padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: lang === k ? '#fff' : 'transparent', color: lang === k ? '#22177A' : '#8A8699', boxShadow: lang === k ? '0 3px 8px -6px rgba(34,23,122,.6)' : 'none' }}>{label}</button>
           ))}
         </div>
-        <div style={{ fontSize: 11.5, color: '#8A8699', marginTop: 6 }}>{lang === 'fr' ? 'Contenu affiché sur /fr. Les champs communs (contrat, salaire, tags…) sont partagés.' : 'Contenu affiché sur /en. Laissé vide → la version française est utilisée.'}</div>
+        <div style={{ fontSize: 11.5, color: '#8A8699', marginTop: 6 }}>{lang === 'fr' ? t('Contenu affiché sur /fr. Les champs communs (contrat, salaire, tags…) sont partagés.') : t('Contenu affiché sur /en. Laissé vide → la version française est utilisée.')}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
-          <div><label style={lbl}>Intitulé du poste{lang === 'fr' ? ' *' : ' (EN)'}</label><input className="st-in" value={tv('titre')} onChange={e => tset('titre', e.target.value)} style={inStyle} placeholder={lang === 'fr' ? 'Account Executive SaaS' : 'Account Executive SaaS (English title)'} /></div>
-          <div><label style={lbl}>Accroche (résumé court){lang === 'fr' ? ' *' : ' (EN)'}</label><textarea className="st-in" value={tv('description')} onChange={e => tset('description', e.target.value)} style={{ ...inStyle, minHeight: 62, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={lang === 'fr' ? 'Une ou deux phrases qui donnent envie de lire la suite…' : 'One or two lines that make people want to read on…'} /></div>
+          <div><label style={lbl}>{t('Intitulé du poste')}{lang === 'fr' ? ' *' : ' (EN)'}</label><input className="st-in" value={tv('titre')} onChange={e => tset('titre', e.target.value)} style={inStyle} placeholder={lang === 'fr' ? 'Account Executive SaaS' : 'Account Executive SaaS (English title)'} /></div>
+          <div><label style={lbl}>{t('Accroche (résumé court)')}{lang === 'fr' ? ' *' : ' (EN)'}</label><textarea className="st-in" value={tv('description')} onChange={e => tset('description', e.target.value)} style={{ ...inStyle, minHeight: 62, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={lang === 'fr' ? t('Une ou deux phrases qui donnent envie de lire la suite…') : 'One or two lines that make people want to read on…'} /></div>
           <div>
-            <label style={lbl}>Mandat lié</label>
+            <label style={lbl}>{t('Mandat lié')}</label>
             <select value={f.mandatId ?? ''} onChange={e => set('mandatId', e.target.value || null)} style={{ ...inStyle, cursor: 'pointer' }}>
-              <option value="">Aucun — offre indépendante</option>
+              <option value="">{t('Aucun — offre indépendante')}</option>
               {mandats.map(m => <option key={m.id} value={m.id}>{m.titrePoste}{m.entreprise?.nom ? ` — ${m.entreprise.nom}` : ''}</option>)}
             </select>
-            <div style={{ fontSize: 11.5, color: '#8A8699', marginTop: 5 }}>Les candidatures reçues via le job board alimenteront directement le pipeline de ce mandat.</div>
+            <div style={{ fontSize: 11.5, color: '#8A8699', marginTop: 5 }}>{t('Les candidatures reçues via le job board alimenteront directement le pipeline de ce mandat.')}</div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div><label style={lbl}>Entreprise (public)</label><input className="st-in" value={f.entrepriseNom ?? ''} onChange={e => set('entrepriseNom', e.target.value)} style={inStyle} placeholder="ou vide = confidentiel" /></div>
-            <div><label style={lbl}>Localisation{lang === 'en' ? ' (EN)' : ''}</label><input className="st-in" value={tv('localisation')} onChange={e => tset('localisation', e.target.value)} style={inStyle} placeholder={lang === 'fr' ? 'Paris (75)' : 'Paris, France'} /></div>
-            <div><label style={lbl}>Contrat</label><select value={f.contractType ?? ''} onChange={e => set('contractType', e.target.value)} style={{ ...inStyle, cursor: 'pointer' }}>{CONTRACTS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-            <div><label style={lbl}>Télétravail</label><select value={f.remote ?? ''} onChange={e => set('remote', e.target.value)} style={{ ...inStyle, cursor: 'pointer' }}>{REMOTES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}</select></div>
-            <div><label style={lbl}>Salaire min (/an)</label><input className="st-in" value={f.salaireMin ?? ''} onChange={e => set('salaireMin', num(e.target.value))} style={inStyle} placeholder="45000" /></div>
-            <div><label style={lbl}>Salaire max (/an)</label><input className="st-in" value={f.salaireMax ?? ''} onChange={e => set('salaireMax', num(e.target.value))} style={inStyle} placeholder="60000" /></div>
-            <div><label style={lbl}>Devise</label><select value={f.currency ?? 'EUR'} onChange={e => set('currency', e.target.value)} style={{ ...inStyle, cursor: 'pointer' }}>{['EUR', 'GBP', 'USD'].map(c => <option key={c} value={c}>{c === 'EUR' ? '€ EUR' : c === 'GBP' ? '£ GBP' : '$ USD'}</option>)}</select></div>
-            <div><label style={lbl}>Secteur</label><input className="st-in" value={f.secteur ?? ''} onChange={e => set('secteur', e.target.value)} style={inStyle} placeholder="SaaS / Tech" /></div>
+            <div><label style={lbl}>{t('Entreprise (public)')}</label><input className="st-in" value={f.entrepriseNom ?? ''} onChange={e => set('entrepriseNom', e.target.value)} style={inStyle} placeholder={t('ou vide = confidentiel')} /></div>
+            <div><label style={lbl}>{t('Localisation')}{lang === 'en' ? ' (EN)' : ''}</label><input className="st-in" value={tv('localisation')} onChange={e => tset('localisation', e.target.value)} style={inStyle} placeholder={lang === 'fr' ? 'Paris (75)' : 'Paris, France'} /></div>
+            <div><label style={lbl}>{t('Contrat')}</label><select value={f.contractType ?? ''} onChange={e => set('contractType', e.target.value)} style={{ ...inStyle, cursor: 'pointer' }}>{CONTRACTS.map(c => <option key={c} value={c}>{CONTRACT_LABEL[c] ?? c}</option>)}</select></div>
+            <div><label style={lbl}>{t('Télétravail')}</label><select value={f.remote ?? ''} onChange={e => set('remote', e.target.value)} style={{ ...inStyle, cursor: 'pointer' }}>{REMOTES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}</select></div>
+            <div><label style={lbl}>{t('Salaire min (/an)')}</label><input className="st-in" value={f.salaireMin ?? ''} onChange={e => set('salaireMin', num(e.target.value))} style={inStyle} placeholder="45000" /></div>
+            <div><label style={lbl}>{t('Salaire max (/an)')}</label><input className="st-in" value={f.salaireMax ?? ''} onChange={e => set('salaireMax', num(e.target.value))} style={inStyle} placeholder="60000" /></div>
+            <div><label style={lbl}>{t('Devise')}</label><select value={f.currency ?? 'EUR'} onChange={e => set('currency', e.target.value)} style={{ ...inStyle, cursor: 'pointer' }}>{['EUR', 'GBP', 'USD'].map(c => <option key={c} value={c}>{c === 'EUR' ? '€ EUR' : c === 'GBP' ? '£ GBP' : '$ USD'}</option>)}</select></div>
+            <div><label style={lbl}>{t('Secteur')}</label><input className="st-in" value={f.secteur ?? ''} onChange={e => set('secteur', e.target.value)} style={inStyle} placeholder="SaaS / Tech" /></div>
           </div>
-          <div><label style={lbl}>Description de la société{lang === 'en' ? ' (EN)' : ''}</label><textarea className="st-in" value={tv('descriptionSociete')} onChange={e => tset('descriptionSociete', e.target.value)} style={{ ...inStyle, minHeight: 84, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={lang === 'fr' ? "Qui est l'entreprise, son marché, sa taille, sa culture, sa mission…" : 'Who the company is, its market, size, culture, mission…'} /></div>
-          <div><label style={lbl}>Missions{lang === 'en' ? ' (EN)' : ''}</label><textarea className="st-in" value={tv('missions')} onChange={e => tset('missions', e.target.value)} style={{ ...inStyle, minHeight: 100, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={lang === 'fr' ? 'Les responsabilités du poste. Une mission par ligne :\n• Prospecter et qualifier…\n• Piloter le cycle de vente…' : 'The role responsibilities. One per line:\n• Prospect and qualify…\n• Own the sales cycle…'} /></div>
-          <div><label style={lbl}>Package{lang === 'en' ? ' (EN)' : ''}</label><textarea className="st-in" value={tv('packageInfo')} onChange={e => tset('packageInfo', e.target.value)} style={{ ...inStyle, minHeight: 84, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={lang === 'fr' ? "Rémunération, variable, avantages, BSPCE, télétravail, matériel…" : 'Compensation, variable, benefits, equity, remote, equipment…'} /></div>
+          <div><label style={lbl}>{t('Description de la société')}{lang === 'en' ? ' (EN)' : ''}</label><textarea className="st-in" value={tv('descriptionSociete')} onChange={e => tset('descriptionSociete', e.target.value)} style={{ ...inStyle, minHeight: 84, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={lang === 'fr' ? t('Qui est l’entreprise, son marché, sa taille, sa culture, sa mission…') : 'Who the company is, its market, size, culture, mission…'} /></div>
+          <div><label style={lbl}>{t('Missions')}{lang === 'en' ? ' (EN)' : ''}</label><textarea className="st-in" value={tv('missions')} onChange={e => tset('missions', e.target.value)} style={{ ...inStyle, minHeight: 100, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={lang === 'fr' ? t('Les responsabilités du poste. Une mission par ligne :\n• Prospecter et qualifier…\n• Piloter le cycle de vente…') : 'The role responsibilities. One per line:\n• Prospect and qualify…\n• Own the sales cycle…'} /></div>
+          <div><label style={lbl}>Package{lang === 'en' ? ' (EN)' : ''}</label><textarea className="st-in" value={tv('packageInfo')} onChange={e => tset('packageInfo', e.target.value)} style={{ ...inStyle, minHeight: 84, resize: 'vertical', fontFamily: "'Manrope',sans-serif" }} placeholder={lang === 'fr' ? t('Rémunération, variable, avantages, BSPCE, télétravail, matériel…') : 'Compensation, variable, benefits, equity, remote, equipment…'} /></div>
           <div>
-            <label style={lbl}>Compétences / tags</label>
+            <label style={lbl}>{t('Compétences / tags')}</label>
             <div style={{ display: 'flex', gap: 8 }}>
-              <input className="st-in" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const t = tagInput.trim(); if (t) { set('tags', [...f.tags, t]); setTagInput(''); } } }} style={inStyle} placeholder="Entrée pour ajouter…" />
+              <input className="st-in" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const tag = tagInput.trim(); if (tag) { set('tags', [...f.tags, tag]); setTagInput(''); } } }} style={inStyle} placeholder={t('Entrée pour ajouter…')} />
             </div>
-            {f.tags.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>{f.tags.map((t, i) => <span key={i} onClick={() => set('tags', f.tags.filter((_, j) => j !== i))} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: '1px solid rgba(34,23,122,.14)', borderRadius: 999, padding: '4px 10px', cursor: 'pointer' }}>{t}<X size={11} strokeWidth={2.8} /></span>)}</div>}
+            {f.tags.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>{f.tags.map((tag, i) => <span key={i} onClick={() => set('tags', f.tags.filter((_, j) => j !== i))} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: '1px solid rgba(34,23,122,.14)', borderRadius: 999, padding: '4px 10px', cursor: 'pointer' }}>{tag}<X size={11} strokeWidth={2.8} /></span>)}</div>}
           </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, padding: '11px 14px', background: '#F2F3D8', border: '1px solid rgba(34,23,122,.14)', borderRadius: 12, cursor: 'pointer' }}>
             <span onClick={() => set('published', !f.published)} style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${f.published ? '#22177A' : 'rgba(34,23,122,.25)'}`, background: f.published ? '#E6E9AF' : '#fff' }}>{f.published && <Check size={12} color="#22177A" />}</span>
-            <span style={{ fontSize: 13, color: '#4A4568' }}>Publier sur le job board (visible via l'API publique)</span>
+            <span style={{ fontSize: 13, color: '#4A4568' }}>{t('Publier sur le job board (visible via l’API publique)')}</span>
           </label>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-          <button onClick={onClose} style={{ flex: 1, fontSize: 14, fontWeight: 700, background: '#F5F4EA', color: '#4A4568', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>Annuler</button>
-          <button disabled={saving || !f.titre.trim() || !f.description.trim()} onClick={() => onSave(f)} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: f.titre.trim() && f.description.trim() ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
+          <button onClick={onClose} style={{ flex: 1, fontSize: 14, fontWeight: 700, background: '#F5F4EA', color: '#4A4568', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>{t('Annuler')}</button>
+          <button disabled={saving || !f.titre.trim() || !f.description.trim()} onClick={() => onSave(f)} style={{ flex: 1.4, fontSize: 14, fontWeight: 700, background: f.titre.trim() && f.description.trim() ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 12, padding: 12, cursor: 'pointer' }}>{saving ? t('Enregistrement…') : t('Enregistrer')}</button>
         </div>
       </div>
     </>

@@ -11,6 +11,7 @@ import Input from '../../components/ui/Input';
 import EmptyState from '../../components/ui/EmptyState';
 import Skeleton from '../../components/ui/Skeleton';
 import { toast } from '../../components/ui/Toast';
+import { t, LOCALE } from '../../lib/i18n';
 
 type Kind = 'RDV_CLIENT' | 'PRESENTATION' | 'INTERVIEW' | 'AUTRE';
 
@@ -52,25 +53,25 @@ interface Detail {
 }
 
 const KINDS: { value: Kind; label: string; icon: typeof Calendar }[] = [
-  { value: 'RDV_CLIENT', label: 'RDV client', icon: Calendar },
-  { value: 'PRESENTATION', label: 'Présentation', icon: Handshake },
-  { value: 'INTERVIEW', label: 'Entretien candidat', icon: UserRound },
-  { value: 'AUTRE', label: 'Autre', icon: CircleOff },
+  { value: 'RDV_CLIENT', label: t('RDV client'), icon: Calendar },
+  { value: 'PRESENTATION', label: t('Présentation'), icon: Handshake },
+  { value: 'INTERVIEW', label: t('Entretien candidat'), icon: UserRound },
+  { value: 'AUTRE', label: t('Autre'), icon: CircleOff },
 ];
 
 const STAGE_LABELS: Record<string, string> = {
-  SOURCING: 'Sourcing',
-  CONTACTE: 'Qualification',
-  ENTRETIEN_1: 'Entretien interne',
-  ENVOYE_CLIENT: 'Envoi client',
-  ENTRETIEN_CLIENT: 'Entretien client',
-  PROCESS: 'Process',
-  OFFRE: 'Offre',
+  SOURCING: t('Sourcing'),
+  CONTACTE: t('Qualification'),
+  ENTRETIEN_1: t('Entretien interne'),
+  ENVOYE_CLIENT: t('Envoi client'),
+  ENTRETIEN_CLIENT: t('Entretien client'),
+  PROCESS: t('Process'),
+  OFFRE: t('Offre'),
 };
 
 function formatDate(iso: string | null) {
-  if (!iso) return 'Date inconnue';
-  return new Date(iso).toLocaleString('fr-FR', {
+  if (!iso) return t('Date inconnue');
+  return new Date(iso).toLocaleString(LOCALE, {
     weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
   });
 }
@@ -93,7 +94,7 @@ function PendingList() {
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
   if (meetings.length === 0) {
-    return <EmptyState title="Rien à classer" icon={<Calendar size={40} />} />;
+    return <EmptyState title={t('Rien à classer')} icon={<Calendar size={40} />} />;
   }
 
   return (
@@ -109,7 +110,7 @@ function PendingList() {
                   {m.attendees.length > 0 && ` · ${m.attendees.map((a) => a.name || a.email).join(', ')}`}
                 </p>
               </div>
-              <span className="shrink-0 text-xs font-medium text-[#22177A]">Classer</span>
+              <span className="shrink-0 text-xs font-medium text-[#22177A]">{t('Classer')}</span>
             </div>
           </Card>
         </Link>
@@ -137,8 +138,8 @@ function ClassifyForm({ id }: { id: string }) {
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
   }, [search]);
 
   // Pré-remplissage depuis l'événement d'agenda
@@ -170,17 +171,17 @@ function ClassifyForm({ id }: { id: string }) {
       }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['meetings-a-classer'] });
-      toast('success', res.annonce ? 'Validé et annoncé sur Slack' : 'Validé');
+      toast('success', res.annonce ? t('Validé et annoncé sur Slack') : t('Validé'));
       navigate('/rdv/classer');
     },
     onError: (e) => {
-      toast('error', e instanceof ApiError ? e.data.message || 'Erreur lors de la validation' : 'Erreur lors de la validation');
+      toast('error', e instanceof ApiError ? e.data.message || t('Erreur lors de la validation') : t('Erreur lors de la validation'));
     },
   });
 
   if (isLoading) return <Skeleton className="h-64 w-full" />;
   if (error || !data) {
-    return <EmptyState title="Événement introuvable" actionLabel="Voir les événements à classer" onAction={() => navigate('/rdv/classer')} />;
+    return <EmptyState title={t('Événement introuvable')} actionLabel={t('Voir les événements à classer')} onAction={() => navigate('/rdv/classer')} />;
   }
 
   const { meeting, clients } = data;
@@ -200,7 +201,7 @@ function ClassifyForm({ id }: { id: string }) {
             <p className="mt-1 text-sm text-neutral-500">{formatDate(meeting.startTime)}</p>
             {meeting.attendees.length > 0 && (
               <p className="mt-1 text-sm text-neutral-500">
-                Avec {meeting.attendees.map((a) => a.name || a.email).join(', ')}
+                {t('Avec {names}', { names: meeting.attendees.map((a) => a.name || a.email).join(', ') })}
               </p>
             )}
           </div>
@@ -212,7 +213,7 @@ function ClassifyForm({ id }: { id: string }) {
               className="flex shrink-0 items-center gap-1 text-xs font-medium text-[#22177A] hover:underline"
             >
               <ExternalLink size={14} />
-              Agenda
+              {t('Agenda')}
             </a>
           )}
         </div>
@@ -240,13 +241,13 @@ function ClassifyForm({ id }: { id: string }) {
 
           {kind === 'PRESENTATION' && (
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-neutral-700">Candidat présenté</label>
+              <label className="block text-sm font-medium text-neutral-700">{t('Candidat présenté')}</label>
               <div className="relative">
                 <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Rechercher un candidat"
+                  placeholder={t('Rechercher un candidat')}
                   className="w-full rounded-lg border border-neutral-200 py-2 pl-9 pr-3 text-sm focus:border-[#22177A] focus:outline-none"
                 />
               </div>
@@ -275,14 +276,14 @@ function ClassifyForm({ id }: { id: string }) {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-neutral-500">Aucune candidature trouvée</p>
+                <p className="text-sm text-neutral-500">{t('Aucune candidature trouvée')}</p>
               )}
             </div>
           )}
 
           {kind === 'RDV_CLIENT' && clients.length > 1 && (
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-neutral-700">Contact principal</label>
+              <label className="block text-sm font-medium text-neutral-700">{t('Contact principal')}</label>
               <div className="space-y-1">
                 {clients.map((c) => (
                   <button
@@ -303,22 +304,22 @@ function ClassifyForm({ id }: { id: string }) {
 
           {needsDetails && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Input label="Date et heure" type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} />
+              <Input label={t('Date et heure')} type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} />
               <Input
-                label={kind === 'PRESENTATION' ? 'Interlocuteur côté client' : 'Interlocuteurs'}
+                label={kind === 'PRESENTATION' ? t('Interlocuteur côté client') : t('Interlocuteurs')}
                 value={interlocuteurs}
                 onChange={(e) => setInterlocuteurs(e.target.value)}
-                placeholder="Prénom Nom"
+                placeholder={t('Prénom Nom')}
               />
             </div>
           )}
 
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => navigate('/rdv/classer')}>
-              Plus tard
+              {t('Plus tard')}
             </Button>
             <Button onClick={() => mutation.mutate()} disabled={missing || mutation.isPending} loading={mutation.isPending}>
-              Valider
+              {t('Valider')}
             </Button>
           </div>
         </div>
@@ -328,12 +329,12 @@ function ClassifyForm({ id }: { id: string }) {
 }
 
 export default function RdvClasserPage() {
-  usePageTitle('RDV à classer');
+  usePageTitle(t('RDV à classer'));
   const { id } = useParams<{ id: string }>();
 
   return (
     <div className="space-y-6">
-      <PageHeader title={id ? 'RDV client ou présentation ?' : 'RDV à classer'} />
+      <PageHeader title={id ? t('RDV client ou présentation ?') : t('RDV à classer')} />
       {id ? <ClassifyForm key={id} id={id} /> : <div className="mx-auto max-w-2xl"><PendingList /></div>}
     </div>
   );

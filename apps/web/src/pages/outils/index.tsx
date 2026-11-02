@@ -5,6 +5,7 @@ import { api } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { toast } from '../../components/ui/Toast';
 import { useAuthStore } from '../../stores/auth-store';
+import { t, lang as uiLang } from '../../lib/i18n';
 
 type Tool = 'home' | 'contrat' | 'cv';
 type Lang = 'fr' | 'en';
@@ -194,10 +195,10 @@ interface Recruiter { nom: string; email: string; telephone: string; avatarUrl: 
 function fileToThumbnail(file: File, max = 320): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Lecture impossible'));
+    reader.onerror = () => reject(new Error(t('Lecture impossible')));
     reader.onload = () => {
       const img = new Image();
-      img.onerror = () => reject(new Error('Image invalide'));
+      img.onerror = () => reject(new Error(t('Image invalide')));
       img.onload = () => {
         const side = Math.min(img.width, img.height); // recadrage carré centré
         const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
@@ -205,7 +206,7 @@ function fileToThumbnail(file: File, max = 320): Promise<string> {
         const canvas = document.createElement('canvas');
         canvas.width = out; canvas.height = out;
         const ctx = canvas.getContext('2d');
-        if (!ctx) return reject(new Error('Canvas indisponible'));
+        if (!ctx) return reject(new Error(t('Canvas indisponible')));
         ctx.drawImage(img, sx, sy, side, side, 0, 0, out, out);
         resolve(canvas.toDataURL('image/jpeg', 0.82));
       };
@@ -481,23 +482,23 @@ function docHtml(cand: CandidatLite, cfg: DocConfig, rec: Recruiter, lang: Lang)
 }
 
 function contratHtml(f: ContractForm, lang: Lang): string {
-  const t = (fr: string, en: string) => (lang === 'fr' ? fr : en);
+  const T = (fr: string, en: string) => (lang === 'fr' ? fr : en);
   const articles = contractArticles(lang, f).map(a => `<div class="art"><div class="sec ab">${esc(artHead(a))}</div>${a.blocks.map(b => `<p class="para">${b.lead ? `<b>${esc(b.lead)}</b>` : ''}${esc(b.text)}</p>`).join('')}</div>`).join('');
-  return `<!doctype html><html lang="${lang}"><head>${DOC_HEAD}<title>${t('Contrat', 'Agreement')} — ${esc(f.client || 'HumanUp')}</title></head><body>
+  return `<!doctype html><html lang="${lang}"><head>${DOC_HEAD}<title>${T('Contrat', 'Agreement')} — ${esc(f.client || 'HumanUp')}</title></head><body>
 <div class="hdr">
-  <div class="eyebrow">${t('Contrat de prestation de recrutement', 'Recruitment services agreement')}</div>
-  <div class="h1 ab">${esc(f.poste || t('Mission de recrutement', 'Recruitment engagement'))}</div>
+  <div class="eyebrow">${T('Contrat de prestation de recrutement', 'Recruitment services agreement')}</div>
+  <div class="h1 ab">${esc(f.poste || T('Mission de recrutement', 'Recruitment engagement'))}</div>
   <div class="parties">
-    <div><div class="pcap">${t('Le Client', 'The Client')}</div><div class="pnm">${esc(f.client || '[Client]')}</div><div class="psub">${esc(f.rep || '—')}${f.siret ? ' · ' + esc(f.siret) : ''}</div></div>
-    <div><div class="pcap">${t('Le Prestataire', 'The Provider')}</div><div class="pnm">HumanUp Recruitment Agency</div><div class="psub">${t('Représenté par le consultant en charge', 'Represented by the consultant in charge')}</div></div>
+    <div><div class="pcap">${T('Le Client', 'The Client')}</div><div class="pnm">${esc(f.client || '[Client]')}</div><div class="psub">${esc(f.rep || '—')}${f.siret ? ' · ' + esc(f.siret) : ''}</div></div>
+    <div><div class="pcap">${T('Le Prestataire', 'The Provider')}</div><div class="pnm">HumanUp Recruitment Agency</div><div class="psub">${T('Représenté par le consultant en charge', 'Represented by the consultant in charge')}</div></div>
   </div>
 </div>
 <div class="body">
-  <div class="art"><div class="sec ab">${t('Préambule', 'Preamble')}</div><p class="para">${esc(PREAMBLE[lang])}</p></div>
+  <div class="art"><div class="sec ab">${T('Préambule', 'Preamble')}</div><p class="para">${esc(PREAMBLE[lang])}</p></div>
   ${articles}
   <div class="sign">
-    <div><div class="cap">${t('Pour le Client', 'For the Client')}</div><div class="ln"></div><div class="nm">${esc(f.rep || f.client || '—')}</div></div>
-    <div><div class="cap">${t('Pour HumanUp', 'For HumanUp')}</div><div class="ln"></div><div class="nm">HumanUp Recruitment Agency</div></div>
+    <div><div class="cap">${T('Pour le Client', 'For the Client')}</div><div class="ln"></div><div class="nm">${esc(f.rep || f.client || '—')}</div></div>
+    <div><div class="cap">${T('Pour HumanUp', 'For HumanUp')}</div><div class="ln"></div><div class="nm">HumanUp Recruitment Agency</div></div>
   </div>
 </div>
 </body></html>`;
@@ -505,7 +506,7 @@ function contratHtml(f: ContractForm, lang: Lang): string {
 
 // ═════════════════════════════════════════════════════
 export default function OutilsPage() {
-  usePageTitle('Outil Recruteurs');
+  usePageTitle(t('Outil Recruteurs'));
   const [tool, setTool] = useState<Tool>('home');
 
   return (
@@ -524,7 +525,7 @@ export default function OutilsPage() {
         <div>
           <div style={{ fontSize: 13, color: '#9A96AE', fontWeight: 600 }}>Recruiter Studio</div>
           <h1 style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: tool === 'home' ? 38 : 28, letterSpacing: '-0.035em', color: '#1A1533', marginTop: 4 }}>
-            {tool === 'home' ? 'Outil Recruteurs' : tool === 'contrat' ? 'Contrat client' : 'CV & Dossier'}
+            {tool === 'home' ? t('Outil Recruteurs') : tool === 'contrat' ? t('Contrat client') : t('CV & Dossier')}
           </h1>
         </div>
       </div>
@@ -536,16 +537,16 @@ export default function OutilsPage() {
               <span style={{ width: 56, height: 56, borderRadius: 16, background: '#F0F1D6', color: '#22177A', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FileText size={27} /></span>
               <ArrowRight size={22} color="#C3BFDA" />
             </div>
-            <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, color: '#22177A', marginTop: 20 }}>Contrat client</div>
-            <div style={{ fontSize: 14, color: '#6E6A85', marginTop: 7, lineHeight: 1.5 }}>Term & conditions au succès. Fee, garantie, paiement éditables → envoi en signature.</div>
+            <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, color: '#22177A', marginTop: 20 }}>{t('Contrat client')}</div>
+            <div style={{ fontSize: 14, color: '#6E6A85', marginTop: 7, lineHeight: 1.5 }}>{t('Term & conditions au succès. Fee, garantie, paiement éditables → envoi en signature.')}</div>
           </button>
           <button onClick={() => setTool('cv')} className="st-card" style={{ textAlign: 'left', cursor: 'pointer', background: '#fff', border: '1px solid rgba(34,23,122,.12)', borderRadius: 22, padding: 30 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
               <span style={{ width: 56, height: 56, borderRadius: 16, background: '#F0F1D6', color: '#22177A', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IdCard size={27} /></span>
               <ArrowRight size={22} color="#C3BFDA" />
             </div>
-            <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, color: '#22177A', marginTop: 20 }}>CV & Dossier</div>
-            <div style={{ fontSize: 14, color: '#6E6A85', marginTop: 7, lineHeight: 1.5 }}>Un candidat → format HumanUp. Sections à la carte, one-page ou dossier, anonyme.</div>
+            <div style={{ fontFamily: "'Archivo Black',sans-serif", fontSize: 20, color: '#22177A', marginTop: 20 }}>{t('CV & Dossier')}</div>
+            <div style={{ fontSize: 14, color: '#6E6A85', marginTop: 7, lineHeight: 1.5 }}>{t('Un candidat → format HumanUp. Sections à la carte, one-page ou dossier, anonyme.')}</div>
           </button>
         </div>
       )}
@@ -558,23 +559,23 @@ export default function OutilsPage() {
 
 // ─── CONTRAT TOOL ───────────────────────────────────
 function ContratTool() {
-  const [lang, setLang] = useState<Lang>('fr');
+  const [lang, setLang] = useState<Lang>(uiLang);
   const [sent, setSent] = useState(false);
   const [f, setF] = useState<ContractForm>({
     client: '', siret: '', adresse: '', rep: '', email: '', pays: 'France',
-    feePct: '20', garantieMois: '3', proprieteMois: '12', paiement: '30 jours date de facture', poste: '',
+    feePct: '20', garantieMois: '3', proprieteMois: '12', paiement: uiLang === 'en' ? '30 days from invoice date' : '30 jours date de facture', poste: '',
   });
   const set = (k: keyof ContractForm, v: string) => { setF(p => ({ ...p, [k]: v })); setSent(false); };
   const { data: mandats } = useQuery({ queryKey: ['mandats', 'contrat'], queryFn: () => api.get<{ data: { id: string; titrePoste: string; entreprise: { nom: string }; client: { nom: string; prenom: string | null } | null }[] }>('/mandats?perPage=100&scope=all') });
 
-  const err = !f.client.trim() ? 'nom du client' : !f.email.trim() ? 'e-mail du signataire' : '';
+  const err = !f.client.trim() ? t('nom du client') : !f.email.trim() ? t('e-mail du signataire') : '';
   const inStyle: React.CSSProperties = { width: '100%', fontSize: 13.5, padding: '10px 12px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#fff', color: '#1A1533', outline: 'none' };
   const lbl: React.CSSProperties = { display: 'block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.09em', textTransform: 'uppercase', color: '#6E6A85', marginBottom: 6 };
 
   const send = () => {
-    if (err) { toast('error', `À compléter : ${err}`); return; }
+    if (err) { toast('error', t('À compléter : {err}', { err })); return; }
     setSent(true);
-    toast('success', `Contrat prêt — envoi en signature à ${f.email} (branchement e-signature à finaliser)`);
+    toast('success', t('Contrat prêt — envoi en signature à {email} (branchement e-signature à finaliser)', { email: f.email }));
   };
 
   return (
@@ -582,41 +583,41 @@ function ContratTool() {
       {/* FORM */}
       <div style={{ background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 16, padding: 20, boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <span style={{ fontWeight: 800, fontSize: 15, color: '#1A1533' }}>Paramètres</span>
+          <span style={{ fontWeight: 800, fontSize: 15, color: '#1A1533' }}>{t('Paramètres')}</span>
           <div style={{ display: 'flex', background: '#EFEFE6', borderRadius: 9, padding: 3 }}>
             {(['fr', 'en'] as const).map(l => <button key={l} onClick={() => setLang(l)} style={{ fontSize: 12, fontWeight: 800, padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', background: lang === l ? '#fff' : 'transparent', color: lang === l ? '#22177A' : '#8A7F5A' }}>{l.toUpperCase()}</button>)}
           </div>
         </div>
 
-        <label style={{ ...lbl, marginTop: 16 }}>Pré-remplir depuis un mandat</label>
+        <label style={{ ...lbl, marginTop: 16 }}>{t('Pré-remplir depuis un mandat')}</label>
         <select onChange={e => { const m = (mandats?.data ?? []).find(x => x.id === e.target.value); if (m) { set('client', m.client ? `${m.client.prenom ? m.client.prenom + ' ' : ''}${m.client.nom}` : m.entreprise.nom); set('poste', m.titrePoste); } }} style={{ ...inStyle, cursor: 'pointer' }} defaultValue="">
-          <option value="">— Choisir un mandat —</option>
+          <option value="">{t('— Choisir un mandat —')}</option>
           {(mandats?.data ?? []).map(m => <option key={m.id} value={m.id}>{m.titrePoste} · {m.entreprise.nom}</option>)}
         </select>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-          <div><label style={lbl}>Nom du client</label><input className="st-in" value={f.client} onChange={e => set('client', e.target.value)} style={inStyle} placeholder="Axiome Concept" /></div>
-          <div><label style={lbl}>E-mail signataire</label><input className="st-in" value={f.email} onChange={e => set('email', e.target.value)} style={inStyle} placeholder="signataire@client.com" /></div>
-          <div><label style={lbl}>SIRET / immatriculation</label><input className="st-in" value={f.siret} onChange={e => set('siret', e.target.value)} style={inStyle} /></div>
-          <div><label style={lbl}>Adresse du siège</label><input className="st-in" value={f.adresse} onChange={e => set('adresse', e.target.value)} style={inStyle} /></div>
-          <div><label style={lbl}>Représenté par</label><input className="st-in" value={f.rep} onChange={e => set('rep', e.target.value)} style={inStyle} /></div>
+          <div><label style={lbl}>{t('Nom du client')}</label><input className="st-in" value={f.client} onChange={e => set('client', e.target.value)} style={inStyle} placeholder="Axiome Concept" /></div>
+          <div><label style={lbl}>{t('E-mail signataire')}</label><input className="st-in" value={f.email} onChange={e => set('email', e.target.value)} style={inStyle} placeholder="signataire@client.com" /></div>
+          <div><label style={lbl}>{t('SIRET / immatriculation')}</label><input className="st-in" value={f.siret} onChange={e => set('siret', e.target.value)} style={inStyle} /></div>
+          <div><label style={lbl}>{t('Adresse du siège')}</label><input className="st-in" value={f.adresse} onChange={e => set('adresse', e.target.value)} style={inStyle} /></div>
+          <div><label style={lbl}>{t('Représenté par')}</label><input className="st-in" value={f.rep} onChange={e => set('rep', e.target.value)} style={inStyle} /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div><label style={lbl}>Success fee (%)</label><input className="st-in" value={f.feePct} onChange={e => set('feePct', e.target.value)} style={inStyle} /></div>
-            <div><label style={lbl}>Pays</label><input className="st-in" value={f.pays} onChange={e => set('pays', e.target.value)} style={inStyle} /></div>
-            <div><label style={lbl}>Garantie (mois)</label><input className="st-in" value={f.garantieMois} onChange={e => set('garantieMois', e.target.value)} style={inStyle} /></div>
-            <div><label style={lbl}>Propriété (mois)</label><input className="st-in" value={f.proprieteMois} onChange={e => set('proprieteMois', e.target.value)} style={inStyle} /></div>
+            <div><label style={lbl}>{t('Pays')}</label><input className="st-in" value={f.pays} onChange={e => set('pays', e.target.value)} style={inStyle} /></div>
+            <div><label style={lbl}>{t('Garantie (mois)')}</label><input className="st-in" value={f.garantieMois} onChange={e => set('garantieMois', e.target.value)} style={inStyle} /></div>
+            <div><label style={lbl}>{t('Propriété (mois)')}</label><input className="st-in" value={f.proprieteMois} onChange={e => set('proprieteMois', e.target.value)} style={inStyle} /></div>
           </div>
-          <div><label style={lbl}>Conditions de paiement</label><input className="st-in" value={f.paiement} onChange={e => set('paiement', e.target.value)} style={inStyle} /></div>
+          <div><label style={lbl}>{t('Conditions de paiement')}</label><input className="st-in" value={f.paiement} onChange={e => set('paiement', e.target.value)} style={inStyle} /></div>
         </div>
 
-        {err && <div style={{ marginTop: 14, background: '#FBE3E3', border: '1px solid rgba(176,54,31,.28)', borderRadius: 10, padding: '10px 12px', fontSize: 12.5, color: '#B23', lineHeight: 1.5 }}><strong>À compléter :</strong> {err}.</div>}
-        {sent && <div style={{ marginTop: 14, background: '#D6F3E3', color: '#1F7A4D', fontWeight: 700, fontSize: 13, padding: '10px 12px', borderRadius: 10, textAlign: 'center' }}>✓ Prêt — envoi en signature à {f.email}</div>}
+        {err && <div style={{ marginTop: 14, background: '#FBE3E3', border: '1px solid rgba(176,54,31,.28)', borderRadius: 10, padding: '10px 12px', fontSize: 12.5, color: '#B23', lineHeight: 1.5 }}><strong>{t('À compléter :')}</strong> {err}.</div>}
+        {sent && <div style={{ marginTop: 14, background: '#D6F3E3', color: '#1F7A4D', fontWeight: 700, fontSize: 13, padding: '10px 12px', borderRadius: 10, textAlign: 'center' }}>✓ {t('Prêt — envoi en signature à {email}', { email: f.email })}</div>}
 
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-          <button onClick={() => printDoc(contratHtml(f, lang))} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 11, padding: 12, cursor: 'pointer' }}><Printer size={15} />Exporter (PDF)</button>
-          <button onClick={send} style={{ flex: 1.3, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 11, padding: 12, cursor: 'pointer' }}><Send size={15} />Envoyer en signature</button>
+          <button onClick={() => printDoc(contratHtml(f, lang))} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, color: '#22177A', background: '#fff', border: '1px solid rgba(34,23,122,.18)', borderRadius: 11, padding: 12, cursor: 'pointer' }}><Printer size={15} />{t('Exporter (PDF)')}</button>
+          <button onClick={send} style={{ flex: 1.3, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 11, padding: 12, cursor: 'pointer' }}><Send size={15} />{t('Envoyer en signature')}</button>
         </div>
-        <div style={{ marginTop: 10, fontSize: 11, color: '#9A96AE', lineHeight: 1.5, display: 'flex', gap: 7 }}><ShieldCheck size={13} style={{ flexShrink: 0, marginTop: 1 }} />L'e-signature (Yousign/DocuSign) sera branchée à la finalisation ; le contrat est déjà généré et imprimable.</div>
+        <div style={{ marginTop: 10, fontSize: 11, color: '#9A96AE', lineHeight: 1.5, display: 'flex', gap: 7 }}><ShieldCheck size={13} style={{ flexShrink: 0, marginTop: 1 }} />{t("L'e-signature (Yousign/DocuSign) sera branchée à la finalisation ; le contrat est déjà généré et imprimable.")}</div>
       </div>
 
       {/* PREVIEW */}
@@ -652,7 +653,7 @@ function ContratTool() {
 
 // ─── STUDIO DE PROPOSITION (one-pager / DC) ─────────
 function CvTool() {
-  const [lang, setLang] = useState<Lang>('fr');
+  const [lang, setLang] = useState<Lang>(uiLang);
   const [format, setFormat] = useState<DocFormat>('onepager');
   const [anon, setAnon] = useState<AnonCfg>({ name: true, currentCompany: false, allCompanies: false, city: true });
   const [hideOffices, setHideOffices] = useState(false);
@@ -704,7 +705,7 @@ function CvTool() {
       versions.current[target] = out;
       setSections(out.sections); setHdr(out.hdr);
     } catch (err: any) {
-      if (trReq.current === reqId) toast('error', err?.message || 'Traduction impossible');
+      if (trReq.current === reqId) toast('error', err?.message || t('Traduction impossible'));
     } finally {
       if (trReq.current === reqId) setTranslating(false);
     }
@@ -778,33 +779,33 @@ function CvTool() {
   async function onPhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) { toast('error', 'Image uniquement (JPG/PNG).'); }
-    else { try { setRecPhoto(await fileToThumbnail(file)); } catch (err: any) { toast('error', err?.message || 'Image illisible'); } }
+    if (!file.type.startsWith('image/')) { toast('error', t('Image uniquement (JPG/PNG).')); }
+    else { try { setRecPhoto(await fileToThumbnail(file)); } catch (err: any) { toast('error', err?.message || t('Image illisible')); } }
     if (photoRef.current) photoRef.current.value = '';
   }
   async function saveMyPhone() {
     if (!member || member.id !== (user as any)?.id) return;
     const body: Record<string, string> = { telephone: recPhone };
     if (recPhoto.startsWith('data:')) body.avatarData = recPhoto; else body.avatarUrl = recPhoto;
-    try { await api.put('/settings/me', body); toast('success', 'Profil mis à jour'); qc.invalidateQueries({ queryKey: ['team'] }); }
-    catch { toast('error', 'Échec de la sauvegarde'); }
+    try { await api.put('/settings/me', body); toast('success', t('Profil mis à jour')); qc.invalidateQueries({ queryKey: ['team'] }); }
+    catch { toast('error', t('Échec de la sauvegarde')); }
   }
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.type !== 'application/pdf') { toast('error', 'PDF uniquement pour l’instant.'); if (fileRef.current) fileRef.current.value = ''; return; }
+    if (file.type !== 'application/pdf') { toast('error', t('PDF uniquement pour l’instant.')); if (fileRef.current) fileRef.current.value = ''; return; }
     setUploading(true);
     try {
       const fd = new FormData(); fd.append('file', file);
       const token = localStorage.getItem('accessToken');
       const res = await fetch('/api/v1/ai/create-from-cv', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd, credentials: 'include' });
-      if (!res.ok) { const d = await res.json().catch(() => ({} as any)); throw new Error(d?.message || 'Échec de l’analyse du CV'); }
+      if (!res.ok) { const d = await res.json().catch(() => ({} as any)); throw new Error(d?.message || t('Échec de l’analyse du CV')); }
       const json = await res.json();
       const id = json?.data?.candidatId as string | undefined;
-      toast('success', 'CV analysé — profil créé.');
+      toast('success', t('CV analysé — profil créé.'));
       qc.invalidateQueries({ queryKey: ['candidats'] });
       if (id) { setSelId(id); setQ(''); }
-    } catch (err: any) { toast('error', err?.message || 'Erreur lors de l’analyse'); }
+    } catch (err: any) { toast('error', err?.message || t('Erreur lors de l’analyse')); }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
   }
 
@@ -833,22 +834,22 @@ function CvTool() {
             </div>
           </div>
           {cand && lang === 'en' && !translating && (
-            <button onClick={() => translateInto('en', versions.current.fr?.sections ?? sections)} style={{ marginTop: 8, fontSize: 11.5, fontWeight: 700, color: '#22177A', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}>Retraduire depuis le français</button>
+            <button onClick={() => translateInto('en', versions.current.fr?.sections ?? sections)} style={{ marginTop: 8, fontSize: 11.5, fontWeight: 700, color: '#22177A', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}>{t('Retraduire depuis le français')}</button>
           )}
           <div style={{ display: 'flex', gap: 4, background: '#EFEFE6', borderRadius: 9, padding: 3, marginTop: 12 }}>
             <button onClick={() => setFormat('onepager')} style={seg(format === 'onepager')}>One-pager</button>
-            <button onClick={() => setFormat('dc')} style={seg(format === 'dc')}>Dossier (DC)</button>
+            <button onClick={() => setFormat('dc')} style={seg(format === 'dc')}>{t('Dossier (DC)')}</button>
           </div>
 
           <input ref={fileRef} type="file" accept="application/pdf" onChange={onFile} style={{ display: 'none' }} />
           <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{ width: '100%', marginTop: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '16px 12px', borderRadius: 12, border: '1.5px dashed rgba(34,23,122,.28)', background: '#F7F7FB', cursor: uploading ? 'wait' : 'pointer' }}>
             {uploading ? <Loader2 size={20} color="#22177A" className="st-spin" /> : <Upload size={20} color="#22177A" />}
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A' }}>{uploading ? 'Analyse du CV par l’IA…' : 'Ajouter un CV (PDF)'}</span>
-            <span style={{ fontSize: 11, color: '#9A96AE' }}>{uploading ? 'Extraction boîtes + réalisations' : 'Crée un profil réutilisable'}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#22177A' }}>{uploading ? t('Analyse du CV par l’IA…') : t('Ajouter un CV (PDF)')}</span>
+            <span style={{ fontSize: 11, color: '#9A96AE' }}>{uploading ? t('Extraction boîtes + réalisations') : t('Crée un profil réutilisable')}</span>
           </button>
           <div style={{ position: 'relative', marginTop: 12 }}>
             <Search size={15} color="#9A96AE" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="…ou choisir un candidat existant" style={{ width: '100%', fontSize: 13, padding: '10px 12px 10px 34px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder={t('…ou choisir un candidat existant')} style={{ width: '100%', fontSize: 13, padding: '10px 12px 10px 34px', borderRadius: 10, border: '1.5px solid rgba(34,23,122,.14)', background: '#FCFCF5', outline: 'none' }} />
           </div>
           {results.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, maxHeight: 220, overflowY: 'auto' }}>
@@ -865,12 +866,12 @@ function CvTool() {
         {cand && <>
           {/* Anonymisation */}
           <div style={card}>
-            <div style={{ fontWeight: 800, fontSize: 14, color: '#1A1533', marginBottom: 10 }}>Anonymisation</div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: '#1A1533', marginBottom: 10 }}>{t('Anonymisation')}</div>
             {([
-              { k: 'name', label: 'Masquer le nom du candidat' },
-              { k: 'currentCompany', label: 'Masquer l’entreprise actuelle' },
-              { k: 'allCompanies', label: 'Masquer toutes les entreprises' },
-              { k: 'city', label: 'Masquer la ville' },
+              { k: 'name', label: t('Masquer le nom du candidat') },
+              { k: 'currentCompany', label: t('Masquer l’entreprise actuelle') },
+              { k: 'allCompanies', label: t('Masquer toutes les entreprises') },
+              { k: 'city', label: t('Masquer la ville') },
             ] as const).map(o => (
               <label key={o.k} style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8, cursor: 'pointer' }} onClick={() => setAnon(a => ({ ...a, [o.k]: !a[o.k] }))}>
                 <span style={cbox(anon[o.k])} />
@@ -879,30 +880,30 @@ function CvTool() {
             ))}
             <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer' }} onClick={() => setHideOffices(v => !v)}>
               <span style={cbox(hideOffices)} />
-              <span style={{ fontSize: 12.5, color: '#4A4568' }}>Masquer les bureaux (Hong Kong · Canada)</span>
+              <span style={{ fontSize: 12.5, color: '#4A4568' }}>{t('Masquer les bureaux (Hong Kong · Canada)')}</span>
             </label>
           </div>
 
           {/* Cible (proposition) */}
           <div style={card}>
-            <div style={{ fontWeight: 800, fontSize: 14, color: '#1A1533', marginBottom: 10 }}>Cible (optionnel)</div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: '#1A1533', marginBottom: 10 }}>{t('Cible (optionnel)')}</div>
             <div style={{ display: 'flex', gap: 4, background: '#EFEFE6', borderRadius: 9, padding: 3 }}>
-              {([['none', 'Aucune'], ['mandat', 'Mandat'], ['free', 'Libre']] as const).map(([m, lab]) => <button key={m} onClick={() => setTargetMode(m)} style={seg(targetMode === m)}>{lab}</button>)}
+              {([['none', t('Aucune')], ['mandat', t('Mandat')], ['free', t('Libre')]] as const).map(([m, lab]) => <button key={m} onClick={() => setTargetMode(m)} style={seg(targetMode === m)}>{lab}</button>)}
             </div>
             {targetMode === 'mandat' && (
               <select value={mandatId} onChange={e => setMandatId(e.target.value)} style={{ ...inStyle, cursor: 'pointer', marginTop: 10 }}>
-                <option value="">— Choisir un mandat —</option>
+                <option value="">{t('— Choisir un mandat —')}</option>
                 {(mandats?.data ?? []).map(m => <option key={m.id} value={m.id}>{m.titrePoste} · {m.entreprise?.nom}</option>)}
               </select>
             )}
-            {targetMode === 'free' && <input value={targetFree} onChange={e => setTargetFree(e.target.value)} placeholder="Ex. Directeur Commercial chez Acme" style={{ ...inStyle, marginTop: 10 }} />}
-            {targetLabel && <div style={{ fontSize: 11.5, color: '#22177A', marginTop: 8 }}>Proposé pour <strong>{targetLabel}</strong> — pense à activer la section « Pourquoi ce candidat ».</div>}
+            {targetMode === 'free' && <input value={targetFree} onChange={e => setTargetFree(e.target.value)} placeholder={t('Ex. Directeur Commercial chez Acme')} style={{ ...inStyle, marginTop: 10 }} />}
+            {targetLabel && <div style={{ fontSize: 11.5, color: '#22177A', marginTop: 8 }}>{t('Proposé pour')} <strong>{targetLabel}</strong> {t('— pense à activer la section « Pourquoi ce candidat ».')}</div>}
           </div>
 
           {/* Éditeur de sections */}
           <div style={card}>
-            <div style={{ fontWeight: 800, fontSize: 14, color: '#1A1533' }}>Sections du document</div>
-            <div style={{ fontSize: 11.5, color: '#9A96AE', margin: '3px 0 12px' }}>Coche pour inclure · ★ met en highlight (bandeau) · édite le texte</div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: '#1A1533' }}>{t('Sections du document')}</div>
+            <div style={{ fontSize: 11.5, color: '#9A96AE', margin: '3px 0 12px' }}>{t('Coche pour inclure · ★ met en highlight (bandeau) · édite le texte')}</div>
             {sections.map((s, idx) => (
               <div key={s.id} style={{ border: '1px solid rgba(34,23,122,.1)', borderRadius: 11, marginBottom: 8, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', background: s.on ? '#F7F7FB' : '#fff' }}>
@@ -916,7 +917,7 @@ function CvTool() {
                   <div style={{ padding: 10, borderTop: '1px solid rgba(34,23,122,.08)' }}>
                     <input value={s.title} onChange={e => patchSec(s.id, { title: e.target.value })} style={{ ...inStyle, fontSize: 11.5, marginBottom: 8, fontWeight: 700 }} />
                     {(s.kind === 'summary' || s.kind === 'pitch' || s.kind === 'availability') && (
-                      <textarea value={s.body || ''} onChange={e => patchSec(s.id, { body: e.target.value })} rows={s.kind === 'summary' ? 5 : 3} style={{ ...inStyle, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }} placeholder="Texte…" />
+                      <textarea value={s.body || ''} onChange={e => patchSec(s.id, { body: e.target.value })} rows={s.kind === 'summary' ? 5 : 3} style={{ ...inStyle, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }} placeholder={t('Texte…')} />
                     )}
                     {(s.kind === 'strengths' || s.kind === 'skills') && (<>
                       {(s.items ?? []).map(it => (
@@ -927,7 +928,7 @@ function CvTool() {
                           <button onClick={() => rmItem(s.id, it.id)} style={iconBtn}>✕</button>
                         </div>
                       ))}
-                      <button onClick={() => addItem(s.id)} style={{ fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', marginTop: 2 }}>+ Ajouter</button>
+                      <button onClick={() => addItem(s.id)} style={{ fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: 'none', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', marginTop: 2 }}>+ {t('Ajouter')}</button>
                     </>)}
                     {s.kind === 'experience' && (s.exps ?? []).map(x => (
                       <div key={x.id} style={{ border: '1px solid rgba(34,23,122,.08)', borderRadius: 9, padding: 8, marginBottom: 7, background: x.on ? '#fff' : '#FAFAF7' }}>
@@ -936,9 +937,9 @@ function CvTool() {
                           <input value={x.titre} onChange={e => patchExp(s.id, x.id, { titre: e.target.value })} style={{ ...inStyle, fontSize: 11.5, fontWeight: 700, padding: '5px 7px' }} />
                         </div>
                         <div style={{ display: 'flex', gap: 6, marginTop: 5 }}>
-                          <input value={x.entreprise} onChange={e => patchExp(s.id, x.id, { entreprise: e.target.value })} placeholder="Entreprise" style={{ ...inStyle, fontSize: 11, padding: '5px 7px', flex: 2 }} />
-                          <input value={x.anneeDebut} onChange={e => patchExp(s.id, x.id, { anneeDebut: e.target.value })} placeholder="Début" style={{ ...inStyle, fontSize: 11, padding: '5px 7px', width: 58 }} />
-                          <input value={x.anneeFin} onChange={e => patchExp(s.id, x.id, { anneeFin: e.target.value })} placeholder="Fin" style={{ ...inStyle, fontSize: 11, padding: '5px 7px', width: 58 }} />
+                          <input value={x.entreprise} onChange={e => patchExp(s.id, x.id, { entreprise: e.target.value })} placeholder={t('Entreprise')} style={{ ...inStyle, fontSize: 11, padding: '5px 7px', flex: 2 }} />
+                          <input value={x.anneeDebut} onChange={e => patchExp(s.id, x.id, { anneeDebut: e.target.value })} placeholder={t('Début')} style={{ ...inStyle, fontSize: 11, padding: '5px 7px', width: 58 }} />
+                          <input value={x.anneeFin} onChange={e => patchExp(s.id, x.id, { anneeFin: e.target.value })} placeholder={t('Fin')} style={{ ...inStyle, fontSize: 11, padding: '5px 7px', width: 58 }} />
                         </div>
                         {x.highlights.map(h => (
                           <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
@@ -959,14 +960,14 @@ function CvTool() {
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <ShieldCheck size={15} color="#22177A" />
-              <span style={{ fontWeight: 800, fontSize: 14, color: '#1A1533' }}>Contact HumanUp (trust)</span>
+              <span style={{ fontWeight: 800, fontSize: 14, color: '#1A1533' }}>{t('Contact HumanUp (trust)')}</span>
             </div>
-            <label style={lbl}>Recruteur</label>
+            <label style={lbl}>{t('Recruteur')}</label>
             <select value={recruiterId ?? ''} onChange={e => setRecruiterId(e.target.value)} style={{ ...inStyle, cursor: 'pointer' }}>
               {(team ?? []).map(m => <option key={m.id} value={m.id}>{`${m.prenom ? m.prenom + ' ' : ''}${m.nom}`}</option>)}
             </select>
-            <div style={{ marginTop: 10 }}><label style={lbl}>E-mail</label><input value={recEmail} onChange={e => setRecEmail(e.target.value)} placeholder="prenom@humanup.io" style={inStyle} /></div>
-            <div style={{ marginTop: 10 }}><label style={lbl}>Téléphone</label><input value={recPhone} onChange={e => setRecPhone(e.target.value)} placeholder="+33 6 12 34 56 78" style={inStyle} /></div>
+            <div style={{ marginTop: 10 }}><label style={lbl}>E-mail</label><input value={recEmail} onChange={e => setRecEmail(e.target.value)} placeholder={t('prenom@humanup.io')} style={inStyle} /></div>
+            <div style={{ marginTop: 10 }}><label style={lbl}>{t('Téléphone')}</label><input value={recPhone} onChange={e => setRecPhone(e.target.value)} placeholder="+33 6 12 34 56 78" style={inStyle} /></div>
             <div style={{ marginTop: 10 }}>
               <label style={lbl}>Photo</label>
               <input ref={photoRef} type="file" accept="image/*" onChange={onPhotoFile} style={{ display: 'none' }} />
@@ -974,16 +975,16 @@ function CvTool() {
                 {recPhoto
                   ? <img src={recPhoto} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(34,23,122,.2)', flexShrink: 0 }} />
                   : <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#EFEFE6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Upload size={15} color="#9A96AE" /></div>}
-                <button onClick={() => photoRef.current?.click()} style={{ flex: 1, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#fff', border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 10px', cursor: 'pointer' }}>{recPhoto ? 'Changer la photo' : 'Téléverser une photo'}</button>
-                {recPhoto && <button onClick={() => setRecPhoto('')} title="Retirer" style={{ fontSize: 13, color: '#9A96AE', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>✕</button>}
+                <button onClick={() => photoRef.current?.click()} style={{ flex: 1, fontSize: 12, fontWeight: 700, color: '#22177A', background: '#fff', border: '1.5px solid rgba(34,23,122,.18)', borderRadius: 9, padding: '8px 10px', cursor: 'pointer' }}>{recPhoto ? t('Changer la photo') : t('Téléverser une photo')}</button>
+                {recPhoto && <button onClick={() => setRecPhoto('')} title={t('Retirer')} style={{ fontSize: 13, color: '#9A96AE', background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>✕</button>}
               </div>
             </div>
             {member && member.id === (user as any)?.id && (
-              <button onClick={saveMyPhone} style={{ marginTop: 10, width: '100%', fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: 'none', borderRadius: 9, padding: '8px 10px', cursor: 'pointer' }}>Enregistrer dans mon profil</button>
+              <button onClick={saveMyPhone} style={{ marginTop: 10, width: '100%', fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', border: 'none', borderRadius: 9, padding: '8px 10px', cursor: 'pointer' }}>{t('Enregistrer dans mon profil')}</button>
             )}
           </div>
 
-          <button onClick={() => printDoc(docHtml(cand, cfg, recruiter, lang))} style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 12, padding: 14, cursor: 'pointer', boxShadow: '0 10px 24px -12px rgba(34,23,122,.6)' }}><Printer size={16} />{format === 'dc' ? 'Exporter le DC (PDF)' : 'Exporter le one-pager (PDF)'}</button>
+          <button onClick={() => printDoc(docHtml(cand, cfg, recruiter, lang))} style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#E6E9AF', background: '#22177A', border: 'none', borderRadius: 12, padding: 14, cursor: 'pointer', boxShadow: '0 10px 24px -12px rgba(34,23,122,.6)' }}><Printer size={16} />{format === 'dc' ? t('Exporter le DC (PDF)') : t('Exporter le one-pager (PDF)')}</button>
         </>}
       </div>
 
@@ -992,12 +993,12 @@ function CvTool() {
         {!cand ? (
           <div style={{ padding: '80px 40px', textAlign: 'center', color: '#9A96AE', fontSize: 14, lineHeight: 1.6 }}>
             <FileText size={30} color="#C4C0D6" style={{ marginBottom: 12 }} /><br />
-            Ajoutez un CV (PDF) ou choisissez un candidat.<br />HumanUp compose une <strong style={{ color: '#6E6A85' }}>proposition</strong> — one-pager ou dossier — dont vous choisissez les sections, ce qui est masqué et ce qui est mis en avant.
+            {t('Ajoutez un CV (PDF) ou choisissez un candidat.')}<br />{t('HumanUp compose une')} <strong style={{ color: '#6E6A85' }}>{t('proposition')}</strong> {t('— one-pager ou dossier — dont vous choisissez les sections, ce qui est masqué et ce qui est mis en avant.')}
           </div>
         ) : (
           <div style={{ position: 'relative' }}>
             <iframe title="document" srcDoc={html} style={{ width: '100%', height: 1040, border: 0, display: 'block', background: '#EFEFE6', opacity: translating ? .45 : 1, transition: 'opacity .2s ease' }} />
-            {translating && <div style={{ position: 'absolute', top: 18, left: '50%', transform: 'translateX(-50%)', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#E6E9AF', background: '#22177A', borderRadius: 999, padding: '9px 16px', boxShadow: '0 10px 24px -12px rgba(34,23,122,.6)' }}><Loader2 size={14} className="st-spin" />Traduction en cours</div>}
+            {translating && <div style={{ position: 'absolute', top: 18, left: '50%', transform: 'translateX(-50%)', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#E6E9AF', background: '#22177A', borderRadius: 999, padding: '9px 16px', boxShadow: '0 10px 24px -12px rgba(34,23,122,.6)' }}><Loader2 size={14} className="st-spin" />{t('Traduction en cours')}</div>}
           </div>
         )}
       </div>

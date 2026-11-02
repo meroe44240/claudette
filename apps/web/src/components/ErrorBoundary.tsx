@@ -1,6 +1,7 @@
 import { Component } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { t } from '../lib/i18n';
 
 interface Props {
   children: ReactNode;
@@ -46,10 +47,10 @@ export default class ErrorBoundary extends Component<Props, State> {
             <AlertTriangle size={56} strokeWidth={1.2} className="text-red-400" />
           </div>
           <h3 className="text-xl font-semibold text-neutral-700">
-            Une erreur inattendue s'est produite
+            {t("Une erreur inattendue s'est produite")}
           </h3>
           <p className="mt-3 max-w-[420px] text-[15px] leading-relaxed text-neutral-500">
-            L'application a rencontré un problème. Vous pouvez recharger la page ou revenir au tableau de bord.
+            {t("L'application a rencontré un problème. Vous pouvez recharger la page ou revenir au tableau de bord.")}
           </p>
           {this.state.error && (
             <pre className="mt-4 max-w-[500px] truncate rounded-lg bg-neutral-50 px-4 py-2 text-xs text-neutral-400">
@@ -62,14 +63,14 @@ export default class ErrorBoundary extends Component<Props, State> {
               className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-700"
             >
               <RefreshCw size={16} />
-              Recharger la page
+              {t('Recharger la page')}
             </button>
             <button
               onClick={this.handleGoHome}
               className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-5 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
             >
               <Home size={16} />
-              Tableau de bord
+              {t('Tableau de bord')}
             </button>
           </div>
         </div>

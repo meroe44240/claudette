@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
+import { t, LOCALE } from '../../lib/i18n';
 
 // ── Types ──────────────────────────────────────────
 interface Auteur { id: string; prenom: string | null; nom: string; avatarUrl: string | null; avatarData: string | null }
@@ -22,16 +23,16 @@ interface Post {
 
 // ── Statuts ────────────────────────────────────────
 const STATUTS = [
-  { key: 'IDEE', label: 'Idée', dot: '#9A96AE', bg: '#F1F0F5', text: '#6E6A85' },
-  { key: 'A_VALIDER', label: 'À valider', dot: '#E5A93B', bg: '#FDF4E3', text: '#9A6B12' },
-  { key: 'VALIDE', label: 'Validé', dot: '#22177A', bg: '#ECEAF8', text: '#22177A' },
-  { key: 'PUBLIE', label: 'Publié', dot: '#2E9E6B', bg: '#E7F6EE', text: '#1F7A50' },
+  { key: 'IDEE', label: t('Idée'), dot: '#9A96AE', bg: '#F1F0F5', text: '#6E6A85' },
+  { key: 'A_VALIDER', label: t('À valider'), dot: '#E5A93B', bg: '#FDF4E3', text: '#9A6B12' },
+  { key: 'VALIDE', label: t('Validé'), dot: '#22177A', bg: '#ECEAF8', text: '#22177A' },
+  { key: 'PUBLIE', label: t('Publié'), dot: '#2E9E6B', bg: '#E7F6EE', text: '#1F7A50' },
 ] as const;
 const statutMeta = (k: string) => STATUTS.find((s) => s.key === k) ?? STATUTS[0];
 
 // ── Helpers date ───────────────────────────────────
-const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+const MOIS = [t('Janvier'), t('Février'), t('Mars'), t('Avril'), t('Mai'), t('Juin'), t('Juillet'), t('Août'), t('Septembre'), t('Octobre'), t('Novembre'), t('Décembre')];
+const JOURS = [t('Lun'), t('Mar'), t('Mer'), t('Jeu'), t('Ven'), t('Sam'), t('Dim')];
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const sameDay = (a: Date, b: Date) => ymd(a) === ymd(b);
 
@@ -72,7 +73,7 @@ async function uploadImage(file: File): Promise<string> {
     body: fd,
     credentials: 'include',
   });
-  if (!res.ok) throw new Error("Échec de l'upload");
+  if (!res.ok) throw new Error(t("Échec de l'upload"));
   return (await res.json()).url as string;
 }
 
@@ -85,7 +86,7 @@ export default function CalendrierLinkedinPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [creatingDate, setCreatingDate] = useState<string | null>(null);
 
-  useEffect(() => { document.title = 'Calendrier LinkedIn — HumanUp'; }, []);
+  useEffect(() => { document.title = `${t('Calendrier LinkedIn')} — HumanUp`; }, []);
 
   const { data: posts = [], isLoading } = useQuery({
     queryKey: ['posts-linkedin'],
@@ -139,15 +140,15 @@ export default function CalendrierLinkedinPage() {
             <Linkedin size={22} color="#E6E9AF" />
           </div>
           <div>
-            <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 22, color: '#1A1533', margin: 0, letterSpacing: '-0.02em' }}>Calendrier LinkedIn</h1>
-            <p style={{ fontSize: 13, color: '#8A8699', margin: 0 }}>Le planning éditorial de l'équipe — proposez, validez, publiez.</p>
+            <h1 style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 22, color: '#1A1533', margin: 0, letterSpacing: '-0.02em' }}>{t('Calendrier LinkedIn')}</h1>
+            <p style={{ fontSize: 13, color: '#8A8699', margin: 0 }}>{t("Le planning éditorial de l'équipe — proposez, validez, publiez.")}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => goMonth(-1)} className="grid place-items-center rounded-lg border h-9 w-9" style={{ borderColor: 'rgba(34,23,122,.14)' }}><ChevronLeft size={18} /></button>
           <div style={{ minWidth: 150, textAlign: 'center', fontWeight: 700, fontSize: 15.5, color: '#1A1533' }}>{MOIS[cursor.m]} {cursor.y}</div>
           <button onClick={() => goMonth(1)} className="grid place-items-center rounded-lg border h-9 w-9" style={{ borderColor: 'rgba(34,23,122,.14)' }}><ChevronRight size={18} /></button>
-          <button onClick={() => setCursor({ y: today.getFullYear(), m: today.getMonth() })} className="rounded-lg border px-3 h-9 text-[13px] font-semibold" style={{ borderColor: 'rgba(34,23,122,.14)', color: '#22177A' }}>Aujourd'hui</button>
+          <button onClick={() => setCursor({ y: today.getFullYear(), m: today.getMonth() })} className="rounded-lg border px-3 h-9 text-[13px] font-semibold" style={{ borderColor: 'rgba(34,23,122,.14)', color: '#22177A' }}>{t("Aujourd'hui")}</button>
         </div>
       </div>
 
@@ -197,7 +198,7 @@ export default function CalendrierLinkedinPage() {
                         onClick={() => createMut.mutate(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9, 0).toISOString())}
                         className="opacity-0 group-hover:opacity-100 transition grid place-items-center rounded-md"
                         style={{ width: 20, height: 20, color: '#22177A', background: '#ECEAF8' }}
-                        title="Ajouter un post"
+                        title={t('Ajouter un post')}
                       ><Plus size={14} /></button>
                     </div>
                     <div className="flex flex-col gap-1">
@@ -213,7 +214,7 @@ export default function CalendrierLinkedinPage() {
                             <span style={{ width: 6, height: 6, borderRadius: '50%', background: m.dot, flexShrink: 0 }} />
                             <Avatar a={p.auteur} size={16} />
                             <span className="truncate text-[11.5px] font-medium" style={{ color: m.text }}>
-                              {p.texte?.trim() ? p.texte.trim().split('\n')[0] : 'Post sans texte'}
+                              {p.texte?.trim() ? p.texte.trim().split('\n')[0] : t('Post sans texte')}
                             </span>
                             {p.commentaires.length > 0 && (
                               <span className="ml-auto text-[10px] font-bold" style={{ color: m.text, opacity: 0.7 }}>💬{p.commentaires.length}</span>
@@ -273,7 +274,7 @@ function PostDrawer({ post, currentUserId, isAdmin, onClose, onChanged, onDelete
     onSuccess: onDeleted,
   });
   const commentMut = useMutation({
-    mutationFn: (t: string) => api.post<Post>(`/posts-linkedin/${post.id}/comments`, { texte: t }),
+    mutationFn: (txt: string) => api.post<Post>(`/posts-linkedin/${post.id}/comments`, { texte: txt }),
     onSuccess: () => { setComment(''); invalidate(); onChanged(); },
   });
   const delCommentMut = useMutation({
@@ -293,7 +294,7 @@ function PostDrawer({ post, currentUserId, isAdmin, onClose, onChanged, onDelete
     } catch { /* noop */ } finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
   }
 
-  const dateLabel = new Date(post.datePost).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const dateLabel = new Date(post.datePost).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <>
@@ -318,7 +319,7 @@ function PostDrawer({ post, currentUserId, isAdmin, onClose, onChanged, onDelete
 
         <div className="flex-1 overflow-y-auto px-5 py-5">
           {/* Statut */}
-          <label className="block text-[11px] font-bold uppercase mb-2" style={{ color: '#9A96AE', letterSpacing: '.1em' }}>Statut</label>
+          <label className="block text-[11px] font-bold uppercase mb-2" style={{ color: '#9A96AE', letterSpacing: '.1em' }}>{t('Statut')}</label>
           <div className="flex flex-wrap gap-1.5 mb-5">
             {STATUTS.map((s) => {
               const active = post.statut === s.key;
@@ -341,28 +342,28 @@ function PostDrawer({ post, currentUserId, isAdmin, onClose, onChanged, onDelete
           </div>
 
           {/* Texte */}
-          <label className="block text-[11px] font-bold uppercase mb-2" style={{ color: '#9A96AE', letterSpacing: '.1em' }}>Texte du post</label>
+          <label className="block text-[11px] font-bold uppercase mb-2" style={{ color: '#9A96AE', letterSpacing: '.1em' }}>{t('Texte du post')}</label>
           {canEdit ? (
             <textarea
               value={texte}
               onChange={(e) => { setTexte(e.target.value); setDirty(true); }}
               onBlur={saveTexte}
-              placeholder="Colle ou rédige le contenu du post LinkedIn…"
+              placeholder={t('Colle ou rédige le contenu du post LinkedIn…')}
               rows={8}
               className="w-full rounded-xl border p-3 text-[14px] leading-relaxed resize-y"
               style={{ borderColor: 'rgba(34,23,122,.14)', background: '#fff', color: '#1A1533' }}
             />
           ) : (
             <div className="w-full rounded-xl border p-3 text-[14px] leading-relaxed whitespace-pre-wrap" style={{ borderColor: 'rgba(34,23,122,.1)', background: '#fff', color: '#1A1533', minHeight: 80 }}>
-              {post.texte?.trim() || <span style={{ color: '#B4B0C2' }}>Aucun texte.</span>}
+              {post.texte?.trim() || <span style={{ color: '#B4B0C2' }}>{t('Aucun texte.')}</span>}
             </div>
           )}
           {canEdit && dirty && (
-            <div className="mt-1.5 text-[12px]" style={{ color: '#9A6B12' }}>Modifié — enregistré à la sortie du champ.</div>
+            <div className="mt-1.5 text-[12px]" style={{ color: '#9A6B12' }}>{t('Modifié — enregistré à la sortie du champ.')}</div>
           )}
 
           {/* Image */}
-          <label className="block text-[11px] font-bold uppercase mt-5 mb-2" style={{ color: '#9A96AE', letterSpacing: '.1em' }}>Visuel</label>
+          <label className="block text-[11px] font-bold uppercase mt-5 mb-2" style={{ color: '#9A96AE', letterSpacing: '.1em' }}>{t('Visuel')}</label>
           {post.imageUrl ? (
             <div className="relative rounded-xl overflow-hidden border" style={{ borderColor: 'rgba(34,23,122,.1)' }}>
               <img src={post.imageUrl} alt="" className="w-full object-cover" style={{ maxHeight: 320 }} />
@@ -378,23 +379,23 @@ function PostDrawer({ post, currentUserId, isAdmin, onClose, onChanged, onDelete
               style={{ borderColor: 'rgba(34,23,122,.16)', color: '#8A8699' }}
             >
               {uploading ? <Loader2 size={22} className="animate-spin" /> : <ImagePlus size={22} />}
-              <span className="text-[13px] font-medium">{uploading ? 'Téléversement…' : 'Ajouter un visuel'}</span>
-              <span className="text-[11.5px]" style={{ color: '#B4B0C2' }}>PNG, JPG, WEBP, GIF — max 10 Mo</span>
+              <span className="text-[13px] font-medium">{uploading ? t('Téléversement…') : t('Ajouter un visuel')}</span>
+              <span className="text-[11.5px]" style={{ color: '#B4B0C2' }}>{t('PNG, JPG, WEBP, GIF — max 10 Mo')}</span>
             </button>
           ) : (
-            <div className="text-[13px]" style={{ color: '#B4B0C2' }}>Aucun visuel.</div>
+            <div className="text-[13px]" style={{ color: '#B4B0C2' }}>{t('Aucun visuel.')}</div>
           )}
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickImage} />
 
           {/* Fil de discussion */}
           <div className="mt-6 pt-5" style={{ borderTop: '1px solid rgba(34,23,122,.1)' }}>
             <div className="flex items-center justify-between mb-3">
-              <label className="text-[11px] font-bold uppercase" style={{ color: '#9A96AE', letterSpacing: '.1em' }}>Discussion</label>
-              <span className="text-[12px]" style={{ color: '#B4B0C2' }}>{post.commentaires.length} message{post.commentaires.length > 1 ? 's' : ''}</span>
+              <label className="text-[11px] font-bold uppercase" style={{ color: '#9A96AE', letterSpacing: '.1em' }}>{t('Discussion')}</label>
+              <span className="text-[12px]" style={{ color: '#B4B0C2' }}>{t(post.commentaires.length > 1 ? '{n} messages' : '{n} message', { n: post.commentaires.length })}</span>
             </div>
             <div className="flex flex-col gap-3 mb-3">
               {post.commentaires.length === 0 && (
-                <p className="text-[13px]" style={{ color: '#B4B0C2' }}>Pas encore de commentaire. Lance la discussion.</p>
+                <p className="text-[13px]" style={{ color: '#B4B0C2' }}>{t('Pas encore de commentaire. Lance la discussion.')}</p>
               )}
               {post.commentaires.map((c) => {
                 const mine = c.auteur.id === currentUserId;
@@ -405,7 +406,7 @@ function PostDrawer({ post, currentUserId, isAdmin, onClose, onChanged, onDelete
                       <div className="rounded-xl px-3 py-2" style={{ background: mine ? '#ECEAF8' : '#fff', border: '1px solid rgba(34,23,122,.08)' }}>
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className="text-[12.5px] font-bold" style={{ color: '#1A1533' }}>{c.auteur.prenom} {c.auteur.nom}</span>
-                          <span className="text-[11px]" style={{ color: '#B4B0C2' }}>{new Date(c.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="text-[11px]" style={{ color: '#B4B0C2' }}>{new Date(c.createdAt).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                           {(mine || isAdmin) && (
                             <button onClick={() => delCommentMut.mutate(c.id)} className="ml-auto opacity-0 group-hover/c:opacity-100 transition" style={{ color: '#C4485B' }}><Trash2 size={13} /></button>
                           )}
@@ -427,7 +428,7 @@ function PostDrawer({ post, currentUserId, isAdmin, onClose, onChanged, onDelete
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && comment.trim()) { e.preventDefault(); commentMut.mutate(comment.trim()); } }}
-              placeholder="Écrire un commentaire… (⌘/Ctrl + Entrée)"
+              placeholder={t('Écrire un commentaire… (⌘/Ctrl + Entrée)')}
               rows={1}
               className="flex-1 rounded-xl border px-3 py-2.5 text-[13.5px] resize-none"
               style={{ borderColor: 'rgba(34,23,122,.14)', color: '#1A1533', maxHeight: 120 }}
@@ -443,10 +444,10 @@ function PostDrawer({ post, currentUserId, isAdmin, onClose, onChanged, onDelete
           </div>
           {canEdit && (
             <button
-              onClick={() => { if (confirm('Supprimer ce post ?')) delMut.mutate(); }}
+              onClick={() => { if (confirm(t('Supprimer ce post ?'))) delMut.mutate(); }}
               className="mt-2.5 inline-flex items-center gap-1.5 text-[12.5px] font-semibold"
               style={{ color: '#C4485B' }}
-            ><Trash2 size={14} /> Supprimer le post</button>
+            ><Trash2 size={14} /> {t('Supprimer le post')}</button>
           )}
         </div>
       </motion.aside>
