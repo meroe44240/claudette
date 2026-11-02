@@ -39,6 +39,7 @@ interface CreateUserPayload {
   fonction: Fonction;
   excludeFromTeamStats: boolean;
   password: string;
+  sendInvite: boolean;
 }
 
 interface UpdateUserPayload {
@@ -100,6 +101,7 @@ export default function SettingsPage() {
   const [formFonction, setFormFonction] = useState<Fonction>('RECRUTEUR');
   const [formExcludeStats, setFormExcludeStats] = useState(false);
   const [formPassword, setFormPassword] = useState('');
+  const [formSendInvite, setFormSendInvite] = useState(true);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // General settings form state
@@ -295,10 +297,17 @@ export default function SettingsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (payload: CreateUserPayload) => api.post('/settings/users', payload),
-    onSuccess: () => {
+    mutationFn: (payload: CreateUserPayload) =>
+      api.post<User & { inviteSent: boolean }>('/settings/users', payload),
+    onSuccess: (user, payload) => {
       queryClient.invalidateQueries({ queryKey: ['settings', 'users'] });
-      toast('success', 'Utilisateur créé avec succès');
+      if (!payload.sendInvite) {
+        toast('success', 'Utilisateur créé avec succès');
+      } else if (user.inviteSent) {
+        toast('success', `Utilisateur créé, invitation envoyée à ${payload.email}`);
+      } else {
+        toast('error', "Utilisateur créé, mais l'email d'invitation n'a pas pu être envoyé");
+      }
       closeCreateModal();
     },
     onError: (error: any) => {
@@ -347,6 +356,7 @@ export default function SettingsPage() {
     setFormFonction('RECRUTEUR');
     setFormExcludeStats(false);
     setFormPassword('');
+    setFormSendInvite(true);
     setFormErrors({});
   };
 
@@ -372,6 +382,7 @@ export default function SettingsPage() {
       fonction: formFonction,
       excludeFromTeamStats: formExcludeStats,
       password: formPassword,
+      sendInvite: formSendInvite,
     });
   };
 
@@ -1133,6 +1144,15 @@ export default function SettingsPage() {
             }}
             error={formErrors.password}
           />
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={formSendInvite}
+              onChange={(e) => setFormSendInvite(e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+            />
+            <span>Envoyer l'email d'invitation (en anglais) avec les identifiants</span>
+          </label>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={closeCreateModal}>
               Annuler
