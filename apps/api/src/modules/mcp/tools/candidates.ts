@@ -7,6 +7,8 @@ import prisma from '../../../lib/db.js';
 import { resolvePersonPhoto } from '../../../lib/photo.js';
 import * as dossierService from '../../candidats/dossier.service.js';
 import * as syntheseService from '../../candidats/synthese.service.js';
+import * as cvUploadService from '../../candidats/cv-upload.service.js';
+import * as cvParsingService from '../../ai/cv-parsing.service.js';
 
 export function registerCandidateTools(server: McpServer) {
   // ─── search_candidates ────────────────────────────────
@@ -215,6 +217,83 @@ export function registerCandidateTools(server: McpServer) {
         protected: d.manuel,
         contact_visible_to_client: d.coordonneesVisibles,
         updated_at: d.modifieLe,
+      };
+    }),
+  );
+
+  // ─── get_cv_upload_link ───────────────────────────────
+  server.tool(
+    'get_cv_upload_link',
+    "A utiliser quand le recruteur veut deposer / uploader un CV qu'il a sous la main (fichier joint a la conversation, fichier sur son ordinateur ou son telephone). Un fichier joint a la conversation ne peut PAS etre transmis a l'ATS par un outil : cet outil renvoie un lien de depot valable 2 heures. Donne upload_page_url au recruteur pour qu'il y glisse son PDF. Si un outil local d'envoi de fichier est disponible (upload_cv_file) et que tu connais le chemin du fichier sur l'ordinateur, appelle-le avec ce meme lien au lieu de le montrer. Avec candidate_id, le CV est attache a cette fiche (remplace le precedent) ; sans, un nouveau candidat est cree depuis le CV. Si le CV est dans un email ou derriere un lien, utiliser plutot upload_candidate_cv.",
+    {
+      candidate_id: z.string().optional().describe('UUID du candidat qui recoit le CV. Absent : le candidat sera cree depuis le CV depose.'),
+    },
+    wrapTool('get_cv_upload_link', async (args, user) => {
+      const link = await cvUploadService.createDepotLink(user.userId, (args.candidate_id as string | undefined) || null);
+      return {
+        upload_page_url: link.pageUrl,
+        expires_at: link.expiresAt.toISOString(),
+        accepts: 'PDF, 10 Mo maximum',
+        target: args.candidate_id ? 'fiche du candidat indique' : 'nouveau candidat cree depuis le CV',
+        message: 'Donne ce lien au recruteur : il y glisse le PDF. Lien personnel, valable 2 heures.',
+      };
+    }),
+  );
+
+  // ─── upload_candidate_cv ──────────────────────────────
+  server.tool(
+    'upload_candidate_cv',
+    "[CONFIRMATION REQUISE] Depose un CV (PDF, 10 Mo max) sur la fiche d'un candidat ; il remplace le CV precedent et devient telechargeable par le client sur le portail. Une seule source parmi : file_url (lien direct, ou lien partage Google Drive / Dropbox), gmail_message_id ou gmail_query (piece jointe PDF d'un email de la boite Gmail du recruteur connecte), file_base64 (contenu du PDF, a reserver aux petits fichiers). Sans candidate_id, un NOUVEAU candidat est cree a partir du CV (verifier d'abord les doublons avec search_candidates). update_profile=true relit le CV pour mettre a jour la fiche (identite, poste, experiences, synthese) ; un dossier client protege n'est pas ecrase.",
+    {
+      candidate_id: z.string().optional().describe('UUID du candidat. Absent : un nouveau candidat est cree depuis le CV.'),
+      file_url: z.string().optional().describe('Lien http(s) vers le PDF (telechargement direct, ou lien de partage Google Drive / Dropbox ouvert a toute personne disposant du lien)'),
+      gmail_message_id: z.string().optional().describe("Identifiant d'un email Gmail du recruteur contenant le CV en piece jointe"),
+      gmail_query: z.string().optional().describe('Recherche Gmail pour retrouver l\'email (syntaxe Gmail, ex. "from:prenom.nom@gmail.com" ou "CV Dupont") : le plus recent avec un PDF est utilise'),
+      attachment_name: z.string().optional().describe("Partie du nom de la piece jointe a prendre quand l'email contient plusieurs PDF"),
+      file_base64: z.string().optional().describe('Contenu du PDF encode en base64'),
+      filename: z.string().optional().describe('Nom du fichier a afficher (ex. "CV Prenom Nom.pdf")'),
+      update_profile: z.boolean().optional().default(false).describe('Relire le CV pour mettre a jour la fiche du candidat (ignore a la creation : la fiche est toujours remplie depuis le CV)'),
+    },
+    wrapTool('upload_candidate_cv', async (args, user) => {
+      const file = await cvUploadService.readCvSource(user.userId, {
+        fileUrl: args.file_url as string | undefined,
+        fileBase64: args.file_base64 as string | undefined,
+        filename: args.filename as string | undefined,
+        gmailMessageId: args.gmail_message_id as string | undefined,
+        gmailQuery: args.gmail_query as string | undefined,
+        attachmentName: args.attachment_name as string | undefined,
+      });
+      // Le contenu du fichier n'a rien a faire dans le journal des actions MCP.
+      if (args.file_base64) args.file_base64 = `[PDF, ${Math.round(file.buffer.length / 1024)} Ko]`;
+
+      let candidateId = args.candidate_id as string | undefined;
+      let created = false;
+      let profileUpdated = false;
+      if (!candidateId) {
+        const res = await cvParsingService.createCandidatFromCv(file.buffer, file.filename, user.userId);
+        candidateId = res.candidat.id as string;
+        created = true;
+        profileUpdated = true;
+      }
+      const out = await cvUploadService.attachCv(candidateId, user.userId, file);
+      if (!created && args.update_profile) {
+        await cvParsingService.updateCandidatFromCv(file.buffer, file.filename, user.userId, candidateId);
+        profileUpdated = true;
+      }
+      const c = await prisma.candidat.findUnique({ where: { id: candidateId }, select: { prenom: true, nom: true, posteActuel: true } });
+      return {
+        success: true,
+        candidate_id: candidateId,
+        candidate_name: `${c?.prenom ?? ''} ${c?.nom ?? ''}`.trim(),
+        candidate_created: created,
+        cv_url: out.cvUrl,
+        filename: out.filename,
+        size_kb: Math.round(out.size / 1024),
+        source: file.origin,
+        replaced_previous_cv: out.replaced,
+        profile_updated_from_cv: profileUpdated,
+        other_pdf_attachments: file.otherAttachments?.length ? file.otherAttachments : undefined,
+        message: created ? 'Candidat cree depuis le CV, CV attache a sa fiche' : `CV attache a la fiche${out.replaced ? ' (remplace le precedent)' : ''}`,
       };
     }),
   );

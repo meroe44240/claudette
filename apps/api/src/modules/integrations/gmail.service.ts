@@ -246,7 +246,7 @@ async function refreshAccessToken(userId: string): Promise<string> {
 /**
  * Get a valid access token for the user, refreshing if needed.
  */
-async function getValidAccessToken(userId: string): Promise<string> {
+export async function getValidAccessToken(userId: string): Promise<string> {
   const config = await prisma.integrationConfig.findUnique({
     where: { userId_provider: { userId, provider: 'gmail' } },
   });
