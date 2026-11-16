@@ -27,6 +27,9 @@ const FEATURE_MODEL_MAP: Record<string, ModelTier> = {
   task_extraction: 'smart', // existing feature
   job_description: 'fast',
   doc_translation: 'fast',
+  notes_questions: 'smart', // Humanup Notes : préparation des questions
+  notes_live: 'fast',       // Humanup Notes : cochage en direct
+  notes_final: 'smart',     // Humanup Notes : notes après le call
 };
 
 // Cost per million tokens (USD)
@@ -44,6 +47,8 @@ export interface ClaudeCallOptions {
   maxTokens?: number;
   temperature?: number;
   userId: string;
+  /** Passer par Anthropic (Claude) même si Gemini est configuré, quand la clé Anthropic existe. */
+  preferAnthropic?: boolean;
 }
 
 export interface ClaudeWebSearchOptions extends ClaudeCallOptions {
@@ -294,6 +299,11 @@ async function callGemini(params: {
 // Routes to Gemini if user has it configured, otherwise falls back to Anthropic
 
 export async function callClaude(options: ClaudeCallOptions): Promise<ClaudeResponse> {
+  // 0. Fonctions qui exigent Claude (Humanup Notes) : Anthropic d'abord.
+  if (options.preferAnthropic && process.env.ANTHROPIC_API_KEY) {
+    return callClaudeViaAnthropic(options);
+  }
+
   // 1. Check if user has their own AI config (highest priority)
   const userAiConfig = await getAiConfigWithKey(options.userId).catch(() => null);
 

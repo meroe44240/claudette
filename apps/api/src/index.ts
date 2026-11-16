@@ -54,6 +54,7 @@ import bookingRouter, { bookingPublicRouter } from './modules/booking/booking.ro
 import candidateSpaceRouter from './modules/candidate-space/candidate-space.router.js';
 import postLinkedinRouter from './modules/post-linkedin/post-linkedin.router.js';
 import confirmationRouter, { confirmationPublicRouter } from './modules/confirmation/confirmation.router.js';
+import notesRouter, { notesRecallRouter } from './modules/notes/notes.router.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 
@@ -196,6 +197,9 @@ async function buildApp() {
   // Confirmation candidat (intérêt + consentement transfert CV)
   await app.register(confirmationRouter, { prefix: '/api/v1/confirmation' });
   await app.register(confirmationPublicRouter, { prefix: '/api/v1/public/confirmation' });
+  // Humanup Notes : note-taker visio (app + webhooks Recall.ai publics)
+  await app.register(notesRouter, { prefix: '/api/v1/notes' });
+  await app.register(notesRecallRouter, { prefix: '/api/v1/notes/recall' });
 
   return app;
 }

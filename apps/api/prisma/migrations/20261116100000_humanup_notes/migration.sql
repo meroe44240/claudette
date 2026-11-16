@@ -1,0 +1,65 @@
+-- Humanup Notes : note-taker visio (Meet / Teams) via Recall.ai
+CREATE TABLE IF NOT EXISTS "note_calls" (
+  "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+  "meeting_key" VARCHAR(400) NOT NULL,
+  "user_id" UUID NOT NULL,
+  "member_ids" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  "google_event_id" VARCHAR(255),
+  "titre" VARCHAR(500) NOT NULL DEFAULT '',
+  "description" TEXT,
+  "start_at" TIMESTAMPTZ NOT NULL,
+  "end_at" TIMESTAMPTZ NOT NULL,
+  "meeting_url" VARCHAR(1000) NOT NULL,
+  "platform" VARCHAR(10) NOT NULL,
+  "attendees" JSONB NOT NULL DEFAULT '[]',
+  "call_type" VARCHAR(12) NOT NULL DEFAULT 'PROSPECT',
+  "type_source" VARCHAR(10) NOT NULL DEFAULT 'AUTO',
+  "needs_review" BOOLEAN NOT NULL DEFAULT false,
+  "review_reason" VARCHAR(300),
+  "candidat_id" UUID,
+  "client_id" UUID,
+  "mandat_id" UUID,
+  "lead_id" UUID,
+  "brief" TEXT,
+  "brief_docs" JSONB NOT NULL DEFAULT '[]',
+  "excluded" BOOLEAN NOT NULL DEFAULT false,
+  "status" VARCHAR(12) NOT NULL DEFAULT 'SCHEDULED',
+  "recall_bot_id" VARCHAR(100),
+  "webhook_secret" VARCHAR(64) NOT NULL DEFAULT gen_random_uuid()::text,
+  "questions" JSONB NOT NULL DEFAULT '[]',
+  "questions_source" VARCHAR(20),
+  "questions_locked_at" TIMESTAMPTZ,
+  "transcript" JSONB NOT NULL DEFAULT '[]',
+  "analyzed_count" INTEGER NOT NULL DEFAULT 0,
+  "last_analyzed_at" TIMESTAMPTZ,
+  "alerts" JSONB NOT NULL DEFAULT '[]',
+  "language" VARCHAR(5),
+  "started_at" TIMESTAMPTZ,
+  "ended_at" TIMESTAMPTZ,
+  "notes" JSONB,
+  "notes_markdown" TEXT,
+  "propium_links" JSONB NOT NULL DEFAULT '[]',
+  "duplicate_flags" JSONB NOT NULL DEFAULT '[]',
+  "tasks_created" JSONB NOT NULL DEFAULT '[]',
+  "error" TEXT,
+  "reminder_sent_at" TIMESTAMPTZ,
+  "notes_sent_at" TIMESTAMPTZ,
+  "transcript_purged_at" TIMESTAMPTZ,
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT "note_calls_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "note_calls_meeting_key_key" ON "note_calls"("meeting_key");
+CREATE INDEX IF NOT EXISTS "note_calls_user_id_start_at_idx" ON "note_calls"("user_id", "start_at");
+CREATE INDEX IF NOT EXISTS "note_calls_status_idx" ON "note_calls"("status");
+CREATE INDEX IF NOT EXISTS "note_calls_start_at_idx" ON "note_calls"("start_at");
+
+CREATE TABLE IF NOT EXISTS "note_user_settings" (
+  "user_id" UUID NOT NULL,
+  "enabled" BOOLEAN NOT NULL DEFAULT true,
+  "timezone" VARCHAR(60) NOT NULL DEFAULT 'Europe/Paris',
+  "last_recap_date" VARCHAR(10),
+  "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT "note_user_settings_pkey" PRIMARY KEY ("user_id")
+);

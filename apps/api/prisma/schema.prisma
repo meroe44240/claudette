@@ -1199,3 +1199,74 @@ model PostLinkedinComment {
   @@index([postId])
   @@map("post_linkedin_comment")
 }
+
+// ─── HUMANUP NOTES (note-taker visio Meet/Teams) ─────
+
+// Un call visio suivi par le bot. Un seul enregistrement par réunion (meetingKey),
+// même si plusieurs membres Humanup y sont invités : un seul bot rejoint.
+model NoteCall {
+  id                 String    @id @default(uuid()) @db.Uuid
+  meetingKey         String    @unique @map("meeting_key") @db.VarChar(400) // lien visio normalisé + date de début
+  userId             String    @map("user_id") @db.Uuid // membre propriétaire (organisateur Humanup ou premier invité)
+  memberIds          String[]  @default([]) @map("member_ids") // autres membres Humanup présents
+  googleEventId      String?   @map("google_event_id") @db.VarChar(255)
+  titre              String    @default("") @db.VarChar(500)
+  description        String?   @db.Text
+  startAt            DateTime  @map("start_at") @db.Timestamptz()
+  endAt              DateTime  @map("end_at") @db.Timestamptz()
+  meetingUrl         String    @map("meeting_url") @db.VarChar(1000)
+  platform           String    @db.VarChar(10) // MEET | TEAMS
+  attendees          Json      @default("[]") // [{ email, name, role, entityId }]
+  callType           String    @default("PROSPECT") @map("call_type") @db.VarChar(12) // QUALIF | INTAKE | PROSPECT | INTERNE
+  typeSource         String    @default("AUTO") @map("type_source") @db.VarChar(10) // AUTO | MANUEL
+  needsReview        Boolean   @default(false) @map("needs_review") // « à préciser »
+  reviewReason       String?   @map("review_reason") @db.VarChar(300)
+  candidatId         String?   @map("candidat_id") @db.Uuid
+  clientId           String?   @map("client_id") @db.Uuid
+  mandatId           String?   @map("mandat_id") @db.Uuid
+  leadId             String?   @map("lead_id") @db.Uuid
+  brief              String?   @db.Text // contexte chargé (JD, CV, notes, ordre du jour)
+  briefDocs          Json      @default("[]") @map("brief_docs") // [{ name, kind, at }]
+  excluded           Boolean   @default(false)
+  status             String    @default("SCHEDULED") @db.VarChar(12) // SCHEDULED | JOINING | IN_CALL | PROCESSING | DONE | FAILED | CANCELLED
+  recallBotId        String?   @map("recall_bot_id") @db.VarChar(100)
+  webhookSecret      String    @default(uuid()) @map("webhook_secret") @db.VarChar(64)
+  questions          Json      @default("[]") // [{ id, text, dealbreaker, status, answer, manual, trameId }]
+  questionsSource    String?   @map("questions_source") @db.VarChar(20) // TEMPLATE | IA | TRAME | MANUEL
+  questionsLockedAt  DateTime? @map("questions_locked_at") @db.Timestamptz()
+  transcript         Json      @default("[]") // [{ speaker, text, t }]
+  analyzedCount      Int       @default(0) @map("analyzed_count") // nb de segments déjà analysés en live
+  lastAnalyzedAt     DateTime? @map("last_analyzed_at") @db.Timestamptz()
+  alerts             Json      @default("[]") // [{ id, kind: RELANCE|CONTRADICTION, questionId, text, at }]
+  language           String?   @db.VarChar(5)
+  startedAt          DateTime? @map("started_at") @db.Timestamptz()
+  endedAt            DateTime? @map("ended_at") @db.Timestamptz()
+  notes              Json? // notes structurées générées après le call
+  notesMarkdown      String?   @map("notes_markdown") @db.Text
+  propiumLinks       Json      @default("[]") @map("propium_links") // [{ kind, id, label, action, url }]
+  duplicateFlags     Json      @default("[]") @map("duplicate_flags") // [{ label, reason, url }]
+  tasksCreated       Json      @default("[]") @map("tasks_created") // [{ id, titre, dueDate }]
+  error              String?   @db.Text
+  reminderSentAt     DateTime? @map("reminder_sent_at") @db.Timestamptz()
+  notesSentAt        DateTime? @map("notes_sent_at") @db.Timestamptz()
+  transcriptPurgedAt DateTime? @map("transcript_purged_at") @db.Timestamptz()
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([userId, startAt])
+  @@index([status])
+  @@index([startAt])
+  @@map("note_calls")
+}
+
+// Réglages Humanup Notes par membre (activé par défaut, fuseau pour le récap de 19h).
+model NoteUserSettings {
+  userId        String   @id @map("user_id") @db.Uuid
+  enabled       Boolean  @default(true)
+  timezone      String   @default("Europe/Paris") @db.VarChar(60)
+  lastRecapDate String?  @map("last_recap_date") @db.VarChar(10)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("note_user_settings")
+}
