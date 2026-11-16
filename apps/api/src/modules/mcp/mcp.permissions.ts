@@ -12,6 +12,8 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   get_daily_brief:               { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   search_candidates:             { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_candidate:                 { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  list_call_notes:               { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  get_call_notes:                { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_candidate_dossier:         { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   list_candidate_debriefs:       { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   search_clients:                { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },

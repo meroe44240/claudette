@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { verifyAccessToken } from '../../lib/jwt.js';
+import prisma from '../../lib/db.js';
 import { runWithMcpUser } from './mcp.auth.js';
 import { registerAllTools, getLastToolCallAt } from './mcp.tools.js';
 import type { Role } from '@prisma/client';
@@ -44,12 +45,19 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
   // ─── Helper: extract and verify user from auth header ───
   async function authenticateMcpRequest(request: any): Promise<{ userId: string; userEmail: string; userRole: Role } | null> {
     const authHeader = request.headers.authorization as string | undefined;
-    if (!authHeader?.startsWith('Bearer ')) return null;
+    const headerKey = request.headers['x-api-key'] as string | undefined;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : headerKey?.trim();
+    if (!token) return null;
     try {
-      const payload = await verifyAccessToken(authHeader.slice(7));
+      const payload = await verifyAccessToken(token);
       return { userId: payload.sub, userEmail: payload.email, userRole: payload.role as Role };
     } catch {
-      return null;
+      // Pas un jeton OAuth : clé API de l'utilisateur, pour les agents qui ne savent pas
+      // faire le parcours OAuth (Grok, scripts). Un compte archivé n'a plus accès.
+      if (token.length < 24) return null;
+      const u = await prisma.user.findUnique({ where: { apiKey: token }, select: { id: true, email: true, role: true, status: true } });
+      if (!u || u.status === 'ARCHIVED') return null;
+      return { userId: u.id, userEmail: u.email, userRole: u.role };
     }
   }
 
