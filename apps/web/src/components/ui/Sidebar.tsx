@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar, Wrench, Megaphone, CalendarClock, Plug, Linkedin, UserSearch } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar, Wrench, Megaphone, CalendarClock, Plug, Linkedin, UserSearch, Video } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 import { t } from '../../lib/i18n';
 
@@ -36,6 +36,7 @@ const navSections: NavSection[] = [
       { to: '/leads', icon: Activity, label: t('Leads') },
       { to: '/mandats', icon: FileText, label: t('Mandats') },
       { to: '/booking', icon: CalendarClock, label: t('Rendez-vous') },
+      { to: '/notes', icon: Video, label: t('Notes visio') },
       { to: '/calendrier-linkedin', icon: Linkedin, label: t('Calendrier LinkedIn') },
       { to: '/outils', icon: Wrench, label: t('Outil Recruteurs') },
       { to: '/offres', icon: Megaphone, label: t('Job board') },

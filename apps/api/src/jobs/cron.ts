@@ -399,6 +399,11 @@ export function startCronJobs(): void {
   const recapInterval = setInterval(checkRecap, 60 * 1000);
   intervals.push(recapInterval);
 
+  // Humanup Notes : agendas, bots Recall, cochage live, récap de 19h
+  import('../modules/notes/notes.scheduler.js')
+    .then(({ startNotesJobs }) => startNotesJobs())
+    .catch((err) => console.error('[Cron] Humanup Notes jobs failed to start:', err));
+
   console.log('[Cron] Scheduled jobs started:');
   console.log('  - Slack daily report: checked every 60s (sends Mon-Fri at configured time, Europe/Paris)');
   console.log('  - Calendar AI analysis: every 30 minutes');

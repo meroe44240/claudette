@@ -291,7 +291,7 @@ async function enrichClientFromCalendly(
  * Get a valid access token for Google Calendar.
  * Reuses the gmail integration config since they share Google OAuth.
  */
-async function getValidAccessToken(userId: string): Promise<string> {
+export async function getValidAccessToken(userId: string): Promise<string> {
   // Calendar shares tokens with Gmail (same Google OAuth)
   // Try calendar-specific config first, then fall back to gmail
   let config = await prisma.integrationConfig.findUnique({

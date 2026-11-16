@@ -16,10 +16,11 @@ export async function sendEmail(
   subject: string,
   html: string,
   text?: string,
+  opts: { from?: string } = {},
 ): Promise<void> {
   if (process.env.NODE_ENV === 'test') return;
 
-  const from = process.env.SMTP_FROM || 'noreply@humanup.io';
+  const from = opts.from || process.env.SMTP_FROM || 'noreply@humanup.io';
   const apiKey = process.env.SMTP_PASSWORD || '';
 
   // Resend : privilegier l'API HTTP (port 443, non filtre par l'hebergeur —

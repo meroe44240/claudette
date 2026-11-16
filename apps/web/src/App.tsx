@@ -78,6 +78,9 @@ const AlertsPage = lazy(() => import('./pages/dashboard/alerts'));
 const EmailsPage = lazy(() => import('./pages/emails/index'));
 const McpLogsPage = lazy(() => import('./pages/mcp-logs/index'));
 const AdminAnalyticsPage = lazy(() => import('./pages/admin/analytics'));
+const NotesPage = lazy(() => import('./pages/notes/index'));
+const NoteCallPage = lazy(() => import('./pages/notes/[id]'));
+const NotesLivePanel = lazy(() => import('./pages/notes/live'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuthStore();
@@ -111,6 +114,8 @@ export default function App() {
         <Route path="/espace" element={<EspaceHomePage />} />
         <Route path="/confirmer" element={<ConfirmerPage />} />
         <Route path="/annuler-rdv" element={<AnnulerRdvPage />} />
+        {/* Panneau live Humanup Notes : plein écran, sans menu, à côté de la visio */}
+        <Route path="/notes/live/:id" element={<ProtectedRoute><NotesLivePanel /></ProtectedRoute>} />
         <Route
           element={
             <ProtectedRoute>
@@ -129,6 +134,8 @@ export default function App() {
           <Route path="calendrier-linkedin" element={<CalendrierLinkedinPage />} />
           <Route path="list-push" element={<ListPushPage />} />
           <Route path="sourcing" element={<SourcingKalentPage />} />
+          <Route path="notes" element={<NotesPage />} />
+          <Route path="notes/:id" element={<NoteCallPage />} />
           <Route path="candidats" element={<CandidatsPage />} />
           <Route path="candidats/new" element={<CandidatNewPage />} />
           <Route path="candidats/duplicates" element={<CandidatDuplicatesPage />} />
