@@ -3,6 +3,7 @@
 // Sans RECALL_API_KEY, Humanup Notes tourne en mode simulation : aucun bot n'est
 // envoyé, les calls se testent depuis l'app avec un transcript de démonstration.
 
+import { BOT_AVATAR_JPEG_B64 } from './bot-avatar.js';
 export const BOT_NAME = process.env.NOTES_BOT_NAME || 'Humanup Notes';
 
 const CHAT_MESSAGE_FR =
@@ -56,6 +57,26 @@ export interface CreateBotInput {
   language?: 'fr' | 'en' | null;
 }
 
+/**
+ * Source du transcript.
+ * Par défaut : sous-titres de Meet / Teams, reçus en temps réel (le panneau live coche
+ * pendant le call). La transcription Recall « prioritize_accuracy » gère mieux le
+ * mélange français / anglais mais arrive avec 3 à 10 min de retard, et son mode
+ * rapide ne fait que l'anglais : on la garde en option (RECALL_TRANSCRIPT_PROVIDER=recallai).
+ */
+function transcriptProvider(language: 'fr' | 'en' | null): Record<string, unknown> {
+  if (process.env.RECALL_TRANSCRIPT_PROVIDER === 'recallai') {
+    return {
+      recallai_streaming: {
+        mode: process.env.RECALL_TRANSCRIPT_MODE || 'prioritize_accuracy',
+        language_code: process.env.RECALL_LANGUAGE_CODE || 'auto',
+      },
+    };
+  }
+  // Google Meet sous-titre en anglais par défaut : on impose la langue du call.
+  return { meeting_captions: { language_code: language === 'en' ? 'en' : 'fr' } };
+}
+
 export async function createBot(input: CreateBotInput): Promise<{ id: string }> {
   const webhookUrl = `${publicApiUrl()}/api/v1/notes/recall/realtime/${input.noteCallId}?secret=${encodeURIComponent(input.webhookSecret)}`;
   // Recall exige un join_at dans le futur ; un call déjà commencé part tout de suite.
@@ -70,14 +91,7 @@ export async function createBot(input: CreateBotInput): Promise<{ id: string }> 
       video_mixed_layout: 'audio_only',
       video_mixed_mp4: null,
       transcript: {
-        provider: {
-          // « auto » gère le français, l'anglais et le passage de l'un à l'autre
-          // (nécessite le mode prioritize_accuracy).
-          recallai_streaming: {
-            mode: process.env.RECALL_TRANSCRIPT_MODE || 'prioritize_accuracy',
-            language_code: process.env.RECALL_LANGUAGE_CODE || 'auto',
-          },
-        },
+        provider: transcriptProvider(input.language ?? null),
         diarization: { use_separate_streams_when_available: true },
       },
       realtime_endpoints: [
@@ -89,6 +103,10 @@ export async function createBot(input: CreateBotInput): Promise<{ id: string }> 
         send_to: 'everyone',
         message: input.language === 'en' ? CHAT_MESSAGE_EN : `${CHAT_MESSAGE_FR}\n\n${CHAT_MESSAGE_EN}`,
       },
+    },
+    // Le bot affiche le logo Humanup à la place d'une vignette vide.
+    automatic_video_output: {
+      in_call_recording: { kind: 'jpeg', b64_data: BOT_AVATAR_JPEG_B64 },
     },
     automatic_leave: {
       waiting_room_timeout: 600,
