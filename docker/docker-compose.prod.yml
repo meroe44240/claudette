@@ -49,6 +49,10 @@ services:
       PAPPERS_BASE_URL: ${PAPPERS_BASE_URL:-https://api.pappers.fr/v2}
       FULLENRICH_API_KEY: ${FULLENRICH_API_KEY}
       KALENT_API_KEY: ${KALENT_API_KEY}
+      RECALL_API_KEY: ${RECALL_API_KEY}
+      RECALL_REGION: ${RECALL_REGION:-eu-central-1}
+      NOTES_FROM: ${NOTES_FROM:-}
+      NOTES_DISABLED: ${NOTES_DISABLED:-false}
     volumes:
       - uploads_data:/app/apps/api/uploads
     expose:
