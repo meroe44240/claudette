@@ -29,6 +29,7 @@ const FEATURE_MODEL_MAP: Record<string, ModelTier> = {
   doc_translation: 'fast',
   notes_questions: 'smart', // Humanup Notes : préparation des questions
   notes_brief: 'smart', // Humanup Notes : brief d'avant-call
+  notes_reply: 'smart', // Humanup Notes : lecture des réponses par email
   notes_live: 'fast',       // Humanup Notes : cochage en direct
   notes_final: 'smart',     // Humanup Notes : notes après le call
 };

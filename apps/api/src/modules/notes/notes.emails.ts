@@ -2,6 +2,7 @@
 // soir (récap de la journée + préparation des meetings du lendemain).
 import prisma from '../../lib/db.js';
 import { escapeHtml, renderBrandedEmail, sendEmail } from '../../lib/mailer.js';
+import { callReplyCode, dayReplyCode, REPLY_HINT_HTML, replyAddress } from './notes.reply.js';
 import { appUrl, CALL_TYPE_LABEL, CALL_TYPES, type Attendee, type CallType, type NoteQuestion, type PropiumLink } from './notes.types.js';
 
 const FROM = () => process.env.NOTES_FROM || undefined;
@@ -59,13 +60,14 @@ export async function sendNotesEmail(call: any): Promise<void> {
     <p style="margin:0 0 12px 0;color:${C.muted};">${escapeHtml(CALL_TYPE_LABEL[call.callType as CallType])} · ${escapeHtml(new Date(call.startAt).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Paris' }))}</p>
     ${mdToHtml(call.notesMarkdown || '')}
     ${linksHtml(links)}
-    ${dups.length ? `<p style="margin-top:14px;color:${C.warn};">À vérifier : ${dups.map((d) => escapeHtml(d.reason)).join(' ')}</p>` : ''}`;
+    ${dups.length ? `<p style="margin-top:14px;color:${C.warn};">À vérifier : ${dups.map((d) => escapeHtml(d.reason)).join(' ')}</p>` : ''}
+    ${call.callType !== 'INTERNE' ? REPLY_HINT_HTML : ''}`;
   const html = renderBrandedEmail({
     title: `Notes : ${call.titre || 'call visio'}`,
     bodyHtml: body,
     cta: mainLink ? { label: 'Ouvrir la fiche Propium', href: mainLink.url } : { label: 'Voir le call', href: `${appUrl()}/notes/${call.id}` },
   });
-  for (const u of to) await sendEmail(u.email, `Notes : ${call.titre || 'call visio'}`, html, call.notesMarkdown || undefined, { from: FROM() });
+  for (const u of to) await sendEmail(u.email, `Notes : ${call.titre || 'call visio'}`, html, call.notesMarkdown || undefined, { from: FROM(), replyTo: call.callType !== 'INTERNE' ? replyAddress(u.email, callReplyCode(call.id)) : undefined });
 }
 
 // ─── Brief 30 min avant (qualif / intake) ────────────
@@ -85,9 +87,10 @@ export async function sendBriefEmail(call: any, briefMd: string | null, missing:
     ${briefMd ? mdToHtml(briefMd) : `<p style="color:${C.muted};">Pas assez d'infos dans Propium pour rédiger un brief.</p>`}
     ${ordered.length ? `<h3 style="margin:18px 0 6px 0;font-size:15px;">Questions préparées</h3><ol style="margin:0 0 0 18px;padding:0;">${ordered.map((q) => `<li style="margin-bottom:3px;">${q.dealbreaker ? '<strong>' : ''}${escapeHtml(q.text)}${q.dealbreaker ? '</strong> <span style="color:' + C.warn + ';font-size:12px;">obligatoire</span>' : ''}</li>`).join('')}</ol>` : ''}
     ${missing.length ? `<p style="margin-top:14px;color:${C.warn};">Il manque : ${escapeHtml(missing.join(', '))}. <a href="${appUrl()}/notes/${call.id}" style="color:${C.primary};">Le charger</a></p>` : ''}
-    <p style="margin-top:14px;font-size:13px;">${[ficheUrl ? `<a href="${ficheUrl}" style="color:${C.primary};">Fiche Propium</a>` : '', mandatUrl ? `<a href="${mandatUrl}" style="color:${C.primary};">Mandat</a>` : '', `<a href="${appUrl()}/notes/${call.id}" style="color:${C.primary};">Questions</a>`].filter(Boolean).join(' · ')}</p>`;
+    <p style="margin-top:14px;font-size:13px;">${[ficheUrl ? `<a href="${ficheUrl}" style="color:${C.primary};">Fiche Propium</a>` : '', mandatUrl ? `<a href="${mandatUrl}" style="color:${C.primary};">Mandat</a>` : '', `<a href="${appUrl()}/notes/${call.id}" style="color:${C.primary};">Questions</a>`].filter(Boolean).join(' · ')}</p>
+    ${REPLY_HINT_HTML}`;
   const html = renderBrandedEmail({ title: `Brief : ${call.titre || 'call visio'}`, bodyHtml: body, cta: { label: 'Ouvrir le panneau live', href: `${appUrl()}/notes/live/${call.id}` } });
-  for (const u of to) await sendEmail(u.email, `Brief ${fmtTime(new Date(call.startAt), tz)} : ${call.titre || 'call visio'}`, html, briefMd || undefined, { from: FROM() });
+  for (const u of to) await sendEmail(u.email, `Brief ${fmtTime(new Date(call.startAt), tz)} : ${call.titre || 'call visio'}`, html, briefMd || undefined, { from: FROM(), replyTo: replyAddress(u.email, callReplyCode(call.id)) });
   return to.length;
 }
 
@@ -143,9 +146,10 @@ export async function sendEveningEmail(user: { id: string; email: string; prenom
     ${todaySection(data.today)}
     ${tasks.length ? `<h3 style="margin:16px 0 6px 0;font-size:15px;">Relances et tâches pour demain</h3><ul style="margin:0 0 0 18px;padding:0;">${tasks.map((t) => `<li>${escapeHtml(t.titre || 'Tâche')}</li>`).join('')}</ul>` : ''}
     <h3 style="margin:22px 0 4px 0;font-size:16px;">Demain tu as ${data.tomorrow.length} meeting${data.tomorrow.length > 1 ? 's' : ''}</h3>
-    ${tomorrowSection(data.tomorrow, tz)}`;
+    ${tomorrowSection(data.tomorrow, tz)}
+    ${REPLY_HINT_HTML}`;
   const html = renderBrandedEmail({ title: `Récap du ${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz })}`, bodyHtml: body, cta: { label: 'Ouvrir Humanup Notes', href: `${appUrl()}/notes` } });
-  await sendEmail(user.email, `Récap du soir · demain ${data.tomorrow.length} meeting${data.tomorrow.length > 1 ? 's' : ''}`, html, undefined, { from: FROM() });
+  await sendEmail(user.email, `Récap du soir · demain ${data.tomorrow.length} meeting${data.tomorrow.length > 1 ? 's' : ''}`, html, undefined, { from: FROM(), replyTo: replyAddress(user.email, dayReplyCode(new Date(), tz)) });
 }
 
 export async function sendTeamRecap(to: string[], perUser: { name: string; today: any[] }[]): Promise<void> {

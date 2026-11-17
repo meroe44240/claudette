@@ -16,7 +16,7 @@ export async function sendEmail(
   subject: string,
   html: string,
   text?: string,
-  opts: { from?: string } = {},
+  opts: { from?: string; replyTo?: string } = {},
 ): Promise<void> {
   if (process.env.NODE_ENV === 'test') return;
 
@@ -33,7 +33,7 @@ export async function sendEmail(
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from, to, subject, html, text }),
+      body: JSON.stringify({ from, to, subject, html, text, ...(opts.replyTo ? { reply_to: opts.replyTo } : {}) }),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -43,7 +43,7 @@ export async function sendEmail(
   }
 
   // Fallback SMTP (nodemailer) pour tout autre fournisseur.
-  await transporter.sendMail({ from, to, subject, html, text });
+  await transporter.sendMail({ from, to, subject, html, text, ...(opts.replyTo ? { replyTo: opts.replyTo } : {}) });
 }
 
 // ─── HumanUp branded email wrapper ────────────────────

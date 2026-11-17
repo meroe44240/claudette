@@ -9,6 +9,7 @@ import { buildContext } from './notes.context.js';
 import { classifyAttendees, detectCall, extractMeetingLink, isInternalEmail, meetingKey } from './notes.detect.js';
 import { sendEveningEmail, sendTeamRecap } from './notes.emails.js';
 import { sendCallBrief } from './notes.brief.js';
+import { pollAllReplies } from './notes.reply.js';
 import { finalizeCall } from './notes.finalize.js';
 import { appendSegments, markInCall, tickLive } from './notes.live.js';
 import { prepareQuestions } from './notes.questions.js';
@@ -336,6 +337,8 @@ export function startNotesJobs(): void {
     try { await fn(); } catch (err) { console.error(`[Notes] ${name}:`, (err as Error).message); }
   };
   setInterval(safe('synchro', async () => { await syncAllCalendars(); await scheduleBots(); }), 5 * 60_000);
+  // Réponses par email aux emails Notes (lues dans les boîtes Gmail connectées).
+  setInterval(safe('réponses email', pollAllReplies), 2 * 60_000);
   setInterval(safe('minute', async () => {
     await pollBots();
     await prepareUpcoming();
