@@ -120,6 +120,7 @@ async function sendInviteEmail(params: { email: string; firstName: string; passw
     `,
     cta: { label: 'Sign in', href: loginUrl },
     signature: 'Welcome aboard!',
+    lang: 'en',
   });
   const text = [
     `Hi ${params.firstName},`,

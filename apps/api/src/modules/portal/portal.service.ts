@@ -31,6 +31,10 @@ export type PortalColumn = (typeof PORTAL_COLUMNS)[number];
 const COLUMN_STAGE: Record<PortalColumn, StageCandidature> = {
   INBOX: 'ENVOYE_CLIENT', SCREENING: 'ENTRETIEN_CLIENT', CASE: 'PROCESS', CULTURE_FIT: 'PROCESS', OFFRE: 'OFFRE', ENGAGE: 'PLACE', PERDU: 'REFUSE',
 };
+// Version anglaise pour les emails envoyés à l'équipe.
+const COLUMN_LABEL_EN: Record<PortalColumn, string> = {
+  INBOX: 'Inbox', SCREENING: 'Screening', CASE: 'Case', CULTURE_FIT: 'Culture Fit', OFFRE: 'Offer', ENGAGE: 'Hired', PERDU: 'Lost',
+};
 const COLUMN_LABEL: Record<PortalColumn, string> = {
   INBOX: 'Inbox', SCREENING: 'Screening', CASE: 'Case', CULTURE_FIT: 'Culture Fit', OFFRE: 'Offre', ENGAGE: 'Engagé', PERDU: 'Perdu',
 };
@@ -468,6 +472,8 @@ export async function recordDecision(
 }
 
 const DECISION_LIBELLE: Record<string, string> = { RENCONTRER: 'À rencontrer', A_DISCUTER: 'À discuter', ECARTER: 'Écarté' };
+// Email interne (équipe) : en anglais
+const DECISION_LABEL_EN: Record<string, string> = { RENCONTRER: 'Meet', A_DISCUTER: 'To discuss', ECARTER: 'Rejected' };
 
 // Avis donné par le client sur un profil : l'interlocuteur du client (le commercial,
 // à défaut le consultant) est prévenu par email, comme pour un déplacement de carte.
@@ -490,18 +496,19 @@ async function notifyDecision(data: { portalAccessId: string; mandatId: string; 
   const contact = commercial ?? mandat.recruteur ?? mandat.assignedTo;
   if (!contact?.email) return;
 
-  const auteur = access ? portalAuthorName(access) : 'Le client';
+  const auteur = access ? portalAuthorName(access) : 'The client';
   const candidatNom = `${candidature.candidat.prenom ?? ''} ${candidature.candidat.nom}`.trim();
-  const avis = DECISION_LIBELLE[data.decision] ?? data.decision;
+  const avis = DECISION_LABEL_EN[data.decision] ?? data.decision;
   const raison = data.reason?.trim();
-  const body = `<p>Bonjour ${esc(contact.prenom ?? '')},</p>
-    <p>Sur le portail client, <strong>${esc(auteur)}</strong> a donné son avis sur <strong>${esc(candidatNom)}</strong> : <strong>${esc(avis)}</strong>.</p>
+  const body = `<p>Hi ${esc(contact.prenom ?? '')},</p>
+    <p>On the client portal, <strong>${esc(auteur)}</strong> gave feedback on <strong>${esc(candidatNom)}</strong>: <strong>${esc(avis)}</strong>.</p>
     ${raison ? `<p style="border-left:3px solid #E6E9AF;padding-left:12px;color:#4a4568;">${esc(raison).replace(/\n/g, '<br>')}</p>` : ''}`;
-  await sendEmail(contact.email, `${auteur} a donné son avis sur ${candidatNom} : ${avis} · ${mandat.titrePoste}`, renderBrandedEmail({
-    title: 'Avis client',
+  await sendEmail(contact.email, `${auteur} gave feedback on ${candidatNom}: ${avis} · ${mandat.titrePoste}`, renderBrandedEmail({
+    title: 'Client feedback',
     bodyHtml: body,
-    cta: { label: 'Ouvrir la fiche candidat', href: `${PORTAL_BASE}/candidats/${candidature.candidat.id}` },
+    cta: { label: 'Open the candidate profile', href: `${PORTAL_BASE}/candidats/${candidature.candidat.id}` },
     signature: 'Propium',
+    lang: 'en',
   }));
 }
 
@@ -612,19 +619,33 @@ async function notifyMentions(p: {
   const auteur = access ? portalAuthorName(access) : 'Votre client';
   const candidatNom = p.candidat ? `${p.candidat.prenom ?? ''} ${p.candidat.nom}`.trim() : null;
   const sujetOf = (mentioned: boolean) => `${auteur} ${mentioned ? 'vous a mentionné' : 'a commenté'}${candidatNom ? `, ${candidatNom}` : ''} (${mandat?.titrePoste ?? ''})`;
+  // Destinataire interne (équipe HumanUp) : email en anglais
+  const auteurEn = access ? portalAuthorName(access) : 'Your client';
+  const sujetEnOf = (mentioned: boolean) => `${auteurEn} ${mentioned ? 'mentioned you' : 'commented'}${candidatNom ? `, ${candidatNom}` : ''} (${mandat?.titrePoste ?? ''})`;
   const quote = `<p style="border-left:3px solid #E6E9AF;padding-left:12px;margin:16px 0;color:#4a4568;">${esc(p.content).replace(/\n/g, '<br>')}</p>`;
   for (const m of p.mentions) {
     const internal = m.kind === 'internal';
     const href = internal && p.candidat
       ? `${PORTAL_BASE}/candidats/${p.candidat.id}`
       : `${PORTAL_BASE}/portail/login?m=${p.mandatId}`;
-    const body = `<p>Bonjour ${esc(m.name.split(/\s+/)[0] || '')},</p>
-      <p><strong>${esc(auteur)}</strong> ${m.mentioned === false ? 'a laissé un commentaire' : 'vous a mentionné dans un commentaire'} sur le recrutement <strong>${esc(mandat?.titrePoste ?? '')}</strong>${mandat?.entreprise?.nom ? ` (${esc(mandat.entreprise.nom)})` : ''}${candidatNom ? `, à propos de <strong>${esc(candidatNom)}</strong>` : ''} :</p>${quote}`;
+    const firstName = esc(m.name.split(/\s+/)[0] || '');
+    const company = mandat?.entreprise?.nom ? ` (${esc(mandat.entreprise.nom)})` : '';
+    const body = internal
+      ? `<p>Hi ${firstName},</p>
+      <p><strong>${esc(auteurEn)}</strong> ${m.mentioned === false ? 'left a comment' : 'mentioned you in a comment'} on the <strong>${esc(mandat?.titrePoste ?? '')}</strong> search${company}${candidatNom ? `, about <strong>${esc(candidatNom)}</strong>` : ''}:</p>${quote}`
+      : `<p>Bonjour ${firstName},</p>
+      <p><strong>${esc(auteur)}</strong> ${m.mentioned === false ? 'a laissé un commentaire' : 'vous a mentionné dans un commentaire'} sur le recrutement <strong>${esc(mandat?.titrePoste ?? '')}</strong>${company}${candidatNom ? `, à propos de <strong>${esc(candidatNom)}</strong>` : ''} :</p>${quote}`;
     try {
-      await sendEmail(m.email, sujetOf(m.mentioned !== false), renderBrandedEmail({
+      await sendEmail(m.email, internal ? sujetEnOf(m.mentioned !== false) : sujetOf(m.mentioned !== false), renderBrandedEmail(internal ? {
+        title: m.mentioned === false ? 'New client comment' : 'New mention',
+        bodyHtml: body,
+        cta: { label: 'Open the candidate profile', href },
+        signature: 'The HumanUp team',
+        lang: 'en',
+      } : {
         title: m.mentioned === false ? 'Nouveau commentaire client' : 'Nouvelle mention',
         bodyHtml: body,
-        cta: { label: internal ? 'Ouvrir la fiche candidat' : 'Ouvrir l’espace de suivi', href },
+        cta: { label: 'Ouvrir l’espace de suivi', href },
         signature: 'L’équipe HumanUp',
       }));
     } catch (e) {
@@ -789,18 +810,23 @@ export async function moveCandidature(data: {
   ]);
 
   if (contact?.email) {
+    // Email interne (équipe) : en anglais
+    const auteurEn = access ? portalAuthorName(access) : 'The client';
+    const fromEn = COLUMN_LABEL_EN[fromCol];
+    const toEn = COLUMN_LABEL_EN[data.column];
     const sujet = pending
-      ? `${auteur} annonce l'embauche de ${candidatNom} · ${mandat.titrePoste}`
-      : `${auteur} a déplacé ${candidatNom} vers « ${to} » · ${mandat.titrePoste}`;
-    const body = `<p>Bonjour ${esc(contact.prenom ?? '')},</p>
-      <p>Sur le portail client, <strong>${esc(auteur)}</strong> a déplacé <strong>${esc(candidatNom)}</strong> de « ${from} » vers « ${to} ».</p>
-      ${pending ? '<p>Passe la candidature en <strong>Gagné</strong> dans l’ATS (montant de la facture + date de démarrage) pour valider l’embauche.</p>' : ''}
+      ? `${auteurEn} reports hiring ${candidatNom} · ${mandat.titrePoste}`
+      : `${auteurEn} moved ${candidatNom} to "${toEn}" · ${mandat.titrePoste}`;
+    const body = `<p>Hi ${esc(contact.prenom ?? '')},</p>
+      <p>On the client portal, <strong>${esc(auteurEn)}</strong> moved <strong>${esc(candidatNom)}</strong> from "${fromEn}" to "${toEn}".</p>
+      ${pending ? '<p>Move the application to <strong>Gagné</strong> in the ATS (invoice amount + start date) to confirm the hire.</p>' : ''}
       ${data.reason?.trim() ? `<p style="border-left:3px solid #E6E9AF;padding-left:12px;color:#4a4568;">${esc(data.reason.trim())}</p>` : ''}`;
     void sendEmail(contact.email, sujet, renderBrandedEmail({
-      title: pending ? 'Embauche annoncée' : 'Mouvement client',
+      title: pending ? 'Hire reported' : 'Client update',
       bodyHtml: body,
-      cta: { label: 'Ouvrir la fiche candidat', href: `${PORTAL_BASE}/candidats/${existing.candidat.id}` },
+      cta: { label: 'Open the candidate profile', href: `${PORTAL_BASE}/candidats/${existing.candidat.id}` },
       signature: 'Propium',
+      lang: 'en',
     })).catch((e) => console.error('[Portal] email mouvement échoué', e));
   }
 

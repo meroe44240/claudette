@@ -329,7 +329,8 @@ export async function activate(input: { token: string; password: string; consent
   });
   await prisma.candidat.update({ where: { id: account.candidatId }, data: { consentementRgpd: true, consentementDate: now } });
   const changed = JSON.stringify([updated.expectations, updated.otherProcesses]) !== before;
-  await logAndNotify(account.candidatId, account.invitedById, changed ? 'Espace candidat activé, attentes corrigées par le candidat' : 'Espace candidat activé, attentes confirmées');
+  await logAndNotify(account.candidatId, account.invitedById, changed ? 'Espace candidat activé, attentes corrigées par le candidat' : 'Espace candidat activé, attentes confirmées',
+    changed ? 'activated their candidate space and corrected their expectations' : 'activated their candidate space and confirmed their expectations');
   return { token: await sessionToken(updated) };
 }
 
@@ -502,7 +503,8 @@ export async function updateExpectations(account: { id: string; candidatId: stri
   if (input.expectations !== undefined) data.expectations = cleanExpectations(profile, input.expectations);
   if (input.otherProcesses !== undefined) data.otherProcesses = cleanOtherProcesses(input.otherProcesses);
   const updated = await prisma.candidateAccount.update({ where: { id: account.id }, data: data as any });
-  await logAndNotify(account.candidatId, account.invitedById, 'Espace candidat : attentes ou autres process mis à jour par le candidat');
+  await logAndNotify(account.candidatId, account.invitedById, 'Espace candidat : attentes ou autres process mis à jour par le candidat',
+    'updated their expectations or other processes in their candidate space');
   return getExpectations(updated);
 }
 
@@ -537,7 +539,8 @@ export async function notifications(account: { id: string; candidatId: string; n
 }
 
 // ── Messages au candidat sur les changements d'étape ─
-async function logAndNotify(candidatId: string, invitedById: string | null, titre: string) {
+// `titre` (français) va dans l'historique ; `titreEn` sert à l'email interne, envoyé en anglais.
+async function logAndNotify(candidatId: string, invitedById: string | null, titre: string, titreEn: string) {
   await prisma.activite.create({
     data: { type: 'NOTE', titre, entiteType: 'CANDIDAT', entiteId: candidatId, userId: invitedById, source: 'SYSTEME', metadata: { candidateSpace: 'update' } },
   });
@@ -545,7 +548,7 @@ async function logAndNotify(candidatId: string, invitedById: string | null, titr
   const c = await prisma.candidat.findUnique({ where: { id: candidatId }, select: { prenom: true, nom: true } });
   const url = `${BASE}/candidats/${candidatId}`;
   for (const t of team) {
-    sendEmail(t.email, `${fullName(c)} : ${titre.replace(/^Espace candidat : /, '')}`, `<p>${esc(fullName(c))} : ${esc(titre)}.</p><p><a href="${url}">Ouvrir la fiche</a></p>`).catch(() => {});
+    sendEmail(t.email, `${fullName(c)} ${titreEn}`, `<p>${esc(fullName(c))} ${esc(titreEn)}.</p><p><a href="${url}">Open the profile</a></p>`).catch(() => {});
   }
 }
 

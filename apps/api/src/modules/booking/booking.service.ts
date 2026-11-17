@@ -51,6 +51,21 @@ function dateLines(d: Date): { l1: string; l2: string } {
   } catch { return { l1: d.toISOString(), l2: '' }; }
 }
 
+// Variante anglaise pour les emails internes (recruteur).
+function dateLinesEn(d: Date): { l1: string; l2: string } {
+  try {
+    const l1 = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Paris' }).format(d);
+    const l2 = 'at ' + new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).format(d);
+    return { l1, l2 };
+  } catch { return { l1: d.toISOString(), l2: '' }; }
+}
+
+// Libellés français du récap de réservation, traduits pour l'email interne.
+const RECAP_LABEL_EN: Record<string, string> = {
+  'Poste': 'Role', 'Société': 'Company', 'Téléphone': 'Phone', 'Recrute pour / poste': 'Hiring for',
+  'Échéance': 'Timeline', 'Message': 'Message',
+};
+
 interface ClientEmailData {
   name: string; dateL1: string; dateL2: string; durationMin: number; meetLink: string | null;
   hostName: string; hostTitle: string; hostPhone: string | null; hostEmail: string; hostPhotoUrl: string | null;
@@ -129,22 +144,22 @@ function clientBookingEmail(o: ClientEmailData): string {
 }
 
 function recruiterBookingEmail(o: { name: string; email: string; dateL1: string; dateL2: string; meetLink: string | null; note?: string | null }): string {
-  const rows = ([['Contact', o.name], ['Email', o.email], ['Créneau', `${o.dateL1} ${o.dateL2}`]] as [string, string][])
-    .concat(String(o.note || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf(':'); return (i > 0 ? [l.slice(0, i).trim(), l.slice(i + 1).trim()] : ['Info', l]) as [string, string]; }))
+  const rows = ([['Contact', o.name], ['Email', o.email], ['Slot', `${o.dateL1} ${o.dateL2}`]] as [string, string][])
+    .concat(String(o.note || '').split('\n').filter(Boolean).map((l) => { const i = l.indexOf(':'); if (i <= 0) return ['Info', l] as [string, string]; const k = l.slice(0, i).trim(); return [RECAP_LABEL_EN[k] ?? k, l.slice(i + 1).trim()] as [string, string]; }))
     .map(([k, v]) => `<tr><td style="font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#6E6A85;padding:7px 14px 7px 0;white-space:nowrap;vertical-align:top">${escHtml(k)}</td><td style="font-family:Arial,Helvetica,sans-serif;font-size:13.5px;color:#1A1533;font-weight:bold;padding:7px 0">${escHtml(v)}</td></tr>`).join('');
   return `<div style="background:#EDEDF2;padding:24px 10px;font-family:Arial,Helvetica,sans-serif">
 <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;max-width:600px;margin:0 auto;background:#FCFCF5;border-radius:18px;overflow:hidden">
  <tr><td style="background:#22177A;padding:22px 30px;border-bottom:3px solid #E6E9AF">
   <span style="font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;letter-spacing:.5px;color:#E6E9AF">HUMANUP</span>
-  <span style="font-family:Arial,Helvetica,sans-serif;font-size:8px;font-weight:bold;letter-spacing:2.4px;text-transform:uppercase;color:#b9bb96;padding-left:10px">Nouveau rendez-vous</span>
+  <span style="font-family:Arial,Helvetica,sans-serif;font-size:8px;font-weight:bold;letter-spacing:2.4px;text-transform:uppercase;color:#b9bb96;padding-left:10px">New meeting</span>
  </td></tr>
  <tr><td style="padding:28px 30px 6px">
-  <div style="font-family:Arial,Helvetica,sans-serif;font-size:21px;font-weight:bold;color:#1A1533">${escHtml(o.name)} a réservé un échange</div>
+  <div style="font-family:Arial,Helvetica,sans-serif;font-size:21px;font-weight:bold;color:#1A1533">${escHtml(o.name)} booked a call</div>
   <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;margin-top:14px">${rows}</table>
  </td></tr>
  <tr><td style="padding:8px 30px 28px">
-  ${o.meetLink ? `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse"><tr><td style="background:#E6E9AF;border-radius:11px"><a href="${escHtml(o.meetLink)}" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;font-weight:bold;color:#22177A;text-decoration:none;padding:13px 24px">Ouvrir le Google Meet</a></td></tr></table>` : ''}
-  <p style="font-family:Arial,Helvetica,sans-serif;font-size:11.5px;color:#4A4568;padding-top:14px">L'événement est dans votre Google Agenda. Répondez à cet email pour écrire au client.</p>
+  ${o.meetLink ? `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse"><tr><td style="background:#E6E9AF;border-radius:11px"><a href="${escHtml(o.meetLink)}" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;font-weight:bold;color:#22177A;text-decoration:none;padding:13px 24px">Open Google Meet</a></td></tr></table>` : ''}
+  <p style="font-family:Arial,Helvetica,sans-serif;font-size:11.5px;color:#4A4568;padding-top:14px">The event is in your Google Calendar. Reply to this email to write to the contact.</p>
  </td></tr>
 </table></div>`;
 }
@@ -628,12 +643,14 @@ L'équipe HumanUp`;
     });
   } catch (e) { console.warn('[Booking] email client échoué', (e as Error).message); }
   if (host?.email) {
+    // Email interne au recruteur : en anglais
+    const { l1: enL1, l2: enL2 } = dateLinesEn(start);
     try {
       await sendRawEmail(settings.userId, {
         to: host.email,
-        subject: `Nouveau RDV — ${data.name}${data.societe ? ' · ' + data.societe : ''}`,
-        body: `${data.name} (${data.email}) a réservé un échange le ${dateL1} ${dateL2}.${intakeNote ? `\n\n${intakeNote}` : ''}${meetLink ? `\n\nMeet : ${meetLink}` : ''}`,
-        htmlBody: recruiterBookingEmail({ name: data.name, email: data.email.trim(), dateL1, dateL2, meetLink, note: recapNote }),
+        subject: `New meeting · ${data.name}${data.societe ? ' · ' + data.societe : ''}`,
+        body: `${data.name} (${data.email}) booked a call on ${enL1} ${enL2}.${intakeNote ? `\n\n${intakeNote}` : ''}${meetLink ? `\n\nMeet: ${meetLink}` : ''}`,
+        htmlBody: recruiterBookingEmail({ name: data.name, email: data.email.trim(), dateL1: enL1, dateL2: enL2, meetLink, note: recapNote }),
       });
     } catch (e) { console.warn('[Booking] email recruteur échoué', (e as Error).message); }
   }
@@ -718,12 +735,12 @@ export async function cancelBooking(token: string) {
     // Notifie le recruteur (best-effort)
     const host = await prisma.user.findUnique({ where: { id: b.userId }, select: { email: true } });
     if (host?.email) {
-      const { l1, l2 } = dateLines(b.slotStart);
+      const { l1, l2 } = dateLinesEn(b.slotStart);
       try {
         await sendRawEmail(b.userId, {
           to: host.email,
-          subject: `RDV annulé · ${b.inviteeName}`,
-          body: `${b.inviteeName} (${b.inviteeEmail}) a annulé le rendez-vous du ${l1} ${l2}.`,
+          subject: `Meeting cancelled · ${b.inviteeName}`,
+          body: `${b.inviteeName} (${b.inviteeEmail}) cancelled the meeting on ${l1} ${l2}.`,
         });
       } catch { /* noop */ }
     }
