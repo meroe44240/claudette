@@ -244,7 +244,7 @@ export async function buildRecap(windowStart: Date, windowEnd: Date): Promise<Re
     for (const c of m.candidatures) {
       const candidatLabel =
         [c.candidat.prenom, c.candidat.nom].filter(Boolean).join(' ').trim() ||
-        '(candidat sans nom)';
+        '(unnamed candidate)';
 
       // MEETINGs Google Calendar
       const meets = futureMeetingsByCandidat.get(c.candidat.id) ?? [];

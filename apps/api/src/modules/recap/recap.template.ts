@@ -19,13 +19,13 @@ import { LOGO_MARK_ON_NAVY_DATA_URI } from '../../lib/brand-assets.js';
 const STAGE_LABEL: Record<Stage, string> = {
   SOURCING: 'Sourcing',
   CONTACTE: 'Qualification',
-  ENTRETIEN_1: 'Entr. interne',
-  ENVOYE_CLIENT: 'Envoi client',
-  ENTRETIEN_CLIENT: 'Entr. client',
+  ENTRETIEN_1: 'Internal interview',
+  ENVOYE_CLIENT: 'Sent to client',
+  ENTRETIEN_CLIENT: 'Client interview',
   PROCESS: 'Process',
-  OFFRE: 'Offre',
-  PLACE: 'Gagné',
-  REFUSE: 'Perdu',
+  OFFRE: 'Offer',
+  PLACE: 'Won',
+  REFUSE: 'Lost',
 };
 
 function escapeHtml(s: string): string {
@@ -38,7 +38,7 @@ function escapeHtml(s: string): string {
 }
 
 function formatDate(d: Date, tz = 'Asia/Ho_Chi_Minh'): string {
-  return d.toLocaleString('fr-FR', {
+  return d.toLocaleString('en-GB', {
     timeZone: tz,
     day: '2-digit',
     month: 'short',
@@ -48,7 +48,7 @@ function formatDate(d: Date, tz = 'Asia/Ho_Chi_Minh'): string {
 }
 
 function formatDay(d: Date, tz = 'Asia/Ho_Chi_Minh'): string {
-  return d.toLocaleString('fr-FR', {
+  return d.toLocaleString('en-GB', {
     timeZone: tz,
     weekday: 'long',
     day: '2-digit',
@@ -57,11 +57,11 @@ function formatDay(d: Date, tz = 'Asia/Ho_Chi_Minh'): string {
 }
 
 function userLabel(u: UserRef | null): string {
-  return u ? u.label : '—';
+  return u ? u.label : '-';
 }
 
 function mandatTitle(m: MandatBase): string {
-  return `${m.entreprise} — ${m.titrePoste}`;
+  return `${m.entreprise} · ${m.titrePoste}`;
 }
 
 // ─── HumanUp brand palette ───────────────────────────
@@ -93,11 +93,11 @@ const GOOGLE_FONTS_LINK =
 export function renderRecapHtml(payload: RecapPayload, tz = 'Asia/Ho_Chi_Minh'): string {
   const { mandats, parPersonne, windowStart, windowEnd } = payload;
 
-  const heading = `Recap — ${formatDay(windowEnd, tz)}`;
-  const windowLabel = `Fenetre : ${formatDate(windowStart, tz)} → ${formatDate(windowEnd, tz)}`;
+  const heading = `Recap · ${formatDay(windowEnd, tz)}`;
+  const windowLabel = `Window: ${formatDate(windowStart, tz)} → ${formatDate(windowEnd, tz)}`;
 
   return `<!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>${escapeHtml(heading)}</title>
@@ -134,7 +134,7 @@ function renderBrandHeader(title: string, subtitle: string): string {
 function renderFooter(generatedAt: Date, tz: string): string {
   return `
   <p style="margin:16px 0 0 0;color:${COLORS.muted};font-size:12px;text-align:center;font-family:${FONT_BODY};">
-    Genere le ${escapeHtml(formatDate(generatedAt, tz))} — HumanUp ATS
+    Generated on ${escapeHtml(formatDate(generatedAt, tz))} · HumanUp ATS
   </p>`;
 }
 
@@ -143,17 +143,17 @@ function renderFooter(generatedAt: Date, tz: string): string {
 function renderMandatsSection(mandats: MandatRecap[], tz: string): string {
   if (mandats.length === 0) {
     return renderCard(
-      `Etat par mandat`,
-      `0 mandat actif`,
-      `<p style="margin:0;color:${COLORS.muted};">Aucun mandat OUVERT/EN_COURS.</p>`,
+      `Jobs overview`,
+      `0 active jobs`,
+      `<p style="margin:0;color:${COLORS.muted};">No open or in-progress jobs.</p>`,
     );
   }
 
   const totalPrez = mandats.reduce((s, m) => s + m.presentationsPrevues.length, 0);
   const inner = mandats.map((m) => renderMandatCard(m, tz)).join('');
   return renderCard(
-    `Etat par mandat`,
-    `${mandats.length} mandat${mandats.length > 1 ? 's' : ''} actif${mandats.length > 1 ? 's' : ''} · ${totalPrez} prez prevue${totalPrez > 1 ? 's' : ''}`,
+    `Jobs overview`,
+    `${mandats.length} active job${mandats.length > 1 ? 's' : ''} · ${totalPrez} upcoming presentation${totalPrez > 1 ? 's' : ''}`,
     inner,
   );
 }
@@ -162,25 +162,25 @@ function renderMandatCard(m: MandatRecap, tz: string): string {
   const header = `
     <div style="margin-bottom:8px;">
       <strong style="font-size:15px;">${escapeHtml(mandatTitle(m))}</strong>
-      <span style="color:${COLORS.muted};font-size:12px;margin-left:6px;">${m.ageJours}j</span>
+      <span style="color:${COLORS.muted};font-size:12px;margin-left:6px;">${m.ageJours}d</span>
     </div>
     <p style="margin:0 0 8px 0;color:${COLORS.muted};font-size:12px;">
-      Contact : ${escapeHtml(m.clientLabel ?? '—')} · Sales : ${escapeHtml(userLabel(m.sales))} · Recruteur : ${escapeHtml(userLabel(m.recruteur))}
+      Contact: ${escapeHtml(m.clientLabel ?? '-')} · Sales: ${escapeHtml(userLabel(m.sales))} · Recruiter: ${escapeHtml(userLabel(m.recruteur))}
     </p>`;
 
   const pipelineHtml = renderPipelineRow(m.pipeline, m.totalActifs);
 
   const prezHtml =
     m.presentationsPrevues.length === 0
-      ? `<p style="margin:12px 0 0 0;color:${COLORS.muted};font-size:12px;font-style:italic;">Aucune presentation prevue.</p>`
+      ? `<p style="margin:12px 0 0 0;color:${COLORS.muted};font-size:12px;font-style:italic;">No presentations scheduled.</p>`
       : `
       <p style="margin:12px 0 4px 0;font-size:12px;font-weight:600;color:${COLORS.highlight};">
-        Prez prevues (${m.presentationsPrevues.length})
+        Upcoming presentations (${m.presentationsPrevues.length})
       </p>
       <ul style="margin:0;padding-left:18px;font-size:12px;color:${COLORS.text};">
         ${m.presentationsPrevues
           .map(
-            (p) => `<li>${escapeHtml(p.candidatLabel)} — <span style="color:${COLORS.muted};">${escapeHtml(formatDate(p.at, tz))}</span>${p.source === 'RDV' && p.label ? ` · ${escapeHtml(p.label)}` : ''}</li>`,
+            (p) => `<li>${escapeHtml(p.candidatLabel)} · <span style="color:${COLORS.muted};">${escapeHtml(formatDate(p.at, tz))}</span>${p.source === 'RDV' && p.label ? ` · ${escapeHtml(p.label)}` : ''}</li>`,
           )
           .join('')}
       </ul>`;
@@ -197,7 +197,7 @@ function renderPipelineRow(pipeline: PipelineBucket[], totalActifs: number): str
   const cells = pipeline
     .filter((b) => b.count > 0)
     .map((b) => {
-      const oldestLabel = b.oldestDays !== null ? ` · ${b.oldestDays}j` : '';
+      const oldestLabel = b.oldestDays !== null ? ` · ${b.oldestDays}d` : '';
       return `
       <td style="padding:6px 10px;border:1px solid ${COLORS.border};font-size:12px;">
         <div style="color:${COLORS.muted};font-size:11px;">${escapeHtml(STAGE_LABEL[b.stage])}</div>
@@ -207,12 +207,12 @@ function renderPipelineRow(pipeline: PipelineBucket[], totalActifs: number): str
     .join('');
 
   if (!cells) {
-    return `<p style="margin:0;color:${COLORS.muted};font-size:12px;font-style:italic;">Pipeline vide.</p>`;
+    return `<p style="margin:0;color:${COLORS.muted};font-size:12px;font-style:italic;">Empty pipeline.</p>`;
   }
 
   return `
   <p style="margin:0 0 4px 0;font-size:12px;color:${COLORS.muted};">
-    ${totalActifs} candidat${totalActifs > 1 ? 's' : ''} en process
+    ${totalActifs} candidate${totalActifs > 1 ? 's' : ''} in process
   </p>
   <table style="border-collapse:collapse;margin:0;">
     <tr>${cells}</tr>
@@ -229,17 +229,17 @@ function renderParPersonneSection(p: RecapPayload['parPersonne']): string {
       <h4 style="margin:12px 0 6px 0;font-size:13px;font-weight:600;">Sales</h4>
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
         <tr style="background:${COLORS.bg};">
-          <th style="text-align:left;padding:6px;border:1px solid ${COLORS.border};">Personne</th>
+          <th style="text-align:left;padding:6px;border:1px solid ${COLORS.border};">Person</th>
           <th style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">RDV</th>
-          <th style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">Mandats</th>
-          <th style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">Appels</th>
-          <th style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">Envoyes client</th>
+          <th style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">Jobs</th>
+          <th style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">Calls</th>
+          <th style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">Sent to client</th>
         </tr>
         ${p.sales
           .map(
             (s) => `
         <tr>
-          <td style="padding:6px;border:1px solid ${COLORS.border};">${escapeHtml(s.user.label)}${s.user.excludeFromTeamStats ? ` <span style="color:${COLORS.muted};font-size:10px;">(hors totaux)</span>` : ''}</td>
+          <td style="padding:6px;border:1px solid ${COLORS.border};">${escapeHtml(s.user.label)}${s.user.excludeFromTeamStats ? ` <span style="color:${COLORS.muted};font-size:10px;">(excluded from totals)</span>` : ''}</td>
           <td style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">${s.nouveauxRdv}</td>
           <td style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">${s.nouveauxMandats}</td>
           <td style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">${s.appels}</td>
@@ -253,19 +253,19 @@ function renderParPersonneSection(p: RecapPayload['parPersonne']): string {
     p.recruteurs.length === 0
       ? ''
       : `
-      <h4 style="margin:16px 0 6px 0;font-size:13px;font-weight:600;">Recruteurs</h4>
+      <h4 style="margin:16px 0 6px 0;font-size:13px;font-weight:600;">Recruiters</h4>
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
         <tr style="background:${COLORS.bg};">
-          <th style="text-align:left;padding:6px;border:1px solid ${COLORS.border};">Personne</th>
-          <th style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">Appels</th>
-          <th style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">Entr. recruteur</th>
+          <th style="text-align:left;padding:6px;border:1px solid ${COLORS.border};">Person</th>
+          <th style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">Calls</th>
+          <th style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">Internal interviews</th>
           <th style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">Presentations</th>
         </tr>
         ${p.recruteurs
           .map(
             (r) => `
         <tr>
-          <td style="padding:6px;border:1px solid ${COLORS.border};">${escapeHtml(r.user.label)}${r.user.excludeFromTeamStats ? ` <span style="color:${COLORS.muted};font-size:10px;">(hors totaux)</span>` : ''}</td>
+          <td style="padding:6px;border:1px solid ${COLORS.border};">${escapeHtml(r.user.label)}${r.user.excludeFromTeamStats ? ` <span style="color:${COLORS.muted};font-size:10px;">(excluded from totals)</span>` : ''}</td>
           <td style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">${r.appels}</td>
           <td style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">${r.entretiensRecruteur}</td>
           <td style="text-align:right;padding:6px;border:1px solid ${COLORS.border};">${r.presentations}</td>
@@ -277,16 +277,16 @@ function renderParPersonneSection(p: RecapPayload['parPersonne']): string {
   const t = p.totaux;
   const totauxHtml = `
     <p style="margin:16px 0 0 0;font-size:12px;color:${COLORS.text};">
-      <strong>Totaux equipe</strong> (hors users exclus) :
-      ${t.appelsEquipe} appels · ${t.rdvEquipe} RDV · ${t.entretiensRecruteurEquipe} entretiens recruteur · ${t.presentationsEquipe} presentations · ${t.entretiensClientEquipe} entretiens client · ${t.placementsEquipe} placements · ${t.nouveauxMandatsEquipe} nouveaux mandats.
+      <strong>Team totals</strong> (excluded users left out):
+      ${t.appelsEquipe} calls · ${t.rdvEquipe} meetings · ${t.entretiensRecruteurEquipe} internal interviews · ${t.presentationsEquipe} presentations · ${t.entretiensClientEquipe} client interviews · ${t.placementsEquipe} placements · ${t.nouveauxMandatsEquipe} new jobs.
     </p>
     <p style="margin:4px 0 0 0;font-size:11px;color:${COLORS.muted};">
-      Grand total : ${t.appelsGrandTotal} appels · ${t.rdvGrandTotal} RDV.
+      Overall: ${t.appelsGrandTotal} calls · ${t.rdvGrandTotal} meetings.
     </p>`;
 
   return renderCard(
-    `Activite par personne`,
-    `${p.sales.length + p.recruteurs.length} personne${p.sales.length + p.recruteurs.length > 1 ? 's' : ''}`,
+    `Activity by person`,
+    `${p.sales.length + p.recruteurs.length} ${p.sales.length + p.recruteurs.length > 1 ? 'people' : 'person'}`,
     `${salesHtml}${recHtml}${totauxHtml}`,
   );
 }
@@ -318,59 +318,59 @@ export function renderRecapText(payload: RecapPayload, tz = 'Asia/Ho_Chi_Minh'):
   const { mandats, parPersonne, windowStart, windowEnd } = payload;
   const lines: string[] = [];
 
-  lines.push(`Recap — ${formatDay(windowEnd, tz)}`);
-  lines.push(`Fenetre : ${formatDate(windowStart, tz)} -> ${formatDate(windowEnd, tz)}`);
+  lines.push(`Recap · ${formatDay(windowEnd, tz)}`);
+  lines.push(`Window: ${formatDate(windowStart, tz)} -> ${formatDate(windowEnd, tz)}`);
   lines.push('');
 
-  lines.push('=== ETAT PAR MANDAT ===');
+  lines.push('=== Jobs overview ===');
   if (mandats.length === 0) {
-    lines.push('Aucun mandat actif.');
+    lines.push('No active jobs.');
   } else {
     for (const m of mandats) {
       lines.push('');
-      lines.push(`${mandatTitle(m)} (${m.ageJours}j)`);
-      lines.push(`  Contact: ${m.clientLabel ?? '—'} | Sales: ${userLabel(m.sales)} | Recruteur: ${userLabel(m.recruteur)}`);
+      lines.push(`${mandatTitle(m)} (${m.ageJours}d)`);
+      lines.push(`  Contact: ${m.clientLabel ?? '-'} | Sales: ${userLabel(m.sales)} | Recruiter: ${userLabel(m.recruteur)}`);
       const buckets = m.pipeline
         .filter((b) => b.count > 0)
-        .map((b) => `${STAGE_LABEL[b.stage]} ${b.count}${b.oldestDays !== null ? `/${b.oldestDays}j` : ''}`)
+        .map((b) => `${STAGE_LABEL[b.stage]} ${b.count}${b.oldestDays !== null ? `/${b.oldestDays}d` : ''}`)
         .join(' · ');
-      lines.push(`  ${m.totalActifs} en process — ${buckets || 'pipeline vide'}`);
+      lines.push(`  ${m.totalActifs} in process: ${buckets || 'empty pipeline'}`);
       if (m.presentationsPrevues.length) {
-        lines.push(`  Prez prevues (${m.presentationsPrevues.length}) :`);
+        lines.push(`  Upcoming presentations (${m.presentationsPrevues.length}):`);
         for (const p of m.presentationsPrevues) {
-          lines.push(`    · ${p.candidatLabel} — ${formatDate(p.at, tz)}${p.source === 'RDV' && p.label ? ` · ${p.label}` : ''}`);
+          lines.push(`    · ${p.candidatLabel}, ${formatDate(p.at, tz)}${p.source === 'RDV' && p.label ? ` · ${p.label}` : ''}`);
         }
       } else {
-        lines.push(`  Prez prevues: aucune`);
+        lines.push(`  Upcoming presentations: none`);
       }
     }
   }
   lines.push('');
 
-  lines.push('=== ACTIVITE PAR PERSONNE ===');
+  lines.push('=== Activity by person ===');
   const p = parPersonne;
   if (p.sales.length) {
     lines.push('');
-    lines.push('Sales :');
+    lines.push('Sales:');
     for (const s of p.sales) {
-      const excl = s.user.excludeFromTeamStats ? ' (hors totaux)' : '';
-      lines.push(`  ${s.user.label}${excl} — RDV ${s.nouveauxRdv} · Mandats ${s.nouveauxMandats} · Appels ${s.appels} · Envoyes ${s.candidaturesEnvoyeesClient}`);
+      const excl = s.user.excludeFromTeamStats ? ' (excluded from totals)' : '';
+      lines.push(`  ${s.user.label}${excl}: meetings ${s.nouveauxRdv} · jobs ${s.nouveauxMandats} · calls ${s.appels} · sent to client ${s.candidaturesEnvoyeesClient}`);
     }
   }
   if (p.recruteurs.length) {
     lines.push('');
-    lines.push('Recruteurs :');
+    lines.push('Recruiters:');
     for (const r of p.recruteurs) {
-      const excl = r.user.excludeFromTeamStats ? ' (hors totaux)' : '';
-      lines.push(`  ${r.user.label}${excl} — Appels ${r.appels} · Entr. recruteur ${r.entretiensRecruteur} · Presentations ${r.presentations}`);
+      const excl = r.user.excludeFromTeamStats ? ' (excluded from totals)' : '';
+      lines.push(`  ${r.user.label}${excl}: calls ${r.appels} · internal interviews ${r.entretiensRecruteur} · presentations ${r.presentations}`);
     }
   }
   const t = p.totaux;
   lines.push('');
-  lines.push(`Totaux equipe : ${t.appelsEquipe} appels · ${t.rdvEquipe} RDV · ${t.entretiensRecruteurEquipe} entr.rec · ${t.presentationsEquipe} pres · ${t.entretiensClientEquipe} entr.cli · ${t.placementsEquipe} placements · ${t.nouveauxMandatsEquipe} mandats`);
-  lines.push(`Grand total : ${t.appelsGrandTotal} appels · ${t.rdvGrandTotal} RDV`);
+  lines.push(`Team totals: ${t.appelsEquipe} calls · ${t.rdvEquipe} meetings · ${t.entretiensRecruteurEquipe} internal interviews · ${t.presentationsEquipe} presentations · ${t.entretiensClientEquipe} client interviews · ${t.placementsEquipe} placements · ${t.nouveauxMandatsEquipe} new jobs`);
+  lines.push(`Overall: ${t.appelsGrandTotal} calls · ${t.rdvGrandTotal} meetings`);
   lines.push('');
-  lines.push(`Genere le ${formatDate(payload.generatedAt, tz)} — HumanUp ATS`);
+  lines.push(`Generated on ${formatDate(payload.generatedAt, tz)} · HumanUp ATS`);
 
   return lines.join('\n');
 }
@@ -378,11 +378,11 @@ export function renderRecapText(payload: RecapPayload, tz = 'Asia/Ho_Chi_Minh'):
 // ─── Sujet email ─────────────────────────────────────
 
 export function renderRecapSubject(payload: RecapPayload, tz = 'Asia/Ho_Chi_Minh'): string {
-  const day = payload.windowEnd.toLocaleString('fr-FR', {
+  const day = payload.windowEnd.toLocaleString('en-GB', {
     timeZone: tz,
     weekday: 'long',
   });
-  const date = payload.windowEnd.toLocaleString('fr-FR', {
+  const date = payload.windowEnd.toLocaleString('en-GB', {
     timeZone: tz,
     day: '2-digit',
     month: '2-digit',
@@ -390,7 +390,7 @@ export function renderRecapSubject(payload: RecapPayload, tz = 'Asia/Ho_Chi_Minh
   const totalPrez = payload.mandats.reduce((s, m) => s + m.presentationsPrevues.length, 0);
   const totalActifs = payload.mandats.reduce((s, m) => s + m.totalActifs, 0);
   const suffix = totalActifs > 0
-    ? ` — ${totalActifs} en process${totalPrez > 0 ? `, ${totalPrez} prez prevue${totalPrez > 1 ? 's' : ''}` : ''}`
+    ? `: ${totalActifs} in process${totalPrez > 0 ? `, ${totalPrez} upcoming presentation${totalPrez > 1 ? 's' : ''}` : ''}`
     : '';
   return `Recap ${day} ${date}${suffix}`;
 }

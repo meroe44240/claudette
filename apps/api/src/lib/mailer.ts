@@ -79,6 +79,8 @@ export interface BrandedEmailOptions {
   cta?: { label: string; href: string };
   /** Optional signature block appended below the body. */
   signature?: string;
+  /** Langue du cadre (footer, lang) : 'en' pour les emails internes à l'équipe, 'fr' sinon. */
+  lang?: 'fr' | 'en';
 }
 
 /**
@@ -86,7 +88,7 @@ export interface BrandedEmailOptions {
  * Returns a full HTML document ready for `sendEmail`.
  */
 export function renderBrandedEmail(opts: BrandedEmailOptions): string {
-  const { title, bodyHtml, cta, signature } = opts;
+  const { title, bodyHtml, cta, signature, lang = 'fr' } = opts;
 
   const ctaHtml = cta
     ? `
@@ -103,7 +105,7 @@ export function renderBrandedEmail(opts: BrandedEmailOptions): string {
     : '';
 
   return `<!doctype html>
-<html lang="fr">
+<html lang="${lang}">
 <head>
 <meta charset="utf-8">
 <title>${escapeHtml(title)}</title>
@@ -137,7 +139,7 @@ export function renderBrandedEmail(opts: BrandedEmailOptions): string {
     </div>
 
     <p style="margin:16px 0 0 0;color:${BRAND.muted};font-size:11px;text-align:center;">
-      HumanUp ATS — Email automatique, ne pas répondre.
+      ${lang === 'en' ? 'HumanUp ATS · Automated email, please do not reply.' : 'HumanUp ATS — Email automatique, ne pas répondre.'}
     </p>
   </div>
 </body>

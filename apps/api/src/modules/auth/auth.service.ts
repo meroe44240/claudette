@@ -91,16 +91,17 @@ export async function forgotPassword(input: ForgotPasswordInput) {
   try {
     await sendEmail(
       user.email,
-      'HumanUp — Réinitialisation de votre mot de passe',
+      'Reset your HumanUp password',
       renderBrandedEmail({
-        title: 'Réinitialisation de mot de passe',
+        title: 'Reset your password',
         bodyHtml: `
-          <p>Bonjour ${firstName},</p>
-          <p>Nous avons reçu une demande de réinitialisation de mot de passe pour votre compte HumanUp.</p>
-          <p>Cliquez sur le bouton ci-dessous pour définir un nouveau mot de passe. Ce lien est valable <strong>1 heure</strong>.</p>
+          <p>Hi ${firstName},</p>
+          <p>We received a request to reset the password for your HumanUp account.</p>
+          <p>Click the button below to choose a new password. This link is valid for <strong>1 hour</strong>.</p>
         `,
-        cta: { label: 'Réinitialiser mon mot de passe', href: resetUrl },
-        signature: `Si vous n'avez pas demandé cette réinitialisation, ignorez cet email — votre mot de passe reste inchangé.`,
+        cta: { label: 'Reset my password', href: resetUrl },
+        signature: `If you didn't ask for this, you can ignore this email. Your password stays the same.`,
+        lang: 'en',
       }),
     );
   } catch {
