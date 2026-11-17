@@ -6,6 +6,7 @@ import { callClaude } from '../../services/claudeAI.js';
 import { buildContext } from './notes.context.js';
 import { prepareQuestions } from './notes.questions.js';
 import { sendBriefEmail } from './notes.emails.js';
+import { resolveCallLanguage } from './notes.language.js';
 import { aiAvailable, CALL_TYPE_LABEL, type CallType, type NoteQuestion } from './notes.types.js';
 
 const SYSTEM = `Tu prépares le brief d'avant-call d'un recruteur d'un cabinet de recrutement (Humanup, profils sales et business).
@@ -53,6 +54,7 @@ export async function sendCallBrief(callId: string, opts: { onlyTo?: string } = 
   if (!call) throw new Error('Call introuvable');
   if (!((call.questions as unknown as NoteQuestion[]) || []).length) call = await prepareQuestions(callId);
   const { markdown, missing } = await generateBrief(callId);
+  if (call!.callType !== 'INTERNE') (call as any)._askLanguage = !(await resolveCallLanguage(call!));
   const sent = await sendBriefEmail(call!, markdown, missing, opts.onlyTo);
   return { sent };
 }

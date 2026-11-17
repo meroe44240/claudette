@@ -114,4 +114,5 @@ export const notes: Record<string, string> = {
   'À préciser': 'To confirm',
   'À venir': 'Upcoming',
   'Écart avec le dossier': 'Mismatch with the file',
+'Langue du call': 'Call language',  'Langue du call : français': 'Call language: French',  'Langue du call : anglais': 'Call language: English',  'Langue inconnue : choisis-la pour que le bot sous-titre dans la bonne langue.': 'Unknown language: pick it so the bot captions in the right language.',  'Français': 'French',  'Anglais': 'English',
 };

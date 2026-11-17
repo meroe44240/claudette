@@ -14,7 +14,8 @@ import { finalizeCall } from './notes.finalize.js';
 import { appendSegments, markInCall, tickLive } from './notes.live.js';
 import { prepareQuestions } from './notes.questions.js';
 import * as recall from './recall.client.js';
-import type { NoteQuestion, TranscriptSegment } from './notes.types.js';
+import { guessLanguageFromText, resolveCallLanguage } from './notes.language.js';
+import type { TranscriptSegment } from './notes.types.js';
 
 export const RETENTION_DAYS = Number(process.env.NOTES_RETENTION_DAYS || 180);
 const SYNC_AHEAD_HOURS = 36;
@@ -163,7 +164,11 @@ export async function scheduleBots(): Promise<void> {
         await recall.deleteScheduledBot(c.recallBotId).catch(() => null);
         await prisma.noteCall.update({ where: { id: c.id }, data: { recallBotId: null } });
       } else if (!off && !c.recallBotId) {
-        const bot = await recall.createBot({ noteCallId: c.id, webhookSecret: c.webhookSecret, meetingUrl: c.meetingUrl, joinAt: new Date(c.startAt.getTime() - 60_000), language: guessLanguage(c) });
+        // Langue connue (choisie ou indicatif du téléphone) : bot programmé tout de suite.
+        // Inconnue : on attend 15 min avant le call pour laisser le membre répondre.
+        const known = await resolveCallLanguage(c);
+        if (!known && c.startAt.getTime() - now > 15 * 60_000) continue;
+        const bot = await recall.createBot({ noteCallId: c.id, webhookSecret: c.webhookSecret, meetingUrl: c.meetingUrl, joinAt: new Date(c.startAt.getTime() - 60_000), language: known ?? guessLanguageFromText(c) });
         await prisma.noteCall.update({ where: { id: c.id }, data: { recallBotId: bot.id } });
       }
     } catch (err) {
@@ -273,22 +278,6 @@ async function retranscribe(callId: string, recId: string): Promise<void> {
   await dropMedia(callId);
 }
 
-/** Langue probable du call avant qu'il commence (titre + questions préparées) : règle les sous-titres du bot. */
-export function guessLanguage(c: { titre: string; questions: unknown; language: string | null }): 'fr' | 'en' | null {
-  if (c.language === 'fr' || c.language === 'en') return c.language;
-  const qs = ((c.questions as unknown as NoteQuestion[]) || []).map((q) => q.text || '').join(' ');
-  const words = `${c.titre} ${qs}`.toLowerCase().match(/[a-zàâçéèêëîïôûùüÿœ']+/g) || [];
-  const EN = new Set(['the', 'with', 'and', 'you', 'your', 'what', 'are', 'for', 'call', 'interview', 'meeting', 'chat', 'how', 'is', 'of', 'to', 'can', 'do']);
-  const FR = new Set(['le', 'la', 'les', 'avec', 'et', 'vous', 'votre', 'quel', 'quelle', 'est', 'pour', 'entretien', 'échange', 'un', 'une', 'des', 'du', 'de', 'comment']);
-  let en = 0;
-  let fr = 0;
-  for (const w of words) {
-    if (EN.has(w)) en++;
-    if (FR.has(w)) fr++;
-  }
-  return en > fr ? 'en' : fr > 0 ? 'fr' : null;
-}
-
 /** Filet de sécurité : un call en cours sans nouvel échange depuis 10 min après l'heure de fin est clôturé. */
 async function closeStaleCalls(): Promise<void> {
   const calls = await prisma.noteCall.findMany({
@@ -345,7 +334,10 @@ async function userDay(userId: string, tz: string, date: string) {
   const mine = { OR: [{ userId }, { memberIds: { has: userId } }] };
   const today = await prisma.noteCall.findMany({ where: { ...mine, startAt: { gte: start, lt: end }, status: { notIn: ['CANCELLED'] }, excluded: false }, orderBy: { startAt: 'asc' } });
   const tomorrow = await prisma.noteCall.findMany({ where: { ...mine, startAt: { gte: end, lt: end2 }, status: { notIn: ['CANCELLED'] } }, orderBy: { startAt: 'asc' } });
-  for (const c of tomorrow as any[]) c._missing = c.excluded ? [] : (await buildContext(c)).missing;
+  for (const c of tomorrow as any[]) {
+    c._missing = c.excluded ? [] : (await buildContext(c)).missing;
+    c._askLanguage = !c.excluded && !(await resolveCallLanguage(c));
+  }
   const tasksTomorrow = await prisma.activite.findMany({
     where: { isTache: true, tacheCompleted: false, userId, tacheDueDate: { gte: end, lt: end2 } },
     select: { titre: true, tacheDueDate: true },

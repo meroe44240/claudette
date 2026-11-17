@@ -112,7 +112,7 @@ export async function getLive(id: string, who: Requester) {
 }
 
 export async function updateCall(id: string, who: Requester, body: {
-  callType?: string; candidatId?: string | null; clientId?: string | null; mandatId?: string | null; leadId?: string | null; brief?: string | null; excluded?: boolean;
+  callType?: string; candidatId?: string | null; clientId?: string | null; mandatId?: string | null; leadId?: string | null; brief?: string | null; excluded?: boolean; language?: string | null;
 }) {
   const call = await load(id, who);
   const data: any = {};
@@ -127,6 +127,16 @@ export async function updateCall(id: string, who: Requester, body: {
     data.reviewReason = null;
   }
   if (body.brief !== undefined) data.brief = body.brief?.slice(0, 60_000) || null;
+  if (body.language !== undefined && body.language !== call.language) {
+    if (body.language !== null && body.language !== 'fr' && body.language !== 'en') throw new ValidationError('Langue inconnue');
+    data.language = body.language;
+    // Bot déjà programmé avec d'autres sous-titres : on le refait avec la bonne langue.
+    if (call.recallBotId && call.status === 'SCHEDULED' && recall.isRecallConfigured()) {
+      await recall.deleteScheduledBot(call.recallBotId).catch(() => null);
+      data.recallBotId = null;
+      setTimeout(() => { import('./notes.scheduler.js').then((m) => m.scheduleBots()).catch(() => null); }, 1000);
+    }
+  }
   if (body.excluded !== undefined) {
     data.excluded = body.excluded;
     if (body.excluded && call.recallBotId && call.status === 'SCHEDULED' && recall.isRecallConfigured()) {
