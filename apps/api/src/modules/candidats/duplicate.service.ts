@@ -72,44 +72,9 @@ export async function detectDuplicates(): Promise<{ groups: DuplicateGroup[] }> 
   return { groups };
 }
 
-export async function mergeCandidates(primaryId: string, duplicateId: string) {
-  const primary = await prisma.candidat.findUnique({ where: { id: primaryId } });
-  const duplicate = await prisma.candidat.findUnique({ where: { id: duplicateId } });
-
-  if (!primary || !duplicate) throw new Error('Candidat not found');
-
-  // Move all candidatures from duplicate to primary
-  await prisma.candidature.updateMany({
-    where: { candidatId: duplicateId },
-    data: { candidatId: primaryId },
-  });
-
-  // Move all activities from duplicate to primary
-  await prisma.activite.updateMany({
-    where: { entiteType: 'CANDIDAT', entiteId: duplicateId },
-    data: { entiteId: primaryId },
-  });
-
-  // Merge tags
-  const mergedTags = [...new Set([...(primary.tags || []), ...(duplicate.tags || [])])];
-
-  // Merge competences (stored as tags in this schema)
-  // Update primary with merged data and fill in blanks
-  await prisma.candidat.update({
-    where: { id: primaryId },
-    data: {
-      tags: mergedTags,
-      telephone: primary.telephone || duplicate.telephone,
-      email: primary.email || duplicate.email,
-      linkedinUrl: primary.linkedinUrl || duplicate.linkedinUrl,
-      localisation: primary.localisation || duplicate.localisation,
-      posteActuel: primary.posteActuel || duplicate.posteActuel,
-      entrepriseActuelle: primary.entrepriseActuelle || duplicate.entrepriseActuelle,
-    },
-  });
-
-  // Delete the duplicate
-  await prisma.candidat.delete({ where: { id: duplicateId } });
-
+// Fusion complete (candidatures, historique, appels...) : voir merge.service.ts
+export async function mergeCandidates(primaryId: string, duplicateId: string, userId?: string) {
+  const { mergeCandidats } = await import('../merge/merge.service.js');
+  await mergeCandidats(primaryId, duplicateId, userId);
   return { message: 'Candidats fusionnes', primaryId };
 }

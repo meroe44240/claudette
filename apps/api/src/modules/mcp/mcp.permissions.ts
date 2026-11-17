@@ -74,6 +74,12 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   grant_portal_access:           { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   revoke_portal_access:          { level: 'confirm', roles: ['ADMIN'] },
 
+  // ═══ FUSION DE DOUBLONS (admin) ═══
+  find_duplicates:               { level: 'free',    roles: ['ADMIN'] },
+  merge_candidates:              { level: 'confirm', roles: ['ADMIN'] },
+  merge_clients:                 { level: 'confirm', roles: ['ADMIN'] },
+  merge_companies:               { level: 'confirm', roles: ['ADMIN'] },
+
   // ═══ PUSHES ═══
 
   // ═══ AUTO-PUSH (3-step flow) ═══

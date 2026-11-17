@@ -21,6 +21,7 @@ import { registerKalentTools } from './tools/kalent.js';
 import { registerJobOfferTools } from './tools/job-offers.js';
 import { registerLeadTools } from './tools/leads.js';
 import { registerPortalTools } from './tools/portal.js';
+import { registerMergeTools } from './tools/merge.js';
 
 export type ToolHandler = (args: Record<string, unknown>) => Promise<{ content: Array<{ type: 'text'; text: string }> }>;
 
@@ -72,5 +73,6 @@ export function registerAllTools(server: McpServer) {
   registerJobOfferTools(server);
   registerLeadTools(server);
   registerPortalTools(server);
+  registerMergeTools(server);
   registerBlockedTools(server);
 }
