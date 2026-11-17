@@ -112,7 +112,7 @@ export default async function candidatRouter(fastify: FastifyInstance) {
     handler: async (request) => {
       const { primaryId, duplicateId } = request.body as { primaryId: string; duplicateId: string };
       const { mergeCandidates } = await import('./duplicate.service.js');
-      return mergeCandidates(primaryId, duplicateId);
+      return mergeCandidates(primaryId, duplicateId, request.userId);
     },
   });
 
