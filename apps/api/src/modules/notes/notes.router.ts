@@ -7,6 +7,7 @@ import { appendSegments } from './notes.live.js';
 import { applyBotStatus, runEveningRecap, syncUserCalendar, scheduleBots } from './notes.scheduler.js';
 import * as service from './notes.service.js';
 import * as recall from './recall.client.js';
+import { sendCallBrief } from './notes.brief.js';
 
 const who = (r: FastifyRequest) => ({ userId: r.userId, userRole: r.userRole as string });
 const idParam = (r: FastifyRequest) => (r.params as { id: string }).id;
@@ -62,6 +63,12 @@ export default async function notesRouter(fastify: FastifyInstance) {
   fastify.delete('/calls/:id/alerts/:alertId', { ...opts, handler: (r) => service.dismissAlert(idParam(r), who(r), (r.params as { alertId: string }).alertId) });
 
   fastify.post('/calls/:id/remove-bot', { ...opts, handler: (r) => service.removeBot(idParam(r), who(r)) });
+  // Envoie le brief d'avant-call à la personne qui clique (test ou besoin de le relire).
+  fastify.post('/calls/:id/brief/send', { ...opts, handler: async (r) => {
+    const id = idParam(r);
+    await service.getCall(id, who(r));
+    return sendCallBrief(id, { onlyTo: who(r).userId });
+  } });
   fastify.post('/calls/:id/end', { ...opts, handler: (r) => service.endCall(idParam(r), who(r)) });
   fastify.post('/calls/:id/demo', { ...opts, handler: (r) => service.runDemo(idParam(r), who(r)) });
 

@@ -7,7 +7,8 @@ import prisma from '../../lib/db.js';
 import { getValidAccessToken } from '../integrations/calendar.service.js';
 import { buildContext } from './notes.context.js';
 import { classifyAttendees, detectCall, extractMeetingLink, isInternalEmail, meetingKey } from './notes.detect.js';
-import { sendEveningEmail, sendReminderEmail, sendTeamRecap } from './notes.emails.js';
+import { sendEveningEmail, sendTeamRecap } from './notes.emails.js';
+import { sendCallBrief } from './notes.brief.js';
 import { finalizeCall } from './notes.finalize.js';
 import { appendSegments, markInCall, tickLive } from './notes.live.js';
 import { prepareQuestions } from './notes.questions.js';
@@ -232,9 +233,9 @@ async function prepareUpcoming(): Promise<void> {
     try {
       const minutes = (c.startAt.getTime() - now) / 60_000;
       if (!c.reminderSentAt && (c.callType === 'QUALIF' || c.callType === 'INTAKE') && minutes <= 32) {
-        const ctx = await buildContext(c);
-        if (!ctx.hasBrief && ctx.missing.length) await sendReminderEmail(c, ctx.missing);
+        // Marqué avant l'envoi : pas de doublon si la génération prend plus d'une minute.
         await prisma.noteCall.update({ where: { id: c.id }, data: { reminderSentAt: new Date() } });
+        await sendCallBrief(c.id);
       }
       // À 5 min du début, la liste est prête (trame, IA ou template du type de call).
       if (minutes <= 5 && !((c.questions as unknown as any[]) || []).length) await prepareQuestions(c.id);

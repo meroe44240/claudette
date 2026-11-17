@@ -78,6 +78,8 @@ export const notes: Record<string, string> = {
   'Réactiver le bot': 'Turn the bot back on',
   'Rédaction des notes et mise à jour de Propium…': 'Writing the notes and updating Propium…',
   'Régénérer': 'Regenerate',
+  'M’envoyer le brief': 'Email me the brief',
+  'Brief envoyé sur ta boîte mail': 'Brief sent to your inbox',
   'Réunion interne': 'Internal meeting',
   'Réunion interne : notes envoyées par email uniquement.': 'Internal meeting: notes sent by email only.',
   'Sans bot': 'No bot',

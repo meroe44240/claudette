@@ -1,4 +1,4 @@
-// Emails Humanup Notes : notes après le call, rappel 30 min avant, et email du
+// Emails Humanup Notes : notes après le call, brief 30 min avant, et email du
 // soir (récap de la journée + préparation des meetings du lendemain).
 import prisma from '../../lib/db.js';
 import { escapeHtml, renderBrandedEmail, sendEmail } from '../../lib/mailer.js';
@@ -68,18 +68,27 @@ export async function sendNotesEmail(call: any): Promise<void> {
   for (const u of to) await sendEmail(u.email, `Notes : ${call.titre || 'call visio'}`, html, call.notesMarkdown || undefined, { from: FROM() });
 }
 
-// ─── Rappel 30 min avant (qualif / intake sans brief) ─
+// ─── Brief 30 min avant (qualif / intake) ────────────
 
-export async function sendReminderEmail(call: any, missing: string[]): Promise<void> {
-  const to = await recipients(call);
-  if (!to.length) return;
+export async function sendBriefEmail(call: any, briefMd: string | null, missing: string[], onlyTo?: string): Promise<number> {
+  let to = await recipients(call);
+  if (onlyTo) to = to.filter((u) => u.id === onlyTo).length ? to.filter((u) => u.id === onlyTo) : await prisma.user.findMany({ where: { id: onlyTo }, select: { id: true, email: true, prenom: true } });
+  if (!to.length) return 0;
   const tz = (await prisma.noteUserSettings.findUnique({ where: { userId: call.userId } }))?.timezone || 'Europe/Paris';
+  const questions = ((call.questions as NoteQuestion[]) || []);
+  const ordered = [...questions.filter((q) => q.dealbreaker), ...questions.filter((q) => !q.dealbreaker)];
+  const att = ((call.attendees as Attendee[]) || []).filter((a) => a.role !== 'internal').map((a) => a.name || a.email).join(', ');
+  const ficheUrl = call.candidatId ? `${appUrl()}/candidats/${call.candidatId}` : call.clientId ? `${appUrl()}/clients/${call.clientId}` : null;
+  const mandatUrl = call.mandatId ? `${appUrl()}/mandats/${call.mandatId}` : null;
   const body = `
-    <p>Ton call <strong>${escapeHtml(call.titre)}</strong> commence à ${fmtTime(new Date(call.startAt), tz)} et rien n'est encore chargé : ${escapeHtml(missing.join(', ') || 'brief')}.</p>
-    <p>Sans brief, le template « ${escapeHtml(CALL_TYPE_LABEL[call.callType as CallType])} » s'applique.</p>
-    <p>Le panneau live du call : <a href="${appUrl()}/notes/live/${call.id}" style="color:${C.primary};">${appUrl()}/notes/live/${call.id}</a></p>`;
-  const html = renderBrandedEmail({ title: 'Brief à charger', bodyHtml: body, cta: { label: 'Charger le brief', href: `${appUrl()}/notes/${call.id}` } });
-  for (const u of to) await sendEmail(u.email, `Rappel : brief à charger pour ${call.titre}`, html, undefined, { from: FROM() });
+    <p style="margin:0 0 12px 0;color:${C.muted};">${escapeHtml(CALL_TYPE_LABEL[call.callType as CallType])} · ${fmtTime(new Date(call.startAt), tz)}${att ? ` · ${escapeHtml(att)}` : ''}</p>
+    ${briefMd ? mdToHtml(briefMd) : `<p style="color:${C.muted};">Pas assez d'infos dans Propium pour rédiger un brief.</p>`}
+    ${ordered.length ? `<h3 style="margin:18px 0 6px 0;font-size:15px;">Questions préparées</h3><ol style="margin:0 0 0 18px;padding:0;">${ordered.map((q) => `<li style="margin-bottom:3px;">${q.dealbreaker ? '<strong>' : ''}${escapeHtml(q.text)}${q.dealbreaker ? '</strong> <span style="color:' + C.warn + ';font-size:12px;">obligatoire</span>' : ''}</li>`).join('')}</ol>` : ''}
+    ${missing.length ? `<p style="margin-top:14px;color:${C.warn};">Il manque : ${escapeHtml(missing.join(', '))}. <a href="${appUrl()}/notes/${call.id}" style="color:${C.primary};">Le charger</a></p>` : ''}
+    <p style="margin-top:14px;font-size:13px;">${[ficheUrl ? `<a href="${ficheUrl}" style="color:${C.primary};">Fiche Propium</a>` : '', mandatUrl ? `<a href="${mandatUrl}" style="color:${C.primary};">Mandat</a>` : '', `<a href="${appUrl()}/notes/${call.id}" style="color:${C.primary};">Questions</a>`].filter(Boolean).join(' · ')}</p>`;
+  const html = renderBrandedEmail({ title: `Brief : ${call.titre || 'call visio'}`, bodyHtml: body, cta: { label: 'Ouvrir le panneau live', href: `${appUrl()}/notes/live/${call.id}` } });
+  for (const u of to) await sendEmail(u.email, `Brief ${fmtTime(new Date(call.startAt), tz)} : ${call.titre || 'call visio'}`, html, briefMd || undefined, { from: FROM() });
+  return to.length;
 }
 
 // ─── Email du soir (19h) ─────────────────────────────
