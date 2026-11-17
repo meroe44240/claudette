@@ -90,6 +90,9 @@ export async function createBot(input: CreateBotInput): Promise<{ id: string }> 
       // Audio seulement : pas de vidéo enregistrée.
       video_mixed_layout: 'audio_only',
       video_mixed_mp4: null,
+      // Audio mixé gardé chez Recall : si les sous-titres ratent (mauvaise langue),
+      // on relance une transcription complète après le call. Supprimé avec le reste.
+      audio_mixed_mp3: {},
       transcript: {
         provider: transcriptProvider(input.language ?? null),
         diarization: { use_separate_streams_when_available: true },
@@ -157,4 +160,46 @@ export async function fetchFinalTranscript(bot: any): Promise<{ speaker: string;
       t: Number(p?.words?.[0]?.start_timestamp?.relative ?? 0),
     }))
     .filter((s) => s.text);
+}
+
+/** Id de l'enregistrement du bot (pour la transcription après coup). */
+export function recordingId(bot: any): string | null {
+  return bot?.recordings?.[0]?.id ?? null;
+}
+
+/** Lance une transcription complète de l'enregistrement, langue détectée automatiquement. */
+export async function createAsyncTranscript(recId: string): Promise<{ id: string }> {
+  const t = await recallFetch(`/recording/${recId}/create_transcript/`, {
+    method: 'POST',
+    body: JSON.stringify({
+      provider: { recallai_async: { language_code: 'auto' } },
+      diarization: { use_separate_streams_when_available: true },
+    }),
+  });
+  return { id: t.id as string };
+}
+
+type Segment = { speaker: string; text: string; t: number };
+
+/** Résultat d'une transcription après coup (status « processing » tant qu'elle tourne). */
+export async function getAsyncTranscript(id: string): Promise<{ status: 'done' | 'failed' | 'processing'; segments: Segment[]; language: 'fr' | 'en' | null }> {
+  const t = await recallFetch(`/transcript/${id}/`);
+  const code = String(t?.status?.code || 'processing');
+  if (code === 'failed') return { status: 'failed', segments: [], language: null };
+  const url = t?.data?.download_url;
+  if (code !== 'done' || !url) return { status: 'processing', segments: [], language: null };
+  const res = await fetch(url);
+  const parts = res.ok ? ((await res.json()) as any[]) : [];
+  let fr = 0;
+  let en = 0;
+  const segments = (Array.isArray(parts) ? parts : [])
+    .map((p) => {
+      const text = (p?.words || []).map((w: any) => w.text).join(' ').replace(/\s+([,.!?;:])/g, '$1').trim();
+      const lang = String(p?.language_code || '').split('-')[0];
+      if (lang === 'fr') fr += text.length;
+      if (lang === 'en') en += text.length;
+      return { speaker: p?.participant?.name || 'Participant', text, t: Number(p?.words?.[0]?.start_timestamp?.relative ?? 0) };
+    })
+    .filter((s) => s.text);
+  return { status: 'done', segments, language: en > fr ? 'en' : fr > 0 ? 'fr' : null };
 }

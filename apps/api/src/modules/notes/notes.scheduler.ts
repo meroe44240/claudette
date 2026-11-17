@@ -14,7 +14,7 @@ import { finalizeCall } from './notes.finalize.js';
 import { appendSegments, markInCall, tickLive } from './notes.live.js';
 import { prepareQuestions } from './notes.questions.js';
 import * as recall from './recall.client.js';
-import type { TranscriptSegment } from './notes.types.js';
+import type { NoteQuestion, TranscriptSegment } from './notes.types.js';
 
 export const RETENTION_DAYS = Number(process.env.NOTES_RETENTION_DAYS || 180);
 const SYNC_AHEAD_HOURS = 36;
@@ -163,7 +163,7 @@ export async function scheduleBots(): Promise<void> {
         await recall.deleteScheduledBot(c.recallBotId).catch(() => null);
         await prisma.noteCall.update({ where: { id: c.id }, data: { recallBotId: null } });
       } else if (!off && !c.recallBotId) {
-        const bot = await recall.createBot({ noteCallId: c.id, webhookSecret: c.webhookSecret, meetingUrl: c.meetingUrl, joinAt: new Date(c.startAt.getTime() - 60_000), language: (c.language as any) ?? null });
+        const bot = await recall.createBot({ noteCallId: c.id, webhookSecret: c.webhookSecret, meetingUrl: c.meetingUrl, joinAt: new Date(c.startAt.getTime() - 60_000), language: guessLanguage(c) });
         await prisma.noteCall.update({ where: { id: c.id }, data: { recallBotId: bot.id } });
       }
     } catch (err) {
@@ -198,20 +198,95 @@ export async function applyBotStatus(callId: string, code: string | null, bot?: 
   } else if (['in_call_recording', 'in_call_not_recording'].includes(code) && c.status !== 'IN_CALL') {
     await markInCall(callId);
   } else if (['call_ended', 'done', 'analysis_done'].includes(code)) {
+    if (retranscribing.has(callId)) return;
+    let current = (c.transcript as unknown as TranscriptSegment[]) || [];
     if (bot && code !== 'call_ended') {
       const final = await recall.fetchFinalTranscript(bot).catch(() => null);
-      const current = (c.transcript as unknown as TranscriptSegment[]) || [];
-      if (final && final.length && final.map((s) => s.text).join(' ').length >= current.map((s) => s.text).join(' ').length) {
+      if (final && final.length && textLength(final) >= textLength(current)) {
         await prisma.noteCall.update({ where: { id: callId }, data: { transcript: final as any } });
+        current = final;
       }
     }
-    await prisma.noteCall.update({ where: { id: callId }, data: { endedAt: new Date() } });
+    const endedAt = c.endedAt ?? new Date();
+    if (!c.endedAt) await prisma.noteCall.update({ where: { id: callId }, data: { endedAt } });
+    if (isThin(current, c.startedAt, endedAt)) {
+      // Sous-titres quasi vides (souvent : langue des sous-titres différente de celle parlée).
+      // On attend l'enregistrement terminé puis on fait retranscrire l'audio.
+      if (code === 'call_ended') return;
+      const recId = bot ? recall.recordingId(bot) : null;
+      if (recId) {
+        void retranscribe(callId, recId);
+        return;
+      }
+    }
     await finalizeCall(callId);
+    if (bot && code !== 'call_ended') await dropMedia(callId);
   } else if (code === 'fatal') {
     const sub = bot?.status_changes?.at(-1)?.sub_code;
     if ((c.transcript as unknown as any[])?.length) await finalizeCall(callId);
     else await prisma.noteCall.update({ where: { id: callId }, data: { status: 'FAILED', error: `Le bot n’a pas pu rejoindre le call${sub ? ` (${sub})` : ''}.` } });
   }
+}
+
+/** L'audio n'est gardé chez Recall que le temps d'écrire les notes. */
+async function dropMedia(callId: string): Promise<void> {
+  const c = await prisma.noteCall.findUnique({ where: { id: callId }, select: { recallBotId: true, status: true } });
+  if (c?.recallBotId && c.status === 'DONE') await recall.deleteBotMedia(c.recallBotId).catch(() => null);
+}
+
+const retranscribing = new Set<string>();
+const textLength = (segs: { text: string }[]) => segs.reduce((n, s) => n + (s.text?.length || 0), 0);
+
+/** Moins de 100 caractères par minute de call : les sous-titres n'ont presque rien capté. */
+function isThin(segs: TranscriptSegment[], startedAt: Date | null, endedAt: Date): boolean {
+  if (!startedAt) return false;
+  const minutes = (endedAt.getTime() - startedAt.getTime()) / 60_000;
+  return minutes >= 3 && textLength(segs) < 100 * minutes;
+}
+
+/** Transcription complète de l'audio après le call (langue détectée), puis notes. */
+async function retranscribe(callId: string, recId: string): Promise<void> {
+  retranscribing.add(callId);
+  try {
+    const job = await recall.createAsyncTranscript(recId);
+    const deadline = Date.now() + 20 * 60_000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 20_000));
+      const res = await recall.getAsyncTranscript(job.id);
+      if (res.status === 'processing') continue;
+      const c = await prisma.noteCall.findUnique({ where: { id: callId }, select: { transcript: true } });
+      const current = (c?.transcript as unknown as TranscriptSegment[]) || [];
+      if (res.status === 'done' && textLength(res.segments) > textLength(current)) {
+        await prisma.noteCall.update({
+          where: { id: callId },
+          data: { transcript: res.segments as any, ...(res.language ? { language: res.language } : {}) },
+        });
+      }
+      break;
+    }
+  } catch (err) {
+    console.error(`[Notes] Retranscription ${callId}:`, (err as Error).message);
+  } finally {
+    retranscribing.delete(callId);
+  }
+  await finalizeCall(callId);
+  await dropMedia(callId);
+}
+
+/** Langue probable du call avant qu'il commence (titre + questions préparées) : règle les sous-titres du bot. */
+export function guessLanguage(c: { titre: string; questions: unknown; language: string | null }): 'fr' | 'en' | null {
+  if (c.language === 'fr' || c.language === 'en') return c.language;
+  const qs = ((c.questions as unknown as NoteQuestion[]) || []).map((q) => q.text || '').join(' ');
+  const words = `${c.titre} ${qs}`.toLowerCase().match(/[a-zàâçéèêëîïôûùüÿœ']+/g) || [];
+  const EN = new Set(['the', 'with', 'and', 'you', 'your', 'what', 'are', 'for', 'call', 'interview', 'meeting', 'chat', 'how', 'is', 'of', 'to', 'can', 'do']);
+  const FR = new Set(['le', 'la', 'les', 'avec', 'et', 'vous', 'votre', 'quel', 'quelle', 'est', 'pour', 'entretien', 'échange', 'un', 'une', 'des', 'du', 'de', 'comment']);
+  let en = 0;
+  let fr = 0;
+  for (const w of words) {
+    if (EN.has(w)) en++;
+    if (FR.has(w)) fr++;
+  }
+  return en > fr ? 'en' : fr > 0 ? 'fr' : null;
 }
 
 /** Filet de sécurité : un call en cours sans nouvel échange depuis 10 min après l'heure de fin est clôturé. */
@@ -220,7 +295,7 @@ async function closeStaleCalls(): Promise<void> {
     where: { status: 'IN_CALL', endAt: { lt: new Date(Date.now() - 10 * 60_000) }, updatedAt: { lt: new Date(Date.now() - 10 * 60_000) } },
     select: { id: true },
   });
-  for (const c of calls) await finalizeCall(c.id);
+  for (const c of calls) if (!retranscribing.has(c.id)) await finalizeCall(c.id);
 }
 
 // ─── Préparation et rappel 30 min avant ──────────────
