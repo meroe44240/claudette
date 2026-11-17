@@ -60,6 +60,19 @@ export default function NoteCallPage() {
     }
   }, [call]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Lien « Langue du call ? » des emails : ?lang=fr | en
+  const appliedLang = useRef(false);
+  useEffect(() => {
+    const lg = params.get('lang');
+    if (call && (lg === 'fr' || lg === 'en') && !appliedLang.current) {
+      appliedLang.current = true;
+      patch.mutate({ language: lg });
+      params.delete('lang');
+      setParams(params, { replace: true });
+      toast('success', lg === 'fr' ? t('Langue du call : français') : t('Langue du call : anglais'));
+    }
+  }, [call]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const demo = useMutation({
     mutationFn: () => api.post(`/notes/calls/${id}/demo`),
     onSuccess: () => { window.open(`/notes/live/${id}`, `notes-live-${id}`, 'width=460,height=900'); qc.invalidateQueries({ queryKey: key }); },
@@ -146,6 +159,22 @@ function TypeCard({ call, onPatch }: { call: CallDetail; onPatch: (b: Record<str
         ))}
       </div>
       <p className="mt-2 text-xs text-neutral-500">{call.typeSource === 'AUTO' ? t('Détecté automatiquement depuis l’invitation.') : t('Choisi à la main.')}</p>
+      {call.callType !== 'INTERNE' && (call.status === 'SCHEDULED' || call.status === 'JOINING') && (
+        <div className="mt-4">
+          <div className="mb-1.5 text-sm font-medium text-[#1A1533]">{t('Langue du call')}</div>
+          {!call.language && (
+            <div className="mb-2 flex gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900"><AlertTriangle size={16} className="mt-0.5 shrink-0" />{t('Langue inconnue : choisis-la pour que le bot sous-titre dans la bonne langue.')}</div>
+          )}
+          <div className="flex gap-2">
+            {(['fr', 'en'] as const).map((lg) => (
+              <button key={lg} onClick={() => onPatch({ language: lg })}
+                className={`rounded-full px-3 py-1 text-sm font-medium transition ${call.language === lg ? 'bg-[#22177A] text-white' : 'bg-neutral-50 text-neutral-500 hover:bg-neutral-100'}`}>
+                {lg === 'fr' ? t('Français') : t('Anglais')}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="mt-4 space-y-3">
         {kinds.filter((k) => k.show).map((k) => (
           <EntityPicker key={k.key} kind={k.key} label={k.label} value={call.linked[k.key]} onChange={(v) => onPatch({ [`${k.key}Id`]: v })} />

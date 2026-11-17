@@ -84,6 +84,7 @@ export async function sendBriefEmail(call: any, briefMd: string | null, missing:
   const mandatUrl = call.mandatId ? `${appUrl()}/mandats/${call.mandatId}` : null;
   const body = `
     <p style="margin:0 0 12px 0;color:${C.muted};">${escapeHtml(CALL_TYPE_LABEL[call.callType as CallType])} · ${fmtTime(new Date(call.startAt), tz)}${att ? ` · ${escapeHtml(att)}` : ''}</p>
+    ${call._askLanguage ? askLanguageHtml(call.id) : ""}
     ${briefMd ? mdToHtml(briefMd) : `<p style="color:${C.muted};">Pas assez d'infos dans Propium pour rédiger un brief.</p>`}
     ${ordered.length ? `<h3 style="margin:18px 0 6px 0;font-size:15px;">Questions préparées</h3><ol style="margin:0 0 0 18px;padding:0;">${ordered.map((q) => `<li style="margin-bottom:3px;">${q.dealbreaker ? '<strong>' : ''}${escapeHtml(q.text)}${q.dealbreaker ? '</strong> <span style="color:' + C.warn + ';font-size:12px;">obligatoire</span>' : ''}</li>`).join('')}</ol>` : ''}
     ${missing.length ? `<p style="margin-top:14px;color:${C.warn};">Il manque : ${escapeHtml(missing.join(', '))}. <a href="${appUrl()}/notes/${call.id}" style="color:${C.primary};">Le charger</a></p>` : ''}
@@ -94,6 +95,12 @@ export async function sendBriefEmail(call: any, briefMd: string | null, missing:
   return to.length;
 }
 
+
+/** Langue inconnue (pas d'indicatif exploitable) : on la demande, un clic suffit. */
+export function askLanguageHtml(callId: string): string {
+  const pill = (code: 'fr' | 'en', label: string) => `<a href="${appUrl()}/notes/${callId}?lang=${code}" style="display:inline-block;margin:2px 4px 2px 0;padding:3px 10px;border:1px solid ${C.border};border-radius:999px;color:${C.primary};text-decoration:none;font-size:12px;">${label}</a>`;
+  return `<div style="margin-top:6px;color:${C.warn};font-size:13px;">Langue du call ? Le bot règle ses sous-titres dessus.</div><div style="margin-top:4px;">${pill('fr', 'Français')}${pill('en', 'Anglais')}</div>`;
+}
 // ─── Email du soir (19h) ─────────────────────────────
 
 interface DayData {
@@ -133,6 +140,7 @@ function tomorrowSection(calls: any[], tz: string): string {
       <div><strong>${fmtTime(new Date(c.startAt), tz)}</strong> · ${escapeHtml(c.titre)}${c.excluded ? ' <span style="color:' + C.muted + ';">(sans bot)</span>' : ''}</div>
       <div style="color:${C.muted};font-size:13px;">${escapeHtml(CALL_TYPE_LABEL[c.callType as CallType])} · ${escapeHtml(att)}</div>
       ${choose}
+      ${c._askLanguage && !c.excluded && c.callType !== "INTERNE" ? askLanguageHtml(c.id) : ""}
       ${missing.length ? `<div style="margin-top:4px;font-size:13px;">À charger : ${escapeHtml(missing.join(', '))}</div>` : ''}
       <div style="margin-top:6px;font-size:13px;"><a href="${appUrl()}/notes/${c.id}" style="color:${C.primary};">Charger les documents</a>${ficheUrl ? ` · <a href="${ficheUrl}" style="color:${C.primary};">Fiche Propium</a>` : ''}</div>
     </div>`;

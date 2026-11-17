@@ -41,6 +41,7 @@ export default async function notesRouter(fastify: FastifyInstance) {
     leadId: z.string().uuid().nullable().optional(),
     brief: z.string().nullable().optional(),
     excluded: z.boolean().optional(),
+    language: z.enum(['fr', 'en']).nullable().optional(),
   }).parse(r.body)) });
 
   fastify.post('/calls/:id/documents', {
