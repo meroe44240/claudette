@@ -7,6 +7,10 @@ import { appendSegments } from './notes.live.js';
 import { applyBotStatus, runEveningRecap, syncUserCalendar, scheduleBots } from './notes.scheduler.js';
 import * as service from './notes.service.js';
 import * as recall from './recall.client.js';
+import { sendCallBrief } from './notes.brief.js';
+import { applyConfirmToken } from './notes.reply.js';
+import { appUrl } from './notes.types.js';
+import { escapeHtml } from '../../lib/mailer.js';
 
 const who = (r: FastifyRequest) => ({ userId: r.userId, userRole: r.userRole as string });
 const idParam = (r: FastifyRequest) => (r.params as { id: string }).id;
@@ -62,8 +66,28 @@ export default async function notesRouter(fastify: FastifyInstance) {
   fastify.delete('/calls/:id/alerts/:alertId', { ...opts, handler: (r) => service.dismissAlert(idParam(r), who(r), (r.params as { alertId: string }).alertId) });
 
   fastify.post('/calls/:id/remove-bot', { ...opts, handler: (r) => service.removeBot(idParam(r), who(r)) });
+  // Envoie le brief d'avant-call à la personne qui clique (test ou besoin de le relire).
+  fastify.post('/calls/:id/brief/send', { ...opts, handler: async (r) => {
+    const id = idParam(r);
+    await service.getCall(id, who(r));
+    return sendCallBrief(id, { onlyTo: who(r).userId });
+  } });
   fastify.post('/calls/:id/end', { ...opts, handler: (r) => service.endCall(idParam(r), who(r)) });
   fastify.post('/calls/:id/demo', { ...opts, handler: (r) => service.runDemo(idParam(r), who(r)) });
+
+  // Lien « Valider » de l'email de retour d'une réponse par email (public : le jeton
+  // signé fait foi, il expire au bout de 7 jours). Le jeton est en query, pas dans le chemin.
+  fastify.get('/reply/confirm', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (r, reply) => {
+    const t = (r.query as { t?: string }).t || '';
+    const page = (title: string, body: string) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head><body style="font-family:system-ui,sans-serif;background:#f6f5fb;margin:0;padding:48px 16px;color:#1A1533"><div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:28px"><h1 style="font-size:20px;margin:0 0 12px">${title}</h1>${body}<p style="margin-top:20px"><a href="${appUrl()}/notes" style="color:#22177A">Ouvrir Humanup Notes</a></p></div></body></html>`;
+    try {
+      const done = await applyConfirmToken(t);
+      const list = done.length ? `<ul>${done.map((d) => `<li>${d.url ? `<a href="${d.url}" style="color:#22177A">${escapeHtml(d.label)}</a>` : escapeHtml(d.label)}</li>`).join('')}</ul>` : '<p>Rien à changer : c’était déjà fait.</p>';
+      return reply.type('text/html').send(page('C’est validé', list));
+    } catch {
+      return reply.code(400).type('text/html').send(page('Lien expiré ou invalide', '<p>Ce lien n’est plus valable. Réponds de nouveau à l’email, ou fais le changement dans Propium.</p>'));
+    }
+  });
 
   fastify.post('/sync', { ...opts, handler: async (r) => {
     const u = await prisma.user.findUnique({ where: { id: r.userId }, select: { email: true } });

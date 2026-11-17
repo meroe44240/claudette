@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useSearchParams } from 'react-router';
 import {
   ArrowLeft, ArrowDown, ArrowUp, Bot, BotOff, ExternalLink, FileUp, Loader2, Play, Plus, RefreshCw, Sparkles, Square, Trash2, AlertTriangle, CheckCircle2, X,
+  Mail,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { t, LOCALE } from '../../lib/i18n';
@@ -278,6 +279,11 @@ function QuestionsCard({ call, onSaved }: { call: CallDetail; onSaved: () => voi
     onSuccess: () => { setDirty(false); onSaved(); },
     onError: (e: any) => toast('error', e.message),
   });
+  const sendBrief = useMutation({
+    mutationFn: () => api.post(`/notes/calls/${call.id}/brief/send`),
+    onSuccess: () => { toast('success', t('Brief envoyé sur ta boîte mail')); onSaved(); },
+    onError: (e: any) => toast('error', e.message),
+  });
   const move = (i: number, d: number) => edit((l) => { const c = [...l]; const [x] = c.splice(i, 1); c.splice(i + d, 0, x); return c; });
   const sourceLabel = { TEMPLATE: t('template du type de call'), IA: t('préparées par l’IA'), TRAME: t('trame du mandat'), MANUEL: t('saisies à la main') }[call.questionsSource ?? ''];
 
@@ -294,6 +300,11 @@ function QuestionsCard({ call, onSaved }: { call: CallDetail; onSaved: () => voi
           <Button size="sm" variant="secondary" onClick={() => regen.mutate()} loading={regen.isPending}>
             {list.length ? <RefreshCw size={13} className="mr-1" /> : <Sparkles size={13} className="mr-1" />}{list.length ? t('Régénérer') : t('Préparer les questions')}
           </Button>
+          {call.callType !== 'INTERNE' && (
+            <Button size="sm" variant="secondary" onClick={() => sendBrief.mutate()} loading={sendBrief.isPending} disabled={dirty}>
+              <Mail size={13} className="mr-1" />{t('M’envoyer le brief')}
+            </Button>
+          )}
           {dirty && <Button size="sm" onClick={() => save.mutate()} loading={save.isPending}>{t('Enregistrer')}</Button>}
         </div>
       </div>
