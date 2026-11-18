@@ -35,7 +35,9 @@ export async function generateBrief(callId: string): Promise<{ markdown: string 
       feature: 'notes_brief',
       preferAnthropic: true,
       userId: call.userId,
-      systemPrompt: SYSTEM,
+      systemPrompt: SYSTEM + (call.language === 'en'
+        ? '\nRédige tout le brief en anglais (titres de sections compris : The role, The candidate, The client, To dig into, Role pitch).'
+        : call.language === 'fr' ? '\nRédige tout le brief en français.' : ''),
       userPrompt: `Type de call : ${CALL_TYPE_LABEL[call.callType as CallType]}\nTitre : ${call.titre}\n\nCONTEXTE :\n${ctx.text}`,
       maxTokens: 1500,
       temperature: 0.2,
@@ -53,8 +55,9 @@ export async function sendCallBrief(callId: string, opts: { onlyTo?: string } = 
   let call = await prisma.noteCall.findUnique({ where: { id: callId } });
   if (!call) throw new Error('Call introuvable');
   if (!((call.questions as unknown as NoteQuestion[]) || []).length) call = await prepareQuestions(callId);
+  const known = call!.callType !== 'INTERNE' ? await resolveCallLanguage(call!) : null;
   const { markdown, missing } = await generateBrief(callId);
-  if (call!.callType !== 'INTERNE') (call as any)._askLanguage = !(await resolveCallLanguage(call!));
+  if (call!.callType !== 'INTERNE') (call as any)._askLanguage = !known;
   const sent = await sendBriefEmail(call!, markdown, missing, opts.onlyTo);
   return { sent };
 }
