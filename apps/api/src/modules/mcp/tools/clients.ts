@@ -7,11 +7,11 @@ import { resolvePersonPhoto } from '../../../lib/photo.js';
 export function registerClientTools(server: McpServer) {
   server.tool(
     'search_clients',
-    'Recherche des clients (contacts entreprise) dans l\'ATS par nom, email, entreprise, statut. Utiliser quand le recruteur cherche un client.',
+    'Searches clients (company contacts) in the ATS by name, email, company or status. Use when the recruiter is looking for a client.',
     {
-      query: z.string().describe('Recherche libre : nom, email, entreprise'),
-      statut: z.string().optional().describe('Filtrer par statut : LEAD, PREMIER_CONTACT, BESOIN_QUALIFIE, PROPOSITION_ENVOYEE, MANDAT_SIGNE, RECURRENT, INACTIF'),
-      limit: z.number().optional().default(10).describe('Nombre max de resultats'),
+      query: z.string().describe('Free-text search: name, email, company'),
+      statut: z.string().optional().describe('Filter by status: LEAD, PREMIER_CONTACT (first contact), BESOIN_QUALIFIE (need qualified), PROPOSITION_ENVOYEE (proposal sent), MANDAT_SIGNE (mandate signed), RECURRENT (recurring), INACTIF (inactive)'),
+      limit: z.number().optional().default(10).describe('Maximum number of results'),
     },
     wrapTool('search_clients', async (args, user) => {
       const result = await clientService.list(
@@ -38,10 +38,10 @@ export function registerClientTools(server: McpServer) {
 
   server.tool(
     'get_client',
-    "Recupere la fiche complete d'un client avec ses mandats et dernieres activites.",
+    "Gets a client's full record with their mandates and latest activity.",
     {
-      client_id: z.string().optional().describe('UUID du client'),
-      client_name: z.string().optional().describe('Nom du client si pas d\'UUID'),
+      client_id: z.string().optional().describe('Client UUID'),
+      client_name: z.string().optional().describe('Client name if no UUID'),
     },
     wrapTool('get_client', async (args) => {
       let client: any;
@@ -51,7 +51,7 @@ export function registerClientTools(server: McpServer) {
         const results = await clientService.list({ page: 1, perPage: 1 }, args.client_name as string);
         client = results.data[0];
       }
-      if (!client) return { error: 'Client non trouve' };
+      if (!client) return { error: 'Client not found' };
 
       return {
         id: client.id,
@@ -79,47 +79,47 @@ export function registerClientTools(server: McpServer) {
 
   server.tool(
     'create_client',
-    "[CONFIRMATION REQUISE] Cree un nouveau client (contact entreprise) dans l'ATS. Tu DOIS demander confirmation avant de creer.",
+    "[CONFIRMATION REQUIRED] Creates a new client (company contact) in the ATS. You MUST ask for confirmation before creating.",
     {
-      nom: z.string().describe('Nom de famille'),
-      prenom: z.string().optional().describe('Prenom'),
+      nom: z.string().describe('Last name'),
+      prenom: z.string().optional().describe('First name'),
       email: z.string().optional().describe('Email'),
-      telephone: z.string().optional().describe('Telephone'),
-      titre: z.string().optional().describe('Titre/poste du contact'),
-      entrepriseId: z.string().optional().describe("UUID de l'entreprise"),
-      linkedinUrl: z.string().optional().describe('URL du profil LinkedIn'),
-      photo_url: z.string().optional().describe('URL de la photo du contact (ex. photo LinkedIn). Si absente, cherchee via Gravatar quand un email est connu.'),
-      roleContact: z.string().optional().describe('Role : HIRING_MANAGER, DRH, PROCUREMENT, CEO, AUTRE'),
-      statutClient: z.string().optional().describe('Statut : LEAD, PREMIER_CONTACT, BESOIN_QUALIFIE, etc.'),
+      telephone: z.string().optional().describe('Phone'),
+      titre: z.string().optional().describe('Contact job title'),
+      entrepriseId: z.string().optional().describe("Company UUID"),
+      linkedinUrl: z.string().optional().describe('LinkedIn profile URL'),
+      photo_url: z.string().optional().describe('Contact photo URL (e.g. LinkedIn photo). If missing, looked up on Gravatar when an email is known.'),
+      roleContact: z.string().optional().describe('Role: HIRING_MANAGER, DRH (HR director), PROCUREMENT, CEO, AUTRE (other)'),
+      statutClient: z.string().optional().describe('Status: LEAD, PREMIER_CONTACT, BESOIN_QUALIFIE, etc.'),
     },
     wrapTool('create_client', async (args, user) => {
       if (!args.entrepriseId) {
-        return { error: 'entrepriseId est requis. Cherche d\'abord l\'entreprise avec search_companies ou cree-la avec create_company.' };
+        return { error: 'entrepriseId is required. Find the company first with search_companies or create it with create_company.' };
       }
       if (args.email) {
         const dup = await clientService.checkDuplicate(args.email as string);
-        if (dup.exists && dup.match) return { warning: 'Doublon detecte', existing: { id: dup.match.id, name: `${dup.match.prenom} ${dup.match.nom}` } };
+        if (dup.exists && dup.match) return { warning: 'Duplicate found', existing: { id: dup.match.id, name: `${dup.match.prenom} ${dup.match.nom}` } };
       }
       // Map 'titre' → 'poste' (Prisma field name) ; résout la photo (URL fournie ou Gravatar)
       const { titre, photo_url, ...rest } = args as any;
       const photoUrl = await resolvePersonPhoto({ photoUrl: photo_url, email: args.email as string });
       const createData = { ...rest, poste: titre, photoUrl: photoUrl ?? undefined };
       const client = await clientService.create(createData, user.userId);
-      return { success: true, client_id: client.id, message: `Client ${args.prenom || ''} ${args.nom} cree` };
+      return { success: true, client_id: client.id, message: `Client ${args.prenom || ''} ${args.nom} created` };
     }),
   );
 
   server.tool(
     'update_client',
-    "[CONFIRMATION REQUISE] Met a jour les informations d'un client. Tu DOIS demander confirmation.",
+    "[CONFIRMATION REQUIRED] Updates a client's details. You MUST ask for confirmation.",
     {
-      client_id: z.string().describe('UUID du client'),
-      nom: z.string().optional().describe('Nom de famille (correction)'),
-      prenom: z.string().optional().describe('Prenom (correction)'),
+      client_id: z.string().describe('Client UUID'),
+      nom: z.string().optional().describe('Last name (correction)'),
+      prenom: z.string().optional().describe('First name (correction)'),
       email: z.string().optional().describe('Email'),
-      telephone: z.string().optional().describe('Telephone'),
-      titre: z.string().optional().describe('Titre/poste du contact'),
-      linkedinUrl: z.string().optional().describe('URL LinkedIn'),
+      telephone: z.string().optional().describe('Phone'),
+      titre: z.string().optional().describe('Contact job title'),
+      linkedinUrl: z.string().optional().describe('LinkedIn URL'),
       statutClient: z.string().optional().describe('LEAD, PREMIER_CONTACT, BESOIN_QUALIFIE, PROPOSITION_ENVOYEE, MANDAT_SIGNE, RECURRENT, INACTIF'),
       roleContact: z.string().optional().describe('HIRING_MANAGER, DRH, PROCUREMENT, CEO, AUTRE'),
       notes: z.string().optional(),
@@ -132,7 +132,7 @@ export function registerClientTools(server: McpServer) {
       // Map 'titre' → 'poste' (Prisma field name)
       if (args.titre !== undefined) updates.poste = args.titre;
       const client = await clientService.update(args.client_id as string, updates as any);
-      return { success: true, message: `Client ${client.prenom || ''} ${client.nom} mis a jour` };
+      return { success: true, message: `Client ${client.prenom || ''} ${client.nom} updated` };
     }),
   );
 }

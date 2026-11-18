@@ -6,11 +6,11 @@ import prisma from '../../../lib/db.js';
 export function registerNoteTools(server: McpServer) {
   server.tool(
     'add_note',
-    "[CONFIRMATION REQUISE] Ajoute une note sur la fiche d'un candidat, client, entreprise ou mandat. Tu DOIS demander confirmation.",
+    "[CONFIRMATION REQUIRED] Adds a note to a candidate, client contact, company or mandate record. You MUST ask for confirmation.",
     {
       entity_type: z.string().describe('CANDIDAT, CLIENT, ENTREPRISE, MANDAT'),
-      entity_id: z.string().describe("UUID de l'entite"),
-      note: z.string().describe('Contenu de la note'),
+      entity_id: z.string().describe('UUID of the record'),
+      note: z.string().describe('Note content'),
     },
     wrapTool('add_note', async (args, user) => {
       const activity = await prisma.activite.create({
@@ -24,7 +24,7 @@ export function registerNoteTools(server: McpServer) {
           userId: user.userId,
         },
       });
-      return { success: true, note_id: activity.id, message: 'Note ajoutee' };
+      return { success: true, note_id: activity.id, message: 'Note added' };
     }),
   );
 
@@ -35,16 +35,16 @@ export function registerNoteTools(server: McpServer) {
 
   server.tool(
     'list_call_notes',
-    'Liste les calls visio (Google Meet / Teams) suivis par Humanup Notes : type, statut, participants, liens Propium. Filtrable par periode, type, candidat, client ou mandat.',
+    'Lists the video calls (Google Meet / Teams) recorded by Humanup Notes: type, status, attendees, Propium links. Can be filtered by period, type, candidate, client or mandate.',
     {
-      from: z.string().optional().describe('Date de debut ISO (defaut : il y a 30 jours)'),
-      to: z.string().optional().describe('Date de fin ISO (defaut : dans 7 jours)'),
-      call_type: z.string().optional().describe('QUALIF, INTAKE, PROSPECT ou INTERNE'),
+      from: z.string().optional().describe('ISO start date (default: 30 days ago)'),
+      to: z.string().optional().describe('ISO end date (default: 7 days from now)'),
+      call_type: z.string().optional().describe('QUALIF (candidate qualification), INTAKE (client intake), PROSPECT or INTERNE (internal)'),
       status: z.string().optional().describe('SCHEDULED, IN_CALL, DONE, FAILED, CANCELLED…'),
       candidat_id: z.string().optional(),
       client_id: z.string().optional(),
       mandat_id: z.string().optional(),
-      limit: z.number().int().min(1).max(200).optional().describe('Defaut 50'),
+      limit: z.number().int().min(1).max(200).optional().describe('Default 50'),
     },
     wrapTool('list_call_notes', async (args, user) => {
       const from = args.from ? new Date(args.from as string) : new Date(Date.now() - 30 * 86400_000);
@@ -78,16 +78,16 @@ export function registerNoteTools(server: McpServer) {
 
   server.tool(
     'get_call_notes',
-    "Detail d'un call Humanup Notes : notes redigees apres le call, questions et reponses, alertes, liens Propium crees ou mis a jour. include_transcript=true ajoute le transcript complet (supprime apres 6 mois).",
+    'Details of a Humanup Notes call: notes written after the call, questions and answers, alerts, Propium records created or updated. include_transcript=true adds the full transcript (deleted after 6 months).',
     {
-      call_id: z.string().describe('UUID du call (voir list_call_notes)'),
+      call_id: z.string().describe('UUID of the call (see list_call_notes)'),
       include_transcript: z.boolean().optional(),
     },
     wrapTool('get_call_notes', async (args, user) => {
       const call = await prisma.noteCall.findFirst({
         where: { id: args.call_id as string, ...visibleTo(user) },
       });
-      if (!call) return { error: 'Call introuvable ou non accessible' };
+      if (!call) return { error: 'Call not found or not accessible' };
       const { webhookSecret, recallBotId, transcript, brief, ...rest } = call;
       const owner = await prisma.user.findUnique({ where: { id: call.userId }, select: { email: true } });
       return {

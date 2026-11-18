@@ -23,25 +23,25 @@ async function resolveMandat(args: Record<string, unknown>): Promise<MandatRef |
     ({ id: m.id, titrePoste: m.titrePoste, entreprise: m.entreprise.nom, client: m.client });
 
   if (typeof args.mandate_id === 'string' && args.mandate_id) {
-    if (!UUID_RE.test(args.mandate_id)) return { error: 'mandate_not_found', message: `"${args.mandate_id}" n'est pas un UUID de mandat. Utilise mandate_name ou search_mandates.` };
+    if (!UUID_RE.test(args.mandate_id)) return { error: 'mandate_not_found', message: `"${args.mandate_id}" is not a mandate UUID. Use mandate_name or search_mandates.` };
     const m = await prisma.mandat.findUnique({ where: { id: args.mandate_id }, select });
-    return m ? shape(m) : { error: 'mandate_not_found', message: `Aucun mandat avec l'UUID ${args.mandate_id}.` };
+    return m ? shape(m) : { error: 'mandate_not_found', message: `No mandate with UUID ${args.mandate_id}.` };
   }
   if (typeof args.mandate_name === 'string' && args.mandate_name.trim()) {
     const found = await mandatService.list({ page: 1, perPage: 6 }, args.mandate_name.trim());
     const rows = found.data as Array<{ id: string; titrePoste: string; statut: string; entreprise: { nom: string } }>;
-    if (rows.length === 0) return { error: 'mandate_not_found', message: `Aucun mandat ne correspond a "${args.mandate_name}". Utilise search_mandates.` };
+    if (rows.length === 0) return { error: 'mandate_not_found', message: `No mandate matches "${args.mandate_name}". Use search_mandates.` };
     if (rows.length > 1) {
       return {
         error: 'mandate_ambiguous',
-        message: `Plusieurs mandats correspondent a "${args.mandate_name}". Demande a l'utilisateur lequel, puis rappelle avec mandate_id.`,
+        message: `Several mandates match "${args.mandate_name}". Ask the user which one, then call again with mandate_id.`,
         candidates: rows.map((r) => ({ id: r.id, titre: r.titrePoste, entreprise: r.entreprise.nom, statut: r.statut })),
       };
     }
     const m = await prisma.mandat.findUnique({ where: { id: rows[0].id }, select });
     if (m) return shape(m);
   }
-  return { error: 'mandate_not_found', message: 'Mandat introuvable. Precise mandate_id ou mandate_name.' };
+  return { error: 'mandate_not_found', message: 'Mandate not found. Provide mandate_id or mandate_name.' };
 }
 
 const fullName = (c: { nom: string; prenom: string | null } | null) => (c ? `${c.prenom || ''} ${c.nom}`.trim() : null);
@@ -49,11 +49,11 @@ const fullName = (c: { nom: string; prenom: string | null } | null) => (c ? `${c
 export function registerPortalTools(server: McpServer) {
   server.tool(
     'list_portal_accesses',
-    "Liste les acces au portail client d'un mandat : qui peut se connecter, derniere connexion, acces revoques. " +
-      "Utiliser quand on demande 'le client a-t-il acces au portail', 'qui a acces au portail de tel mandat', ou avant d'ouvrir/retirer un acces.",
+    "Lists the client portal accesses of a mandate: who can log in, last login, revoked accesses. " +
+      "Use when asked 'does the client have portal access', 'who can access the portal for this mandate', or before granting or revoking an access.",
     {
-      mandate_id: z.string().optional().describe('UUID du mandat'),
-      mandate_name: z.string().optional().describe("Titre du mandat si pas d'UUID"),
+      mandate_id: z.string().optional().describe('Mandate UUID'),
+      mandate_name: z.string().optional().describe("Mandate title if no UUID"),
     },
     wrapTool('list_portal_accesses', async (args) => {
       const mandat = await resolveMandat(args);
@@ -71,7 +71,7 @@ export function registerPortalTools(server: McpServer) {
           access_id: a.id,
           email: a.email,
           name: a.name || fullName(a.client),
-          status: a.revokedAt ? 'revoque' : 'actif',
+          status: a.revokedAt ? 'revoked' : 'active',
           last_login: a.lastLoginAt,
           created_at: a.createdAt,
         })),
@@ -81,30 +81,30 @@ export function registerPortalTools(server: McpServer) {
 
   server.tool(
     'grant_portal_access',
-    "[CONFIRMATION REQUISE] Ouvre (ou reactive) l'acces d'un contact client au portail client d'un mandat. " +
-      "Par defaut l'email est celui du client du mandat et une invitation lui est envoyee par email avec le lien et ses identifiants. " +
-      "Le mot de passe n'est jamais renvoye ici : il part dans l'email d'invitation ; sans invitation, le contact en recoit un via « mot de passe oublie » sur la page de connexion. " +
-      "Si le contact a deja un acces sur une autre offre de la meme entreprise, il garde son mot de passe. " +
-      "Tu DOIS confirmer avec l'utilisateur le mandat, l'email destinataire et l'envoi de l'invitation avant d'appeler cet outil.",
+    "[CONFIRMATION REQUIRED] Grants (or reactivates) a client contact's access to the client portal of a mandate. " +
+      "By default the email is the mandate client's, and an invitation is emailed with the link and login details. " +
+      "The password is never returned here: it goes in the invitation email; without an invitation, the contact gets one through 'forgot password' on the login page. " +
+      "If the contact already has access to another job at the same company, they keep their password. " +
+      "You MUST confirm the mandate, the recipient email and whether to send the invitation with the user before calling this tool.",
     {
-      mandate_id: z.string().optional().describe('UUID du mandat'),
-      mandate_name: z.string().optional().describe("Titre du mandat si pas d'UUID"),
-      email: z.string().optional().describe("Email du contact a inviter. Par defaut : l'email du client du mandat"),
-      contact_name: z.string().optional().describe('Nom du contact invite (affiche dans le portail). Par defaut : le client du mandat'),
-      send_invite: z.boolean().optional().default(true).describe("Envoyer l'email d'invitation avec le lien et les identifiants (defaut : true)"),
+      mandate_id: z.string().optional().describe('Mandate UUID'),
+      mandate_name: z.string().optional().describe("Mandate title if no UUID"),
+      email: z.string().optional().describe("Email of the contact to invite. Default: the mandate client's email"),
+      contact_name: z.string().optional().describe('Invited contact name (shown in the portal). Default: the mandate client'),
+      send_invite: z.boolean().optional().default(true).describe("Send the invitation email with the link and login details (default: true)"),
     },
     wrapTool('grant_portal_access', async (args) => {
       const mandat = await resolveMandat(args);
       if ('error' in mandat) return mandat;
       if (!mandat.client) {
-        return { error: 'no_client', message: `Le mandat "${mandat.titrePoste}" n'a pas de client rattache : impossible d'ouvrir un acces portail. Rattache d'abord un client au mandat.` };
+        return { error: 'no_client', message: `The mandate "${mandat.titrePoste}" has no client attached, so no portal access can be granted. Attach a client to the mandate first.` };
       }
 
       const email = (typeof args.email === 'string' && args.email.trim() ? args.email : mandat.client.email || '').toLowerCase().trim();
       if (!email) {
-        return { error: 'no_email', message: `Le client ${fullName(mandat.client)} n'a pas d'email sur sa fiche. Demande l'email a l'utilisateur et rappelle avec le parametre email.` };
+        return { error: 'no_email', message: `The client ${fullName(mandat.client)} has no email on their record. Ask the user for the email and call again with the email parameter.` };
       }
-      if (!EMAIL_RE.test(email)) return { error: 'invalid_email', message: `"${email}" n'est pas un email valide.` };
+      if (!EMAIL_RE.test(email)) return { error: 'invalid_email', message: `"${email}" is not a valid email.` };
 
       const isMainClient = email === (mandat.client.email || '').toLowerCase().trim();
       const contactName = (typeof args.contact_name === 'string' && args.contact_name.trim()) || (isMainClient ? fullName(mandat.client) : null) || undefined;
@@ -121,8 +121,8 @@ export function registerPortalTools(server: McpServer) {
 
       const link = `${PORTAL_BASE}/portail/login?m=${mandat.id}`;
       const suite = sendInvite
-        ? `Une invitation a ete envoyee a ${email} avec le lien et ses identifiants.`
-        : `Aucun email envoye : transmets le lien a ${email}, qui recevra son mot de passe via « mot de passe oublie ».`;
+        ? `An invitation was sent to ${email} with the link and login details.`
+        : `No email sent: share the link with ${email}, who will get a password through 'forgot password'.`;
       return {
         success: true,
         access_id: access.id,
@@ -133,21 +133,21 @@ export function registerPortalTools(server: McpServer) {
         portal_link: link,
         invite_sent: sendInvite,
         reused_credentials: access.reusedCredentials,
-        message: `Acces portail ouvert pour ${contactName || email} sur "${mandat.titrePoste}" (${mandat.entreprise}). ${suite}` +
-          (access.reusedCredentials ? ' Ce contact avait deja un acces : son mot de passe reste le meme.' : ''),
+        message: `Portal access granted to ${contactName || email} on "${mandat.titrePoste}" (${mandat.entreprise}). ${suite}` +
+          (access.reusedCredentials ? ' This contact already had access: their password stays the same.' : ''),
       };
     }),
   );
 
   server.tool(
     'revoke_portal_access',
-    "[CONFIRMATION REQUISE] Retire l'acces d'un contact au portail client d'un mandat (reserve aux admins). " +
-      "Le contact ne peut plus se connecter a ce mandat ; l'acces peut etre rouvert ensuite avec grant_portal_access. Tu DOIS demander confirmation.",
+    "[CONFIRMATION REQUIRED] Revokes a contact's access to the client portal of a mandate (admins only). " +
+      "The contact can no longer log in to this mandate; access can be granted again later with grant_portal_access. You MUST ask for confirmation.",
     {
-      access_id: z.string().optional().describe("UUID de l'acces (voir list_portal_accesses)"),
-      mandate_id: z.string().optional().describe("UUID du mandat, si pas d'access_id"),
-      mandate_name: z.string().optional().describe("Titre du mandat, si pas d'access_id"),
-      email: z.string().optional().describe("Email du contact, a fournir avec le mandat si pas d'access_id"),
+      access_id: z.string().optional().describe("Access UUID (see list_portal_accesses)"),
+      mandate_id: z.string().optional().describe("Mandate UUID, if no access_id"),
+      mandate_name: z.string().optional().describe("Mandate title, if no access_id"),
+      email: z.string().optional().describe("Contact email, to give with the mandate if no access_id"),
     },
     wrapTool('revoke_portal_access', async (args) => {
       let accessId = typeof args.access_id === 'string' ? args.access_id : '';
@@ -161,19 +161,19 @@ export function registerPortalTools(server: McpServer) {
           return {
             error: cible.length ? 'access_ambiguous' : 'access_not_found',
             message: cible.length
-              ? `Plusieurs acces actifs sur "${mandat.titrePoste}". Precise l'email ou l'access_id.`
-              : `Aucun acces actif${email ? ` pour ${email}` : ''} sur "${mandat.titrePoste}".`,
+              ? `Several active accesses on "${mandat.titrePoste}". Specify the email or access_id.`
+              : `No active access${email ? ` for ${email}` : ''} on "${mandat.titrePoste}".`,
             candidates: actifs.map((a) => ({ access_id: a.id, email: a.email, name: a.name })),
           };
         }
         accessId = cible[0].id;
       }
-      if (!UUID_RE.test(accessId)) return { error: 'access_not_found', message: `"${accessId}" n'est pas un UUID d'acces. Utilise list_portal_accesses.` };
+      if (!UUID_RE.test(accessId)) return { error: 'access_not_found', message: `"${accessId}" is not an access UUID. Use list_portal_accesses.` };
       const existing = await prisma.portalAccess.findUnique({ where: { id: accessId }, select: { email: true, revokedAt: true, mandat: { select: { titrePoste: true } } } });
-      if (!existing) return { error: 'access_not_found', message: `Aucun acces portail avec l'UUID ${accessId}.` };
-      if (existing.revokedAt) return { success: true, access_id: accessId, message: `L'acces de ${existing.email} sur "${existing.mandat.titrePoste}" etait deja revoque.` };
+      if (!existing) return { error: 'access_not_found', message: `No portal access with UUID ${accessId}.` };
+      if (existing.revokedAt) return { success: true, access_id: accessId, message: `The access of ${existing.email} on "${existing.mandat.titrePoste}" was already revoked.` };
       await portalService.revokeAccess(accessId);
-      return { success: true, access_id: accessId, message: `Acces portail retire pour ${existing.email} sur "${existing.mandat.titrePoste}".` };
+      return { success: true, access_id: accessId, message: `Portal access revoked for ${existing.email} on "${existing.mandat.titrePoste}".` };
     }),
   );
 }

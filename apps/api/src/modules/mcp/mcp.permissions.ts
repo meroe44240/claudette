@@ -75,8 +75,8 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   revoke_portal_access:          { level: 'confirm', roles: ['ADMIN'] },
 
   // ═══ FUSION DE DOUBLONS (admin) ═══
-  find_duplicates:               { level: 'free',    roles: ['ADMIN'] },
-  merge_candidates:              { level: 'confirm', roles: ['ADMIN'] },
+  find_duplicates:               { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  merge_candidates:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   merge_clients:                 { level: 'confirm', roles: ['ADMIN'] },
   merge_companies:               { level: 'confirm', roles: ['ADMIN'] },
 
@@ -108,10 +108,10 @@ export function getToolPermission(toolName: string): ToolPermission {
 export function checkToolAccess(toolName: string, userRole: Role): { allowed: boolean; level: PermissionLevel; reason?: string } {
   const perm = getToolPermission(toolName);
   if (perm.level === 'blocked') {
-    return { allowed: false, level: 'blocked', reason: 'Cette action est interdite via MCP pour des raisons de securite.' };
+    return { allowed: false, level: 'blocked', reason: 'This action is not allowed over MCP for security reasons.' };
   }
   if (!perm.roles.includes(userRole)) {
-    return { allowed: false, level: perm.level, reason: `Role ${userRole} n'a pas acces a cet outil.` };
+    return { allowed: false, level: perm.level, reason: `This tool is not available to the ${userRole} role. Ask an admin to do it.` };
   }
   return { allowed: true, level: perm.level };
 }

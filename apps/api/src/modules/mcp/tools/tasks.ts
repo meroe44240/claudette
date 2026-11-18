@@ -6,9 +6,9 @@ import * as tacheService from '../../taches/tache.service.js';
 export function registerTaskTools(server: McpServer) {
   server.tool(
     'get_my_tasks',
-    "Recupere les taches du recruteur : en retard, aujourd'hui, cette semaine, par priorite.",
+    "Gets the user's tasks: overdue, today, this week, by priority.",
     {
-      status: z.enum(['todo', 'overdue', 'done', 'all']).optional().default('todo').describe('Filtre : todo, overdue, done, all'),
+      status: z.enum(['todo', 'overdue', 'done', 'all']).optional().default('todo').describe('Filter: todo, overdue, done, all'),
     },
     wrapTool('get_my_tasks', async (args, user) => {
       const result = await tacheService.list(
@@ -34,14 +34,14 @@ export function registerTaskTools(server: McpServer) {
 
   server.tool(
     'create_task',
-    "[CONFIRMATION REQUISE] Cree une nouvelle tache. Tu DOIS demander confirmation.",
+    "[CONFIRMATION REQUIRED] Creates a new task. You MUST ask for confirmation.",
     {
-      titre: z.string().describe('Titre de la tache'),
-      contenu: z.string().optional().describe('Description detaillee'),
+      titre: z.string().describe('Task title'),
+      contenu: z.string().optional().describe('Detailed description'),
       entiteType: z.string().optional().describe('CANDIDAT, CLIENT, ENTREPRISE, MANDAT'),
-      entiteId: z.string().optional().describe("UUID de l'entite liee"),
-      tacheDueDate: z.string().optional().describe('Date d\'echeance (ISO 8601)'),
-      tachePriority: z.string().optional().describe('HAUTE, NORMALE, BASSE'),
+      entiteId: z.string().optional().describe('UUID of the linked record'),
+      tacheDueDate: z.string().optional().describe('Due date (ISO 8601)'),
+      tachePriority: z.string().optional().describe('HAUTE (high), NORMALE (normal), BASSE (low)'),
     },
     wrapTool('create_task', async (args, user) => {
       const createData: any = {
@@ -57,19 +57,19 @@ export function registerTaskTools(server: McpServer) {
         createData.entiteId = args.entiteId as string;
       }
       const task = await tacheService.create(createData);
-      return { success: true, task_id: task.id, message: `Tache "${args.titre}" creee` };
+      return { success: true, task_id: task.id, message: `Task "${args.titre}" created` };
     }),
   );
 
   server.tool(
     'complete_task',
-    "[CONFIRMATION REQUISE] Marque une tache comme terminee. Tu DOIS demander confirmation.",
+    "[CONFIRMATION REQUIRED] Marks a task as done. You MUST ask for confirmation.",
     {
-      task_id: z.string().describe('UUID de la tache'),
+      task_id: z.string().describe('UUID of the task'),
     },
     wrapTool('complete_task', async (args) => {
       await tacheService.complete(args.task_id as string);
-      return { success: true, message: 'Tache marquee comme terminee' };
+      return { success: true, message: 'Task marked as done' };
     }),
   );
 }

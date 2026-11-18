@@ -3,21 +3,21 @@ import { z } from 'zod';
 import { wrapTool } from '../mcp.tools.js';
 
 const BLOCKED_TOOLS = [
-  { name: 'delete_client', desc: 'Supprimer un client' },
-  { name: 'delete_mandate', desc: 'Supprimer un mandat' },
-  { name: 'delete_company', desc: 'Supprimer une entreprise' },
-  { name: 'export_database', desc: "Exporter la base de donnees" },
-  { name: 'modify_settings', desc: 'Modifier les parametres systeme' },
+  { name: 'delete_client', desc: 'Delete a client contact' },
+  { name: 'delete_mandate', desc: 'Delete a mandate' },
+  { name: 'delete_company', desc: 'Delete a company' },
+  { name: 'export_database', desc: 'Export the database' },
+  { name: 'modify_settings', desc: 'Change system settings' },
 ];
 
 export function registerBlockedTools(server: McpServer) {
   for (const tool of BLOCKED_TOOLS) {
     server.tool(
       tool.name,
-      `[INTERDIT] ${tool.desc} — Cette action est bloquee via MCP pour des raisons de securite. L'utilisateur doit effectuer cette action directement dans l'interface web.`,
+      `[BLOCKED] ${tool.desc}. This action is blocked over MCP for security reasons. The user has to do it directly in the web app.`,
       { reason: z.string().optional() },
       wrapTool(tool.name, async () => {
-        return { error: `Action interdite : ${tool.desc}. Veuillez utiliser l'interface web de HumanUp pour cette operation.` };
+        return { error: `Action not allowed: ${tool.desc}. Please use the HumanUp web app for this.` };
       }),
     );
   }
