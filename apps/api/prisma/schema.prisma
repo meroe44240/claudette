@@ -330,6 +330,10 @@ model Mandat {
   contractApprovals   ContractApproval[]
   portalAccesses      PortalAccess[]         @relation("PortalAccessMandat")
 
+  // Index créés par les migrations binôme (filtres « mes mandats »).
+  @@index([sourceurId])
+  @@index([salesId])
+  @@index([recruteurId])
   @@map("mandats")
 }
 
