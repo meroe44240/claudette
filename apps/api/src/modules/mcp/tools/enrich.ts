@@ -9,17 +9,17 @@ export function registerEnrichTools(server: McpServer) {
   // ─── enrich_contact ───────────────────────────────
   server.tool(
     'enrich_contact',
-    "[CONFIRMATION REQUISE] Enrichit un candidat ou client via FullEnrich. IMPORTANT : tu DOIS d'abord demander au recruteur s'il veut recuperer un EMAIL, un NUMERO DE TELEPHONE, ou LES DEUX avant d'appeler cet outil. Couts : email = 1 credit, telephone = 10 credits, les deux = 11 credits.",
+    "[CONFIRMATION REQUIRED] Enriches a candidate or client through FullEnrich. IMPORTANT: you MUST first ask the recruiter whether they want an EMAIL, a PHONE NUMBER or BOTH before calling this tool. Cost: email = 1 credit, phone = 10 credits, both = 11 credits.",
     {
-      enrich_type: z.enum(['email', 'phone', 'both']).describe("Que chercher : 'email' (1 credit), 'phone' (10 credits), ou 'both' (11 credits). Tu DOIS demander au recruteur avant de choisir."),
-      candidate_id: z.string().optional().describe("UUID du candidat a enrichir (remplit auto nom/prenom/entreprise depuis la fiche)"),
-      client_id: z.string().optional().describe("UUID du client a enrichir"),
-      linkedin_url: z.string().optional().describe('URL LinkedIn du contact (methode la plus fiable)'),
-      first_name: z.string().optional().describe('Prenom (si pas de candidate_id/client_id)'),
-      last_name: z.string().optional().describe('Nom (si pas de candidate_id/client_id)'),
-      company_name: z.string().optional().describe("Nom de l'entreprise actuelle"),
-      company_domain: z.string().optional().describe("Domaine de l'entreprise (ex: google.com)"),
-      auto_update: z.boolean().optional().default(true).describe("Mettre a jour la fiche ATS avec les resultats (defaut: oui)"),
+      enrich_type: z.enum(['email', 'phone', 'both']).describe("What to look for: 'email' (1 credit), 'phone' (10 credits) or 'both' (11 credits). You MUST ask the recruiter before choosing."),
+      candidate_id: z.string().optional().describe("UUID of the candidate to enrich (name and company are filled from the record)"),
+      client_id: z.string().optional().describe("UUID of the client to enrich"),
+      linkedin_url: z.string().optional().describe('Contact LinkedIn URL (most reliable method)'),
+      first_name: z.string().optional().describe('First name (if no candidate_id/client_id)'),
+      last_name: z.string().optional().describe('Last name (if no candidate_id/client_id)'),
+      company_name: z.string().optional().describe("Current company name"),
+      company_domain: z.string().optional().describe("Company domain (e.g. google.com)"),
+      auto_update: z.boolean().optional().default(true).describe("Update the ATS record with the results (default: yes)"),
     },
     wrapTool('enrich_contact', async (args, user) => {
       // Build enrichment input from ATS entity or manual params
@@ -29,7 +29,7 @@ export function registerEnrichTools(server: McpServer) {
 
       if (args.candidate_id) {
         const candidat = await prisma.candidat.findUnique({ where: { id: args.candidate_id as string } });
-        if (!candidat) return { error: 'Candidat non trouve' };
+        if (!candidat) return { error: 'Candidate not found' };
         input = {
           first_name: candidat.prenom || undefined,
           last_name: candidat.nom || undefined,
@@ -43,7 +43,7 @@ export function registerEnrichTools(server: McpServer) {
           where: { id: args.client_id as string },
           include: { entreprise: { select: { nom: true, siteWeb: true } } },
         });
-        if (!client) return { error: 'Client non trouve' };
+        if (!client) return { error: 'Client not found' };
         input = {
           first_name: client.prenom || undefined,
           last_name: client.nom || undefined,
@@ -64,7 +64,7 @@ export function registerEnrichTools(server: McpServer) {
 
       // Validate we have enough info
       if (!input.linkedin_url && !(input.first_name && input.last_name && (input.company_name || input.domain))) {
-        return { error: "Pas assez d'informations. Fournir un URL LinkedIn OU nom+prenom+entreprise." };
+        return { error: "Not enough information. Provide a LinkedIn URL OR first name + last name + company." };
       }
 
       // Build enrich_fields based on enrich_type
@@ -79,7 +79,7 @@ export function registerEnrichTools(server: McpServer) {
 
       // Run enrichment
       const result = await fullenrich.enrichContact(input, enrichFields);
-      if (!result) return { error: "Aucun resultat d'enrichissement" };
+      if (!result) return { error: "No enrichment result" };
 
       const ci = result.contact_info;
       const profile = result.profile;
@@ -165,8 +165,8 @@ export function registerEnrichTools(server: McpServer) {
         } : null,
         auto_updated: updatedFields.length > 0 ? updatedFields : null,
         message: updatedFields.length > 0
-          ? `Enrichissement termine. ${updatedFields.length} champ(s) mis a jour dans la fiche.`
-          : 'Enrichissement termine. Aucun champ mis a jour (deja remplis ou pas de donnees).',
+          ? `Enrichment done. ${updatedFields.length} field(s) updated on the record.`
+          : 'Enrichment done. No field updated (already filled or no data).',
       };
     }),
   );
@@ -174,19 +174,19 @@ export function registerEnrichTools(server: McpServer) {
   // ─── search_people_external ───────────────────────
   server.tool(
     'search_people_external',
-    "Recherche des contacts EXTERNES (hors ATS) via FullEnrich. Trouve des profils par titre, entreprise, ville, competences. Utile pour du sourcing ou de la prospection. Coute 0.25 credit par resultat.",
+    "Searches EXTERNAL contacts (outside the ATS) through FullEnrich. Finds profiles by title, company, city or skills. Useful for sourcing or prospecting. Costs 0.25 credit per result.",
     {
-      job_titles: z.array(z.string()).optional().describe('Titres de poste (ex: ["Product Manager", "CTO"])'),
-      company_names: z.array(z.string()).optional().describe('Noms d\'entreprises (ex: ["Google", "Doctolib"])'),
-      company_domains: z.array(z.string()).optional().describe('Domaines (ex: ["google.com"])'),
-      locations: z.array(z.string()).optional().describe('Villes/pays (ex: ["Paris", "France"])'),
-      skills: z.array(z.string()).optional().describe('Competences (ex: ["React", "Python"])'),
-      seniority: z.array(z.string()).optional().describe('Niveaux de seniorite : Entry level, Mid-level, Senior, Director, VP, C-level'),
-      limit: z.number().optional().default(10).describe('Nombre max de resultats (max 100)'),
+      job_titles: z.array(z.string()).optional().describe('Job titles (e.g. ["Product Manager", "CTO"])'),
+      company_names: z.array(z.string()).optional().describe('Company names (e.g. ["Google", "Doctolib"])'),
+      company_domains: z.array(z.string()).optional().describe('Domains (e.g. ["google.com"])'),
+      locations: z.array(z.string()).optional().describe('Cities or countries (e.g. ["Paris", "France"])'),
+      skills: z.array(z.string()).optional().describe('Skills (e.g. ["React", "Python"])'),
+      seniority: z.array(z.string()).optional().describe('Seniority levels: Entry level, Mid-level, Senior, Director, VP, C-level'),
+      limit: z.number().optional().default(10).describe('Maximum number of results (max 100)'),
     },
     wrapTool('search_people_external', async (args) => {
       if (!args.job_titles && !args.company_names && !args.company_domains && !args.locations && !args.skills) {
-        return { error: 'Au moins un critere de recherche requis (titre, entreprise, ville ou competences).' };
+        return { error: 'At least one search criterion is required (title, company, city or skills).' };
       }
 
       const result = await fullenrich.searchPeople({
@@ -217,7 +217,7 @@ export function registerEnrichTools(server: McpServer) {
   // ─── get_enrich_credits ───────────────────────────
   server.tool(
     'get_enrich_credits',
-    "Verifie le solde de credits FullEnrich restants.",
+    "Checks the remaining FullEnrich credit balance.",
     {},
     wrapTool('get_enrich_credits', async () => {
       const balance = await fullenrich.getCredits();

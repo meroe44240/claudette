@@ -7,20 +7,21 @@ import prisma from '../../../lib/db.js';
 import { resolvePersonPhoto } from '../../../lib/photo.js';
 import * as dossierService from '../../candidats/dossier.service.js';
 import * as syntheseService from '../../candidats/synthese.service.js';
+import { STAGES_DOC, stageEn } from '../labels.js';
 
 export function registerCandidateTools(server: McpServer) {
   // ─── search_candidates ────────────────────────────────
   server.tool(
     'search_candidates',
-    "Recherche des candidats dans l'ATS par nom, email, poste, entreprise, tags, ville ou disponibilite. Utiliser pour retrouver un candidat, verifier les doublons avant creation, ou lister par critere.",
+    "Searches candidates in the ATS by name, email, job title, company, tags, city or availability. Use to find a candidate, check for duplicates before creating one, or list by criteria.",
     {
-      query: z.string().optional().describe('Recherche full-text : nom, prenom, email, poste, entreprise'),
-      city: z.string().optional().describe('Filtrer par ville (ex: Paris, Lyon)'),
-      source: z.string().optional().describe('Filtrer par source : linkedin, referral, jobboard, extension'),
-      tags: z.array(z.string()).optional().describe('Filtrer par tags/competences (ex: ["CSM", "SaaS"])'),
-      disponibilite: z.string().optional().describe('Filtrer par disponibilite : immediate, 1_mois, 3_mois, en_poste'),
-      limit: z.number().optional().default(10).describe('Nombre max de resultats (defaut 10, max 50)'),
-      offset: z.number().optional().default(0).describe('Offset pour pagination (defaut 0)'),
+      query: z.string().optional().describe('Full-text search: last name, first name, email, job title, company'),
+      city: z.string().optional().describe('Filter by city (e.g. Paris, Lyon)'),
+      source: z.string().optional().describe('Filter by source: linkedin, referral, jobboard, extension'),
+      tags: z.array(z.string()).optional().describe('Filter by tags/skills (e.g. ["CSM", "SaaS"])'),
+      disponibilite: z.string().optional().describe('Filter by availability: immediate, 1_mois (1 month), 3_mois (3 months), en_poste (currently employed)'),
+      limit: z.number().optional().default(10).describe('Max number of results (default 10, max 50)'),
+      offset: z.number().optional().default(0).describe('Pagination offset (default 0)'),
     },
     wrapTool('search_candidates', async (args, user) => {
       const limit = Math.min((args.limit as number) || 10, 50);
@@ -56,6 +57,7 @@ export function registerCandidateTools(server: McpServer) {
           mandates: c.candidatures?.map((ca: any) => ({
             mandate_title: ca.mandat?.titrePoste,
             stage: ca.stage,
+            stage_label: stageEn(ca.stage),
           })),
         })),
       };
@@ -65,10 +67,10 @@ export function registerCandidateTools(server: McpServer) {
   // ─── get_candidate ────────────────────────────────────
   server.tool(
     'get_candidate',
-    "Recupere la fiche complete d'un candidat : infos, experience, mandats lies, dernieres activites. Utiliser quand le recruteur veut voir le detail d'un candidat.",
+    "Gets the full candidate record: details, experience, linked mandates, latest activity. Use when the recruiter wants the detail of a candidate.",
     {
-      candidate_id: z.string().optional().describe('UUID du candidat'),
-      candidate_name: z.string().optional().describe("Nom du candidat (si pas d'UUID, on cherche par nom)"),
+      candidate_id: z.string().optional().describe('Candidate UUID'),
+      candidate_name: z.string().optional().describe('Candidate name (if no UUID, search by name)'),
     },
     wrapTool('get_candidate', async (args) => {
       let candidate: any;
@@ -78,7 +80,7 @@ export function registerCandidateTools(server: McpServer) {
         const results = await candidatService.list({ page: 1, perPage: 1 }, args.candidate_name as string);
         candidate = results.data[0];
       }
-      if (!candidate) return { error: 'Candidat non trouve' };
+      if (!candidate) return { error: 'Candidate not found' };
 
       return {
         id: candidate.id,
@@ -107,7 +109,9 @@ export function registerCandidateTools(server: McpServer) {
           id: ca.mandatId,
           title: ca.mandat?.titrePoste,
           company: ca.mandat?.entreprise?.nom,
+          candidature_id: ca.id,
           stage: ca.stage,
+          stage_label: stageEn(ca.stage),
         })),
         created_at: candidate.createdAt,
       };
@@ -117,22 +121,22 @@ export function registerCandidateTools(server: McpServer) {
   // ─── create_candidate ─────────────────────────────────
   server.tool(
     'create_candidate',
-    "[CONFIRMATION REQUISE] Cree un nouveau candidat dans l'ATS. Tu DOIS demander confirmation au recruteur en montrant les donnees avant de creer.",
+    "[CONFIRMATION REQUIRED] Creates a new candidate in the ATS. You MUST show the data to the recruiter and get confirmation before creating.",
     {
-      nom: z.string().describe('Nom de famille'),
-      prenom: z.string().optional().describe('Prenom'),
+      nom: z.string().describe('Last name'),
+      prenom: z.string().optional().describe('First name'),
       email: z.string().optional().describe('Email'),
-      telephone: z.string().optional().describe('Telephone'),
-      posteActuel: z.string().optional().describe('Poste actuel'),
-      entrepriseActuelle: z.string().optional().describe('Entreprise actuelle'),
-      localisation: z.string().optional().describe('Ville'),
-      linkedin_url: z.string().optional().describe('URL du profil LinkedIn'),
-      photo_url: z.string().optional().describe('URL de la photo de la personne (ex. photo LinkedIn). Si absente, la photo est cherchee via Gravatar quand un email est connu.'),
-      salaire: z.string().optional().describe('Salaire souhaite (ex: 55000)'),
-      source: z.string().optional().describe('Source : linkedin, referral, jobboard, mcp_claude'),
-      tags: z.array(z.string()).optional().describe('Tags/competences'),
-      mandate_id: z.string().optional().describe('Ajouter directement a un mandat (optionnel)'),
-      stage: z.string().optional().describe('Etape initiale si mandate_id fourni : SOURCING, CONTACTE, ENTRETIEN_1, ENVOYE_CLIENT, ENTRETIEN_CLIENT, PROCESS, OFFRE. Defaut: SOURCING'),
+      telephone: z.string().optional().describe('Phone'),
+      posteActuel: z.string().optional().describe('Current job title'),
+      entrepriseActuelle: z.string().optional().describe('Current company'),
+      localisation: z.string().optional().describe('City'),
+      linkedin_url: z.string().optional().describe('LinkedIn profile URL'),
+      photo_url: z.string().optional().describe('URL of the person photo (e.g. LinkedIn photo). If missing, the photo is looked up on Gravatar when an email is known.'),
+      salaire: z.string().optional().describe('Expected salary (e.g. 55000)'),
+      source: z.string().optional().describe('Source: linkedin, referral, jobboard, mcp_claude'),
+      tags: z.array(z.string()).optional().describe('Tags/skills'),
+      mandate_id: z.string().optional().describe('Add straight to a mandate (optional)'),
+      stage: z.string().optional().describe('Initial stage code if mandate_id is given (default SOURCING). Codes: ' + STAGES_DOC),
     },
     wrapTool('create_candidate', async (args, user) => {
       // Check duplicates by email
@@ -142,7 +146,7 @@ export function registerCandidateTools(server: McpServer) {
           error: 'duplicate_detected',
           existing_candidate_id: dup.match.id,
           existing_candidate_name: `${dup.match.prenom || ''} ${dup.match.nom}`.trim(),
-          message: 'Un candidat avec le meme email existe deja. Utilisez update_candidate pour le modifier.',
+          message: 'A candidate with the same email already exists. Use update_candidate to edit it, or merge_candidates if it is a duplicate.',
         };
       }
 
@@ -159,7 +163,7 @@ export function registerCandidateTools(server: McpServer) {
           error: 'duplicate_detected',
           existing_candidate_id: existingByName.id,
           existing_candidate_name: `${existingByName.prenom || ''} ${existingByName.nom}`.trim(),
-          message: 'Un candidat avec le meme nom+prenom existe deja. Utilisez update_candidate pour le modifier.',
+          message: 'A candidate with the same first and last name already exists. Use update_candidate to edit it, or merge_candidates if it is a duplicate.',
         };
       }
 
@@ -190,16 +194,16 @@ export function registerCandidateTools(server: McpServer) {
         } as any, user.userId);
       }
 
-      return { success: true, candidate_id: candidate.id, message: `Candidat ${args.prenom || ''} ${args.nom} cree` };
+      return { success: true, candidate_id: candidate.id, message: `Candidate ${`${args.prenom || ''} ${args.nom}`.trim()} created` };
     }),
   );
 
   // ─── get_candidate_dossier ────────────────────────────
   server.tool(
     'get_candidate_dossier',
-    "Lit le dossier client d'un candidat : ce que le client voit sur le portail (photo, synthese, cartes d'infos, adequation au poste, sections comme Parcours). Utiliser avant de le modifier.",
+    "Reads the client dossier of a candidate: what the client sees on the portal (photo, summary, info cards, fit for the role, sections such as Background). Use before editing it.",
     {
-      candidate_id: z.string().describe('UUID du candidat'),
+      candidate_id: z.string().describe('Candidate UUID'),
     },
     wrapTool('get_candidate_dossier', async (args) => {
       const d = await dossierService.getDossier(args.candidate_id as string);
@@ -222,18 +226,18 @@ export function registerCandidateTools(server: McpServer) {
   // ─── update_candidate_dossier ─────────────────────────
   server.tool(
     'update_candidate_dossier',
-    "[CONFIRMATION REQUISE] Met a jour le dossier client d'un candidat (visible par le client sur le portail). Chaque champ fourni REMPLACE entierement l'existant ; les champs omis ne changent pas. Lire d'abord avec get_candidate_dossier. Ne jamais y mettre d'infos sensibles (sante, situation perso, enveloppe interne, coordonnees). Tu DOIS montrer le dossier final au recruteur et obtenir sa confirmation avant d'appeler.",
+    "[CONFIRMATION REQUIRED] Updates the client dossier of a candidate (visible to the client on the portal). Each field you send fully REPLACES the current one; omitted fields do not change. Read it first with get_candidate_dossier. Never put sensitive information in it (health, personal situation, internal budget, contact details). The dossier itself is written in French for French clients unless the recruiter asks otherwise. You MUST show the final dossier to the recruiter and get confirmation before calling.",
     {
-      candidate_id: z.string().describe('UUID du candidat'),
-      synthese: z.string().optional().describe('Paragraphe de synthese, 500 caracteres maximum'),
+      candidate_id: z.string().describe('Candidate UUID'),
+      synthese: z.string().optional().describe('Summary paragraph, 500 characters max'),
       infos: z.array(z.object({ label: z.string(), value: z.string() })).optional()
-        .describe("Cartes d'infos, ex. [{label:'Localisation', value:'Lyon'}, {label:'Disponibilite', value:'Preavis ~3 mois'}, {label:'Experience', value:'8+ ans'}, {label:'Pretentions', value:'70-75 K€ package'}]"),
-      adequation: z.array(z.string()).optional().describe("Points d'adequation au poste (8 max affiches)"),
+        .describe("Info cards, e.g. [{label:'Localisation', value:'Lyon'}, {label:'Disponibilite', value:'Preavis ~3 mois'}, {label:'Experience', value:'8+ ans'}, {label:'Pretentions', value:'70-75 K€ package'}]"),
+      adequation: z.array(z.string()).optional().describe('Points showing fit for the role (8 shown max)'),
       sections: z.array(z.object({ title: z.string(), items: z.array(z.string()) })).optional()
-        .describe('Sections titrees, ex. [{title:"Parcours",items:["Depuis 03.2026 : ... · Agicap"]}]'),
-      photo_url: z.string().optional().describe("URL http(s) d'une photo (JPG/PNG/WebP) : elle est telechargee et hebergee par l'ATS. Chaine vide pour retirer la photo."),
-      show_contact: z.boolean().optional().describe("Montrer au client l'email, le telephone et le LinkedIn du candidat sur le portail (le CV, lui, est toujours telechargeable). A activer seulement si le candidat a donne son accord."),
-      protect: z.boolean().optional().default(true).describe("Proteger le dossier : un nouveau CV importe ne l'ecrasera pas (defaut true)"),
+        .describe('Titled sections, e.g. [{title:"Parcours",items:["Depuis 03.2026 : ... · Agicap"]}]'),
+      photo_url: z.string().optional().describe('http(s) URL of a photo (JPG/PNG/WebP): it is downloaded and hosted by the ATS. Empty string to remove the photo.'),
+      show_contact: z.boolean().optional().describe('Show the candidate email, phone and LinkedIn to the client on the portal (the CV can always be downloaded). Only turn on if the candidate agreed.'),
+      protect: z.boolean().optional().default(true).describe('Protect the dossier: a newly imported CV will not overwrite it (default true)'),
     },
     wrapTool('update_candidate_dossier', async (args) => {
       const id = args.candidate_id as string;
@@ -263,7 +267,7 @@ export function registerCandidateTools(server: McpServer) {
         sections: d.sections,
         protected: d.manuel,
         contact_visible_to_client: d.coordonneesVisibles,
-        message: 'Dossier client mis a jour (visible sur le portail)',
+        message: 'Client dossier updated (visible on the portal)',
       };
     }),
   );
@@ -273,7 +277,8 @@ export function registerCandidateTools(server: McpServer) {
     debrief_id: s.id,
     filename: s.filename,
     file_url: s.url,
-    status: s.status, // propose = à valider, applique, erreur
+    status: s.status, // propose = a valider, applique, erreur
+    status_label: s.status === 'propose' ? 'To review' : s.status === 'applique' ? 'Applied' : s.status === 'erreur' ? 'Error' : s.status,
     error: s.error,
     created_at: s.createdAt,
     applied_at: s.appliedAt,
@@ -289,8 +294,8 @@ export function registerCandidateTools(server: McpServer) {
 
   server.tool(
     'list_candidate_debriefs',
-    "Liste les debriefs / syntheses d'entretien ranges sur la fiche d'un candidat (onglet Entretiens), avec la proposition de mise a jour et son statut (propose = a valider, applique, erreur).",
-    { candidate_id: z.string().describe('UUID du candidat') },
+    "Lists the interview debriefs stored on a candidate record (Interviews tab), with the proposed update and its status (propose = to review, applique = applied, erreur = error).",
+    { candidate_id: z.string().describe('Candidate UUID') },
     wrapTool('list_candidate_debriefs', async (args) => {
       const rows = await syntheseService.listSyntheses(args.candidate_id as string);
       return { total: rows.length, debriefs: rows.map(debriefView) };
@@ -299,13 +304,13 @@ export function registerCandidateTools(server: McpServer) {
 
   server.tool(
     'add_candidate_debrief',
-    "[CONFIRMATION REQUISE] Ajoute un debrief / une synthese d'entretien sur la fiche d'un candidat (onglet Entretiens). L'ATS le lit et renvoie une PROPOSITION (champs de la fiche, experiences, dossier client) : rien n'est modifie tant que apply_candidate_debrief n'est pas appele. Fournir UNE source : `text` (recommande : le contenu integral du debrief que tu as lu dans le PDF ou le document, sans le resumer), `pdf_url` (lien https vers le PDF, ou lien Google Drive partage a tous ceux qui ont le lien), ou `pdf_base64` (petit PDF encode en base64). Montre ensuite la proposition au recruteur.",
+    "[CONFIRMATION REQUIRED] Adds an interview debrief to a candidate record (Interviews tab). The ATS reads it and returns a PROPOSAL (record fields, experiences, client dossier): nothing changes until apply_candidate_debrief is called. Provide ONE source: `text` (recommended: the full debrief content you read in the PDF or document, not a summary), `pdf_url` (https link to the PDF, or a Google Drive link shared with anyone who has the link), or `pdf_base64` (small base64-encoded PDF). Then show the proposal to the recruiter.",
     {
-      candidate_id: z.string().describe('UUID du candidat'),
-      title: z.string().optional().describe("Nom du debrief, ex. 'Synthese entretien Vicky 25-09'. Pour un PDF : nom du fichier."),
-      text: z.string().optional().describe('Contenu integral du debrief (texte brut). A privilegier quand tu as deja lu le document.'),
-      pdf_url: z.string().optional().describe('Lien https vers le PDF (ou lien de partage Google Drive public)'),
-      pdf_base64: z.string().optional().describe('PDF encode en base64 (10 Mo max). A eviter pour les gros fichiers.'),
+      candidate_id: z.string().describe('Candidate UUID'),
+      title: z.string().optional().describe("Debrief name, e.g. 'Interview debrief Vicky 25-09'. For a PDF: the file name."),
+      text: z.string().optional().describe('Full debrief content (plain text). Preferred when you have already read the document.'),
+      pdf_url: z.string().optional().describe('https link to the PDF (or a public Google Drive share link)'),
+      pdf_base64: z.string().optional().describe('Base64-encoded PDF (10 MB max). Avoid for large files.'),
     },
     wrapTool('add_candidate_debrief', async (args, user) => {
       const id = args.candidate_id as string;
@@ -313,8 +318,8 @@ export function registerCandidateTools(server: McpServer) {
       let s: any;
       if (args.pdf_base64) {
         const buffer = Buffer.from(String(args.pdf_base64).replace(/^data:application\/pdf;base64,/, ''), 'base64');
-        if (buffer.subarray(0, 5).toString('latin1') !== '%PDF-') return { error: 'pdf_base64 ne contient pas un PDF valide' };
-        if (buffer.length > 10 * 1024 * 1024) return { error: 'PDF trop volumineux (max 10 Mo)' };
+        if (buffer.subarray(0, 5).toString('latin1') !== '%PDF-') return { error: 'pdf_base64 does not contain a valid PDF' };
+        if (buffer.length > 10 * 1024 * 1024) return { error: 'PDF too large (10 MB max)' };
         const name = title ? (/\.pdf$/i.test(title) ? title : `${title}.pdf`) : 'synthese.pdf';
         s = await syntheseService.uploadSynthese(id, buffer, name, 'application/pdf', user.userId);
       } else if (args.pdf_url) {
@@ -322,59 +327,59 @@ export function registerCandidateTools(server: McpServer) {
       } else if (args.text) {
         s = await syntheseService.addSyntheseText(id, args.text as string, title || 'Débrief', user.userId);
       } else {
-        return { error: 'Fournir text, pdf_url ou pdf_base64' };
+        return { error: 'Provide text, pdf_url or pdf_base64' };
       }
       return {
         success: s.status !== 'erreur',
         ...debriefView(s),
         message: s.status === 'erreur'
-          ? `Debrief range, mais la lecture a echoue : ${s.error}`
-          : "Debrief range et lu. Rien n'est encore applique : montre la proposition au recruteur puis appelle apply_candidate_debrief.",
+          ? `Debrief stored, but reading it failed: ${s.error}`
+          : 'Debrief stored and read. Nothing is applied yet: show the proposal to the recruiter, then call apply_candidate_debrief.',
       };
     }),
   );
 
   server.tool(
     'apply_candidate_debrief',
-    "[CONFIRMATION REQUISE] Applique la proposition d'un debrief deja range (voir add_candidate_debrief / list_candidate_debriefs). Choisir ce qui est applique : champs de la fiche, experiences (les doublons sont ignores), dossier client. ATTENTION : apply_client_dossier REMPLACE le dossier que le client voit sur le portail ; ne l'activer que si le recruteur l'a demande, surtout si un dossier a deja ete redige a la main.",
+    "[CONFIRMATION REQUIRED] Applies the proposal of a stored debrief (see add_candidate_debrief / list_candidate_debriefs). Choose what is applied: record fields, experiences (duplicates are skipped), client dossier. WARNING: apply_client_dossier REPLACES the dossier the client sees on the portal; only turn it on if the recruiter asked, especially if a dossier was already written by hand.",
     {
-      candidate_id: z.string().describe('UUID du candidat'),
-      debrief_id: z.string().describe('Identifiant du debrief (debrief_id)'),
-      apply_fields: z.boolean().optional().default(true).describe('Appliquer les champs de la fiche (remuneration, disponibilite, mobilite, experience, localisation)'),
-      apply_experiences: z.boolean().optional().default(true).describe('Ajouter les experiences'),
-      apply_client_dossier: z.boolean().optional().default(false).describe('Remplacer le dossier client du portail par celui de la proposition (defaut false)'),
+      candidate_id: z.string().describe('Candidate UUID'),
+      debrief_id: z.string().describe('Debrief identifier (debrief_id)'),
+      apply_fields: z.boolean().optional().default(true).describe('Apply the record fields (pay, availability, mobility, experience, location)'),
+      apply_experiences: z.boolean().optional().default(true).describe('Add the experiences'),
+      apply_client_dossier: z.boolean().optional().default(false).describe('Replace the portal client dossier with the one in the proposal (default false)'),
     },
     wrapTool('apply_candidate_debrief', async (args) => {
       const id = args.candidate_id as string;
       const s = (await syntheseService.listSyntheses(id)).find((x) => x.id === args.debrief_id);
-      if (!s) return { error: 'Debrief introuvable pour ce candidat' };
-      if (!s.proposal) return { error: "Ce debrief n'a pas de proposition (lecture echouee)" };
+      if (!s) return { error: 'Debrief not found for this candidate' };
+      if (!s.proposal) return { error: 'This debrief has no proposal (reading failed)' };
       const res = await syntheseService.applySynthese(id, s.id, {
         fields: args.apply_fields === false ? undefined : s.proposal.fields,
         experiences: args.apply_experiences === false ? undefined : s.proposal.experiences,
         dossier: args.apply_client_dossier === true ? s.proposal.dossier : undefined,
       });
-      return { success: true, applied: res.applied, message: res.applied.length ? `Applique : ${res.applied.join(', ')}` : 'Rien a appliquer' };
+      return { success: true, applied: res.applied, message: res.applied.length ? `Applied: ${res.applied.join(', ')}` : 'Nothing to apply' };
     }),
   );
 
   // ─── update_candidate ─────────────────────────────────
   server.tool(
     'update_candidate',
-    "[CONFIRMATION REQUISE] Met a jour les informations d'un candidat. Tu DOIS demander confirmation en montrant les changements.",
+    "[CONFIRMATION REQUIRED] Updates a candidate details. You MUST show the changes and get confirmation.",
     {
-      candidate_id: z.string().describe('UUID du candidat'),
-      nom: z.string().optional().describe('Nom de famille (correction)'),
-      prenom: z.string().optional().describe('Prenom (correction)'),
-      email: z.string().optional().describe('Email du candidat'),
-      linkedinUrl: z.string().optional().describe('URL du profil LinkedIn'),
-      salaire: z.string().optional().describe('Salaire souhaite (ex: 55000)'),
-      disponibilite: z.string().optional().describe('immediate, 1_mois, 3_mois, en_poste'),
-      posteActuel: z.string().optional().describe('Poste actuel'),
-      entrepriseActuelle: z.string().optional().describe('Entreprise actuelle'),
-      telephone: z.string().optional().describe('Telephone'),
-      localisation: z.string().optional().describe('Ville'),
-      tags: z.array(z.string()).optional().describe('Tags/competences'),
+      candidate_id: z.string().describe('Candidate UUID'),
+      nom: z.string().optional().describe('Last name (correction)'),
+      prenom: z.string().optional().describe('First name (correction)'),
+      email: z.string().optional().describe('Candidate email'),
+      linkedinUrl: z.string().optional().describe('LinkedIn profile URL'),
+      salaire: z.string().optional().describe('Expected salary (e.g. 55000)'),
+      disponibilite: z.string().optional().describe('immediate, 1_mois (1 month), 3_mois (3 months), en_poste (currently employed)'),
+      posteActuel: z.string().optional().describe('Current job title'),
+      entrepriseActuelle: z.string().optional().describe('Current company'),
+      telephone: z.string().optional().describe('Phone'),
+      localisation: z.string().optional().describe('City'),
+      tags: z.array(z.string()).optional().describe('Tags/skills'),
     },
     wrapTool('update_candidate', async (args) => {
       const updates: Record<string, unknown> = {};
@@ -386,22 +391,22 @@ export function registerCandidateTools(server: McpServer) {
         const parsed = parseInt(String(args.salaire).replace(/[^\d]/g, ''), 10);
         if (parsed) updates.salaireSouhaite = parsed;
       }
-      if (Object.keys(updates).length === 0) return { error: 'Aucune mise a jour fournie' };
+      if (Object.keys(updates).length === 0) return { error: 'No update provided' };
 
       const candidate = await candidatService.update(args.candidate_id as string, updates as any);
-      return { success: true, message: `Fiche de ${candidate.prenom || ''} ${candidate.nom} mise a jour`, fields_updated: Object.keys(updates) };
+      return { success: true, message: `${`${candidate.prenom || ''} ${candidate.nom}`.trim()} updated`, fields_updated: Object.keys(updates) };
     }),
   );
 
   // ─── suggest_candidates_for_mandate ────────────────────
   server.tool(
     'suggest_candidates_for_mandate',
-    "Cherche dans le vivier les candidats qui pourraient correspondre a un mandat. Utiliser quand le recruteur dit 'qui dans ma base peut coller au mandat X'.",
+    "Looks in the talent pool for candidates who could fit a mandate. Use when the recruiter asks who in the database could match mandate X.",
     {
-      mandate_id: z.string().describe('UUID du mandat'),
-      title_keywords: z.array(z.string()).optional().describe('Mots-cles du titre recherche'),
-      city: z.string().optional().describe('Ville'),
-      limit: z.number().optional().default(10).describe('Nombre max de suggestions'),
+      mandate_id: z.string().describe('Mandate UUID'),
+      title_keywords: z.array(z.string()).optional().describe('Keywords for the target job title'),
+      city: z.string().optional().describe('City'),
+      limit: z.number().optional().default(10).describe('Max number of suggestions'),
     },
     wrapTool('suggest_candidates_for_mandate', async (args, user) => {
       // Get mandate details
@@ -409,7 +414,7 @@ export function registerCandidateTools(server: McpServer) {
         where: { id: args.mandate_id as string },
         include: { entreprise: true, candidatures: { select: { candidatId: true } } },
       });
-      if (!mandate) return { error: 'Mandat non trouve' };
+      if (!mandate) return { error: 'Mandate not found' };
 
       const existingIds = mandate.candidatures.map(c => c.candidatId);
       const searchTerms = (args.title_keywords as string[])?.join(' ') || mandate.titrePoste || '';
@@ -441,9 +446,9 @@ export function registerCandidateTools(server: McpServer) {
   // ─── delete_candidate ─────────────────────────────────
   server.tool(
     'delete_candidate',
-    "[CONFIRMATION REQUISE] Supprime un candidat. Impossible si le candidat a des candidatures actives. Tu DOIS demander confirmation.",
+    "[CONFIRMATION REQUIRED] Deletes a candidate. Not possible while the candidate has active candidatures. For a duplicate, use merge_candidates instead. You MUST ask for confirmation.",
     {
-      candidate_id: z.string().describe('UUID du candidat a supprimer'),
+      candidate_id: z.string().describe('UUID of the candidate to delete'),
     },
     wrapTool('delete_candidate', async (args) => {
       const candidatId = args.candidate_id as string;
@@ -456,14 +461,15 @@ export function registerCandidateTools(server: McpServer) {
 
       if (activeCandidatures.length > 0) {
         return {
-          error: 'Impossible de supprimer ce candidat — il a des candidatures actives.',
+          error: 'This candidate cannot be deleted: they have active candidatures.',
           active_mandates: activeCandidatures.map((ca: any) => ({
             candidature_id: ca.id,
             mandate: ca.mandat?.titrePoste,
             company: ca.mandat?.entreprise?.nom,
             stage: ca.stage,
+            stage_label: stageEn(ca.stage),
           })),
-          message: 'Retirez le candidat de ces mandats (move_candidate_stage → REFUSE) avant de supprimer.',
+          message: 'Remove the candidate from these mandates first (move_candidate_stage to REFUSE, Lost), then delete.',
         };
       }
 
@@ -472,7 +478,7 @@ export function registerCandidateTools(server: McpServer) {
       await prisma.activite.deleteMany({ where: { entiteType: 'CANDIDAT', entiteId: candidatId } });
       await prisma.candidat.delete({ where: { id: candidatId } });
 
-      return { success: true, message: 'Candidat supprime.' };
+      return { success: true, message: 'Candidate deleted.' };
     }),
   );
 }

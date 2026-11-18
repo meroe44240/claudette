@@ -6,7 +6,7 @@ import * as jobOfferService from '../../job-offers/job-offer.service.js';
 export function registerJobOfferTools(server: McpServer) {
   server.tool(
     'list_job_offers',
-    "Liste les offres du job board (publiees et brouillons). Utiliser quand le recruteur/sales demande 'montre-moi mes offres', 'quelles offres sont en ligne', etc.",
+    "Lists job board offers (published and drafts). Use when a recruiter or salesperson asks 'show me my job offers', 'which offers are live', etc.",
     {},
     wrapTool('list_job_offers', async () => {
       const offers = await jobOfferService.list();
@@ -24,19 +24,19 @@ export function registerJobOfferTools(server: McpServer) {
 
   server.tool(
     'create_job_offer',
-    "[CONFIRMATION REQUISE] Cree une offre pour le job board (consommee par la landing via l'API publique). Tu DOIS demander confirmation. Par defaut l'offre est un brouillon (non publiee) : mets published=true pour la publier directement.",
+    "[CONFIRMATION REQUIRED] Creates a job board offer (read by the website through the public API). You MUST ask for confirmation. The offer is a draft (unpublished) by default: set published=true to publish it right away.",
     {
-      titre: z.string().describe("Intitule du poste"),
-      description: z.string().describe("Description : missions, profil recherche"),
-      entreprise_nom: z.string().optional().describe("Nom de l'entreprise affiche publiquement (vide = confidentiel)"),
-      localisation: z.string().optional().describe("Ex : Paris (75)"),
+      titre: z.string().describe("Job title"),
+      description: z.string().describe("Description: responsibilities, profile sought"),
+      entreprise_nom: z.string().optional().describe("Company name shown publicly (empty = confidential)"),
+      localisation: z.string().optional().describe("E.g. Paris (75)"),
       contract_type: z.string().optional().describe("CDI, CDD, FREELANCE, ALTERNANCE, STAGE"),
       remote: z.string().optional().describe("ONSITE, HYBRID, REMOTE"),
-      salaire_min: z.number().int().optional().describe("Salaire min en euros/an"),
-      salaire_max: z.number().int().optional().describe("Salaire max en euros/an"),
-      secteur: z.string().optional().describe("Secteur d'activite"),
-      tags: z.array(z.string()).optional().describe("Competences / mots-cles"),
-      published: z.boolean().optional().describe("true = publier tout de suite sur le job board. Defaut false (brouillon)."),
+      salaire_min: z.number().int().optional().describe("Minimum salary in euros per year"),
+      salaire_max: z.number().int().optional().describe("Maximum salary in euros per year"),
+      secteur: z.string().optional().describe("Industry"),
+      tags: z.array(z.string()).optional().describe("Skills or keywords"),
+      published: z.boolean().optional().describe("true = publish on the job board right away. Default false (draft)."),
     },
     wrapTool('create_job_offer', async (args, user) => {
       const offer = await jobOfferService.create({
@@ -52,20 +52,20 @@ export function registerJobOfferTools(server: McpServer) {
         tags: (args.tags as string[]) ?? [],
         published: (args.published as boolean) ?? false,
       }, user.userId);
-      return { success: true, id: offer.id, slug: offer.slug, published: offer.published, message: offer.published ? 'Offre creee et publiee sur le job board' : 'Offre creee en brouillon' };
+      return { success: true, id: offer.id, slug: offer.slug, published: offer.published, message: offer.published ? 'Offer created and published on the job board' : 'Offer created as a draft' };
     }),
   );
 
   server.tool(
     'publish_job_offer',
-    "[CONFIRMATION REQUISE] Publie ou depublie une offre du job board. Tu DOIS demander confirmation.",
+    "[CONFIRMATION REQUIRED] Publishes or unpublishes a job board offer. You MUST ask for confirmation.",
     {
-      offer_id: z.string().describe("UUID de l'offre"),
-      published: z.boolean().describe("true = publier, false = depublier"),
+      offer_id: z.string().describe("Offer UUID"),
+      published: z.boolean().describe("true = publish, false = unpublish"),
     },
     wrapTool('publish_job_offer', async (args) => {
       const offer = await jobOfferService.setPublished(args.offer_id as string, args.published as boolean);
-      return { success: true, id: offer.id, published: offer.published, message: offer.published ? 'Offre publiee sur le job board' : 'Offre depubliee' };
+      return { success: true, id: offer.id, published: offer.published, message: offer.published ? 'Offer published on the job board' : 'Offer unpublished' };
     }),
   );
 }

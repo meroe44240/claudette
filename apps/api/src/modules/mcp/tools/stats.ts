@@ -4,6 +4,7 @@ import { wrapTool } from '../mcp.tools.js';
 import prisma from '../../../lib/db.js';
 import * as calendarService from '../../integrations/calendar.service.js';
 import * as clientService from '../../clients/client.service.js';
+import { stageEn } from '../labels.js';
 
 function startOfDay(date: Date = new Date()): Date {
   const d = new Date(date);
@@ -48,10 +49,10 @@ export function registerStatsTools(server: McpServer) {
   // ─── get_daily_brief ──────────────────────────────────
   server.tool(
     'get_daily_brief',
-    "Brief matinal du recruteur : 5 KPIs (calls, prez, RDV, placements, CA), agenda du jour, kanban actif par mandat, relances a faire (>7j sans activite), taches. Appeler quand le recruteur dit bonjour, 'ma journee', 'brief du jour'.",
+    "User's morning brief: 5 KPIs (calls, presentations, meetings, placements, revenue), today's agenda, active pipeline per mandate, follow-ups to do (no activity for more than 7 days), tasks. Call it when the user says hello, 'my day', 'daily brief'.",
     {
-      date: z.string().optional().describe('Date au format YYYY-MM-DD. Defaut: aujourd\'hui.'),
-      relances_threshold_days: z.number().optional().default(7).describe('Nombre de jours sans activite au-dela duquel on suggere une relance. Defaut 7.'),
+      date: z.string().optional().describe('Date as YYYY-MM-DD. Default: today.'),
+      relances_threshold_days: z.number().optional().default(7).describe('Number of days without activity after which a follow-up is suggested. Default 7.'),
     },
     wrapTool('get_daily_brief', async (args, user) => {
       const today = args.date ? new Date(args.date as string) : new Date();
@@ -226,14 +227,17 @@ export function registerStatsTools(server: McpServer) {
       const pipeline = activeMandates
         .map((m) => {
           const byStage: Record<string, number> = {};
+          const byStageLabel: Record<string, number> = {};
           for (const c of m.candidatures) {
             byStage[c.stage] = (byStage[c.stage] || 0) + 1;
+            byStageLabel[stageEn(c.stage)] = (byStageLabel[stageEn(c.stage)] || 0) + 1;
           }
           return {
             titre: m.titrePoste,
             entreprise: m.entreprise?.nom,
             total_actifs: m.candidatures.length,
             par_stage: byStage,
+            by_stage_label: byStageLabel,
           };
         })
         .filter((m) => m.total_actifs > 0)
@@ -241,8 +245,8 @@ export function registerStatsTools(server: McpServer) {
         .slice(0, 10);
 
       return {
-        greeting: `Bonjour ${user_?.prenom || ''} !`,
-        date: today.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+        greeting: `Hello ${user_?.prenom || ''}!`,
+        date: today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
         kpis: {
           calls: { today: callsToday, yesterday: callsYesterday, month: callsMonth, target_daily: objMap.get('daily_calls') || 30 },
           presentations: { today: presentationsToday, month: presentationsMonth },
@@ -261,6 +265,7 @@ export function registerStatsTools(server: McpServer) {
         relances_todo: relancesCandidates.map((c) => ({
           candidature_id: c.id,
           stage: c.stage,
+          stage_label: stageEn(c.stage),
           candidat: `${c.candidat.prenom || ''} ${c.candidat.nom}`.trim(),
           candidat_id: c.candidat.id,
           mandat: c.mandat.titrePoste,
@@ -273,15 +278,15 @@ export function registerStatsTools(server: McpServer) {
           today: tasksToday.map((t) => ({ id: t.id, title: t.titre, due: t.tacheDueDate, entity_type: t.entiteType, entity_id: t.entiteId })),
         },
         instructions_for_claude: [
-          'Presente le brief dans cet ordre :',
-          '1. Salutation courte + date',
-          '2. 📊 KPIs du mois en une ligne (calls / prez / RDV / placements / CA)',
-          '3. 📅 Agenda du jour (heures + participants) si non vide',
-          '4. 🎯 Pipeline actif : top mandats + nombre de candidats par stage',
-          '5. 🔔 Relances à faire (bloc `relances_todo` — candidats sans activité depuis N jours)',
-          '6. ✅ Tâches en retard puis tâches du jour',
-          '7. Termine par UNE proposition de blocs horaires pour la journée (deep work + calls + relances + admin).',
-          'Sois concis, utilise des emojis, pas de bullshit motivational.',
+          'Present the brief in this order:',
+          '1. Short greeting + date',
+          '2. 📊 Month KPIs on one line (calls / presentations / meetings / placements / revenue)',
+          '3. 📅 Today agenda (times + attendees) if not empty',
+          '4. 🎯 Active pipeline: top mandates + number of candidates per stage (use the English stage labels)',
+          '5. 🔔 Follow-ups to do (`relances_todo` block: candidates with no activity for N days)',
+          '6. ✅ Overdue tasks, then today tasks',
+          '7. End with ONE proposed time-block plan for the day (deep work + calls + follow-ups + admin).',
+          'Be concise, use emojis, no motivational fluff.',
         ].join('\n'),
       };
     }),
@@ -290,11 +295,11 @@ export function registerStatsTools(server: McpServer) {
   // ─── list_relances_todo ────────────────────────────────
   server.tool(
     'list_relances_todo',
-    "Liste les candidats du recruteur sans activite depuis N jours (default 7), triés du plus urgent au moins urgent. Le recruteur ou Claude peut appeler pour construire une session de relance ciblee.",
+    "Lists the user's candidates with no activity for N days (default 7), most urgent first. Use it to build a targeted follow-up session.",
     {
-      days_since_last_activity: z.number().optional().default(7).describe('Seuil en jours au-dela duquel on considere une relance necessaire.'),
-      limit: z.number().optional().default(30).describe('Nombre max de resultats. Defaut 30.'),
-      entity_type: z.enum(['candidat', 'client', 'both']).optional().default('candidat').describe('Type de relance à retourner.'),
+      days_since_last_activity: z.number().optional().default(7).describe('Threshold in days after which a follow-up is needed.'),
+      limit: z.number().optional().default(30).describe('Max number of results. Default 30.'),
+      entity_type: z.enum(['candidat', 'client', 'both']).optional().default('candidat').describe('Which follow-ups to return: candidat (candidates), client (client contacts) or both.'),
     },
     wrapTool('list_relances_todo', async (args, user) => {
       const days = (args.days_since_last_activity as number) || 7;
@@ -332,6 +337,7 @@ export function registerStatsTools(server: McpServer) {
           telephone: c.candidat.telephone,
           email: c.candidat.email,
           stage: c.stage,
+          stage_label: stageEn(c.stage),
           mandat: c.mandat.titrePoste,
           entreprise: c.mandat.entreprise?.nom,
           mandat_id: c.mandat.id,
@@ -377,13 +383,13 @@ export function registerStatsTools(server: McpServer) {
   // ─── plan_my_day ──────────────────────────────────────
   server.tool(
     'plan_my_day',
-    "Propose une organisation de journee en blocs horaires (deep work / calls / relances / admin) en tenant compte de l'agenda du recruteur, des taches urgentes et des relances a faire. Retourne les blocs proposes SANS les creer dans Google Calendar — le recruteur doit ensuite valider et Claude appellera create_rdv si besoin.",
+    "Proposes a plan for the day in time blocks (deep work / calls / follow-ups / admin) based on the user's agenda, urgent tasks and pending follow-ups. Returns the proposed blocks WITHOUT creating them in Google Calendar: the user validates first, then create_rdv can be called if needed.",
     {
-      date: z.string().optional().describe('Date au format YYYY-MM-DD. Defaut: aujourd\'hui.'),
-      start_hour: z.number().optional().default(9).describe("Heure de debut de journee (defaut 9)"),
-      end_hour: z.number().optional().default(18).describe("Heure de fin de journee (defaut 18)"),
-      lunch_start_hour: z.number().optional().default(12).describe("Debut pause dej (defaut 12)"),
-      lunch_duration_min: z.number().optional().default(60).describe("Duree pause dej en min (defaut 60)"),
+      date: z.string().optional().describe('Date as YYYY-MM-DD. Default: today.'),
+      start_hour: z.number().optional().default(9).describe('Start hour of the working day (default 9)'),
+      end_hour: z.number().optional().default(18).describe('End hour of the working day (default 18)'),
+      lunch_start_hour: z.number().optional().default(12).describe('Lunch break start hour (default 12)'),
+      lunch_duration_min: z.number().optional().default(60).describe('Lunch break length in minutes (default 60)'),
     },
     wrapTool('plan_my_day', async (args, user) => {
       const targetDate = args.date ? new Date(args.date as string) : new Date();
@@ -450,7 +456,7 @@ export function registerStatsTools(server: McpServer) {
         const morningEnd = new Date(Math.min(firstMeetingStart.getTime(), lunchStartTime.getTime()));
         softBlocks.push({
           type: 'prep',
-          title: 'Deep work / prépa RDV du jour',
+          title: 'Deep work / prep for today meetings',
           start_iso: dayStartWork.toISOString(),
           end_iso: morningEnd.toISOString(),
           fixed: false,
@@ -460,7 +466,7 @@ export function registerStatsTools(server: McpServer) {
       // Lunch
       softBlocks.push({
         type: 'lunch',
-        title: 'Pause déjeuner',
+        title: 'Lunch break',
         start_iso: lunchStartTime.toISOString(),
         end_iso: lunchEndTime.toISOString(),
         fixed: false,
@@ -472,7 +478,7 @@ export function registerStatsTools(server: McpServer) {
         const afterLunchEnd = new Date(afterLunchStart.getTime() + 60 * 60_000);
         softBlocks.push({
           type: 'relances',
-          title: `Session relances (${relances} candidats en attente)`,
+          title: `Follow-up session (${relances} candidates waiting)`,
           start_iso: afterLunchStart.toISOString(),
           end_iso: afterLunchEnd.toISOString(),
           fixed: false,
@@ -491,7 +497,7 @@ export function registerStatsTools(server: McpServer) {
       const allBlocks = [...meetingBlocks, ...softBlocks].sort((a, b) => a.start_iso.localeCompare(b.start_iso));
 
       return {
-        date: targetDate.toLocaleDateString('fr-FR'),
+        date: targetDate.toLocaleDateString('en-GB'),
         context: {
           meetings_count: meetings.length,
           overdue_tasks: overdueTasks,
@@ -500,11 +506,11 @@ export function registerStatsTools(server: McpServer) {
         },
         proposed_blocks: allBlocks,
         instructions_for_claude: [
-          'Presente les blocs proposes sous forme de tableau horaire.',
-          'Distingue les blocs fixes (meetings deja confirmes) des blocs souples (prep, relances, admin).',
-          'Demande au recruteur s\'il veut ajuster (deplacer un bloc, en ajouter, en retirer) ou tout valider.',
-          'Si validation → appelle create_rdv pour les blocs qu\'il souhaite materialiser dans Google Calendar.',
-          'Ne cree RIEN sans confirmation explicite.',
+          'Present the proposed blocks as a timetable.',
+          'Separate fixed blocks (confirmed meetings) from flexible ones (prep, follow-ups, admin).',
+          'Ask the user whether they want to adjust (move, add or remove a block) or validate everything.',
+          'Once validated, call create_rdv for the blocks they want in Google Calendar.',
+          'Create NOTHING without explicit confirmation.',
         ].join('\n'),
       };
     }),
@@ -513,7 +519,7 @@ export function registerStatsTools(server: McpServer) {
   // ─── get_my_stats ─────────────────────────────────────
   server.tool(
     'get_my_stats',
-    "Recupere les statistiques du recruteur pour une periode donnee : appels, RDV, candidats, mandats, CA.",
+    "Gets the user's stats for a period: calls, meetings, candidates, mandates, placements.",
     {
       period: z.string().optional().default('this_week').describe('today, this_week, this_month, this_quarter, this_year'),
     },
@@ -551,9 +557,9 @@ export function registerStatsTools(server: McpServer) {
   // ─── get_my_calendar ──────────────────────────────────
   server.tool(
     'get_my_calendar',
-    "Recupere les evenements du calendrier du recruteur pour aujourd'hui ou une date donnee.",
+    "Gets the user's calendar events for today or a given date.",
     {
-      date: z.string().optional().describe('Date au format YYYY-MM-DD'),
+      date: z.string().optional().describe('Date as YYYY-MM-DD'),
     },
     wrapTool('get_my_calendar', async (args, user) => {
       const date = args.date ? new Date(args.date as string) : new Date();
@@ -568,7 +574,7 @@ export function registerStatsTools(server: McpServer) {
       });
 
       return {
-        date: date.toLocaleDateString('fr-FR'),
+        date: date.toLocaleDateString('en-GB'),
         events: meetings.map(m => ({ type: 'meeting', title: m.titre, time: m.createdAt })),
       };
     }),
@@ -577,16 +583,16 @@ export function registerStatsTools(server: McpServer) {
   // ─── create_rdv ──────────────────────────────────────
   server.tool(
     'create_rdv',
-    "[CONFIRMATION REQUISE] Cree un rendez-vous client. Cree l'evenement dans Google Calendar (si connecte) + une activite MEETING dans l'ATS. Tu DOIS demander confirmation avant de creer.",
+    "[CONFIRMATION REQUIRED] Creates a client meeting: the event in Google Calendar (if connected) plus a MEETING activity in the ATS. You MUST ask for confirmation before creating it.",
     {
-      titre: z.string().describe("Titre du RDV (ex: 'RDV Ponant - Poste Account Executive')"),
-      date: z.string().describe('Date et heure de debut au format ISO (ex: 2026-04-16T14:00:00)'),
-      duree: z.number().optional().default(60).describe('Duree en minutes (defaut: 60)'),
-      client_id: z.string().optional().describe('UUID du client. Si fourni, lie le RDV au client.'),
-      client_name: z.string().optional().describe('Nom du client si pas d\'UUID — recherche automatique.'),
-      description: z.string().optional().describe('Description / notes du RDV'),
-      lieu: z.string().optional().describe('Lieu (adresse, lien visio, etc.)'),
-      attendees: z.array(z.string()).optional().describe('Emails des participants pour invitation Calendar'),
+      titre: z.string().describe("Meeting title (e.g. 'Ponant meeting · Account Executive role')"),
+      date: z.string().describe('Start date and time in ISO format (e.g. 2026-04-16T14:00:00)'),
+      duree: z.number().optional().default(60).describe('Length in minutes (default: 60)'),
+      client_id: z.string().optional().describe('UUID of the client contact. If given, the meeting is linked to them.'),
+      client_name: z.string().optional().describe('Client contact name if no UUID: searched automatically.'),
+      description: z.string().optional().describe('Meeting description or notes'),
+      lieu: z.string().optional().describe('Location (address, video link, etc.)'),
+      attendees: z.array(z.string()).optional().describe('Attendee emails for the Calendar invite'),
     },
     wrapTool('create_rdv', async (args, user) => {
       // Resolve client
@@ -604,13 +610,13 @@ export function registerStatsTools(server: McpServer) {
       if (!entiteId && invites.length === 0) {
         return {
           success: false,
-          message: "Un RDV client doit avoir une date et au moins un interlocuteur : precise le client (client_id ou client_name) ou les emails des participants.",
+          message: "A client meeting needs a date and at least one contact: give the client (client_id or client_name) or the attendee emails.",
         };
       }
 
       const startTime = new Date(args.date as string);
       if (Number.isNaN(startTime.getTime())) {
-        return { success: false, message: 'Date du RDV invalide : format ISO attendu (ex: 2026-04-16T14:00:00).' };
+        return { success: false, message: 'Invalid meeting date: ISO format expected (e.g. 2026-04-16T14:00:00).' };
       }
       const dureeMin = (args.duree as number) || 60;
       const endTime = new Date(startTime.getTime() + dureeMin * 60 * 1000);
@@ -634,8 +640,8 @@ export function registerStatsTools(server: McpServer) {
           activite_id: result.activiteId,
           google_event_id: result.googleEventId,
           message: result.success
-            ? `RDV "${args.titre}" cree dans Calendar + ATS`
-            : `RDV "${args.titre}" cree dans l'ATS (Calendar non connecte)`,
+            ? `Meeting "${args.titre}" created in Calendar and the ATS`
+            : `Meeting "${args.titre}" created in the ATS (Calendar not connected)`,
         };
       } catch {
         // Calendar not connected — create Activite only
@@ -646,7 +652,7 @@ export function registerStatsTools(server: McpServer) {
             entiteId: entiteId || undefined,
             userId: user.userId,
             titre: args.titre as string,
-            contenu: args.description as string || `RDV planifie: ${args.titre}`,
+            contenu: args.description as string || `Meeting scheduled: ${args.titre}`,
             source: 'MANUEL',
             metadata: {
               startTime: startTime.toISOString(),
@@ -662,7 +668,7 @@ export function registerStatsTools(server: McpServer) {
           success: true,
           calendar: false,
           activite_id: activite.id,
-          message: `RDV "${args.titre}" cree dans l'ATS (Google Calendar non connecte)`,
+          message: `Meeting "${args.titre}" created in the ATS (Google Calendar not connected)`,
         };
       }
     }),
@@ -672,7 +678,7 @@ export function registerStatsTools(server: McpServer) {
   // ─── get_team_stats (admin only) ──────────────────────
   server.tool(
     'get_team_stats',
-    "[ADMIN UNIQUEMENT] Recupere les statistiques de toute l'equipe.",
+    "[ADMIN ONLY] Gets stats for the whole team.",
     {
       period: z.string().optional().default('this_week'),
     },
@@ -709,9 +715,9 @@ export function registerStatsTools(server: McpServer) {
   // ─── get_team_daily_report (admin only) ───────────────
   server.tool(
     'get_team_daily_report',
-    "[ADMIN] Rapport d'activite quotidien par personne (standup) : overview business (mandats actifs/dormants, candidats en process, offres en cours, presentations semaine, placements + CA du mois), evenements d'hier (offres & presentations avec candidat/mandat/recruteur/interlocuteur), et activite par personne (calls, rdv, push, presentations / screenings, nouvelles). Fenetre J-1 (jour ouvre, Europe/Paris ; lundi=vendredi).",
+    "[ADMIN] Daily activity report per person (standup): business overview (active and dormant mandates, candidates in process, open offers, presentations this week, placements and revenue this month), yesterday's events (offers and presentations with candidate, mandate, recruiter, contact), and activity per person (calls, meetings, pushes, presentations, screenings, new items). Window = previous working day (Europe/Paris; on Monday, Friday).",
     {
-      date: z.string().optional().describe('Jour du rapport YYYY-MM-DD. Defaut : jour ouvre precedent.'),
+      date: z.string().optional().describe('Report day YYYY-MM-DD. Default: previous working day.'),
     },
     wrapTool('get_team_daily_report', async (args) => {
       const { getTeamDailyReport } = await import('../../reports/team-daily-report.service.js');
@@ -722,7 +728,7 @@ export function registerStatsTools(server: McpServer) {
   // ─── get_team_brief (admin only) ──────────────────────
   server.tool(
     'get_team_brief',
-    "[ADMIN UNIQUEMENT] Brief complet de l'equipe pour la journee/semaine.",
+    "[ADMIN ONLY] Full team brief for the day or week.",
     {
       period: z.string().optional().default('today'),
     },
@@ -767,7 +773,7 @@ export function registerStatsTools(server: McpServer) {
           company: m.entreprise?.nom,
           days_inactive: Math.floor((Date.now() - m.updatedAt.getTime()) / 86400000),
         })),
-        instructions_for_claude: 'Presente un tableau recapitulatif par recruteur avec un classement. Signale les mandats dormants comme alertes.',
+        instructions_for_claude: 'Present a summary table per recruiter with a ranking. Flag dormant mandates as alerts.',
       };
     }),
   );
@@ -775,11 +781,11 @@ export function registerStatsTools(server: McpServer) {
   // ─── get_recruiter_stats (admin only) ─────────────────
   server.tool(
     'get_recruiter_stats',
-    "[ADMIN UNIQUEMENT] Stats d'un recruteur specifique pour une periode : appels (total + moyenne/jour ouvre), nouvelles opportunites, mandats clotures, presentations candidat, deals closes. Identifie le recruteur par email, id, ou nom.",
+    "[ADMIN ONLY] Stats for one recruiter over a period: calls (total and average per working day), new opportunities, closed mandates, candidate presentations, closed deals. Identify the recruiter by email, id or name.",
     {
-      user_email: z.string().optional().describe("Email du recruteur (ex: valentin@humanup.io)"),
-      user_id: z.string().optional().describe('UUID du recruteur'),
-      user_name: z.string().optional().describe('Nom ou prenom du recruteur (recherche insensitive)'),
+      user_email: z.string().optional().describe('Recruiter email (e.g. valentin@humanup.io)'),
+      user_id: z.string().optional().describe('UUID of the recruiter'),
+      user_name: z.string().optional().describe('Recruiter first or last name (case-insensitive search)'),
       period: z.string().optional().default('this_quarter').describe('today, this_week, this_month, this_quarter, this_year'),
     },
     wrapTool('get_recruiter_stats', async (args) => {
@@ -809,7 +815,7 @@ export function registerStatsTools(server: McpServer) {
         });
       }
       if (!target) {
-        return { error: 'Recruteur introuvable. Fournis user_email, user_id ou user_name.' };
+        return { error: 'Recruiter not found. Give user_email, user_id or user_name.' };
       }
 
       // Period bounds
@@ -928,7 +934,7 @@ export function registerStatsTools(server: McpServer) {
           presentations_candidat: presentations,
           deals_closed: dealsClosed,
         },
-        instructions_for_claude: 'Presente les 5 metriques (avec la moyenne calls/jour) dans un tableau clair. Le champ working_days te dit sur combien de jours ouvres la periode etait effectivement mesuree.',
+        instructions_for_claude: 'Present the 5 metrics (with the calls per day average) in a clear table. working_days tells you how many working days the period actually covers.',
       };
     }),
   );

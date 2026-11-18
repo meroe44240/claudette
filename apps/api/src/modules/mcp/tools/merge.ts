@@ -4,16 +4,81 @@ import { wrapTool } from '../mcp.tools.js';
 import prisma from '../../../lib/db.js';
 import { detectDuplicates } from '../../candidats/duplicate.service.js';
 import * as merge from '../../merge/merge.service.js';
+import { stageEn } from '../labels.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const mergeArgs = {
-  primary_id: z.string().describe('UUID de la fiche a GARDER (principale)'),
-  duplicate_id: z.string().describe('UUID du doublon, absorbe puis supprime'),
+  primary_id: z.string().describe('UUID of the record to KEEP (primary)'),
+  duplicate_id: z.string().describe('UUID of the duplicate, folded into the primary then deleted'),
   confirm: z.boolean().optional().describe(
-    "false ou absent = apercu seulement, rien n'est modifie. true = fusion reelle, a passer uniquement apres accord explicite de l'utilisateur sur l'apercu.",
+    'false or missing = preview only, nothing changes. true = real merge, only after the user explicitly approved the preview.',
   ),
 };
+
+// Le service de fusion renvoie des cles en francais : on les traduit pour la reponse MCP.
+const KEY_EN: Record<string, string> = {
+  principal: 'primary',
+  doublon: 'duplicate',
+  nom: 'name',
+  site: 'website',
+  mandat: 'mandate',
+  mandats: 'mandates',
+  entreprise: 'company',
+  etape: 'stage',
+  etape_principal: 'stage_primary',
+  etape_doublon: 'stage_duplicate',
+  etape_gardee: 'stage_kept',
+  candidatures_deplacees: 'candidatures_moved',
+  candidatures_en_conflit: 'candidatures_in_conflict',
+  champs_completes: 'fields_filled',
+  tags_ajoutes: 'tags_added',
+  mandats_deplaces: 'mandates_moved',
+  acces_portail_deplaces: 'portal_accesses_moved',
+  contacts_deplaces: 'contacts_moved',
+  attention: 'warning',
+  primaryId: 'primary_id',
+  candidaturesDeplacees: 'candidatures_moved',
+  candidaturesFusionnees: 'candidatures_merged',
+  activitesRattachees: 'activities_moved',
+  mandatsDeplaces: 'mandates_moved',
+  accesPortailDeplaces: 'portal_accesses_moved',
+  contactsDeplaces: 'contacts_moved',
+};
+
+function warningEn(w: string): string {
+  let m = w.match(/^Les deux contacts ne sont pas dans la même entreprise \((.*) \/ (.*)\)/);
+  if (m) return `The two contacts are not in the same company (${m[1]} / ${m[2]}). The primary contact's company is kept.`;
+  m = w.match(/^SIREN différents \((.*) \/ (.*)\)/);
+  if (m) return `Different SIREN numbers (${m[1]} / ${m[2]}): these may be two separate companies.`;
+  return w;
+}
+
+function toEnglish(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(toEnglish);
+  if (!v || typeof v !== 'object') return v;
+  const out: Record<string, unknown> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    const key = KEY_EN[k] ?? k;
+    if (val === undefined) continue;
+    if (key === 'warning' && typeof val === 'string') out[key] = warningEn(val);
+    else out[key] = toEnglish(val);
+    if (key.startsWith('stage') && typeof val === 'string') out[`${key}_label`] = stageEn(val);
+  }
+  return out;
+}
+
+const ENTITY_EN: Record<string, string> = { candidat: 'candidate', client: 'client contact', entreprise: 'company' };
+
+function mergeErrorEn(err: merge.MergeError, entite: string): string {
+  if (err.code === 'same_id') return 'Both IDs point to the same record.';
+  if (err.code === 'not_found') {
+    const id = err.message.match(/\(([^)]+)\)/)?.[1] ?? '';
+    const which = /doublon/.test(err.message) ? 'Duplicate' : 'Primary';
+    return `${which} ${ENTITY_EN[entite]} not found${id ? ` (${id})` : ''}.`;
+  }
+  return err.message;
+}
 
 type Preview = (p: string, d: string) => Promise<unknown>;
 type Run = (p: string, d: string, userId?: string) => Promise<unknown>;
@@ -23,20 +88,20 @@ function mergeHandler(entite: string, preview: Preview, run: Run) {
     const primaryId = String(args.primary_id ?? '').trim();
     const duplicateId = String(args.duplicate_id ?? '').trim();
     if (!UUID_RE.test(primaryId) || !UUID_RE.test(duplicateId)) {
-      return { error: 'invalid_id', message: `primary_id et duplicate_id doivent etre des UUID de ${entite}. Utilise find_duplicates ou la recherche pour les trouver.` };
+      return { error: 'invalid_id', message: `primary_id and duplicate_id must be ${ENTITY_EN[entite]} UUIDs. Use find_duplicates or a search tool to find them.` };
     }
     try {
       if (args.confirm !== true) {
         return {
           preview: true,
-          ...(await preview(primaryId, duplicateId) as object),
-          message: "Apercu uniquement, rien n'a ete modifie. Montre-le a l'utilisateur et, s'il valide, rappelle avec confirm=true. La fusion est definitive : le doublon est supprime.",
+          ...(toEnglish(await preview(primaryId, duplicateId)) as object),
+          message: 'Preview only, nothing has changed. Show it to the user and, if they approve, call again with confirm=true. The merge is final: the duplicate is deleted.',
         };
       }
       const result = await run(primaryId, duplicateId, user.userId);
-      return { success: true, ...(result as object), message: `Fusion effectuee : le doublon a ete absorbe dans la fiche ${primaryId}.` };
+      return { success: true, ...(toEnglish(result) as object), message: `Merge done: the duplicate was folded into record ${primaryId}.` };
     } catch (err) {
-      if (err instanceof merge.MergeError) return { error: err.code, message: err.message };
+      if (err instanceof merge.MergeError) return { error: err.code, message: mergeErrorEn(err, entite) };
       throw err;
     }
   };
@@ -46,15 +111,22 @@ export function registerMergeTools(server: McpServer) {
   // ─── find_duplicates ──────────────────────────────────
   server.tool(
     'find_duplicates',
-    "Liste les doublons probables (reserve aux admins). Candidats : meme email ou meme LinkedIn. Clients : meme email. Entreprises : meme nom ou meme domaine. " +
-      "La premiere fiche de chaque groupe est la plus ancienne, c'est elle qu'on garde en general.",
+    "Lists likely duplicates. Candidates: same email or same LinkedIn. Client contacts: same email. Companies: same name or same domain. " +
+      'The first record of each group is the oldest one, usually the one to keep. Candidates are open to everyone; client contacts and companies are for admins.',
     {
-      entity: z.enum(['candidat', 'client', 'entreprise']).describe('Type de fiche'),
+      entity: z.enum(['candidat', 'client', 'entreprise']).describe('Record type: candidat (candidate), client (client contact), entreprise (company)'),
     },
     wrapTool('find_duplicates', async (args) => {
       if (args.entity === 'candidat') {
         const { groups } = await detectDuplicates();
-        return { entity: 'candidat', count: groups.length, groups };
+        const en = groups.map((g) => ({
+          primary: g.primary,
+          duplicates: g.duplicates.map((d) => ({
+            ...d,
+            matchReason: d.matchReason.replace(/^Email identique:/, 'Same email:').replace(/^LinkedIn identique/, 'Same LinkedIn'),
+          })),
+        }));
+        return { entity: 'candidat', count: en.length, groups: en };
       }
 
       if (args.entity === 'client') {
@@ -69,7 +141,7 @@ export function registerMergeTools(server: McpServer) {
             select: { id: true, nom: true, prenom: true, email: true, entreprise: { select: { nom: true } }, _count: { select: { mandats: true } } },
             orderBy: { createdAt: 'asc' },
           });
-          if (clients.length > 1) groups.push({ raison: `Email identique : ${r.email}`, fiches: clients });
+          if (clients.length > 1) groups.push({ reason: `Same email: ${r.email}`, records: clients });
         }
         return { entity: 'client', count: groups.length, groups };
       }
@@ -92,7 +164,7 @@ export function registerMergeTools(server: McpServer) {
           orderBy: { createdAt: 'asc' },
         });
         const [type, valeur] = [r.cle.split(':')[0], r.cle.slice(r.cle.indexOf(':') + 1)];
-        groups.push({ raison: `${type === 'nom' ? 'Nom' : 'Domaine'} identique : ${valeur}`, fiches: entreprises });
+        groups.push({ reason: `Same ${type === 'nom' ? 'name' : 'domain'}: ${valeur}`, records: entreprises });
       }
       return { entity: 'entreprise', count: groups.length, groups };
     }),
@@ -101,10 +173,10 @@ export function registerMergeTools(server: McpServer) {
   // ─── merge_candidates ─────────────────────────────────
   server.tool(
     'merge_candidates',
-    "[CONFIRMATION REQUISE] Fusionne deux fiches candidat en doublon (reserve aux admins). La fiche principale est gardee : elle recupere les candidatures, " +
-      "l'historique, les notes, les appels et complete ses champs vides avec ceux du doublon, qui est ensuite supprime. " +
-      "Si les deux sont sur le meme mandat, la candidature la plus avancee est gardee. Appelle d'abord SANS confirm pour obtenir l'apercu, " +
-      "montre-le a l'utilisateur, puis rappelle avec confirm=true seulement s'il valide.",
+    "[CONFIRMATION REQUIRED] Merges two duplicate candidate records (open to all recruiters). The primary record is kept: it takes over the candidatures, " +
+      'history, notes and calls, and fills its empty fields from the duplicate, which is then deleted. ' +
+      'If both are on the same mandate, the most advanced candidature is kept. First call WITHOUT confirm to get the preview, ' +
+      'show it to the user, then call again with confirm=true only if they approve.',
     mergeArgs,
     wrapTool('merge_candidates', mergeHandler('candidat', merge.previewMergeCandidats, merge.mergeCandidats)),
   );
@@ -112,9 +184,9 @@ export function registerMergeTools(server: McpServer) {
   // ─── merge_clients ────────────────────────────────────
   server.tool(
     'merge_clients',
-    "[CONFIRMATION REQUISE] Fusionne deux fiches contact client en doublon (reserve aux admins). La fiche principale est gardee : elle recupere les mandats, " +
-      "les acces portail, les leads, l'historique et complete ses champs vides ; le doublon est ensuite supprime. " +
-      "Appelle d'abord SANS confirm pour l'apercu, puis avec confirm=true apres accord de l'utilisateur.",
+    "[CONFIRMATION REQUIRED] Merges two duplicate client contact records (admins only). The primary record is kept: it takes over the mandates, " +
+      'portal accesses, leads and history, and fills its empty fields; the duplicate is then deleted. ' +
+      'First call WITHOUT confirm for the preview, then with confirm=true once the user approves.',
     mergeArgs,
     wrapTool('merge_clients', mergeHandler('client', merge.previewMergeClients, merge.mergeClients)),
   );
@@ -122,9 +194,9 @@ export function registerMergeTools(server: McpServer) {
   // ─── merge_companies ──────────────────────────────────
   server.tool(
     'merge_companies',
-    "[CONFIRMATION REQUISE] Fusionne deux fiches entreprise en doublon (reserve aux admins). L'entreprise principale est gardee : elle recupere les contacts, " +
-      "les mandats, les leads, l'historique et complete ses champs vides (Pappers, site, logo...) ; le doublon est ensuite supprime. " +
-      "Appelle d'abord SANS confirm pour l'apercu, puis avec confirm=true apres accord de l'utilisateur.",
+    "[CONFIRMATION REQUIRED] Merges two duplicate company records (admins only). The primary company is kept: it takes over the contacts, " +
+      'mandates, leads and history, and fills its empty fields (Pappers, website, logo...); the duplicate is then deleted. ' +
+      'First call WITHOUT confirm for the preview, then with confirm=true once the user approves.',
     mergeArgs,
     wrapTool('merge_companies', mergeHandler('entreprise', merge.previewMergeEntreprises, merge.mergeEntreprises)),
   );

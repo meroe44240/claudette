@@ -6,7 +6,7 @@ import prisma from '../../../lib/db.js';
 export function registerEmailTools(server: McpServer) {
   server.tool(
     'get_my_emails',
-    "Recupere les derniers emails envoyes/recus lies a des contacts de l'ATS.",
+    'Gets the latest emails sent or received that are linked to ATS contacts.',
     {
       limit: z.number().optional().default(10),
     },
@@ -44,14 +44,14 @@ export function registerEmailTools(server: McpServer) {
 
   server.tool(
     'send_email',
-    "[CONFIRMATION REQUISE] Envoie un email via Gmail depuis le compte du recruteur. Tu DOIS TOUJOURS demander confirmation au recruteur en montrant le contenu complet de l'email AVANT d'envoyer.",
+    "[CONFIRMATION REQUIRED] Sends an email through Gmail from the user's account. You MUST ALWAYS show the user the full email and get their confirmation BEFORE sending.",
     {
-      to_email: z.string().describe('Email du destinataire'),
-      subject: z.string().describe("Objet de l'email"),
-      body: z.string().describe("Corps de l'email en texte ou HTML simple"),
+      to_email: z.string().describe('Recipient email address'),
+      subject: z.string().describe('Email subject'),
+      body: z.string().describe('Email body, plain text or simple HTML'),
       entity_type: z.string().optional().describe('CANDIDAT, CLIENT'),
-      entity_id: z.string().optional().describe("UUID de l'entite liee"),
-      mandate_id: z.string().optional().describe('UUID du mandat lie'),
+      entity_id: z.string().optional().describe('UUID of the linked record'),
+      mandate_id: z.string().optional().describe('UUID of the linked mandate'),
     },
     wrapTool('send_email', async (args, user) => {
       // Import Gmail service dynamically to avoid circular deps
@@ -77,7 +77,7 @@ export function registerEmailTools(server: McpServer) {
         },
       });
 
-      return { success: true, message: `Email envoye a ${args.to_email}` };
+      return { success: true, message: `Email sent to ${args.to_email}` };
     }),
   );
 }

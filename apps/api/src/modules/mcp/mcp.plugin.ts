@@ -10,10 +10,17 @@ import type { Role } from '@prisma/client';
 const startedAt = Date.now();
 
 function createMcpServer(): McpServer {
-  const server = new McpServer({
-    name: 'humanup-ats',
-    version: '1.0.0',
-  });
+  const server = new McpServer(
+    {
+      name: 'humanup-ats',
+      version: '1.0.0',
+    },
+    {
+      instructions:
+        'HumanUp ATS (Propium). Tool results are in English. Pipeline stages come as a code (stage) plus an English name (stage_label): ' +
+        'when you talk about a stage, use the English name (Sourcing, Qualification, Internal interview, Sent to client, Client interview, Process, Offer, Won, Lost), never the code or a French label.',
+    },
+  );
   registerAllTools(server);
   return server;
 }

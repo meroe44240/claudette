@@ -2,15 +2,16 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { wrapTool } from '../mcp.tools.js';
 import prisma from '../../../lib/db.js';
+import { stageEn } from '../labels.js';
 
 export function registerAiTools(server: McpServer) {
   // ─── get_call_brief ───────────────────────────────────
   server.tool(
     'get_call_brief',
-    "Genere un brief pre-appel enrichi pour un contact : contexte ATS (dernieres interactions, mandats, notes). Utiliser quand le recruteur dit 'prepare-moi le brief pour mon call avec X'.",
+    "Builds a pre-call brief for a contact from the ATS context (latest interactions, mandates, notes). Use when the recruiter says 'prepare my brief for my call with X'.",
     {
-      contact_id: z.string().describe('UUID du contact'),
-      contact_type: z.string().describe('candidate ou client'),
+      contact_id: z.string().describe('Contact UUID'),
+      contact_type: z.string().describe('candidate or client'),
     },
     wrapTool('get_call_brief', async (args) => {
       const contactType = args.contact_type as string;
@@ -28,7 +29,7 @@ export function registerAiTools(server: McpServer) {
           include: { entreprise: true, mandats: true },
         });
       }
-      if (!contact) return { error: 'Contact non trouve' };
+      if (!contact) return { error: 'Contact not found' };
 
       // Recent activities
       const activities = await prisma.activite.findMany({
@@ -50,12 +51,14 @@ export function registerAiTools(server: McpServer) {
         name: `${contact.prenom || ''} ${contact.nom}`.trim(),
         title: contact.posteActuel,
         company: contact.entrepriseActuelle,
-        salary: contact.salaire,
+        salary: contact.salaireActuel ?? null,
+        expected_salary: contact.salaireSouhaite ?? null,
         availability: contact.disponibilite,
         mandates: contact.candidatures?.map((ca: any) => ({
           title: ca.mandat?.titrePoste,
           company: ca.mandat?.entreprise?.nom,
-          stage: ca.stade,
+          stage: ca.stage,
+          stage_label: stageEn(ca.stage),
         })),
       } : {
         name: `${contact.prenom || ''} ${contact.nom}`.trim(),
@@ -76,9 +79,9 @@ export function registerAiTools(server: McpServer) {
         })),
         notes: notes.map(n => ({ text: n.contenu, date: n.createdAt })),
         talking_points: [
-          activities.length === 0 ? 'Premier contact — se presenter et contextualiser.' : `Dernier contact le ${activities[0]?.createdAt?.toLocaleDateString('fr-FR')}`,
-          contactType === 'candidate' && contact.salaire ? `Pretentions salariales : ${contact.salaire}` : null,
-          contactType === 'candidate' && contact.disponibilite ? `Disponibilite : ${contact.disponibilite}` : null,
+          activities.length === 0 ? 'First contact: introduce yourself and set the context.' : `Last contact on ${activities[0]?.createdAt?.toLocaleDateString('en-GB')}`,
+          contactType === 'candidate' && (contact.salaireActuel || contact.salaireSouhaite) ? `Salary: current ${contact.salaireActuel ?? "unknown"}, expected ${contact.salaireSouhaite ?? "unknown"}` : null,
+          contactType === 'candidate' && contact.disponibilite ? `Availability: ${contact.disponibilite}` : null,
         ].filter(Boolean),
       };
     }),
@@ -87,20 +90,20 @@ export function registerAiTools(server: McpServer) {
   // ─── click_to_call ────────────────────────────────────
   server.tool(
     'click_to_call',
-    "Lance un appel telephonique via Allo VoIP. Utiliser quand le recruteur dit 'appelle Pierre' ou 'passe un call a Fatima'.",
+    "Starts a phone call through Allo VoIP. Use when the recruiter says 'call Pierre' or 'give Fatima a call'.",
     {
-      phone_number: z.string().describe('Numero de telephone a appeler'),
-      contact_name: z.string().optional().describe('Nom du contact'),
-      contact_id: z.string().optional().describe('UUID du contact'),
-      contact_type: z.string().optional().describe('candidate ou client'),
+      phone_number: z.string().describe('Phone number to call'),
+      contact_name: z.string().optional().describe('Contact name'),
+      contact_id: z.string().optional().describe('Contact UUID'),
+      contact_type: z.string().optional().describe('candidate or client'),
     },
     wrapTool('click_to_call', async (args) => {
       const alloLink = `https://app.withallo.com/call/${encodeURIComponent(args.phone_number as string)}`;
       return {
         success: true,
-        message: `Appel lance vers ${args.contact_name || args.phone_number}`,
+        message: `Call started to ${args.contact_name || args.phone_number}`,
         allo_link: alloLink,
-        instruction: "Clique sur le lien pour lancer l'appel dans Allo. La transcription et le resume seront generes automatiquement.",
+        instruction: "Click the link to start the call in Allo. The transcript and summary will be generated automatically.",
       };
     }),
   );
@@ -108,19 +111,19 @@ export function registerAiTools(server: McpServer) {
   // ─── validate_call_analysis ───────────────────────────
   server.tool(
     'validate_call_analysis',
-    "[CONFIRMATION REQUISE] Valide ou modifie l'analyse IA d'un appel. Le recruteur confirme les mises a jour de fiche et les taches proposees. Tu DOIS demander confirmation.",
+    "[CONFIRMATION REQUIRED] Approves or edits the AI analysis of a call. The recruiter confirms the proposed record updates and tasks. You MUST ask for confirmation.",
     {
-      validation_id: z.string().describe('UUID de la validation pending'),
-      approve_updates: z.boolean().optional().default(true).describe('Appliquer les mises a jour de fiche'),
-      approve_tasks: z.boolean().optional().default(true).describe('Creer les taches proposees'),
-      field_corrections: z.record(z.string(), z.string()).optional().describe('Corrections des champs (ex: { "salaire": "75k" })'),
+      validation_id: z.string().describe('UUID of the pending validation'),
+      approve_updates: z.boolean().optional().default(true).describe('Apply the record updates'),
+      approve_tasks: z.boolean().optional().default(true).describe('Create the proposed tasks'),
+      field_corrections: z.record(z.string(), z.string()).optional().describe('Field corrections (e.g. { "salaire": "75k" })'),
     },
     wrapTool('validate_call_analysis', async (args, user) => {
       const validation = await prisma.aiPendingValidation.findUnique({
         where: { id: args.validation_id as string },
       });
-      if (!validation) return { error: 'Validation non trouvee' };
-      if (validation.userId !== user.userId) return { error: 'Acces refuse' };
+      if (!validation) return { error: 'Validation not found' };
+      if (validation.userId !== user.userId) return { error: 'Access denied' };
 
       const results: { updates_applied: string[]; tasks_created: string[] } = { updates_applied: [], tasks_created: [] };
 
@@ -182,7 +185,7 @@ export function registerAiTools(server: McpServer) {
         success: true,
         updates_applied: results.updates_applied,
         tasks_created: results.tasks_created,
-        message: `${results.updates_applied.length} mises a jour, ${results.tasks_created.length} taches creees`,
+        message: `${results.updates_applied.length} update(s), ${results.tasks_created.length} task(s) created`,
       };
     }),
   );

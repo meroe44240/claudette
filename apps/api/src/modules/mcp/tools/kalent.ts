@@ -7,21 +7,21 @@ export function registerKalentTools(server: McpServer) {
   // ─── search_talents_kalent ────────────────────────
   server.tool(
     'search_talents_kalent',
-    "Recherche des profils dans la base Kalent (+200M profils). Utilise la cle API partagee de l'equipe. Construis les filtres a partir de la description du recruteur (job title, localisation, skills, entreprise, seniorite...). Un filtre LOCATION accepte un rayon en km (defaut 30).",
+    "Searches profiles in the Kalent database (200M+ profiles) with the team's shared API key. Build the filters from the recruiter's description (job title, location, skills, company, seniority...). A LOCATION filter accepts a radius in km (default 30).",
     {
-      job_title: z.string().optional().describe("Intitule de poste recherche (ex: 'Software Engineer', 'Directeur commercial')"),
-      location: z.string().optional().describe("Ville, region ou pays (ex: 'Paris', 'Lyon', 'France')"),
-      location_radius_km: z.number().optional().default(30).describe("Rayon autour de la localisation en km (defaut 30). Si le recruteur mentionne des miles, convertir en km avant."),
-      skills: z.array(z.string()).optional().describe("Competences requises (ex: ['Python', 'AWS'])"),
-      companies: z.array(z.string()).optional().describe("Entreprises actuelles/passees (ex: ['OpenAI', 'Google'])"),
-      excluded_companies: z.array(z.string()).optional().describe("Entreprises a exclure"),
-      seniority: z.array(z.string()).optional().describe("Niveaux de seniorite (ex: ['Senior', 'Lead', 'Director'])"),
-      industries: z.array(z.string()).optional().describe("Secteurs d'activite"),
-      languages: z.array(z.string()).optional().describe("Langues parlees"),
+      job_title: z.string().optional().describe("Target job title (e.g. 'Software Engineer', 'Sales Director')"),
+      location: z.string().optional().describe("City, region or country (e.g. 'Paris', 'Lyon', 'France')"),
+      location_radius_km: z.number().optional().default(30).describe("Radius around the location in km (default 30). If the recruiter gives miles, convert to km first."),
+      skills: z.array(z.string()).optional().describe("Required skills (e.g. ['Python', 'AWS'])"),
+      companies: z.array(z.string()).optional().describe("Current or past companies (e.g. ['OpenAI', 'Google'])"),
+      excluded_companies: z.array(z.string()).optional().describe("Companies to exclude"),
+      seniority: z.array(z.string()).optional().describe("Seniority levels (e.g. ['Senior', 'Lead', 'Director'])"),
+      industries: z.array(z.string()).optional().describe("Industries"),
+      languages: z.array(z.string()).optional().describe("Spoken languages"),
       raw_filters: z
         .array(
           z.object({
-            filterType: z.string().describe("Type de filtre Kalent (ex: JOB_TITLE, LOCATION, SKILL, COMPANY, SENIORITY, INDUSTRY, LANGUAGE, EDUCATION)"),
+            filterType: z.string().describe("Kalent filter type (e.g. JOB_TITLE, LOCATION, SKILL, COMPANY, SENIORITY, INDUSTRY, LANGUAGE, EDUCATION)"),
             value: z.string(),
             isRequired: z.boolean().optional(),
             isExcluded: z.boolean().optional(),
@@ -30,11 +30,11 @@ export function registerKalentTools(server: McpServer) {
           }),
         )
         .optional()
-        .describe("Filtres bruts Kalent si besoin d'un type non couvert par les champs ci-dessus"),
+        .describe("Raw Kalent filters, for a type not covered by the fields above"),
     },
     wrapTool('search_talents_kalent', async (args) => {
       if (!kalent.isConfigured()) {
-        return { error: 'Integration Kalent non configuree. Contacter un administrateur.' };
+        return { error: 'Kalent integration is not configured. Contact an administrator.' };
       }
 
       const filters: kalent.KalentFilter[] = [];
@@ -73,7 +73,7 @@ export function registerKalentTools(server: McpServer) {
       }
 
       if (!filters.length) {
-        return { error: 'Au moins un critere de recherche est requis (job_title, location, skills, ...)' };
+        return { error: 'At least one search criterion is required (job_title, location, skills...)' };
       }
 
       const result = await kalent.searchTalents(filters);

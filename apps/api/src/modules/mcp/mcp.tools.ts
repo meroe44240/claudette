@@ -35,7 +35,7 @@ export function wrapTool(toolName: string, handler: (args: Record<string, unknow
     try {
       user = getMcpUser();
     } catch {
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Non authentifie. Veuillez vous connecter via OAuth.' }) }] };
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Not authenticated. Please sign in via OAuth.' }) }] };
     }
 
     const access = checkToolAccess(toolName, user.userRole);
@@ -53,7 +53,7 @@ export function wrapTool(toolName: string, handler: (args: Record<string, unknow
     } catch (err: any) {
       const durationMs = Date.now() - start;
       await logMcpAction({ userId: user.userId, toolName, level: access.level, input: args, success: false, error: err.message, durationMs });
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: err.message || 'Erreur interne' }) }] };
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: err.message || 'Internal error' }) }] };
     }
   };
 }
