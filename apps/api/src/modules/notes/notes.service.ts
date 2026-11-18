@@ -4,7 +4,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from '../../lib/errors
 import { buildContext } from './notes.context.js';
 import { finalizeCall } from './notes.finalize.js';
 import { startDemo, stopDemo } from './notes.live.js';
-import { newQuestion, prepareQuestions } from './notes.questions.js';
+import { newQuestion, prepareQuestions, translateQuestions } from './notes.questions.js';
 import * as recall from './recall.client.js';
 import { notesUserSettings, RETENTION_DAYS } from './notes.scheduler.js';
 import { CALL_TYPES, targetMinutes, type CallType, type NoteQuestion, type QuestionStatus } from './notes.types.js';
@@ -130,6 +130,11 @@ export async function updateCall(id: string, who: Requester, body: {
   if (body.language !== undefined && body.language !== call.language) {
     if (body.language !== null && body.language !== 'fr' && body.language !== 'en') throw new ValidationError('Langue inconnue');
     data.language = body.language;
+    // Questions remises dans la nouvelle langue (sauf call déjà fini).
+    const qs = (call.questions as unknown as NoteQuestion[]) || [];
+    if (body.language && qs.length && !['DONE', 'PROCESSING', 'CANCELLED'].includes(call.status)) {
+      data.questions = await translateQuestions(qs, body.language as 'fr' | 'en', who.userId);
+    }
     // Bot déjà programmé avec d'autres sous-titres : on le refait avec la bonne langue.
     if (call.recallBotId && call.status === 'SCHEDULED' && recall.isRecallConfigured()) {
       await recall.deleteScheduledBot(call.recallBotId).catch(() => null);

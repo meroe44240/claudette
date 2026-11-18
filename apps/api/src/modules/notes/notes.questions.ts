@@ -6,6 +6,7 @@ import { callClaude } from '../../services/claudeAI.js';
 import { aiAvailable as isAiConfigured } from './notes.types.js';
 import { buildContext } from './notes.context.js';
 import { TEMPLATES } from './notes.templates.js';
+import { resolveCallLanguage } from './notes.language.js';
 import { CALL_TYPE_LABEL, type CallType, type NoteQuestion } from './notes.types.js';
 
 export function newQuestion(text: string, dealbreaker = false, trameId: string | null = null): NoteQuestion {
@@ -24,7 +25,7 @@ Règles :
 - Une qualif dure 15 minutes : 8 à 12 questions maximum, les dealbreakers du poste d'abord.
 - Marque "dealbreaker": true pour les questions obligatoires (critères éliminatoires du poste, salaire, préavis, localisation si contrainte).
 - Questions courtes, une seule idée par question, tutoiement pour un candidat, vouvoiement pour un client ou un prospect.
-- Écris dans la langue du contexte (français par défaut, anglais si le brief ou le poste sont en anglais).
+- {LANGUE}
 Réponds UNIQUEMENT en JSON : {"questions":[{"text":"...","dealbreaker":true,"fromTrame":"<id de la question de trame ou null>"}]}`;
 
 /**
@@ -39,6 +40,7 @@ export async function prepareQuestions(callId: string, opts: { force?: boolean; 
 
   const type = call.callType as CallType;
   const ctx = await buildContext(call);
+  const lang = await resolveCallLanguage(call);
   let questions: NoteQuestion[] = [];
   let source = 'TEMPLATE';
 
@@ -49,7 +51,7 @@ export async function prepareQuestions(callId: string, opts: { force?: boolean; 
         feature: 'notes_questions',
         preferAnthropic: true,
         userId: opts.userId || call.userId,
-        systemPrompt: SYSTEM,
+        systemPrompt: SYSTEM.replace('{LANGUE}', lang ? `Écris toutes les questions en ${LANG_NAME[lang]}, quelle que soit la langue du contexte.` : 'Écris dans la langue du contexte (français par défaut, anglais si le brief ou le poste sont en anglais).'),
         userPrompt: `Type de call : ${CALL_TYPE_LABEL[type]}\nQuestions types de ce type de call (à utiliser si le contexte ne dit rien de mieux) :\n${TEMPLATES[type].map((q) => `- ${q.text}`).join('\n')}\n\nCONTEXTE :\n${ctx.text}\n\nTrame (ids) : ${JSON.stringify(ctx.trame)}`,
         maxTokens: 2500,
         temperature: 0.2,
@@ -76,9 +78,39 @@ export async function prepareQuestions(callId: string, opts: { force?: boolean; 
     source = 'MANUEL';
   }
   if (!questions.length) questions = templateQuestions(type);
+  // Template ou trame écrits en français : remis dans la langue du call.
+  if (lang && source !== 'IA' && type !== 'INTERNE') questions = await translateQuestions(questions, lang, opts.userId || call.userId);
 
   return prisma.noteCall.update({
     where: { id: callId },
     data: { questions: questions as any, questionsSource: source },
   });
+}
+
+const LANG_NAME = { fr: 'français', en: 'anglais' } as const;
+
+/**
+ * Traduit les questions dans la langue du call (mêmes ids, statuts, réponses).
+ * Une question déjà dans la bonne langue est rendue telle quelle.
+ */
+export async function translateQuestions(questions: NoteQuestion[], lang: 'fr' | 'en', userId: string): Promise<NoteQuestion[]> {
+  if (!questions.length || !isAiConfigured()) return questions;
+  try {
+    const res = await callClaude({
+      feature: 'notes_questions',
+      preferAnthropic: true,
+      userId,
+      systemPrompt: `Tu traduis des questions de call de recrutement en ${LANG_NAME[lang]}. Garde le sens, le ton (tutoiement ou vouvoiement, "you" en anglais), les chiffres et les noms propres. Une question déjà en ${LANG_NAME[lang]} est rendue telle quelle. Même nombre de questions, même ordre.
+Réponds UNIQUEMENT en JSON : {"texts":["...", "..."]}`,
+      userPrompt: JSON.stringify(questions.map((q) => q.text)),
+      maxTokens: 2500,
+      temperature: 0,
+    });
+    const texts = res.content?.texts;
+    if (!Array.isArray(texts) || texts.length !== questions.length) return questions;
+    return questions.map((q, i) => (typeof texts[i] === 'string' && texts[i].trim() ? { ...q, text: texts[i].trim() } : q));
+  } catch (err) {
+    console.error('[Notes] Traduction des questions impossible:', (err as Error).message);
+    return questions;
+  }
 }
