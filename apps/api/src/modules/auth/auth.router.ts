@@ -3,6 +3,8 @@ import { loginSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordS
 import * as authService from './auth.service.js';
 import { authenticate } from '../../middleware/auth.js';
 import prisma from '../../lib/db.js';
+import { ValidationError } from '../../lib/errors.js';
+import { normalizeLang, normalizeTimeZone } from '../../lib/locale.js';
 
 export default async function authRouter(fastify: FastifyInstance) {
   fastify.post('/login', {
@@ -88,6 +90,8 @@ export default async function authRouter(fastify: FastifyInstance) {
           role: true,
           avatarUrl: true,
           calendlyUrl: true,
+          preferredLanguage: true,
+          timezone: true,
         },
       });
       return user;
@@ -99,8 +103,18 @@ export default async function authRouter(fastify: FastifyInstance) {
     schema: { description: 'Mettre à jour le profil utilisateur', tags: ['Auth'] },
     preHandler: [authenticate],
     handler: async (request) => {
-      const body = request.body as { calendlyUrl?: string; nom?: string; prenom?: string; avatarUrl?: string };
+      const body = request.body as { calendlyUrl?: string; nom?: string; prenom?: string; avatarUrl?: string; preferredLanguage?: string; timezone?: string };
       const data: Record<string, any> = {};
+      if (body.preferredLanguage !== undefined) {
+        const lang = normalizeLang(body.preferredLanguage);
+        if (!lang) throw new ValidationError('Langue inconnue (fr ou en)');
+        data.preferredLanguage = lang;
+      }
+      if (body.timezone !== undefined) {
+        const tz = normalizeTimeZone(body.timezone);
+        if (!tz) throw new ValidationError('Fuseau horaire inconnu');
+        data.timezone = tz;
+      }
       if (body.calendlyUrl !== undefined) data.calendlyUrl = body.calendlyUrl || null;
       if (body.nom) data.nom = body.nom;
       if (body.prenom !== undefined) data.prenom = body.prenom;
@@ -108,7 +122,7 @@ export default async function authRouter(fastify: FastifyInstance) {
       const user = await prisma.user.update({
         where: { id: request.userId },
         data,
-        select: { id: true, email: true, nom: true, prenom: true, role: true, avatarUrl: true, calendlyUrl: true },
+        select: { id: true, email: true, nom: true, prenom: true, role: true, avatarUrl: true, calendlyUrl: true, preferredLanguage: true, timezone: true },
       });
       return user;
     },

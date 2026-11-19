@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogOut, Menu, Languages } from 'lucide-react';
@@ -13,7 +13,7 @@ import { ToastContainer } from '../ui/Toast';
 import { useAuthStore } from '../../stores/auth-store';
 import { api } from '../../lib/api-client';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
-import { t, isEn, setLang } from '../../lib/i18n';
+import { t, isEn, setLang, syncLocaleWithProfile } from '../../lib/i18n';
 
 export default function MainLayout() {
   const { user, logout } = useAuthStore();
@@ -23,6 +23,13 @@ export default function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => !(user as any)?.onboardingCompleted);
   const { showHelp, setShowHelp, shortcuts } = useKeyboardShortcuts();
+
+  // Langue et fuseau : le profil fait foi (voir lib/i18n). Une fois par chargement de l'app.
+  useEffect(() => {
+    api.get<{ preferredLanguage: string | null; timezone: string | null }>('/auth/me')
+      .then((me) => syncLocaleWithProfile(me))
+      .catch(() => null);
+  }, []);
 
   // Entity preview state (SlideOver)
   const [previewEntity, setPreviewEntity] = useState<{ type: string; id: string } | null>(null);
@@ -104,7 +111,7 @@ export default function MainLayout() {
               items={[
                 { label: t('Mon Espace'), onClick: () => navigate('/mon-espace') },
                 { label: t('Paramètres'), onClick: () => navigate('/settings') },
-                { label: isEn ? 'Passer en français' : 'Switch to English', onClick: () => setLang(isEn ? 'fr' : 'en'), icon: <Languages size={14} /> },
+                { label: isEn ? 'Passer en français' : 'Switch to English', onClick: () => { void setLang(isEn ? 'fr' : 'en'); }, icon: <Languages size={14} /> },
                 { label: t('Déconnexion'), onClick: logout, icon: <LogOut size={14} />, danger: true },
               ]}
             />

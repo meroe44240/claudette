@@ -32,6 +32,9 @@ model User {
   excludeFromTeamStats Boolean  @default(false)
   status               String    @default("ACTIVE") @db.VarChar(20) // ACTIVE | ARCHIVED
   dateSortie           DateTime? @map("date_sortie") @db.Timestamptz()
+  // Langue et fuseau du membre : source unique pour l'interface, les emails et les contenus IA.
+  preferredLanguage    String?   @map("preferred_language") @db.VarChar(5) // 'fr' | 'en' (null = pas encore choisi)
+  timezone             String?   @db.VarChar(64) // IANA, ex. Asia/Ho_Chi_Minh (null = pas encore connu)
   createdAt          DateTime  @default(now()) @db.Timestamptz()
   updatedAt          DateTime  @updatedAt @db.Timestamptz()
 

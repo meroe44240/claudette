@@ -37,6 +37,8 @@ export async function login(input: LoginInput) {
       role: user.role,
       mustChangePassword: user.mustChangePassword,
       onboardingCompleted: user.onboardingCompleted,
+      preferredLanguage: user.preferredLanguage,
+      timezone: user.timezone,
     },
   };
 }

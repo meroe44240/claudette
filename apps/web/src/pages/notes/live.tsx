@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router';
-import { AlertTriangle, Check, CircleDashed, CircleDot, Clock, Loader2, MessageCircleQuestion, Pin, Radio, Square, UserX, X } from 'lucide-react';
+import { AlertTriangle, Check, ClipboardList, CircleDashed, CircleDot, Clock, Loader2, MessageCircleQuestion, Pin, Radio, Square, UserX, X } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { t } from '../../lib/i18n';
 import { usePageTitle } from '../../hooks/usePageTitle';
@@ -13,6 +13,23 @@ interface LiveState {
   id: string; titre: string; status: string; callType: string; platform: string; startAt: string; endAt: string; startedAt: string | null; endedAt: string | null;
   questions: NoteQuestion[]; alerts: LiveAlert[]; lastAnalyzedAt: string | null; transcriptTail: { speaker: string; text: string }[]; transcriptCount: number;
   targetMinutes: number; recallConfigured: boolean; hasBot: boolean; meetingUrl: string; propiumLinks: PropiumLink[]; error: string | null;
+  candidatId: string | null; candidateMissing: ('linkedin' | 'cv')[];
+}
+
+function MissingOnRecord({ data }: { data: LiveState }) {
+  const missing = data.candidateMissing || [];
+  if (!missing.length) return null;
+  const items = missing.map((m) => (m === 'linkedin' ? t('son profil LinkedIn') : t('son CV')));
+  return (
+    <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+      <ClipboardList size={15} className="mt-0.5 shrink-0" />
+      <div className="flex-1">
+        <span className="font-semibold">{t('Avant de raccrocher :')} </span>
+        {t('demandez au candidat {items}.', { items: items.join(t(' et ')) })}
+        {data.candidatId && <> <a href={`/candidats/${data.candidatId}`} target="_blank" rel="noreferrer" className="font-semibold underline">{t('Ouvrir la fiche')}</a></>}
+      </div>
+    </div>
+  );
 }
 
 const NEXT: Record<QStatus, QStatus> = { todo: 'covered', covered: 'partial', partial: 'todo' };
@@ -132,6 +149,9 @@ export default function NotesLivePanel() {
             {data.transcriptTail.map((s, i) => <p key={i} className="text-xs leading-relaxed text-neutral-600"><span className="font-semibold text-neutral-800">{s.speaker}</span> : {s.text}</p>)}
           </section>
         )}
+
+        {/* Avant de raccrocher : ce qui manque sur la fiche du candidat (disparaît une fois complété). */}
+        {(live || data.status === 'PROCESSING' || data.status === 'DONE') && <MissingOnRecord data={data} />}
 
         {(live || data.status === 'JOINING' || data.status === 'SCHEDULED') && (
           <div className="flex gap-2 pt-2">

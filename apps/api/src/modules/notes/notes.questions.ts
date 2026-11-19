@@ -6,7 +6,8 @@ import { callClaude } from '../../services/claudeAI.js';
 import { aiAvailable as isAiConfigured } from './notes.types.js';
 import { buildContext } from './notes.context.js';
 import { TEMPLATES } from './notes.templates.js';
-import { resolveCallLanguage } from './notes.language.js';
+import { questionsAlreadyIn, resolveCallLanguage } from './notes.language.js';
+import { getUserLocale } from '../../lib/locale.js';
 import { CALL_TYPE_LABEL, type CallType, type NoteQuestion } from './notes.types.js';
 
 export function newQuestion(text: string, dealbreaker = false, trameId: string | null = null): NoteQuestion {
@@ -40,7 +41,10 @@ export async function prepareQuestions(callId: string, opts: { force?: boolean; 
 
   const type = call.callType as CallType;
   const ctx = await buildContext(call);
-  const lang = await resolveCallLanguage(call);
+  // Les questions sont posées à voix haute : langue parlée du call. Inconnue : celle du membre
+  // (plus de français par défaut), corrigée ensuite si le membre choisit la langue du call.
+  const known = await resolveCallLanguage(call);
+  const lang = known ?? (await getUserLocale(call.userId)).lang;
   let questions: NoteQuestion[] = [];
   let source = 'TEMPLATE';
 
@@ -51,7 +55,7 @@ export async function prepareQuestions(callId: string, opts: { force?: boolean; 
         feature: 'notes_questions',
         preferAnthropic: true,
         userId: opts.userId || call.userId,
-        systemPrompt: SYSTEM.replace('{LANGUE}', lang ? `Écris toutes les questions en ${LANG_NAME[lang]}, quelle que soit la langue du contexte.` : 'Écris dans la langue du contexte (français par défaut, anglais si le brief ou le poste sont en anglais).'),
+        systemPrompt: SYSTEM.replace('{LANGUE}', `Écris toutes les questions en ${LANG_NAME[lang]}, quelle que soit la langue du contexte.`),
         userPrompt: `Type de call : ${CALL_TYPE_LABEL[type]}\nQuestions types de ce type de call (à utiliser si le contexte ne dit rien de mieux) :\n${TEMPLATES[type].map((q) => `- ${q.text}`).join('\n')}\n\nCONTEXTE :\n${ctx.text}\n\nTrame (ids) : ${JSON.stringify(ctx.trame)}`,
         maxTokens: 2500,
         temperature: 0.2,
@@ -78,8 +82,8 @@ export async function prepareQuestions(callId: string, opts: { force?: boolean; 
     source = 'MANUEL';
   }
   if (!questions.length) questions = templateQuestions(type);
-  // Template ou trame écrits en français : remis dans la langue du call.
-  if (lang && source !== 'IA' && type !== 'INTERNE') questions = await translateQuestions(questions, lang, opts.userId || call.userId);
+  // Template ou trame écrits en français : remis dans la langue du call (l'IA écrit déjà dans la bonne langue).
+  if (source !== 'IA' && type !== 'INTERNE') questions = await translateQuestions(questions, lang, opts.userId || call.userId);
 
   return prisma.noteCall.update({
     where: { id: callId },
@@ -95,6 +99,8 @@ const LANG_NAME = { fr: 'français', en: 'anglais' } as const;
  */
 export async function translateQuestions(questions: NoteQuestion[], lang: 'fr' | 'en', userId: string): Promise<NoteQuestion[]> {
   if (!questions.length || !isAiConfigured()) return questions;
+  // Déjà dans la bonne langue : pas d'appel de traduction.
+  if (questionsAlreadyIn(questions, lang)) return questions;
   try {
     const res = await callClaude({
       feature: 'notes_questions',

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api-client';
+import { syncLocaleWithProfile } from '../lib/i18n';
 
 interface User {
   id: string;
@@ -9,6 +10,8 @@ interface User {
   role: 'ADMIN' | 'MANAGER' | 'RECRUTEUR';
   mustChangePassword: boolean;
   onboardingCompleted?: boolean;
+  preferredLanguage?: string | null;
+  timezone?: string | null;
 }
 
 interface AuthState {
@@ -47,6 +50,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.setItem('accessToken', data.accessToken);
       localStorage.setItem('user', JSON.stringify(data.user));
       set({ user: data.user, isAuthenticated: true });
+      void syncLocaleWithProfile(data.user);
     } finally {
       set({ isLoading: false });
     }

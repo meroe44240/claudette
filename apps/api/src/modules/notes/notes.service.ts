@@ -1,6 +1,7 @@
 import { createRequire } from 'module';
 import prisma from '../../lib/db.js';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../lib/errors.js';
+import { normalizeTimeZone } from '../../lib/locale.js';
 import { buildContext } from './notes.context.js';
 import { finalizeCall } from './notes.finalize.js';
 import { startDemo, stopDemo } from './notes.live.js';
@@ -108,7 +109,23 @@ export async function getLive(id: string, who: Requester) {
     targetMinutes: targetMinutes(call.callType as CallType, call.startAt, call.endAt),
     recallConfigured: recall.isRecallConfigured(), hasBot: !!call.recallBotId, meetingUrl: call.meetingUrl,
     propiumLinks: call.propiumLinks, error: call.error,
+    candidatId: call.candidatId,
+    candidateMissing: await candidateMissing(call.candidatId),
   };
+}
+
+/**
+ * Ce qui manque sur la fiche du candidat lié (rappel en fin de call) : profil LinkedIn, CV.
+ * Relu à chaque appel du panneau live : le rappel disparaît dès que la fiche est complète.
+ */
+export async function candidateMissing(candidatId: string | null): Promise<('linkedin' | 'cv')[]> {
+  if (!candidatId) return [];
+  const c = await prisma.candidat.findUnique({ where: { id: candidatId }, select: { linkedinUrl: true, cvUrl: true, cvTexte: true } });
+  if (!c) return [];
+  const out: ('linkedin' | 'cv')[] = [];
+  if (!c.linkedinUrl?.trim()) out.push('linkedin');
+  if (!c.cvUrl?.trim() && !c.cvTexte?.trim()) out.push('cv');
+  return out;
 }
 
 export async function updateCall(id: string, who: Requester, body: {
@@ -266,12 +283,13 @@ export async function getSettings(userId: string) {
 
 export async function updateSettings(userId: string, body: { enabled?: boolean; timezone?: string }) {
   if (body.timezone) {
-    try { new Intl.DateTimeFormat('fr-FR', { timeZone: body.timezone }); } catch { throw new ValidationError('Fuseau horaire inconnu'); }
+    // Le fuseau vit sur le profil (User.timezone) : même valeur partout.
+    const tz = normalizeTimeZone(body.timezone);
+    if (!tz) throw new ValidationError('Fuseau horaire inconnu');
+    await prisma.user.update({ where: { id: userId }, data: { timezone: tz } });
   }
-  await prisma.noteUserSettings.upsert({
-    where: { userId },
-    update: { ...(body.enabled !== undefined ? { enabled: body.enabled } : {}), ...(body.timezone ? { timezone: body.timezone } : {}) },
-    create: { userId, enabled: body.enabled ?? true, ...(body.timezone ? { timezone: body.timezone } : {}) },
-  });
+  if (body.enabled !== undefined) {
+    await prisma.noteUserSettings.upsert({ where: { userId }, update: { enabled: body.enabled }, create: { userId, enabled: body.enabled } });
+  }
   return getSettings(userId);
 }
