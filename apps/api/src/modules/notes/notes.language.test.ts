@@ -38,3 +38,26 @@ describe('brief email labels', () => {
     expect(missingLabel('CV du candidat', 'fr')).toBe('CV du candidat');
   });
 });
+
+describe('caption language check', () => {
+  it('re-transcribes when the caption language was guessed or turned out wrong', async () => {
+    const { captionsMayBeWrong } = await import('./notes.scheduler.js');
+    expect(captionsMayBeWrong({ captionsLanguage: 'fr', captionsGuessed: true, language: null })).toBe(true);
+    expect(captionsMayBeWrong({ captionsLanguage: 'fr', captionsGuessed: false, language: 'en' })).toBe(true);
+    expect(captionsMayBeWrong({ captionsLanguage: 'en', captionsGuessed: false, language: 'en' })).toBe(false);
+    expect(captionsMayBeWrong({ captionsLanguage: null, captionsGuessed: false, language: 'en' })).toBe(false);
+  });
+});
+
+describe('post-call notes markdown', () => {
+  it('uses the writing language for headings and colon spacing', async () => {
+    const { renderMarkdown } = await import('./notes.finalize.js');
+    const q = { ...newQuestion('Notice period?', true), status: 'partial' as const, answer: '1 month' };
+    const n = { language: 'fr' as const, summary: 'S', sections: [], answers: [], dealbreakers: [], person: {}, qualif: {}, company: {}, mandat: {}, nextStep: {}, actions: [] };
+    const en = renderMarkdown('QUALIF', 'T', [q], n, 'en');
+    expect(en).toContain('## Questions not covered');
+    expect(en).toContain('**Dealbreaker**: Notice period? (partial: 1 month)');
+    const fr = renderMarkdown('QUALIF', 'T', [q], n, 'fr');
+    expect(fr).toContain('**Dealbreaker** : Notice period? (partiel : 1 month)');
+  });
+});

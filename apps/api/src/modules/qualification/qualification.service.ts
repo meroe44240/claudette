@@ -1,6 +1,7 @@
 import prisma from '../../lib/db.js';
 import { NotFoundError, ValidationError } from '../../lib/errors.js';
 import { callClaude } from '../../services/claudeAI.js';
+import { getUserLocale, promptLanguageLine } from '../../lib/locale.js';
 
 /**
  * Carte de qualification (socle standard) d'un candidat.
@@ -82,7 +83,7 @@ async function gatherTranscripts(candidatId: string): Promise<{ text: string; co
   return { text: parts.join('\n\n---\n\n'), count };
 }
 
-const FILL_SYSTEM = `Tu es un assistant recruteur. À partir des transcriptions d'appels et d'entretiens fournies, tu remplis une fiche de qualification standardisée sur LE CANDIDAT. Pour chaque champ, réponds UNIQUEMENT avec ce qui est dit ou fortement impliqué par les transcriptions. Si un champ n'est pas couvert, mets null. Sois factuel et concis (une phrase ou une liste courte). Conserve les CHIFFRES (montants, quotas, ARR, pourcentages, durées de cycle) tels quels. Réponds en français.`;
+const FILL_SYSTEM = `Tu es un assistant recruteur. À partir des transcriptions d'appels et d'entretiens fournies, tu remplis une fiche de qualification standardisée sur LE CANDIDAT. Pour chaque champ, réponds UNIQUEMENT avec ce qui est dit ou fortement impliqué par les transcriptions. Si un champ n'est pas couvert, mets null. Sois factuel et concis (une phrase ou une liste courte). Conserve les CHIFFRES (montants, quotas, ARR, pourcentages, durées de cycle) tels quels.`;
 
 /** Remplit les champs IA du socle depuis les transcripts du candidat. Préserve les champs `manuel`. */
 export async function fillFromTranscripts(candidatId: string, userId: string) {
@@ -103,7 +104,7 @@ ${AI_FIELDS.map((f) => `- ${f.key} : ${f.label} (${f.hint})`).join('\n')}
 Retourne UNIQUEMENT ce JSON, sans texte autour :
 { "fields": { ${AI_FIELDS.map((f) => `"${f.key}": "<valeur ou null>"`).join(', ')} } }`;
 
-  const response = await callClaude({ feature: 'qualif_fill', systemPrompt: FILL_SYSTEM, userPrompt, maxTokens: 2048, temperature: 0, userId });
+  const response = await callClaude({ feature: 'qualif_fill', systemPrompt: `${FILL_SYSTEM}\n${promptLanguageLine((await getUserLocale(userId)).lang, 'les réponses')}`, userPrompt, maxTokens: 2048, temperature: 0, userId });
   const raw = (response as any).content ?? (response as any).rawText ?? '';
   let parsed: { fields?: Record<string, string | null> };
   try {
@@ -172,7 +173,7 @@ ${transcripts.slice(0, 20000)}
 
 Retourne UNIQUEMENT ce JSON : { "fields": { "fitPoste": "<...ou null>", "nextSteps": "<...ou null>" } }`;
 
-  const response = await callClaude({ feature: 'qualif_fit', systemPrompt: FILL_SYSTEM, userPrompt, maxTokens: 1024, temperature: 0, userId });
+  const response = await callClaude({ feature: 'qualif_fit', systemPrompt: `${FILL_SYSTEM}\n${promptLanguageLine((await getUserLocale(userId)).lang, 'les réponses')}`, userPrompt, maxTokens: 1024, temperature: 0, userId });
   const raw = (response as any).content ?? (response as any).rawText ?? '';
   let parsed: { fields?: Record<string, string | null> };
   try { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; }

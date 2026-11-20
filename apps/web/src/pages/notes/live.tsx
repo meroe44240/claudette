@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router';
 import { AlertTriangle, Check, ClipboardList, CircleDashed, CircleDot, Clock, Loader2, MessageCircleQuestion, Pin, Radio, Square, UserX, X } from 'lucide-react';
 import { api } from '../../lib/api-client';
-import { t } from '../../lib/i18n';
+import { t, COLON } from '../../lib/i18n';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { typeLabel, type LiveAlert, type NoteQuestion, type QStatus, type PropiumLink } from './shared';
 
@@ -126,7 +126,7 @@ export default function NotesLivePanel() {
         {(data.alerts || []).slice().reverse().slice(0, 3).map((a) => (
           <div key={a.id} className={`flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm ${a.kind === 'CONTRADICTION' ? 'bg-amber-50 text-amber-900' : 'bg-[#EAE8F7] text-[#22177A]'}`}>
             {a.kind === 'CONTRADICTION' ? <AlertTriangle size={15} className="mt-0.5 shrink-0" /> : <MessageCircleQuestion size={15} className="mt-0.5 shrink-0" />}
-            <div className="flex-1"><span className="font-semibold">{a.kind === 'CONTRADICTION' ? t('Écart avec le dossier') : t('Relance')} : </span>{a.text}</div>
+            <div className="flex-1"><span className="font-semibold">{a.kind === 'CONTRADICTION' ? t('Écart avec le dossier') : t('Relance')}{COLON} </span>{a.text}</div>
             <button onClick={() => dismiss.mutate(a.id)} className="opacity-50 hover:opacity-100"><X size={14} /></button>
           </div>
         ))}

@@ -11,4 +11,10 @@ WHERE n."user_id" = u."id" AND u."timezone" IS NULL AND n."timezone" <> 'Europe/
 -- Max Anderson : anglais, heure de Ho Chi Minh.
 UPDATE "users"
 SET "preferred_language" = 'en', "timezone" = 'Asia/Ho_Chi_Minh'
-WHERE lower(trim("prenom")) = 'max' AND lower(trim("nom")) = 'anderson';
+WHERE "id" = 'f6176f9c-9c66-4891-9572-7e4bb03e9c0e'
+   OR (lower(trim("prenom")) = 'max' AND lower(trim("nom")) = 'anderson');
+
+-- Langue des sous-titres donnée au bot : si elle était devinée ou s'avère fausse,
+-- l'audio est retranscrit (langue détectée) avant d'écrire les notes.
+ALTER TABLE "note_calls" ADD COLUMN IF NOT EXISTS "captions_language" VARCHAR(5);
+ALTER TABLE "note_calls" ADD COLUMN IF NOT EXISTS "captions_guessed" BOOLEAN NOT NULL DEFAULT false;

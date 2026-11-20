@@ -1242,6 +1242,8 @@ model NoteCall {
   lastAnalyzedAt     DateTime? @map("last_analyzed_at") @db.Timestamptz()
   alerts             Json      @default("[]") // [{ id, kind: RELANCE|CONTRADICTION, questionId, text, at }]
   language           String?   @db.VarChar(5)
+  captionsLanguage   String?   @map("captions_language") @db.VarChar(5) // langue des sous-titres donnée au bot
+  captionsGuessed    Boolean   @default(false) @map("captions_guessed") // langue des sous-titres devinée (non confirmée)
   startedAt          DateTime? @map("started_at") @db.Timestamptz()
   endedAt            DateTime? @map("ended_at") @db.Timestamptz()
   notes              Json? // notes structurées générées après le call

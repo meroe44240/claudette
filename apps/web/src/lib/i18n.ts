@@ -24,6 +24,8 @@ export const lang: Lang = readLang();
 export const isEn = lang === 'en';
 /** Locale pour les dates et les nombres (`toLocaleDateString(LOCALE)`). */
 export const LOCALE = isEn ? 'en-GB' : 'fr-FR';
+/** Deux-points selon la typographie de la langue : « Relance : » / « Follow-up: ». */
+export const COLON = isEn ? ':' : ' :';
 
 const dict: Record<string, string> = isEn ? EN : {};
 

@@ -1,6 +1,7 @@
 import prisma from '../../lib/db.js';
 import { NotFoundError, ValidationError } from '../../lib/errors.js';
 import { callClaude } from '../../services/claudeAI.js';
+import { getUserLocale, promptLanguageLine } from '../../lib/locale.js';
 
 interface Question { id: string; text: string }
 interface Answer { questionId: string; answer: string | null; source: string; filledAt: string }
@@ -37,7 +38,7 @@ export async function setMandatTrame(mandatId: string, questions: Question[]) {
 }
 
 // ── Auto-remplissage IA depuis les transcripts ──────
-const FILL_SYSTEM = `Tu es un assistant recruteur. À partir des transcriptions d'appels et d'entretiens fournies, tu réponds à une liste de questions de qualification portant sur LE CANDIDAT. Réponds uniquement avec ce qui est dit ou fortement impliqué par les transcriptions. Si une question n'a pas de réponse dans les transcriptions, mets "answer": null. Sois factuel, concis (1-2 phrases max par réponse), en français.`;
+const FILL_SYSTEM = `Tu es un assistant recruteur. À partir des transcriptions d'appels et d'entretiens fournies, tu réponds à une liste de questions de qualification portant sur LE CANDIDAT. Réponds uniquement avec ce qui est dit ou fortement impliqué par les transcriptions. Si une question n'a pas de réponse dans les transcriptions, mets "answer": null. Sois factuel, concis (1-2 phrases max par réponse).`;
 
 export async function fillTrame(candidatureId: string, userId: string) {
   const cand = await prisma.candidature.findUnique({
@@ -82,7 +83,7 @@ ${trame.map((q, i) => `${i + 1}. [${q.id}] ${q.text}`).join('\n')}
 Retourne UNIQUEMENT ce JSON, sans texte autour :
 { "answers": [ { "questionId": "<id de la question>", "answer": "<réponse concise, ou null si non abordé>" } ] }`;
 
-  const response = await callClaude({ feature: 'trame_fill', systemPrompt: FILL_SYSTEM, userPrompt, maxTokens: 2048, temperature: 0, userId });
+  const response = await callClaude({ feature: 'trame_fill', systemPrompt: `${FILL_SYSTEM}\n${promptLanguageLine((await getUserLocale(userId)).lang, 'les réponses')}`, userPrompt, maxTokens: 2048, temperature: 0, userId });
   const raw = (response as any).content ?? (response as any).rawText ?? '';
   let parsed: { answers?: { questionId: string; answer: string | null }[] };
   try {

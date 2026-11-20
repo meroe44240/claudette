@@ -172,8 +172,9 @@ export async function scheduleBots(): Promise<void> {
         // puis indices du titre et des questions, et enfin la langue du membre (plus de français par défaut).
         const known = await resolveCallLanguage(c);
         if (!known && c.startAt.getTime() - now > 15 * 60_000) continue;
-        const bot = await recall.createBot({ noteCallId: c.id, webhookSecret: c.webhookSecret, meetingUrl: c.meetingUrl, joinAt: new Date(c.startAt.getTime() - 60_000), language: known ?? guessLanguageFromText(c, (await getUserLocale(c.userId)).lang) });
-        await prisma.noteCall.update({ where: { id: c.id }, data: { recallBotId: bot.id } });
+        const captions = known ?? guessLanguageFromText(c, (await getUserLocale(c.userId)).lang);
+        const bot = await recall.createBot({ noteCallId: c.id, webhookSecret: c.webhookSecret, meetingUrl: c.meetingUrl, joinAt: new Date(c.startAt.getTime() - 60_000), language: captions });
+        await prisma.noteCall.update({ where: { id: c.id }, data: { recallBotId: bot.id, captionsLanguage: captions, captionsGuessed: !known } });
       }
     } catch (err) {
       console.error(`[Notes] Bot ${c.id}:`, (err as Error).message);
@@ -218,13 +219,13 @@ export async function applyBotStatus(callId: string, code: string | null, bot?: 
     }
     const endedAt = c.endedAt ?? new Date();
     if (!c.endedAt) await prisma.noteCall.update({ where: { id: callId }, data: { endedAt } });
-    if (isThin(current, c.startedAt, endedAt)) {
-      // Sous-titres quasi vides (souvent : langue des sous-titres différente de celle parlée).
-      // On attend l'enregistrement terminé puis on fait retranscrire l'audio.
+    if (isThin(current, c.startedAt, endedAt) || captionsMayBeWrong(c)) {
+      // Sous-titres quasi vides, ou dans une langue devinée ou différente de celle parlée :
+      // on attend l'enregistrement terminé puis on fait retranscrire l'audio (langue détectée).
       if (code === 'call_ended') return;
       const recId = bot ? recall.recordingId(bot) : null;
       if (recId) {
-        void retranscribe(callId, recId);
+        void retranscribe(callId, recId, captionsMayBeWrong(c));
         return;
       }
     }
@@ -246,6 +247,15 @@ async function dropMedia(callId: string): Promise<void> {
 const retranscribing = new Set<string>();
 const textLength = (segs: { text: string }[]) => segs.reduce((n, s) => n + (s.text?.length || 0), 0);
 
+/**
+ * Les sous-titres du bot sont peut-être dans la mauvaise langue : langue devinée faute de mieux,
+ * ou différente de la langue du call connue à la fin (choisie par le membre ou détectée en live).
+ */
+export function captionsMayBeWrong(c: { captionsLanguage: string | null; captionsGuessed: boolean; language: string | null }): boolean {
+  if (!c.captionsLanguage) return false;
+  return c.captionsGuessed || (!!c.language && c.language !== c.captionsLanguage);
+}
+
 /** Moins de 100 caractères par minute de call : les sous-titres n'ont presque rien capté. */
 function isThin(segs: TranscriptSegment[], startedAt: Date | null, endedAt: Date): boolean {
   if (!startedAt) return false;
@@ -254,7 +264,8 @@ function isThin(segs: TranscriptSegment[], startedAt: Date | null, endedAt: Date
 }
 
 /** Transcription complète de l'audio après le call (langue détectée), puis notes. */
-async function retranscribe(callId: string, recId: string): Promise<void> {
+/** `preferNew` : sous-titres suspects (mauvaise langue) ; la transcription de l'audio l'emporte dès qu'elle a du contenu. */
+async function retranscribe(callId: string, recId: string, preferNew = false): Promise<void> {
   retranscribing.add(callId);
   try {
     const job = await recall.createAsyncTranscript(recId);
@@ -265,7 +276,7 @@ async function retranscribe(callId: string, recId: string): Promise<void> {
       if (res.status === 'processing') continue;
       const c = await prisma.noteCall.findUnique({ where: { id: callId }, select: { transcript: true } });
       const current = (c?.transcript as unknown as TranscriptSegment[]) || [];
-      if (res.status === 'done' && textLength(res.segments) > textLength(current)) {
+      if (res.status === 'done' && (preferNew ? textLength(res.segments) >= 100 : textLength(res.segments) > textLength(current))) {
         await prisma.noteCall.update({
           where: { id: callId },
           data: { transcript: res.segments as any, ...(res.language ? { language: res.language } : {}) },
