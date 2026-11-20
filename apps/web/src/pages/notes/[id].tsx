@@ -417,7 +417,7 @@ function Results({ call }: { call: CallDetail }) {
         )}
         {call.duplicateFlags.length > 0 && (
           <div className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-            {call.duplicateFlags.map((d, i) => <div key={i}><a href={new URL(d.url).pathname} className="font-medium underline">{d.label}</a> : {d.reason}</div>)}
+            {call.duplicateFlags.map((d, i) => <div key={i}><a href={new URL(d.url).pathname} className="font-medium underline">{d.label}</a>{COLON} {d.reason}</div>)}
           </div>
         )}
       </div>

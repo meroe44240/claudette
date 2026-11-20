@@ -50,9 +50,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: cd apps/api && npx prisma generate
-      # Les migrations sont en retard sur schema.prisma : la base de test est
-      # construite directement depuis le schéma.
-      - run: cd apps/api && npx prisma db push --skip-generate
+      # La base de test est construite par les migrations (comme la production), puis on
+      # vérifie qu'elles couvrent tout schema.prisma : un oubli de migration fait échouer la CI.
+      - run: cd apps/api && npx prisma migrate deploy
+      - run: cd apps/api && npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
       - run: cd apps/api && npx vitest run
 
   build:

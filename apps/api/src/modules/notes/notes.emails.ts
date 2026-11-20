@@ -4,6 +4,7 @@ import prisma from '../../lib/db.js';
 import { escapeHtml, renderBrandedEmail, sendEmail } from '../../lib/mailer.js';
 import { callReplyCode, dayReplyCode, REPLY_HINT_HTML, REPLY_HINT_HTML_FR, replyAddress } from './notes.reply.js';
 import { formatDateTime, formatLongDate, formatTime, getUserLocale, localeOf, type Lang, type UserLocale } from '../../lib/locale.js';
+import { localizeFlags, notesMessage } from './notes.messages.js';
 import { appUrl, CALL_TYPES, type Attendee, type CallType, type NoteQuestion, type PropiumLink } from './notes.types.js';
 
 const FROM = () => process.env.NOTES_FROM || undefined;
@@ -127,19 +128,23 @@ function linksHtml(links: PropiumLink[], lang: Lang): string {
   </div>`;
 }
 
-/** Notes après le call : cadre dans la langue de chaque destinataire, heure dans son fuseau. */
-export async function sendNotesEmail(call: any): Promise<void> {
+/**
+ * Notes après le call : dans la langue de chaque destinataire, heure dans son fuseau.
+ * `markdownByLang` : notes rédigées par langue ; à défaut, celles du call (langue du propriétaire).
+ */
+export async function sendNotesEmail(call: any, markdownByLang: Partial<Record<Lang, string>> = {}): Promise<void> {
   const to = await recipients(call);
   const links = (call.propiumLinks as PropiumLink[]) || [];
   const mainLink = links.find((l) => l.kind !== 'TACHE');
-  const dups = (call.duplicateFlags as any[]) || [];
   for (const u of to) {
     const loc = localeOf(u);
     const L = TXT[loc.lang];
+    const dups = localizeFlags(call.duplicateFlags as any[], loc.lang);
     const titre = call.titre || L.untitled;
+    const md: string = markdownByLang[loc.lang] ?? call.notesMarkdown ?? '';
     const body = `
     <p style="margin:0 0 12px 0;color:${C.muted};">${escapeHtml(CALL_TYPE_LABEL[loc.lang][call.callType as CallType])} · ${escapeHtml(formatDateTime(call.startAt, loc))}</p>
-    ${mdToHtml(call.notesMarkdown || '')}
+    ${mdToHtml(md)}
     ${linksHtml(links, loc.lang)}
     ${dups.length ? `<p style="margin-top:14px;color:${C.warn};">${escapeHtml(L.toCheck)} ${dups.map((d) => escapeHtml(d.reason)).join(' ')}</p>` : ''}
     ${call.callType !== 'INTERNE' ? L.replyHint : ''}`;
@@ -149,7 +154,7 @@ export async function sendNotesEmail(call: any): Promise<void> {
       bodyHtml: body,
       cta: mainLink ? { label: L.openPropium, href: mainLink.url } : { label: L.viewCall, href: `${appUrl()}/notes/${call.id}` },
     });
-    await sendEmail(u.email, L.notesTitle(titre), html, call.notesMarkdown || undefined, { from: FROM(), replyTo: call.callType !== 'INTERNE' ? replyAddress(u.email, callReplyCode(call.id)) : undefined });
+    await sendEmail(u.email, L.notesTitle(titre), html, md || undefined, { from: FROM(), replyTo: call.callType !== 'INTERNE' ? replyAddress(u.email, callReplyCode(call.id)) : undefined });
   }
 }
 
@@ -204,7 +209,7 @@ function todaySection(calls: any[], lang: Lang): string {
   const dbs = calls
     .map((c) => ({ c, q: ((c.questions as NoteQuestion[]) || []).filter((q) => q.dealbreaker && q.status !== 'covered') }))
     .filter((x) => x.q.length && x.c.status === 'DONE');
-  const dups = calls.flatMap((c) => (c.duplicateFlags as any[]) || []);
+  const dups = calls.flatMap((c) => localizeFlags(c.duplicateFlags as any[], lang));
   const failed = calls.filter((c) => c.status === 'FAILED');
   return `
     <p><strong>${plural(calls.length, L.calls)}</strong>${L.colon} ${counts.map(([t, n]) => `${n} ${escapeHtml(CALL_TYPE_LABEL[lang][t].toLowerCase())}`).join(', ')}.</p>
@@ -221,7 +226,7 @@ function tomorrowSection(calls: any[], loc: UserLocale): string {
     const att = ((c.attendees as Attendee[]) || []).filter((a) => a.role !== 'internal').map((a) => a.name || a.email).join(', ') || L.internal;
     const ficheUrl = c.candidatId ? `${appUrl()}/candidats/${c.candidatId}` : c.clientId ? `${appUrl()}/clients/${c.clientId}` : c.mandatId ? `${appUrl()}/mandats/${c.mandatId}` : null;
     const choose = c.needsReview
-      ? `<div style="margin-top:6px;color:${C.warn};">${escapeHtml(L.pickType)}${c.reviewReason ? `${L.colon} ${escapeHtml(c.reviewReason)}` : ''}</div>
+      ? `<div style="margin-top:6px;color:${C.warn};">${escapeHtml(L.pickType)}${c.reviewReason ? `${L.colon} ${escapeHtml(notesMessage(c.reviewReason, loc.lang))}` : ''}</div>
          <div style="margin-top:4px;">${CALL_TYPES.map((t) => `<a href="${appUrl()}/notes/${c.id}?type=${t}" style="${pillStyle}">${escapeHtml(CALL_TYPE_LABEL[loc.lang][t])}</a>`).join('')}</div>`
       : '';
     const missing: string[] = c._missing || [];

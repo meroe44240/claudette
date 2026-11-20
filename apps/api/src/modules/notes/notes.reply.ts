@@ -263,7 +263,7 @@ async function applyDirect(a: Action, call: any, userId: string, lang: Lang): Pr
   if (a.type === 'add_note') {
     const entiteId = a.target === 'CANDIDAT' ? call.candidatId : a.target === 'MANDAT' ? call.mandatId : call.clientId;
     if (!entiteId || !a.text?.trim()) return null;
-    await prisma.activite.create({ data: { type: 'NOTE', titre: 'Note (réponse email)', contenu: a.text.trim(), source: 'AGENT_IA', entiteType: a.target, entiteId, userId, metadata: { source: 'humanup_notes_reply', noteCallId: call.id } } });
+    await prisma.activite.create({ data: { type: 'NOTE', titre: lang === 'en' ? 'Note (email reply)' : 'Note (réponse email)', contenu: a.text.trim(), source: 'AGENT_IA', entiteType: a.target, entiteId, userId, metadata: { source: 'humanup_notes_reply', noteCallId: call.id } } });
     const path = a.target === 'CANDIDAT' ? 'candidats' : a.target === 'MANDAT' ? 'mandats' : 'clients';
     return { label: `${L.note}${L.colon} ${a.text.trim().slice(0, 140)}`, url: `${appUrl()}/${path}/${entiteId}` };
   }

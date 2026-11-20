@@ -61,3 +61,15 @@ describe('post-call notes markdown', () => {
     expect(fr).toContain('**Dealbreaker** : Notice period? (partiel : 1 month)');
   });
 });
+
+describe('stored call messages', () => {
+  it('are shown in the reader language, including messages with values', async () => {
+    const { notesMessage } = await import('./notes.messages.js');
+    expect(notesMessage('Mandat lié inconnu : choisissez le mandat de cette qualif.', 'en')).toBe('Linked mandate unknown: pick the mandate for this qualification.');
+    expect(notesMessage('Correspondance par le nom uniquement (1 fiche possible) : fiche existante mise à jour, à vérifier.', 'en')).toBe('Matched by name only (1 possible profile): existing profile updated, please check.');
+    expect(notesMessage('Le bot n’a pas pu rejoindre le call (meeting_not_found).', 'en')).toBe('The bot couldn’t join the call (meeting_not_found).');
+    expect(notesMessage('Erreur : timeout', 'en')).toBe('Error: timeout');
+    expect(notesMessage('Mandat lié inconnu : choisissez le mandat de cette qualif.', 'fr')).toContain('Mandat lié inconnu');
+    expect(notesMessage(null, 'en')).toBeNull();
+  });
+});

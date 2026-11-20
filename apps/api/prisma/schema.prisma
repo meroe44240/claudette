@@ -333,6 +333,9 @@ model Mandat {
   contractApprovals   ContractApproval[]
   portalAccesses      PortalAccess[]         @relation("PortalAccessMandat")
 
+  @@index([sourceurId])
+  @@index([salesId])
+  @@index([recruteurId])
   @@map("mandats")
 }
 

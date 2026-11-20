@@ -4,7 +4,7 @@ import prisma from '../../lib/db.js';
 import { callClaude } from '../../services/claudeAI.js';
 import { aiAvailable as isAiConfigured } from './notes.types.js';
 import { buildContext } from './notes.context.js';
-import { getUserLocale, promptLanguageLine, type Lang } from '../../lib/locale.js';
+import { getUserLocale, localeOf, promptLanguageLine, type Lang } from '../../lib/locale.js';
 import { sendNotesEmail } from './notes.emails.js';
 import { isInternalEmail, PUBLIC_DOMAINS } from './notes.detect.js';
 import { appUrl, CALL_TYPE_LABEL, type Attendee, type CallType, type NoteQuestion, type PropiumLink, type TranscriptSegment } from './notes.types.js';
@@ -35,7 +35,7 @@ export async function finalizeCall(callId: string): Promise<void> {
     let duplicates: any[] = [];
     let tasks: any[] = [];
     try {
-      ({ links, duplicates, tasks } = await writeToPropium({ ...call, questions }, notes, markdown, transcript));
+      ({ links, duplicates, tasks } = await writeToPropium({ ...call, questions }, notes, markdown, transcript, writeLang));
     } catch (err) {
       console.error(`[Notes] Écriture Propium ${callId}:`, err);
       duplicates.push({ label: 'Écriture Propium', reason: `Erreur : ${(err as Error).message}`, url: `${appUrl()}/notes/${callId}` });
@@ -55,7 +55,21 @@ export async function finalizeCall(callId: string): Promise<void> {
       },
     });
 
-    await sendNotesEmail(updated).catch((err) => console.error('[Notes] Email notes:', (err as Error).message));
+    // Membres du call dans une autre langue : notes rédigées directement dans leur langue pour l'email
+    // (une génération par langue supplémentaire ; Propium garde la version du propriétaire).
+    const markdownByLang: Partial<Record<Lang, string>> = { [writeLang]: markdown };
+    const memberLangs = await membersLanguages(call);
+    for (const lang of memberLangs) {
+      if (markdownByLang[lang]) continue;
+      try {
+        const other = await generateNotes(call, transcript, lang);
+        const qs = mergeFinalAnswers((call.questions as unknown as NoteQuestion[]) || [], other);
+        markdownByLang[lang] = renderMarkdown(call.callType as CallType, call.titre, qs, other, lang);
+      } catch (err) {
+        console.error(`[Notes] Notes en ${lang} ${callId}:`, (err as Error).message);
+      }
+    }
+    await sendNotesEmail(updated, markdownByLang).catch((err) => console.error('[Notes] Email notes:', (err as Error).message));
     await prisma.noteCall.update({ where: { id: callId }, data: { notesSentAt: new Date() } });
   } catch (err) {
     console.error(`[Notes] Finalisation ${callId}:`, err);
@@ -63,6 +77,13 @@ export async function finalizeCall(callId: string): Promise<void> {
   } finally {
     finalizing.delete(callId);
   }
+}
+
+/** Langues des membres actifs du call (propriétaire et invités Humanup). */
+async function membersLanguages(call: { userId: string; memberIds: string[] }): Promise<Lang[]> {
+  const ids = [call.userId, ...(call.memberIds || [])];
+  const users = await prisma.user.findMany({ where: { id: { in: ids }, status: 'ACTIVE' }, select: { preferredLanguage: true, timezone: true } });
+  return [...new Set(users.map((u) => localeOf(u).lang))];
 }
 
 // ─── Génération des notes ────────────────────────────
@@ -239,7 +260,8 @@ function dueDate(s: string | null | undefined, fallbackDays: number): Date {
   return f;
 }
 
-async function writeToPropium(call: any, n: GeneratedNotes, markdown: string, transcript: TranscriptSegment[]) {
+/** `lang` : langue du membre propriétaire ; les titres des activités créées dans Propium sont dans sa langue, comme les notes. */
+async function writeToPropium(call: any, n: GeneratedNotes, markdown: string, transcript: TranscriptSegment[], lang: Lang) {
   const type = call.callType as CallType;
   const links: PropiumLink[] = [];
   const duplicates: { label: string; reason: string; url: string }[] = [];
@@ -248,15 +270,19 @@ async function writeToPropium(call: any, n: GeneratedNotes, markdown: string, tr
   const attendees = ((call.attendees as Attendee[]) || []).filter((a) => !isInternalEmail(a.email));
   const main = attendees.find((a) => a.role === 'candidat' || a.role === 'client' || a.role === 'lead') || attendees[0];
   const email = (clean(n.person?.email) || main?.email || '').toLowerCase() || null;
-  const dateLabel = new Date(call.startAt).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
+  const { timezone } = await getUserLocale(ownerId);
+  const dateLabel = new Date(call.startAt).toLocaleDateString(lang === 'en' ? 'en-GB' : 'fr-FR', { timeZone: timezone });
+  const T = lang === 'en'
+    ? { notes: 'Video call notes: ', transcript: 'Video call transcript, ', intake: 'Intake: ' }
+    : { notes: 'Notes visio : ', transcript: 'Transcript visio du ', intake: 'Intake : ' };
   const meta = { source: 'humanup_notes', noteCallId: call.id };
 
   const addActivities = async (entiteType: 'CANDIDAT' | 'CLIENT' | 'MANDAT', entiteId: string) => {
     await prisma.activite.create({
-      data: { type: 'MEETING', entiteType, entiteId, userId: ownerId, titre: `Notes visio : ${call.titre}`.slice(0, 500), contenu: markdown, source: 'AGENT_IA', metadata: meta },
+      data: { type: 'MEETING', entiteType, entiteId, userId: ownerId, titre: `${T.notes}${call.titre}`.slice(0, 500), contenu: markdown, source: 'AGENT_IA', metadata: meta },
     });
     await prisma.activite.create({
-      data: { type: 'TRANSCRIPT', entiteType, entiteId, userId: ownerId, titre: `Transcript visio du ${dateLabel}`, contenu: transcriptText(transcript), source: 'AGENT_IA', metadata: meta },
+      data: { type: 'TRANSCRIPT', entiteType, entiteId, userId: ownerId, titre: `${T.transcript}${dateLabel}`, contenu: transcriptText(transcript), source: 'AGENT_IA', metadata: meta },
     });
   };
 
@@ -373,7 +399,7 @@ async function writeToPropium(call: any, n: GeneratedNotes, markdown: string, tr
         links.push(link('MANDAT', m.id, m.titrePoste, 'created'));
         await prisma.noteCall.update({ where: { id: call.id }, data: { mandatId: m.id } });
       }
-      if (mandatId) await prisma.activite.create({ data: { type: 'MEETING', entiteType: 'MANDAT', entiteId: mandatId, userId: ownerId, titre: `Intake : ${call.titre}`.slice(0, 500), contenu: markdown, source: 'AGENT_IA', metadata: meta } });
+      if (mandatId) await prisma.activite.create({ data: { type: 'MEETING', entiteType: 'MANDAT', entiteId: mandatId, userId: ownerId, titre: `${T.intake}${call.titre}`.slice(0, 500), contenu: markdown, source: 'AGENT_IA', metadata: meta } });
       if (n.nextStep?.text) await createTask(n.nextStep.text, dueDate(n.nextStep.dueDate, 2), { entiteType: 'CLIENT', entiteId: cl.id });
       await prisma.noteCall.update({ where: { id: call.id }, data: { clientId: cl.id } });
     }
