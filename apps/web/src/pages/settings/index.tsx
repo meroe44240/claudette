@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Trash2, Plug, Settings, Users, Puzzle, GitBranch, Bell, Sparkles, Eye, EyeOff, CheckCircle2, Loader2, CalendarCheck, Copy, KeyRound } from 'lucide-react';
+import { Plus, Trash2, Plug, Settings, Users, Puzzle, GitBranch, Bell, Sparkles, Eye, EyeOff, CheckCircle2, Loader2, CalendarCheck, Copy, KeyRound, UserCircle } from 'lucide-react';
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
 import PageHeader from '../../components/ui/PageHeader';
+import ProfilePreferences from '../../components/settings/ProfilePreferences';
 import Table from '../../components/ui/Table';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
@@ -73,9 +74,10 @@ const roleBadgeVariant: Record<string, 'info' | 'warning'> = {
   RECRUTEUR: 'info',
 };
 
-type SettingsSection = 'general' | 'equipe' | 'integrations' | 'pipeline' | 'notifications' | 'booking';
+type SettingsSection = 'profil' | 'general' | 'equipe' | 'integrations' | 'pipeline' | 'notifications' | 'booking';
 
 const sidebarItems: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
+  { id: 'profil', label: t('Mon profil'), icon: <UserCircle size={16} /> },
   { id: 'general', label: t('Général'), icon: <Settings size={16} /> },
   { id: 'equipe', label: t('Équipe'), icon: <Users size={16} /> },
   { id: 'integrations', label: t('Intégrations'), icon: <Puzzle size={16} /> },
@@ -88,7 +90,7 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const [activeSection, setActiveSection] = useState<SettingsSection>('general');
+  const [activeSection, setActiveSection] = useState<SettingsSection>('profil');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [resetPwdUser, setResetPwdUser] = useState<User | null>(null);
@@ -533,10 +535,8 @@ export default function SettingsPage() {
     return (
       <div>
         <PageHeader title={t('Paramètres')} breadcrumbs={[{ label: t('Paramètres') }]} />
-        <EmptyState
-          title={t('Accès restreint')}
-          description={t('Seuls les administrateurs peuvent accéder à cette page.')}
-        />
+        {/* Hors admin : seulement ses propres préférences. */}
+        <div className="max-w-[720px]"><ProfilePreferences /></div>
       </div>
     );
   }
@@ -598,6 +598,8 @@ export default function SettingsPage() {
 
         {/* Content */}
         <motion.div className="max-w-[720px] flex-1" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          {activeSection === 'profil' && <ProfilePreferences />}
+
           {/* General section */}
           {activeSection === 'general' && (
             <div className="space-y-6">

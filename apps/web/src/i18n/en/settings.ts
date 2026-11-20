@@ -216,4 +216,8 @@ export const settings: Record<string, string> = {
   "La clé Allo ne « expire » pas comme Gmail : une fois posée, c'est bon durablement.": "The Allo key doesn't \"expire\" like Gmail: once it's set, you're good for the long run.",
   'Ça bloque ?': 'Stuck?',
   "Si la fenêtre Google se ferme sans rien, vérifie que tu es déconnecté d'un compte perso Google, puis réessaie. Pour Allo, si la clé est refusée, re-copie-la sans espace. En cas de souci, préviens l'admin.": "If the Google window closes without doing anything, make sure you're signed out of any personal Google account, then try again. For Allo, if the key is rejected, copy it again without spaces. If problems persist, let the admin know.",
+  'Mon profil': 'My profile',
+  'Préférences enregistrées': 'Preferences saved',
+  'Votre langue et votre fuseau : interface, emails (briefs, notes, récaps) et contenus générés par l’IA.': 'Your language and time zone: the interface, emails (briefs, notes, recaps) and AI-generated content.',
+  'Heure actuelle dans ce fuseau : {time}': 'Current time in this zone: {time}',
 };

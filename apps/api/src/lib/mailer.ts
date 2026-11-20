@@ -121,7 +121,7 @@ export function renderBrandedEmail(opts: BrandedEmailOptions): string {
           </td>
           <td style="padding-left:12px;vertical-align:middle;">
             <div style="font-family:${FONT_DISPLAY};font-size:15px;letter-spacing:0.08em;text-transform:uppercase;color:${BRAND.highlight};line-height:1;">HUMANUP</div>
-            <div style="margin-top:4px;font-family:${FONT_BODY};font-size:11px;color:#c4c1d0;letter-spacing:0.14em;text-transform:uppercase;opacity:0.85;">Recruitment Agency</div>
+            <div style="margin-top:4px;font-family:${FONT_BODY};font-size:11px;color:#c4c1d0;letter-spacing:0.14em;text-transform:uppercase;opacity:0.85;">${lang === 'en' ? 'Recruitment Agency' : 'Cabinet de recrutement'}</div>
           </td>
         </tr>
       </table>

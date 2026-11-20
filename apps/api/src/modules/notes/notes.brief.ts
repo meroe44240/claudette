@@ -5,7 +5,8 @@ import prisma from '../../lib/db.js';
 import { callClaude } from '../../services/claudeAI.js';
 import { buildContext } from './notes.context.js';
 import { prepareQuestions } from './notes.questions.js';
-import { sendBriefEmail } from './notes.emails.js';
+import { briefRecipients, sendBriefEmail } from './notes.emails.js';
+import { localeOf, promptLanguageLine, type Lang } from '../../lib/locale.js';
 import { resolveCallLanguage } from './notes.language.js';
 import { aiAvailable, CALL_TYPE_LABEL, type CallType, type NoteQuestion } from './notes.types.js';
 
@@ -25,7 +26,11 @@ Entreprise, intitulé, contexte (création de poste, remplacement), package (fix
 Puces courtes, une info par ligne, pas de phrase d'introduction ni de conclusion.
 Réponds UNIQUEMENT en JSON : {"brief":"<markdown>"}`;
 
-export async function generateBrief(callId: string): Promise<{ markdown: string | null; missing: string[] }> {
+/**
+ * Rédige le brief directement dans la langue du membre qui le lit (jamais traduit après coup).
+ * `lang` : langue du destinataire (User.preferredLanguage).
+ */
+export async function generateBrief(callId: string, lang: Lang): Promise<{ markdown: string | null; missing: string[] }> {
   const call = await prisma.noteCall.findUnique({ where: { id: callId } });
   if (!call) throw new Error('Call introuvable');
   const ctx = await buildContext(call);
@@ -35,9 +40,7 @@ export async function generateBrief(callId: string): Promise<{ markdown: string 
       feature: 'notes_brief',
       preferAnthropic: true,
       userId: call.userId,
-      systemPrompt: SYSTEM + (call.language === 'en'
-        ? '\nRédige tout le brief en anglais (titres de sections compris : The role, The candidate, The client, To dig into, Role pitch).'
-        : call.language === 'fr' ? '\nRédige tout le brief en français.' : ''),
+      systemPrompt: `${SYSTEM}\n${promptLanguageLine(lang, 'tout le brief')}${lang === 'en' ? ' Titres de sections en anglais : The role, The candidate, The client, To dig into, Role pitch.' : ''}`,
       userPrompt: `Type de call : ${CALL_TYPE_LABEL[call.callType as CallType]}\nTitre : ${call.titre}\n\nCONTEXTE :\n${ctx.text}`,
       maxTokens: 1500,
       temperature: 0.2,
@@ -50,14 +53,23 @@ export async function generateBrief(callId: string): Promise<{ markdown: string 
   }
 }
 
-/** Prépare les questions si besoin, rédige le brief et l'envoie au(x) membre(s) du call. */
+/**
+ * Prépare les questions si besoin, puis envoie le brief à chaque membre du call :
+ * rédigé dans sa langue, heures dans son fuseau. Une seule génération par langue.
+ */
 export async function sendCallBrief(callId: string, opts: { onlyTo?: string } = {}): Promise<{ sent: number }> {
   let call = await prisma.noteCall.findUnique({ where: { id: callId } });
   if (!call) throw new Error('Call introuvable');
   if (!((call.questions as unknown as NoteQuestion[]) || []).length) call = await prepareQuestions(callId);
   const known = call!.callType !== 'INTERNE' ? await resolveCallLanguage(call!) : null;
-  const { markdown, missing } = await generateBrief(callId);
-  if (call!.callType !== 'INTERNE') (call as any)._askLanguage = !known;
-  const sent = await sendBriefEmail(call!, markdown, missing, opts.onlyTo);
+  const to = await briefRecipients(call!, opts.onlyTo);
+  const byLang = new Map<Lang, Promise<{ markdown: string | null; missing: string[] }>>();
+  let sent = 0;
+  for (const u of to) {
+    const loc = localeOf(u);
+    if (!byLang.has(loc.lang)) byLang.set(loc.lang, generateBrief(callId, loc.lang));
+    const { markdown, missing } = await byLang.get(loc.lang)!;
+    sent += await sendBriefEmail(call!, u, loc, markdown, missing, { askLanguage: call!.callType !== 'INTERNE' && !known });
+  }
   return { sent };
 }

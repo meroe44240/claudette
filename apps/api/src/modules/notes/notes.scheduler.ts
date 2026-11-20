@@ -4,6 +4,7 @@
 //  - toutes les 10 s : cochage live des calls en cours
 //  - chaque nuit : suppression des transcripts de plus de 6 mois
 import prisma from '../../lib/db.js';
+import { getUserLocale, normalizeTimeZone } from '../../lib/locale.js';
 import { getValidAccessToken } from '../integrations/calendar.service.js';
 import { buildContext } from './notes.context.js';
 import { classifyAttendees, detectCall, extractMeetingLink, isInternalEmail, meetingKey } from './notes.detect.js';
@@ -21,8 +22,10 @@ export const RETENTION_DAYS = Number(process.env.NOTES_RETENTION_DAYS || 180);
 const SYNC_AHEAD_HOURS = 36;
 const BOT_SCHEDULE_AHEAD_MS = 3 * 3600_000;
 
+/** Réglages Notes du membre. Le fuseau est celui du profil (User.timezone), source unique. */
 export async function notesUserSettings(userId: string) {
-  return (await prisma.noteUserSettings.findUnique({ where: { userId } })) ?? { userId, enabled: true, timezone: 'Europe/Paris', lastRecapDate: null };
+  const [s, loc] = await Promise.all([prisma.noteUserSettings.findUnique({ where: { userId } }), getUserLocale(userId)]);
+  return { userId, enabled: s?.enabled ?? true, lastRecapDate: s?.lastRecapDate ?? null, timezone: loc.timezone };
 }
 
 /** Membres actifs avec Google connecté et Humanup Notes activé. */
@@ -64,9 +67,9 @@ export async function syncUserCalendar(userId: string, userEmail: string): Promi
   if (!res.ok) throw new Error(`Google Calendar ${res.status}`);
   const data = (await res.json()) as any;
 
-  if (data.timeZone) {
-    await prisma.noteUserSettings.upsert({ where: { userId }, update: { timezone: data.timeZone }, create: { userId, timezone: data.timeZone } });
-  }
+  // Fuseau de l'agenda Google : seulement si le membre n'en a pas encore (son choix prime).
+  const tz = normalizeTimeZone(data.timeZone);
+  if (tz) await prisma.user.updateMany({ where: { id: userId, timezone: null }, data: { timezone: tz } });
 
   let count = 0;
   for (const item of data.items || []) {
@@ -165,11 +168,13 @@ export async function scheduleBots(): Promise<void> {
         await prisma.noteCall.update({ where: { id: c.id }, data: { recallBotId: null } });
       } else if (!off && !c.recallBotId) {
         // Langue connue (choisie ou indicatif du téléphone) : bot programmé tout de suite.
-        // Inconnue : on attend 15 min avant le call pour laisser le membre répondre.
+        // Inconnue : on attend 15 min avant le call pour laisser le membre répondre,
+        // puis indices du titre et des questions, et enfin la langue du membre (plus de français par défaut).
         const known = await resolveCallLanguage(c);
         if (!known && c.startAt.getTime() - now > 15 * 60_000) continue;
-        const bot = await recall.createBot({ noteCallId: c.id, webhookSecret: c.webhookSecret, meetingUrl: c.meetingUrl, joinAt: new Date(c.startAt.getTime() - 60_000), language: known ?? guessLanguageFromText(c) });
-        await prisma.noteCall.update({ where: { id: c.id }, data: { recallBotId: bot.id } });
+        const captions = known ?? guessLanguageFromText(c, (await getUserLocale(c.userId)).lang);
+        const bot = await recall.createBot({ noteCallId: c.id, webhookSecret: c.webhookSecret, meetingUrl: c.meetingUrl, joinAt: new Date(c.startAt.getTime() - 60_000), language: captions });
+        await prisma.noteCall.update({ where: { id: c.id }, data: { recallBotId: bot.id, captionsLanguage: captions, captionsGuessed: !known } });
       }
     } catch (err) {
       console.error(`[Notes] Bot ${c.id}:`, (err as Error).message);
@@ -214,13 +219,13 @@ export async function applyBotStatus(callId: string, code: string | null, bot?: 
     }
     const endedAt = c.endedAt ?? new Date();
     if (!c.endedAt) await prisma.noteCall.update({ where: { id: callId }, data: { endedAt } });
-    if (isThin(current, c.startedAt, endedAt)) {
-      // Sous-titres quasi vides (souvent : langue des sous-titres différente de celle parlée).
-      // On attend l'enregistrement terminé puis on fait retranscrire l'audio.
+    if (isThin(current, c.startedAt, endedAt) || captionsMayBeWrong(c)) {
+      // Sous-titres quasi vides, ou dans une langue devinée ou différente de celle parlée :
+      // on attend l'enregistrement terminé puis on fait retranscrire l'audio (langue détectée).
       if (code === 'call_ended') return;
       const recId = bot ? recall.recordingId(bot) : null;
       if (recId) {
-        void retranscribe(callId, recId);
+        void retranscribe(callId, recId, captionsMayBeWrong(c));
         return;
       }
     }
@@ -242,6 +247,15 @@ async function dropMedia(callId: string): Promise<void> {
 const retranscribing = new Set<string>();
 const textLength = (segs: { text: string }[]) => segs.reduce((n, s) => n + (s.text?.length || 0), 0);
 
+/**
+ * Les sous-titres du bot sont peut-être dans la mauvaise langue : langue devinée faute de mieux,
+ * ou différente de la langue du call connue à la fin (choisie par le membre ou détectée en live).
+ */
+export function captionsMayBeWrong(c: { captionsLanguage: string | null; captionsGuessed: boolean; language: string | null }): boolean {
+  if (!c.captionsLanguage) return false;
+  return c.captionsGuessed || (!!c.language && c.language !== c.captionsLanguage);
+}
+
 /** Moins de 100 caractères par minute de call : les sous-titres n'ont presque rien capté. */
 function isThin(segs: TranscriptSegment[], startedAt: Date | null, endedAt: Date): boolean {
   if (!startedAt) return false;
@@ -250,7 +264,8 @@ function isThin(segs: TranscriptSegment[], startedAt: Date | null, endedAt: Date
 }
 
 /** Transcription complète de l'audio après le call (langue détectée), puis notes. */
-async function retranscribe(callId: string, recId: string): Promise<void> {
+/** `preferNew` : sous-titres suspects (mauvaise langue) ; la transcription de l'audio l'emporte dès qu'elle a du contenu. */
+async function retranscribe(callId: string, recId: string, preferNew = false): Promise<void> {
   retranscribing.add(callId);
   try {
     const job = await recall.createAsyncTranscript(recId);
@@ -261,7 +276,7 @@ async function retranscribe(callId: string, recId: string): Promise<void> {
       if (res.status === 'processing') continue;
       const c = await prisma.noteCall.findUnique({ where: { id: callId }, select: { transcript: true } });
       const current = (c?.transcript as unknown as TranscriptSegment[]) || [];
-      if (res.status === 'done' && textLength(res.segments) > textLength(current)) {
+      if (res.status === 'done' && (preferNew ? textLength(res.segments) >= 100 : textLength(res.segments) > textLength(current))) {
         await prisma.noteCall.update({
           where: { id: callId },
           data: { transcript: res.segments as any, ...(res.language ? { language: res.language } : {}) },
@@ -354,7 +369,7 @@ export async function runEveningRecap(force?: { userId: string }): Promise<numbe
       const s = await notesUserSettings(u.id);
       const lp = localParts(s.timezone);
       if (!force && (lp.hour !== 19 || s.lastRecapDate === lp.date)) continue;
-      await prisma.noteUserSettings.upsert({ where: { userId: u.id }, update: { lastRecapDate: lp.date }, create: { userId: u.id, lastRecapDate: lp.date, timezone: s.timezone } });
+      await prisma.noteUserSettings.upsert({ where: { userId: u.id }, update: { lastRecapDate: lp.date }, create: { userId: u.id, lastRecapDate: lp.date } });
       const day = await userDay(u.id, s.timezone, lp.date);
       if (force || day.today.length || day.tomorrow.length || day.tasksTomorrow.length) {
         await sendEveningEmail(u, day, s.timezone);

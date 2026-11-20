@@ -7,6 +7,7 @@ import { aiAvailable as isAiConfigured } from './notes.types.js';
 import { buildContext } from './notes.context.js';
 import { DEMO } from './notes.demo.js';
 import { prepareQuestions } from './notes.questions.js';
+import { getUserLocale, promptLanguageLine, type Lang } from '../../lib/locale.js';
 import type { CallType, LiveAlert, NoteQuestion, TranscriptSegment } from './notes.types.js';
 
 /** Délai minimal entre deux analyses d'un même call (spec : 20 à 30 s). */
@@ -60,8 +61,23 @@ Pour chaque question à laquelle les NOUVEAUX échanges répondent (même si la 
 Ne renvoie que les questions qui changent. N'invente rien.
 "relance" : si une réponse est vague, une relance courte à poser (une phrase), sinon null.
 "contradiction" : si une réponse contredit le CV ou la fiche Propium, explique en une phrase, sinon null.
-"language" : langue principale du call, "fr" ou "en".
+"language" : langue parlée dans le call, "fr" ou "en".
 Réponds UNIQUEMENT en JSON : {"updates":[{"id":"...","status":"covered|partial","answer":"..."}],"relance":{"questionId":"...","text":"..."}|null,"contradiction":{"questionId":"...","text":"..."}|null,"language":"fr"}`;
+
+const LANG_LABEL: Record<Lang, string> = { fr: 'français', en: 'anglais' };
+
+/**
+ * Langues du panneau live, données au modèle (rien n'est traduit après coup) :
+ * - "answer" et "contradiction" sont lus par le membre : dans SA langue ;
+ * - "relance" est dite à voix haute à la personne en face : dans la langue parlée du call.
+ */
+export function liveLanguageRules(recruiterLang: Lang, spokenLang: Lang | null): string {
+  const spoken = spokenLang
+    ? `en ${LANG_LABEL[spokenLang]} (langue parlée du call)`
+    : 'dans la langue parlée dans les échanges du transcript';
+  return `${promptLanguageLine(recruiterLang, '"answer" et "contradiction.text"')}
+"relance.text" est une phrase que le membre pose à voix haute : écris-la ${spoken}.`;
+}
 
 async function analyze(call: any, transcript: TranscriptSegment[]): Promise<void> {
   const questions = ((call.questions as NoteQuestion[]) || []).map((q) => ({ ...q }));
@@ -77,11 +93,12 @@ async function analyze(call: any, transcript: TranscriptSegment[]): Promise<void
   const open = questions.filter((q) => !q.manual && q.status !== 'covered');
   const ctx = await buildContext(call);
   const fmt = (s: TranscriptSegment) => `${s.speaker} : ${s.text}`;
+  const { lang: recruiterLang } = await getUserLocale(call.userId);
   const res = await callClaude({
     feature: 'notes_live',
     preferAnthropic: true,
     userId: call.userId,
-    systemPrompt: SYSTEM,
+    systemPrompt: `${SYSTEM}\n${liveLanguageRules(recruiterLang, call.language === 'fr' || call.language === 'en' ? call.language : null)}`,
     userPrompt: [
       `QUESTIONS OUVERTES :\n${open.map((q) => `[${q.id}] (${q.status}${q.dealbreaker ? ', dealbreaker' : ''}) ${q.text}${q.answer ? ` | réponse partielle : ${q.answer}` : ''}`).join('\n') || '(aucune)'}`,
       recent.length ? `ÉCHANGES PRÉCÉDENTS (contexte) :\n${recent.map(fmt).join('\n')}` : '',

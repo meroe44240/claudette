@@ -8,7 +8,7 @@ import { applyBotStatus, runEveningRecap, syncUserCalendar, scheduleBots } from 
 import * as service from './notes.service.js';
 import * as recall from './recall.client.js';
 import { sendCallBrief } from './notes.brief.js';
-import { applyConfirmToken } from './notes.reply.js';
+import { applyConfirmToken, replyText } from './notes.reply.js';
 import { appUrl } from './notes.types.js';
 import { escapeHtml } from '../../lib/mailer.js';
 
@@ -80,13 +80,17 @@ export default async function notesRouter(fastify: FastifyInstance) {
   // signé fait foi, il expire au bout de 7 jours). Le jeton est en query, pas dans le chemin.
   fastify.get('/reply/confirm', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (r, reply) => {
     const t = (r.query as { t?: string }).t || '';
-    const page = (title: string, body: string) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head><body style="font-family:system-ui,sans-serif;background:#f6f5fb;margin:0;padding:48px 16px;color:#1A1533"><div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:28px"><h1 style="font-size:20px;margin:0 0 12px">${title}</h1>${body}<p style="margin-top:20px"><a href="${appUrl()}/notes" style="color:#22177A">Ouvrir Humanup Notes</a></p></div></body></html>`;
+    // Langue de la page : celle du membre (lue dans le jeton), sinon celle du navigateur.
+    const page = (lang: 'fr' | 'en', title: string, body: string) => `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head><body style="font-family:system-ui,sans-serif;background:#f6f5fb;margin:0;padding:48px 16px;color:#1A1533"><div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;padding:28px"><h1 style="font-size:20px;margin:0 0 12px">${title}</h1>${body}<p style="margin-top:20px"><a href="${appUrl()}/notes" style="color:#22177A">${replyText(lang).openNotes}</a></p></div></body></html>`;
     try {
-      const done = await applyConfirmToken(t);
-      const list = done.length ? `<ul>${done.map((d) => `<li>${d.url ? `<a href="${d.url}" style="color:#22177A">${escapeHtml(d.label)}</a>` : escapeHtml(d.label)}</li>`).join('')}</ul>` : '<p>Rien à changer : c’était déjà fait.</p>';
-      return reply.type('text/html').send(page('C’est validé', list));
+      const { done, lang } = await applyConfirmToken(t);
+      const L = replyText(lang);
+      const list = done.length ? `<ul>${done.map((d) => `<li>${d.url ? `<a href="${d.url}" style="color:#22177A">${escapeHtml(d.label)}</a>` : escapeHtml(d.label)}</li>`).join('')}</ul>` : `<p>${L.pageNothing}</p>`;
+      return reply.type('text/html').send(page(lang, L.pageOk, list));
     } catch {
-      return reply.code(400).type('text/html').send(page('Lien expiré ou invalide', '<p>Ce lien n’est plus valable. Réponds de nouveau à l’email, ou fais le changement dans Propium.</p>'));
+      const lang = /^\s*fr/i.test(String(r.headers['accept-language'] || '')) ? 'fr' : 'en';
+      const L = replyText(lang);
+      return reply.code(400).type('text/html').send(page(lang, L.pageBad, `<p>${L.pageBadBody}</p>`));
     }
   });
 

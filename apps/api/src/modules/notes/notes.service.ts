@@ -1,6 +1,8 @@
 import { createRequire } from 'module';
 import prisma from '../../lib/db.js';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../lib/errors.js';
+import { getUserLocale, normalizeTimeZone } from '../../lib/locale.js';
+import { localizeFlags, notesMessage } from './notes.messages.js';
 import { buildContext } from './notes.context.js';
 import { finalizeCall } from './notes.finalize.js';
 import { startDemo, stopDemo } from './notes.live.js';
@@ -43,6 +45,7 @@ export async function listCalls(who: Requester, range: 'upcoming' | 'past', all 
       candidatId: true, clientId: true, mandatId: true, leadId: true,
     },
   });
+  const { lang } = await getUserLocale(who.userId);
   const ownerIds = [...new Set(calls.map((c) => c.userId))];
   const owners = await prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, prenom: true, nom: true } });
   return {
@@ -52,6 +55,8 @@ export async function listCalls(who: Requester, range: 'upcoming' | 'past', all 
       const o = owners.find((u) => u.id === c.userId);
       return {
         ...c,
+        reviewReason: notesMessage(c.reviewReason, lang),
+        error: notesMessage(c.error, lang),
         questions: undefined,
         brief: undefined,
         hasBrief: !!c.brief?.trim(),
@@ -72,8 +77,12 @@ export async function getCall(id: string, who: Requester) {
     call.mandatId ? prisma.mandat.findUnique({ where: { id: call.mandatId }, select: { id: true, titrePoste: true, entreprise: { select: { nom: true } } } }) : null,
     call.leadId ? prisma.lead.findUnique({ where: { id: call.leadId }, select: { id: true, contact: true, company: true } }) : null,
   ]);
+  const { lang } = await getUserLocale(who.userId);
   return {
     ...call,
+    reviewReason: notesMessage(call.reviewReason, lang),
+    error: notesMessage(call.error, lang),
+    duplicateFlags: localizeFlags(call.duplicateFlags as unknown as { label: string; reason: string; url: string }[], lang),
     transcriptCount: ((call.transcript as unknown as any[]) || []).length,
     transcript: undefined,
     webhookSecret: undefined,
@@ -107,8 +116,24 @@ export async function getLive(id: string, who: Requester) {
     transcriptTail: t.slice(-4), transcriptCount: t.length,
     targetMinutes: targetMinutes(call.callType as CallType, call.startAt, call.endAt),
     recallConfigured: recall.isRecallConfigured(), hasBot: !!call.recallBotId, meetingUrl: call.meetingUrl,
-    propiumLinks: call.propiumLinks, error: call.error,
+    propiumLinks: call.propiumLinks, error: notesMessage(call.error, (await getUserLocale(who.userId)).lang),
+    candidatId: call.candidatId,
+    candidateMissing: await candidateMissing(call.candidatId),
   };
+}
+
+/**
+ * Ce qui manque sur la fiche du candidat lié (rappel en fin de call) : profil LinkedIn, CV.
+ * Relu à chaque appel du panneau live : le rappel disparaît dès que la fiche est complète.
+ */
+export async function candidateMissing(candidatId: string | null): Promise<('linkedin' | 'cv')[]> {
+  if (!candidatId) return [];
+  const c = await prisma.candidat.findUnique({ where: { id: candidatId }, select: { linkedinUrl: true, cvUrl: true, cvTexte: true } });
+  if (!c) return [];
+  const out: ('linkedin' | 'cv')[] = [];
+  if (!c.linkedinUrl?.trim()) out.push('linkedin');
+  if (!c.cvUrl?.trim() && !c.cvTexte?.trim()) out.push('cv');
+  return out;
 }
 
 export async function updateCall(id: string, who: Requester, body: {
@@ -266,12 +291,13 @@ export async function getSettings(userId: string) {
 
 export async function updateSettings(userId: string, body: { enabled?: boolean; timezone?: string }) {
   if (body.timezone) {
-    try { new Intl.DateTimeFormat('fr-FR', { timeZone: body.timezone }); } catch { throw new ValidationError('Fuseau horaire inconnu'); }
+    // Le fuseau vit sur le profil (User.timezone) : même valeur partout.
+    const tz = normalizeTimeZone(body.timezone);
+    if (!tz) throw new ValidationError('Fuseau horaire inconnu');
+    await prisma.user.update({ where: { id: userId }, data: { timezone: tz } });
   }
-  await prisma.noteUserSettings.upsert({
-    where: { userId },
-    update: { ...(body.enabled !== undefined ? { enabled: body.enabled } : {}), ...(body.timezone ? { timezone: body.timezone } : {}) },
-    create: { userId, enabled: body.enabled ?? true, ...(body.timezone ? { timezone: body.timezone } : {}) },
-  });
+  if (body.enabled !== undefined) {
+    await prisma.noteUserSettings.upsert({ where: { userId }, update: { enabled: body.enabled }, create: { userId, enabled: body.enabled } });
+  }
   return getSettings(userId);
 }

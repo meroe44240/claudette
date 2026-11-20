@@ -20,6 +20,7 @@ import { escapeHtml, renderBrandedEmail, sendEmail } from '../../lib/mailer.js';
 import { callClaude } from '../../services/claudeAI.js';
 import * as candidatureService from '../candidatures/candidature.service.js';
 import { appUrl, CALL_TYPE_LABEL, type CallType, type NoteQuestion } from './notes.types.js';
+import { getUserLocale, promptLanguageLine, type Lang } from '../../lib/locale.js';
 
 const FROM = () => process.env.NOTES_FROM || undefined;
 const C = { muted: '#6e6a85', border: '#eceaf2', primary: '#22177A', warn: '#b45309' };
@@ -47,6 +48,7 @@ export function replyAddress(userEmail: string, code: string): string | undefine
 
 const REPLY_RE = /\+n-([a-z0-9]{9,12})@/i;
 
+export const REPLY_HINT_HTML_FR = `<p style="margin-top:18px;padding-top:12px;border-top:1px solid ${C.border};font-size:12px;color:${C.muted};">Répondez à cet email pour mettre à jour Propium (préavis, salaire, réponse à une question, tâche, étape du pipeline). Vous recevrez un résumé de ce qui a changé.</p>`;
 export const REPLY_HINT_HTML = `<p style="margin-top:18px;padding-top:12px;border-top:1px solid ${C.border};font-size:12px;color:${C.muted};">Reply to this email to update Propium (notice period, salary, an answer to a question, a task, a pipeline stage). You'll get back a summary of what changed.</p>`;
 
 // ─── Gmail ───────────────────────────────────────────
@@ -121,11 +123,37 @@ const STAGE_LABEL: Record<string, string> = {
   SOURCING: 'Sourcing', CONTACTE: 'Qualification', ENTRETIEN_1: 'Entretien interne', ENVOYE_CLIENT: 'Envoi client',
   ENTRETIEN_CLIENT: 'Entretien client', PROCESS: 'Process', OFFRE: 'Offre', PLACE: 'Gagné', REFUSE: 'Perdu',
 };
-// Libellés des emails de retour (internes, donc en anglais) ; STAGE_LABEL reste en français pour le prompt.
+// Libellés des retours (email, page de validation) dans la langue du membre ; STAGE_LABEL sert aussi au prompt.
 const STAGE_LABEL_EN: Record<string, string> = {
   SOURCING: 'Sourcing', CONTACTE: 'Qualification', ENTRETIEN_1: 'Internal interview', ENVOYE_CLIENT: 'Sent to client',
   ENTRETIEN_CLIENT: 'Client interview', PROCESS: 'Process', OFFRE: 'Offer', PLACE: 'Won', REFUSE: 'Lost',
 };
+const stageName = (stage: string, lang: Lang) => (lang === 'en' ? STAGE_LABEL_EN : STAGE_LABEL)[stage] ?? stage;
+
+const R = {
+  en: {
+    field: { disponibilite: 'notice period', salaireActuel: 'current salary', salaireSouhaite: 'expected salary', posteActuel: 'role', entrepriseActuelle: 'company', localisation: 'location', mobilite: 'mobility', telephone: 'phone', email: 'email', linkedinUrl: 'LinkedIn' } as Record<string, string>,
+    colon: ':', money: (n: number) => `€${n.toLocaleString('en-GB')}`, date: (d: Date) => d.toLocaleDateString('en-GB'),
+    answer: 'Answer saved', note: 'Note added', task: 'Task created', due: 'due', moved: 'Application moved to', application: 'Application', on: 'on',
+    updated: 'Updated in Propium', toApprove: 'To approve', approveWhy: 'These changes are visible to the client, so nothing happens until you approve them.',
+    nothing: 'I didn’t find anything to update in your reply.', titleApprove: 'Updated, with changes to approve', titleDone: 'Propium updated',
+    approveMany: 'Approve the changes', approve: 'Approve', subjectApprove: 'Propium updated · to approve', subjectDone: 'Propium updated',
+    pageOk: 'Approved', pageNothing: 'Nothing to change: it was already done.', pageBad: 'Link expired or invalid',
+    pageBadBody: 'This link is no longer valid. Reply to the email again, or make the change in Propium.', openNotes: 'Open Humanup Notes',
+  },
+  fr: {
+    field: { disponibilite: 'préavis', salaireActuel: 'salaire actuel', salaireSouhaite: 'salaire souhaité', posteActuel: 'poste', entrepriseActuelle: 'entreprise', localisation: 'localisation', mobilite: 'mobilité', telephone: 'téléphone', email: 'email', linkedinUrl: 'LinkedIn' } as Record<string, string>,
+    colon: ' :', money: (n: number) => `${n.toLocaleString('fr-FR')} €`, date: (d: Date) => d.toLocaleDateString('fr-FR'),
+    answer: 'Réponse enregistrée', note: 'Note ajoutée', task: 'Tâche créée', due: 'pour le', moved: 'Candidature passée en', application: 'Candidature', on: 'le',
+    updated: 'Mis à jour dans Propium', toApprove: 'À valider', approveWhy: 'Ces changements sont visibles du client : rien ne se fait tant que vous ne les validez pas.',
+    nothing: 'Je n’ai rien trouvé à mettre à jour dans votre réponse.', titleApprove: 'Mis à jour, avec des changements à valider', titleDone: 'Propium mis à jour',
+    approveMany: 'Valider les changements', approve: 'Valider', subjectApprove: 'Propium mis à jour · à valider', subjectDone: 'Propium mis à jour',
+    pageOk: 'C’est validé', pageNothing: 'Rien à changer : c’était déjà fait.', pageBad: 'Lien expiré ou invalide',
+    pageBadBody: 'Ce lien n’est plus valable. Répondez de nouveau à l’email, ou faites le changement dans Propium.', openNotes: 'Ouvrir Humanup Notes',
+  },
+} satisfies Record<Lang, unknown>;
+export const replyText = (lang: Lang) => R[lang];
+const quoted = (x: string, lang: Lang) => (lang === 'en' ? `"${x}"` : `« ${x} »`);
 const CANDIDAT_FIELDS = ['posteActuel', 'entrepriseActuelle', 'localisation', 'disponibilite', 'salaireActuel', 'salaireSouhaite', 'mobilite', 'telephone', 'email', 'linkedinUrl'] as const;
 
 type Action =
@@ -200,7 +228,8 @@ const toInt = (v: unknown) => {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
 };
 
-async function applyDirect(a: Action, call: any, userId: string): Promise<Done | null> {
+async function applyDirect(a: Action, call: any, userId: string, lang: Lang): Promise<Done | null> {
+  const L = R[lang];
   if (a.type === 'update_candidat') {
     if (!call.candidatId) return null;
     const data: Record<string, unknown> = {};
@@ -211,9 +240,8 @@ async function applyDirect(a: Action, call: any, userId: string): Promise<Done |
     }
     if (!Object.keys(data).length) return null;
     const k = await prisma.candidat.update({ where: { id: call.candidatId }, data, select: { prenom: true, nom: true } });
-    const LABEL: Record<string, string> = { disponibilite: 'notice period', salaireActuel: 'current salary', salaireSouhaite: 'expected salary', posteActuel: 'role', entrepriseActuelle: 'company', localisation: 'location', mobilite: 'mobility', telephone: 'phone', email: 'email', linkedinUrl: 'LinkedIn' };
-    const what = Object.entries(data).map(([f, v]) => `${LABEL[f] ?? f}: ${typeof v === 'number' ? `€${v.toLocaleString('en-GB')}` : v}`).join(', ');
-    return { label: `${k.prenom ?? ''} ${k.nom}: ${what}`.replace(/\s+/g, ' '), url: `${appUrl()}/candidats/${call.candidatId}` };
+    const what = Object.entries(data).map(([f, v]) => `${L.field[f] ?? f}${L.colon} ${typeof v === 'number' ? L.money(v) : v}`).join(', ');
+    return { label: `${k.prenom ?? ''} ${k.nom}${L.colon} ${what}`.replace(/\s+/g, ' '), url: `${appUrl()}/candidats/${call.candidatId}` };
   }
   if (a.type === 'answer_question') {
     const qs = ((call.questions as NoteQuestion[]) || []);
@@ -230,14 +258,14 @@ async function applyDirect(a: Action, call: any, userId: string): Promise<Done |
         await prisma.candidature.update({ where: { id: cand.id }, data: { trameAnswers: merged as any } });
       }
     }
-    return { label: `Answer saved: ${q.text} → ${a.answer.trim()}`, url: `${appUrl()}/notes/${call.id}` };
+    return { label: `${L.answer}${L.colon} ${q.text} → ${a.answer.trim()}`, url: `${appUrl()}/notes/${call.id}` };
   }
   if (a.type === 'add_note') {
     const entiteId = a.target === 'CANDIDAT' ? call.candidatId : a.target === 'MANDAT' ? call.mandatId : call.clientId;
     if (!entiteId || !a.text?.trim()) return null;
-    await prisma.activite.create({ data: { type: 'NOTE', titre: 'Note (réponse email)', contenu: a.text.trim(), source: 'AGENT_IA', entiteType: a.target, entiteId, userId, metadata: { source: 'humanup_notes_reply', noteCallId: call.id } } });
+    await prisma.activite.create({ data: { type: 'NOTE', titre: lang === 'en' ? 'Note (email reply)' : 'Note (réponse email)', contenu: a.text.trim(), source: 'AGENT_IA', entiteType: a.target, entiteId, userId, metadata: { source: 'humanup_notes_reply', noteCallId: call.id } } });
     const path = a.target === 'CANDIDAT' ? 'candidats' : a.target === 'MANDAT' ? 'mandats' : 'clients';
-    return { label: `Note added: ${a.text.trim().slice(0, 140)}`, url: `${appUrl()}/${path}/${entiteId}` };
+    return { label: `${L.note}${L.colon} ${a.text.trim().slice(0, 140)}`, url: `${appUrl()}/${path}/${entiteId}` };
   }
   if (a.type === 'create_task') {
     if (!a.titre?.trim()) return null;
@@ -245,12 +273,12 @@ async function applyDirect(a: Action, call: any, userId: string): Promise<Done |
     const entiteType = call.candidatId ? 'CANDIDAT' : call.clientId ? 'CLIENT' : call.mandatId ? 'MANDAT' : null;
     const entiteId = call.candidatId ?? call.clientId ?? call.mandatId ?? null;
     await prisma.activite.create({ data: { type: 'TACHE', isTache: true, tacheDueDate: due, userId, titre: a.titre.trim().slice(0, 500), source: 'AGENT_IA', entiteType: entiteType as any, entiteId, metadata: { source: 'humanup_notes_reply', noteCallId: call.id } } });
-    return { label: `Task created: ${a.titre.trim()} (due ${due.toLocaleDateString('en-GB')})`, url: `${appUrl()}/taches` };
+    return { label: `${L.task}${L.colon} ${a.titre.trim()} (${L.due} ${L.date(due)})`, url: `${appUrl()}/taches` };
   }
   return null;
 }
 
-async function applyMoveStage(a: Extract<Action, { type: 'move_stage' }>, userId: string): Promise<Done | null> {
+async function applyMoveStage(a: Extract<Action, { type: 'move_stage' }>, userId: string, lang: Lang): Promise<Done | null> {
   const call = await prisma.noteCall.findUnique({ where: { id: a.callId } });
   if (!call?.mandatId || !call.candidatId || !(STAGES as readonly string[]).includes(a.stage)) return null;
   let cand = await prisma.candidature.findUnique({ where: { mandatId_candidatId: { mandatId: call.mandatId, candidatId: call.candidatId } } });
@@ -262,13 +290,14 @@ async function applyMoveStage(a: Extract<Action, { type: 'move_stage' }>, userId
     updates.dateEntretienClient = raw.includes('T') ? raw : new Date(`${raw.slice(0, 10)}T09:00:00`).toISOString();
   }
   await candidatureService.update(cand.id, updates as any, userId);
-  return { label: `Application moved to "${STAGE_LABEL_EN[a.stage] ?? a.stage}"`, url: `${appUrl()}/mandats/${call.mandatId}` };
+  return { label: `${R[lang].moved} ${quoted(stageName(a.stage, lang), lang)}`, url: `${appUrl()}/mandats/${call.mandatId}` };
 }
 
-async function stageLabelFor(a: Extract<Action, { type: 'move_stage' }>): Promise<string> {
+async function stageLabelFor(a: Extract<Action, { type: 'move_stage' }>, lang: Lang): Promise<string> {
+  const L = R[lang];
   const call = await prisma.noteCall.findUnique({ where: { id: a.callId }, select: { candidatId: true, titre: true } });
   const k = call?.candidatId ? await prisma.candidat.findUnique({ where: { id: call.candidatId }, select: { prenom: true, nom: true } }) : null;
-  return `${k ? `${k.prenom ?? ''} ${k.nom}`.trim() : call?.titre ?? 'Application'} → "${STAGE_LABEL_EN[a.stage] ?? a.stage}"${a.dateEntretienClient ? ` on ${new Date(a.dateEntretienClient).toLocaleDateString('en-GB')}` : ''}${a.motif ? ` (${a.motif})` : ''}`;
+  return `${k ? `${k.prenom ?? ''} ${k.nom}`.trim() : call?.titre ?? L.application} → ${quoted(stageName(a.stage, lang), lang)}${a.dateEntretienClient ? ` ${L.on} ${L.date(new Date(a.dateEntretienClient))}` : ''}${a.motif ? ` (${a.motif})` : ''}`;
 }
 
 export async function confirmToken(userId: string, actions: Action[]): Promise<string> {
@@ -280,20 +309,22 @@ export async function confirmToken(userId: string, actions: Action[]): Promise<s
 }
 
 /** Lien « Valider » de l'email de retour. Rejouer le lien ne fait rien de plus (même étape). */
-export async function applyConfirmToken(token: string): Promise<Done[]> {
+/** Applique les changements validés ; renvoie aussi la langue du membre pour la page de retour. */
+export async function applyConfirmToken(token: string): Promise<{ done: Done[]; lang: Lang }> {
   const { payload } = await jwtVerify(token, secret());
   if (payload.type !== 'notes_confirm' || typeof payload.sub !== 'string') throw new Error('Lien invalide');
   const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { status: true } });
   if (!user || user.status === 'ARCHIVED') throw new Error('Compte inactif');
+  const { lang } = await getUserLocale(payload.sub);
   const done: Done[] = [];
   for (const a of (payload.actions as Action[]) || []) {
     if (a.type !== 'move_stage') continue;
     const call = await prisma.noteCall.findUnique({ where: { id: a.callId }, select: { userId: true, memberIds: true } });
     if (!call || (call.userId !== payload.sub && !call.memberIds.includes(payload.sub))) continue;
-    const r = await applyMoveStage(a, payload.sub);
+    const r = await applyMoveStage(a, payload.sub, lang);
     if (r) done.push(r);
   }
-  return done;
+  return { done, lang };
 }
 
 // ─── Traitement d'une réponse ────────────────────────
@@ -304,11 +335,12 @@ export async function processReply(userId: string, code: string, text: string): 
   if (!user || !calls.length || !text.trim()) return { done: [], pending: [], remarque: calls.length ? 'Réponse vide.' : 'Call introuvable.' };
 
   const ctx = (await Promise.all(calls.map(describeCall))).join('\n\n');
+  const { lang } = await getUserLocale(userId);
   const res = await callClaude({
     feature: 'notes_reply',
     preferAnthropic: true,
     userId,
-    systemPrompt: SYSTEM,
+    systemPrompt: `${SYSTEM}\n${promptLanguageLine(lang, '"remarque"')}`,
     userPrompt: `Date du jour : ${new Date().toISOString().slice(0, 10)}\n\n${ctx}\n\nRÉPONSE DU RECRUTEUR :\n${text.slice(0, 6000)}`,
     maxTokens: 1500,
     temperature: 0,
@@ -323,32 +355,33 @@ export async function processReply(userId: string, code: string, text: string): 
   for (const a of actions) {
     try {
       if (a.type === 'move_stage') { toConfirm.push(a); continue; }
-      const r = await applyDirect(a, byId.get(a.callId), userId);
+      const r = await applyDirect(a, byId.get(a.callId), userId, lang);
       if (r) done.push(r);
     } catch (err) {
       console.error('[Notes] Action de réponse impossible:', a.type, (err as Error).message);
     }
   }
-  const pending = await Promise.all(toConfirm.map(stageLabelFor));
+  const pending = await Promise.all(toConfirm.map((a) => stageLabelFor(a, lang)));
   const link = toConfirm.length ? `${appUrl()}/api/v1/notes/reply/confirm?t=${encodeURIComponent(await confirmToken(userId, toConfirm))}` : null;
-  await sendFeedbackEmail(user.email, code, done, pending, link, (res.content?.remarque as string) || null);
+  await sendFeedbackEmail(user.email, code, done, pending, link, (res.content?.remarque as string) || null, lang);
   return { done, pending, remarque: (res.content?.remarque as string) || null };
 }
 
-async function sendFeedbackEmail(to: string, code: string, done: Done[], pending: string[], confirmUrl: string | null, remarque: string | null) {
+async function sendFeedbackEmail(to: string, code: string, done: Done[], pending: string[], confirmUrl: string | null, remarque: string | null, lang: Lang) {
+  const L = R[lang];
   const a = (d: Done) => (d.url ? `<a href="${d.url}" style="color:${C.primary};">${escapeHtml(d.label)}</a>` : escapeHtml(d.label));
   const body = `
-    ${done.length ? `<h3 style="margin:0 0 6px 0;font-size:15px;">Updated in Propium</h3><ul style="margin:0 0 0 18px;padding:0;">${done.map((d) => `<li style="margin-bottom:4px;">${a(d)}</li>`).join('')}</ul>` : ''}
-    ${pending.length ? `<h3 style="margin:18px 0 6px 0;font-size:15px;color:${C.warn};">To approve</h3><p style="margin:0 0 6px 0;font-size:13px;color:${C.muted};">These changes are visible to the client, so nothing happens until you approve them.</p><ul style="margin:0 0 0 18px;padding:0;">${pending.map((p) => `<li>${escapeHtml(p)}</li>`).join('')}</ul>` : ''}
-    ${!done.length && !pending.length ? `<p>I didn't find anything to update in your reply.${remarque ? ` ${escapeHtml(remarque)}` : ''}</p>` : remarque ? `<p style="margin-top:12px;color:${C.muted};font-size:13px;">${escapeHtml(remarque)}</p>` : ''}
-    ${REPLY_HINT_HTML}`;
+    ${done.length ? `<h3 style="margin:0 0 6px 0;font-size:15px;">${escapeHtml(L.updated)}</h3><ul style="margin:0 0 0 18px;padding:0;">${done.map((d) => `<li style="margin-bottom:4px;">${a(d)}</li>`).join('')}</ul>` : ''}
+    ${pending.length ? `<h3 style="margin:18px 0 6px 0;font-size:15px;color:${C.warn};">${escapeHtml(L.toApprove)}</h3><p style="margin:0 0 6px 0;font-size:13px;color:${C.muted};">${escapeHtml(L.approveWhy)}</p><ul style="margin:0 0 0 18px;padding:0;">${pending.map((p) => `<li>${escapeHtml(p)}</li>`).join('')}</ul>` : ''}
+    ${!done.length && !pending.length ? `<p>${escapeHtml(L.nothing)}${remarque ? ` ${escapeHtml(remarque)}` : ''}</p>` : remarque ? `<p style="margin-top:12px;color:${C.muted};font-size:13px;">${escapeHtml(remarque)}</p>` : ''}
+    ${lang === 'en' ? REPLY_HINT_HTML : REPLY_HINT_HTML_FR}`;
   const html = renderBrandedEmail({
-    lang: 'en',
-    title: pending.length ? 'Updated, with changes to approve' : 'Propium updated',
+    lang,
+    title: pending.length ? L.titleApprove : L.titleDone,
     bodyHtml: body,
-    ...(confirmUrl ? { cta: { label: pending.length > 1 ? 'Approve the changes' : 'Approve', href: confirmUrl } } : {}),
+    ...(confirmUrl ? { cta: { label: pending.length > 1 ? L.approveMany : L.approve, href: confirmUrl } } : {}),
   });
-  await sendEmail(to, pending.length ? 'Propium updated · to approve' : 'Propium updated', html, undefined, { from: FROM(), replyTo: replyAddress(to, code) });
+  await sendEmail(to, pending.length ? L.subjectApprove : L.subjectDone, html, undefined, { from: FROM(), replyTo: replyAddress(to, code) });
 }
 
 // ─── Relève (toutes les 2 min) ───────────────────────

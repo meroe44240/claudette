@@ -6,7 +6,7 @@ import {
   Mail,
 } from 'lucide-react';
 import { api } from '../../lib/api-client';
-import { t, LOCALE } from '../../lib/i18n';
+import { t, LOCALE, COLON } from '../../lib/i18n';
 import { renderMarkdown } from '../../lib/markdown';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { useGoBack } from '../../hooks/useGoBack';
@@ -278,7 +278,7 @@ function BriefCard({ call, onSaved }: { call: CallDetail; onSaved: () => void })
         <input ref={fileRef} type="file" accept="application/pdf,text/plain" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
       </div>
       {call.missing.length > 0 && (
-        <div className="mb-3 text-sm text-amber-800">{t('À charger')} : {call.missing.join(', ')}</div>
+        <div className="mb-3 text-sm text-amber-800">{t('À charger')}{COLON} {call.missing.map((m) => t(m)).join(', ')}</div>
       )}
       {call.linked.candidat?.hasCv && <div className="mb-2 flex items-center gap-1 text-xs text-[#1F6B45]"><CheckCircle2 size={13} />{t('CV récupéré depuis la fiche Propium')}</div>}
       {call.hasTrame && <div className="mb-2 flex items-center gap-1 text-xs text-[#1F6B45]"><CheckCircle2 size={13} />{t('Trame de qualification du mandat récupérée')}</div>}
@@ -417,7 +417,7 @@ function Results({ call }: { call: CallDetail }) {
         )}
         {call.duplicateFlags.length > 0 && (
           <div className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-            {call.duplicateFlags.map((d, i) => <div key={i}><a href={new URL(d.url).pathname} className="font-medium underline">{d.label}</a> : {d.reason}</div>)}
+            {call.duplicateFlags.map((d, i) => <div key={i}><a href={new URL(d.url).pathname} className="font-medium underline">{d.label}</a>{COLON} {d.reason}</div>)}
           </div>
         )}
       </div>

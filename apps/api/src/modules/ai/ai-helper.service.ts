@@ -1,5 +1,6 @@
 import prisma from '../../lib/db.js';
 import { callClaude } from '../../services/claudeAI.js';
+import { getUserLocale, promptLanguageLine } from '../../lib/locale.js';
 
 // ─── ADCHASE AI RECOMMEND ───────────────────────────
 
@@ -75,7 +76,8 @@ export async function aiRecommendProspects(
 
   const systemPrompt = `Tu es un consultant en recrutement expert. Tu dois analyser un profil de candidat et recommander les meilleurs clients/prospects à qui présenter ce candidat. Pour chaque client, attribue un score de 0 à 100 et une raison courte (1 phrase max).
 
-Réponds UNIQUEMENT en JSON valide, un tableau d'objets avec les champs: clientId (string), score (number 0-100), reason (string en français).
+Réponds UNIQUEMENT en JSON valide, un tableau d'objets avec les champs: clientId (string), score (number 0-100), reason (string).
+${promptLanguageLine((await getUserLocale(userId)).lang, 'les raisons ("reason")')}
 Trie par score décroissant. Retourne maximum 10 résultats. Ne retourne que les clients avec un score >= 30.`;
 
   const userPrompt = `Profil candidat:

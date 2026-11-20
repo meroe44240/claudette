@@ -1,6 +1,7 @@
 import prisma from '../../lib/db.js';
 import { callClaudeWithWebSearch } from '../../services/claudeAI.js';
 import * as notificationService from '../notifications/notification.service.js';
+import { getUserLocale, promptLanguageLine, type Lang } from '../../lib/locale.js';
 
 // ─── TYPES ──────────────────────────────────────────
 
@@ -239,9 +240,12 @@ export async function generateCallBrief(
   calendarEventId?: string,
   forceRefresh = false,
 ): Promise<CallBriefResult> {
+  // Le brief est rédigé dans la langue du recruteur qui le demande ; le cache est donc par langue.
+  const { lang } = await getUserLocale(userId);
+
   // 1. Check cache (non-expired brief)
   if (!forceRefresh) {
-    const cached = await getCachedBrief(entityType, entityId);
+    const cached = await getCachedBrief(entityType, entityId, lang);
     if (cached) {
       return {
         id: cached.id,
@@ -280,7 +284,8 @@ Génère un brief pré-appel complet en JSON.`;
   const systemPrompt = SYSTEM_PROMPT
     .replace(/\{\{contact_name\}\}/g, context.contactName)
     .replace(/\{\{company_name\}\}/g, context.companyName)
-    .replace(/\{\{sector\}\}/g, context.sector || 'N/A');
+    .replace(/\{\{sector\}\}/g, context.sector || 'N/A')
+    + `\n\n${promptLanguageLine(lang, 'toutes les valeurs texte du JSON')}`;
 
   const response = await callClaudeWithWebSearch({
     feature: 'call_brief',
@@ -300,7 +305,7 @@ Génère un brief pré-appel complet en JSON.`;
       entityId,
       calendarEventId: calendarEventId ?? null,
       userId,
-      briefJson: response.content ?? {},
+      briefJson: { ...(response.content ?? {}), _lang: lang },
       webResultsRaw: { rawText: response.rawText, model: response.model },
       generatedAt: new Date(),
       expiresAt,
@@ -337,12 +342,13 @@ Génère un brief pré-appel complet en JSON.`;
 
 // ─── PUBLIC: getCachedBrief ────────────────────────
 
-export async function getCachedBrief(entityType: string, entityId: string) {
+export async function getCachedBrief(entityType: string, entityId: string, lang?: Lang) {
   return prisma.aiCallBrief.findFirst({
     where: {
       entityType,
       entityId,
       expiresAt: { gt: new Date() },
+      ...(lang ? { briefJson: { path: ['_lang'], equals: lang } } : {}),
     },
     orderBy: { generatedAt: 'desc' },
   });

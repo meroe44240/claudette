@@ -51,17 +51,31 @@ export async function resolveCallLanguage(c: {
   return lang;
 }
 
-/** Faute de mieux pour le bot (la question reste posée) : indices du titre et des questions. */
-export function guessLanguageFromText(c: { titre: string; questions: unknown }): CallLanguage {
-  const qs = ((c.questions as unknown as NoteQuestion[]) || []).map((q) => q.text || '').join(' ');
-  const words = `${c.titre} ${qs}`.toLowerCase().match(/[a-zàâçéèêëîïôûùüÿœ']+/g) || [];
-  const EN = new Set(['the', 'with', 'and', 'you', 'your', 'what', 'are', 'for', 'interview', 'meeting', 'chat', 'how', 'is', 'of', 'to', 'can', 'do']);
-  const FR = new Set(['le', 'la', 'les', 'avec', 'et', 'vous', 'votre', 'quel', 'quelle', 'est', 'pour', 'entretien', 'échange', 'un', 'une', 'des', 'du', 'de', 'comment']);
+const EN_WORDS = new Set(['the', 'with', 'and', 'you', 'your', 'what', 'are', 'for', 'interview', 'meeting', 'chat', 'how', 'is', 'of', 'to', 'can', 'do', 'have', 'did', 'would', 'which', 'why', 'when']);
+const FR_WORDS = new Set(['le', 'la', 'les', 'avec', 'et', 'vous', 'votre', 'quel', 'quelle', 'est', 'pour', 'entretien', 'échange', 'un', 'une', 'des', 'du', 'de', 'comment', 'tu', 'ton', 'ta', 'tes', 'qu', 'quels', 'quelles', 'pourquoi', 'combien']);
+
+/** Langue d'un texte d'après ses mots outils ; null si rien ne tranche. */
+export function guessTextLanguage(text: string): CallLanguage | null {
+  const words = text.toLowerCase().match(/[a-zàâçéèêëîïôûùüÿœ]+/g) || [];
   let en = 0;
   let fr = 0;
   for (const w of words) {
-    if (EN.has(w)) en++;
-    if (FR.has(w)) fr++;
+    if (EN_WORDS.has(w)) en++;
+    if (FR_WORDS.has(w)) fr++;
   }
-  return en > fr ? 'en' : 'fr';
+  return en > fr ? 'en' : fr > en ? 'fr' : null;
+}
+
+/** Toutes les questions sont déjà dans cette langue (évite un appel de traduction inutile). */
+export function questionsAlreadyIn(questions: NoteQuestion[], lang: CallLanguage): boolean {
+  return questions.length > 0 && questions.every((q) => (guessTextLanguage(q.text || '') ?? lang) === lang);
+}
+
+/**
+ * Faute de mieux pour le bot (la question reste posée) : indices du titre et des questions,
+ * puis la langue du membre (`fallback`) plutôt qu'un français par défaut.
+ */
+export function guessLanguageFromText(c: { titre: string; questions: unknown }, fallback: CallLanguage = 'fr'): CallLanguage {
+  const qs = ((c.questions as unknown as NoteQuestion[]) || []).map((q) => q.text || '').join(' ');
+  return guessTextLanguage(`${c.titre} ${qs}`) ?? fallback;
 }

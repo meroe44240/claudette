@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { translateTexts } from './translate.service.js';
+import { getUserLocale } from '../../lib/locale.js';
 import { z } from 'zod';
 import * as aiService from './ai.service.js';
 import * as aiConfigService from './ai-config.service.js';
@@ -468,7 +469,7 @@ export default async function aiRouter(fastify: FastifyInstance) {
     preHandler: [authenticate],
     handler: async (request, reply) => {
       const { entityType, entityId } = request.params as { entityType: string; entityId: string };
-      const brief = await callBriefService.getCachedBrief(entityType, entityId);
+      const brief = await callBriefService.getCachedBrief(entityType, entityId, (await getUserLocale(request.userId)).lang);
       if (!brief) {
         return { data: null };
       }
