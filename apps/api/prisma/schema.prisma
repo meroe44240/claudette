@@ -340,8 +340,9 @@ enum ContractStatus {
   EXPIRED
 }
 
-// Demande de validation admin quand un contrat propose un feePourcentage
-// sous le plancher (18%). Bloque l'envoi tant qu'un admin n'a pas approuvé.
+// Demande de validation admin quand un contrat sort des conditions standard
+// (fee sous 18 %, garantie, propriété, paiement, clause libre). Bloque la
+// génération / l'envoi tant qu'un admin n'a pas approuvé.
 model ContractApproval {
   id             String                 @id @default(uuid()) @db.Uuid
   mandatId       String                 @db.Uuid
@@ -349,6 +350,9 @@ model ContractApproval {
   requestedById  String                 @db.Uuid
   feeRequested   Decimal                @db.Decimal(5, 2)  // ex: 15.00 (%)
   reason         String                 @db.Text
+  // Valeurs hors bornes demandées (fee_percent, guarantee_months, ownership_months,
+  // payment_terms, custom_clause). null = ancienne demande, fee seul.
+  exceptions     Json?
   status         ContractApprovalStatus @default(PENDING)
   approvedById   String?                @db.Uuid
   approvedAt     DateTime?              @db.Timestamptz()

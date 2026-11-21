@@ -1158,11 +1158,17 @@ export async function notifyContractApprovalRequest(data: {
   reason: string;
   requestedByPrenom: string | null;
   approvalId: string;
+  exceptionLabels?: string[];
+  customClause?: string | null;
 }): Promise<void> {
   const config = await getSlackConfig();
   if (!config || !config.enabled) return;
 
   const asker = data.requestedByPrenom || 'A recruiter';
+  const what = data.exceptionLabels?.length
+    ? `${asker} is requesting non-standard contract terms:\n${data.exceptionLabels.map((l) => `• ${l}`).join('\n')}`
+    : `${asker} is requesting a fee of *${data.feeRequested}%* (below the 18% floor).`;
+  const clause = data.customClause ? `\n_Clause_:\n> ${data.customClause.slice(0, 1500).replace(/\n/g, '\n> ')}` : '';
   const payload = {
     blocks: [
       {
@@ -1172,12 +1178,12 @@ export async function notifyContractApprovalRequest(data: {
           text: [
             `⚠️ *Contract approval required*`,
             ``,
-            `${asker} is requesting a fee of *${data.feeRequested}%* (below the 18% floor).`,
+            what,
             `📋 ${data.entrepriseNom} — ${data.mandatTitre}`,
             ``,
-            `_Reason_: ${data.reason}`,
+            `_Reason_: ${data.reason}${clause}`,
             ``,
-            `To approve in the ATS (Admin > Demandes de contrat).`,
+            `An admin can approve or reject it from Claude (HumanUp ATS connector): "show pending contract approvals".`,
           ].join('\n'),
         },
       },

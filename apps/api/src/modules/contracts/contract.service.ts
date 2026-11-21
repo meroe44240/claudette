@@ -9,6 +9,8 @@
 import prisma from '../../lib/db.js';
 import { NotFoundError, ValidationError, ForbiddenError } from '../../lib/errors.js';
 import type { ContractStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { canonicalExceptions, approvalExceptions, type ContractExceptions } from './contract-generate.service.js';
 import { notifyContractApprovalRequest } from '../slack/slack.service.js';
 
 const FEE_FLOOR = 18; // Plancher %
@@ -78,6 +80,59 @@ export async function requestApproval(
   })().catch((err) => console.error('[contract] slack notif failed:', err));
 
   return approval;
+}
+
+/**
+ * Demande de validation pour des conditions hors standard (outil MCP
+ * generate_contract) : fee sous 18 %, garantie, propriété, paiement, clause
+ * libre. Idempotent : une demande PENDING portant exactement sur les mêmes
+ * valeurs est renvoyée telle quelle.
+ */
+export async function requestContractExceptions(
+  data: { mandatId: string; fee: number; exceptions: ContractExceptions; exceptionLabels: string[]; reason: string },
+  requestedById: string,
+) {
+  if (Object.keys(data.exceptions).length === 0) {
+    throw new ValidationError('Nothing to approve: these terms are within the standard limits.');
+  }
+  if (!data.reason?.trim()) throw new ValidationError('A reason is required.');
+
+  const wanted = canonicalExceptions(data.exceptions);
+  const pending = await prisma.contractApproval.findMany({ where: { mandatId: data.mandatId, status: 'PENDING' } });
+  const same = pending.find((p) => canonicalExceptions(approvalExceptions(p)) === wanted);
+  if (same) return { approval: same, created: false };
+
+  const approval = await prisma.contractApproval.create({
+    data: {
+      mandatId: data.mandatId,
+      feeRequested: data.fee,
+      reason: data.reason.trim(),
+      exceptions: data.exceptions as Prisma.InputJsonObject,
+      requestedById,
+      status: 'PENDING',
+    },
+  });
+
+  (async () => {
+    const [context, requester] = await Promise.all([
+      prisma.mandat.findUnique({ where: { id: data.mandatId }, select: { titrePoste: true, entreprise: { select: { nom: true } } } }),
+      prisma.user.findUnique({ where: { id: requestedById }, select: { prenom: true } }),
+    ]);
+    if (context) {
+      await notifyContractApprovalRequest({
+        mandatTitre: context.titrePoste,
+        entrepriseNom: context.entreprise?.nom ?? '?',
+        feeRequested: data.fee,
+        reason: approval.reason,
+        requestedByPrenom: requester?.prenom ?? null,
+        approvalId: approval.id,
+        exceptionLabels: data.exceptionLabels,
+        customClause: data.exceptions.custom_clause ?? null,
+      });
+    }
+  })().catch((err) => console.error('[contract] slack notif failed:', err));
+
+  return { approval, created: true };
 }
 
 /**

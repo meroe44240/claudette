@@ -87,6 +87,20 @@ describe('renderContractPdf', () => {
     expect(pages).toBeLessThanOrEqual(5);
   });
 
+  it('ajoute l’article 19 « Conditions particulières » quand une clause est fournie', async () => {
+    const { text } = await pdfText(await renderContractPdf(form, 'fr', { customClause: 'Exclusivité de 3 mois sur le poste.\nRevue au bout de 60 jours.' }));
+    expect(text).toContain('Article 19 - Conditions particulières');
+    expect(text).toContain('Exclusivité de 3 mois sur le poste.');
+    expect(text).toContain('Revue au bout de 60 jours.');
+    const en = await pdfText(await renderContractPdf(form, 'en', { customClause: 'Exclusive search.' }));
+    expect(en.text).toContain('Article 19 - Special conditions');
+  });
+
+  it('pas d’article 19 sans clause', async () => {
+    const { text } = await pdfText(await renderContractPdf(form, 'fr', { customClause: '   ' }));
+    expect(text).not.toContain('Article 19');
+  });
+
   it('remplace le client vide par un emplacement', async () => {
     const { text } = await pdfText(await renderContractPdf({ ...form, client: '', rep: '', poste: '' }, 'fr'));
     expect(text).toContain('[Client]');
