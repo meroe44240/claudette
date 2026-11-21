@@ -17,7 +17,12 @@ const MUTED = '#6E6A85';
 
 const MARGIN = 56;
 
-export function renderContractPdf(f: ContractForm, lang: ContractLang): Promise<Buffer> {
+/** Titre de l'article ajouté quand une clause libre a été validée par un admin. */
+export function customClauseHeading(lang: ContractLang): string {
+  return lang === 'fr' ? 'Article 19 - Conditions particulières' : 'Article 19 - Special conditions';
+}
+
+export function renderContractPdf(f: ContractForm, lang: ContractLang, extra: { customClause?: string | null } = {}): Promise<Buffer> {
   const T = (fr: string, en: string) => (lang === 'fr' ? fr : en);
 
   return new Promise((resolve, reject) => {
@@ -89,6 +94,11 @@ export function renderContractPdf(f: ContractForm, lang: ContractLang): Promise<
     for (const a of contractArticles(lang, f)) {
       section(artHead(a));
       for (const b of a.blocks) para(b.lead, b.text);
+    }
+    const custom = extra.customClause?.trim();
+    if (custom) {
+      section(customClauseHeading(lang));
+      for (const p of custom.split(/\n\s*\n|\r?\n/).map((s) => s.trim()).filter(Boolean)) para('', p);
     }
 
     // ── Signatures ──

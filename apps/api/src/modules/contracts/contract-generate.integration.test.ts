@@ -17,6 +17,7 @@ const { PDFParse } = require('pdf-parse');
 
 const PREFIX = 'TestContrat';
 let userId: string;
+let adminId: string;
 let entrepriseId: string;
 let entrepriseSansMandatId: string;
 let mandatId: string;
@@ -37,6 +38,12 @@ beforeAll(async () => {
     create: { email: 'contract-test@humanup.io', passwordHash: 'x', nom: 'ContractTest', role: 'RECRUTEUR', mustChangePassword: false },
   });
   userId = user.id;
+  const admin = await prisma.user.upsert({
+    where: { email: 'contract-admin-test@humanup.io' },
+    update: {},
+    create: { email: 'contract-admin-test@humanup.io', passwordHash: 'x', nom: 'ContractAdmin', role: 'ADMIN', mustChangePassword: false },
+  });
+  adminId = admin.id;
 
   const e = await prisma.entreprise.create({
     data: { nom: `${PREFIX} Acme SAS`, siret: '12345678900012', adresseComplete: '12 rue de la Paix, 75002 Paris' },
@@ -67,8 +74,8 @@ afterAll(async () => {
   await prisma.mandat.deleteMany({ where: { titrePoste: { startsWith: PREFIX } } });
   await prisma.client.deleteMany({ where: { email: 'claire@acme-test.fr' } });
   await prisma.entreprise.deleteMany({ where: { nom: { startsWith: PREFIX } } });
-  await prisma.mcpActionLog.deleteMany({ where: { userId } });
-  await prisma.user.deleteMany({ where: { email: 'contract-test@humanup.io' } }).catch(() => undefined);
+  await prisma.mcpActionLog.deleteMany({ where: { userId: { in: [userId, adminId] } } });
+  await prisma.user.deleteMany({ where: { email: { in: ['contract-test@humanup.io', 'contract-admin-test@humanup.io'] } } }).catch(() => undefined);
   for (const d of writtenDirs) await fs.rm(d, { recursive: true, force: true });
   await prisma.$disconnect();
 });
@@ -136,8 +143,12 @@ describe('outil MCP generate_contract (base réelle)', () => {
   const tools: Record<string, Handler> = {};
   registerContractTools({ tool: (name: string, _d: string, _s: unknown, h: Handler) => { tools[name] = h; } } as never);
 
-  const call = (args: Record<string, unknown>) =>
-    runWithMcpUser({ userId, userRole: 'RECRUTEUR' } as never, async () => JSON.parse((await tools.generate_contract(args)).content[0].text));
+  const as = (who: 'recruiter' | 'admin', tool: string, args: Record<string, unknown>) =>
+    runWithMcpUser(
+      (who === 'admin' ? { userId: adminId, userRole: 'ADMIN' } : { userId, userRole: 'RECRUTEUR' }) as never,
+      async () => JSON.parse((await tools[tool](args)).content[0].text),
+    );
+  const call = (args: Record<string, unknown>) => as('recruiter', 'generate_contract', args);
 
   it('génère par nom de société et renvoie un lien vers un PDF existant', async () => {
     const res = await call({ company_name: `${PREFIX} Acme SAS`, fee_percent: 20 });
@@ -154,5 +165,52 @@ describe('outil MCP generate_contract (base réelle)', () => {
   it('renvoie une erreur lisible pour un mandat inconnu', async () => {
     const res = await call({ mandate_id: '00000000-0000-0000-0000-000000000000' });
     expect(res.error).toBe('mandate_not_found');
+  });
+
+  it('circuit complet : aperçu, demande, validation admin, génération avec l’article 19', async () => {
+    const clause = 'Mission confiée en exclusivité au Prestataire pendant 3 mois.';
+    const terms = { mandate_id: mandatId, guarantee_months: 9, special_conditions: clause };
+
+    // 1. aperçu : rien n'est généré, la validation est annoncée
+    const preview = await call({ ...terms, preview: true });
+    expect(preview).toMatchObject({ preview: true, approval: 'required' });
+    expect(preview.articles).toHaveLength(20);
+    expect(preview.non_standard_terms).toHaveLength(2);
+
+    // 2. génération refusée tant que rien n'est validé
+    expect((await call(terms)).error).toBe('needs_admin_approval');
+
+    // 3. demande envoyée avec une raison, stockée avec les valeurs exactes
+    const asked = await call({ ...terms, exception_reason: 'Client stratégique, 5 postes à venir' });
+    expect(asked).toMatchObject({ approval_requested: true });
+    const row = await prisma.contractApproval.findUnique({ where: { id: asked.approval_id } });
+    expect(row).toMatchObject({ status: 'PENDING', reason: 'Client stratégique, 5 postes à venir', exceptions: { guarantee_months: 9, custom_clause: clause } });
+
+    // 4. redemander ne crée pas de doublon
+    const again = await call({ ...terms, exception_reason: 'idem' });
+    expect(again.approval_status).toBe('PENDING');
+    expect(await prisma.contractApproval.count({ where: { mandatId, status: 'PENDING' } })).toBe(1);
+
+    // 5. un recruteur ne peut ni lister ni valider
+    expect((await as('recruiter', 'list_contract_approvals', {})).error).toContain('not available');
+    expect((await as('recruiter', 'review_contract_approval', { approval_id: asked.approval_id, decision: 'approve' })).error).toContain('not available');
+
+    // 6. l'admin voit la demande et la valide
+    const list = await as('admin', 'list_contract_approvals', {});
+    const mine = list.requests.find((r: { approval_id: string }) => r.approval_id === asked.approval_id);
+    expect(mine).toMatchObject({ requested_by: 'ContractTest', requested_terms: { guarantee_months: 9, custom_clause: clause } });
+    expect(await as('admin', 'review_contract_approval', { approval_id: asked.approval_id, decision: 'approve' })).toMatchObject({ status: 'APPROVED' });
+
+    // 7. une clause modifiée d'un mot n'est pas couverte par la validation
+    expect((await call({ ...terms, special_conditions: clause.replace('3 mois', '6 mois') })).error).toBe('needs_admin_approval');
+
+    // 8. avec exactement les valeurs validées, le contrat sort avec l'article 19
+    const done = await call(terms);
+    expect(done.success).toBe(true);
+    expect(done.content).toMatchObject({ guarantee_months: 9, special_conditions: clause });
+    const text = await pdfText(localPath(done.pdf_url));
+    expect(text).toContain('Article 19 - Conditions particulières');
+    expect(text).toContain(clause);
+    expect(text).toContain('dans la limite de 9 mois');
   });
 });

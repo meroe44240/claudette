@@ -14,10 +14,50 @@
 
 import prisma from '../../lib/db.js';
 import { upload as uploadDocument } from '../documents/document.service.js';
-import { renderContractPdf } from './contract-pdf.js';
-import type { ContractForm, ContractLang } from './contract-text.js';
+import { renderContractPdf, customClauseHeading } from './contract-pdf.js';
+import { contractArticles, artHead, type ContractForm, type ContractLang } from './contract-text.js';
 
 export const FEE_FLOOR = 18;
+
+/**
+ * Garde-fous du contrat généré par le MCP. Les 19 articles sont tous
+ * verrouillés : on ne peut jouer que sur les valeurs ci-dessous, plus une
+ * clause « Conditions particulières ».
+ * - SOFT : hors de ces bornes, il faut une validation admin (ContractApproval).
+ * - HARD : hors de ces bornes, refus net (même un admin ne peut pas valider).
+ */
+export const BOUNDS = {
+  feeMin: FEE_FLOOR,
+  guaranteeMin: 0, guaranteeMax: 6,
+  ownershipMin: 6, ownershipMax: 24,
+  paymentMaxDays: 60,
+} as const;
+const HARD = { guaranteeMax: 12, ownershipMin: 1, ownershipMax: 60, customClauseMaxLen: 2000 } as const;
+
+/** Valeurs hors bornes demandées (seulement celles-là), telles que validées par un admin. */
+export interface ContractExceptions {
+  fee_percent?: number;
+  guarantee_months?: number;
+  ownership_months?: number;
+  payment_terms?: string;
+  custom_clause?: string;
+}
+
+/** Forme canonique (clés triées) pour comparer une demande à une validation. */
+export function canonicalExceptions(e: ContractExceptions): string {
+  const sorted: Record<string, unknown> = {};
+  for (const k of Object.keys(e).sort()) {
+    const v = (e as Record<string, unknown>)[k];
+    if (v !== undefined) sorted[k] = typeof v === 'string' ? v.trim() : v;
+  }
+  return JSON.stringify(sorted);
+}
+
+/** Délai de paiement en jours lu dans un texte libre (« 45 jours fin de mois » → 45). null si illisible. */
+export function paymentDays(text: string): number | null {
+  const nums = [...text.matchAll(/(\d{1,3})\s*(?:jours?|days?|j\b)/gi)].map((m) => Number(m[1]));
+  return nums.length ? Math.max(...nums) : null;
+}
 
 const PORTAL_BASE = process.env.PORTAL_BASE_URL || 'https://ats.propium.co';
 
@@ -58,21 +98,37 @@ export interface GenerateContractInput {
   address?: string;
   registration?: string;   // SIRET / immatriculation
   jobTitle?: string;
+  customClause?: string;   // « Conditions particulières » (validation admin obligatoire)
+  preview?: boolean;       // ne génère rien : renvoie ce qui irait dans le contrat
+}
+
+export type ApprovalState = 'not_needed' | 'approved' | 'pending' | 'required';
+
+interface ContractSummary {
+  lang: ContractLang;
+  mandatId: string | null;
+  entrepriseId: string;
+  terms: ContractForm;
+  customClause: string | null;
+  articles: string[];
+  exceptions: ContractExceptions;
+  exceptionLabels: string[];
+  approval: ApprovalState;
+  approvalId: string | null;
+  missing: string[];
 }
 
 export type GenerateContractResult =
+  | ({ ok: true; preview: true } & ContractSummary)
+  | ({ ok: true; preview: false; url: string; filename: string; sizeBytes: number } & ContractSummary)
   | {
-      ok: true;
-      url: string;
-      filename: string;
-      sizeBytes: number;
-      lang: ContractLang;
-      mandatId: string | null;
-      entrepriseId: string;
-      terms: ContractForm;
-      missing: string[];
-    }
-  | { ok: false; error: 'needs_admin_approval' | 'not_found' | 'invalid'; message: string; approvalStatus?: string };
+      ok: false;
+      error: 'needs_admin_approval' | 'not_found' | 'invalid';
+      message: string;
+      approvalStatus?: 'NONE' | 'PENDING';
+      exceptions?: ContractExceptions;
+      exceptionLabels?: string[];
+    };
 
 const fullName = (c: { nom: string; prenom: string | null } | null | undefined) => (c ? `${c.prenom || ''} ${c.nom}`.trim() : '');
 
@@ -90,6 +146,61 @@ function resolveCountry(value: string | null | undefined, lang: ContractLang): s
 
 function fileSafe(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').substring(0, 60) || 'Client';
+}
+
+/**
+ * Valeurs hors bornes « souples » (à faire valider par un admin), ou erreur si
+ * une valeur sort des bornes « dures ».
+ */
+export function computeExceptions(v: {
+  fee: number; guarantee: number; ownership: number; paymentRaw: string; customClause: string | null;
+}): { exceptions: ContractExceptions; labels: string[] } | { error: string } {
+  if (!Number.isFinite(v.fee) || v.fee <= 0 || v.fee > 100) return { error: `Invalid fee: ${v.fee}.` };
+  if (!Number.isInteger(v.guarantee) || v.guarantee < 0 || v.guarantee > HARD.guaranteeMax) {
+    return { error: `The replacement guarantee must be a whole number of months between 0 and ${HARD.guaranteeMax}.` };
+  }
+  if (!Number.isInteger(v.ownership) || v.ownership < HARD.ownershipMin || v.ownership > HARD.ownershipMax) {
+    return { error: `Candidate ownership must be a whole number of months between ${HARD.ownershipMin} and ${HARD.ownershipMax}.` };
+  }
+  if (v.customClause && v.customClause.length > HARD.customClauseMaxLen) {
+    return { error: `The special conditions clause is limited to ${HARD.customClauseMaxLen} characters.` };
+  }
+
+  const exceptions: ContractExceptions = {};
+  const labels: string[] = [];
+  if (v.fee < BOUNDS.feeMin) {
+    exceptions.fee_percent = Number(v.fee.toFixed(2));
+    labels.push(`fee ${exceptions.fee_percent}% (floor ${BOUNDS.feeMin}%)`);
+  }
+  if (v.guarantee < BOUNDS.guaranteeMin || v.guarantee > BOUNDS.guaranteeMax) {
+    exceptions.guarantee_months = v.guarantee;
+    labels.push(`replacement guarantee ${v.guarantee} months (allowed ${BOUNDS.guaranteeMin} to ${BOUNDS.guaranteeMax})`);
+  }
+  if (v.ownership < BOUNDS.ownershipMin || v.ownership > BOUNDS.ownershipMax) {
+    exceptions.ownership_months = v.ownership;
+    labels.push(`candidate ownership ${v.ownership} months (allowed ${BOUNDS.ownershipMin} to ${BOUNDS.ownershipMax})`);
+  }
+  const pay = v.paymentRaw.trim();
+  if (!PAYMENT_TERMS[pay]) {
+    const days = paymentDays(pay);
+    if (days === null || days > BOUNDS.paymentMaxDays) {
+      exceptions.payment_terms = pay;
+      labels.push(days === null
+        ? `payment terms "${pay}" (no standard delay found, max ${BOUNDS.paymentMaxDays} days)`
+        : `payment terms "${pay}" (${days} days, max ${BOUNDS.paymentMaxDays})`);
+    }
+  }
+  if (v.customClause) {
+    exceptions.custom_clause = v.customClause;
+    labels.push('special conditions clause (free text)');
+  }
+  return { exceptions, labels };
+}
+
+/** Exceptions validées par une approbation (les anciennes demandes ne portaient que sur le fee). */
+export function approvalExceptions(a: { exceptions?: unknown; feeRequested: unknown }): ContractExceptions {
+  if (a.exceptions && typeof a.exceptions === 'object') return a.exceptions as ContractExceptions;
+  return { fee_percent: Number(a.feeRequested) };
 }
 
 export async function generateContract(input: GenerateContractInput, userId: string): Promise<GenerateContractResult> {
@@ -135,31 +246,33 @@ export async function generateContract(input: GenerateContractInput, userId: str
   }
 
   const fee = input.feePct ?? (mandat ? Number(mandat.feePourcentage) : 20);
-  if (!Number.isFinite(fee) || fee <= 0 || fee > 100) {
-    return { ok: false, error: 'invalid', message: `Invalid fee: ${input.feePct}.` };
-  }
+  const guarantee = input.guaranteeMonths ?? 3;
+  const ownership = input.ownershipMonths ?? 12;
+  const paymentRaw = (input.paymentTerms ?? mandat?.paymentTerms ?? '30j').trim() || '30j';
+  const customClause = input.customClause?.trim() || null;
 
-  if (fee < FEE_FLOOR) {
-    if (!mandat) {
-      return {
-        ok: false, error: 'needs_admin_approval',
-        message: `A ${fee}% fee is below the ${FEE_FLOOR}% floor and needs admin approval, which is tied to a mandate. Create the mandate first, or use a fee of ${FEE_FLOOR}% or more.`,
-      };
-    }
-    const approval = await prisma.contractApproval.findFirst({
-      where: { mandatId: mandat.id, status: 'APPROVED' },
-      orderBy: { approvedAt: 'desc' },
+  const check = computeExceptions({ fee, guarantee, ownership, paymentRaw, customClause });
+  if ('error' in check) return { ok: false, error: 'invalid', message: check.error };
+  const { exceptions, labels } = check;
+  const hasExceptions = Object.keys(exceptions).length > 0;
+
+  // Validation admin : une approbation APPROVED portant exactement sur ces valeurs
+  let approval: ApprovalState = 'not_needed';
+  let approvalId: string | null = null;
+  if (hasExceptions && mandat) {
+    const wanted = canonicalExceptions(exceptions);
+    const rows = await prisma.contractApproval.findMany({
+      where: { mandatId: mandat.id, status: { in: ['APPROVED', 'PENDING'] } },
+      orderBy: { createdAt: 'desc' },
     });
-    if (!approval || Number(approval.feeRequested) !== fee) {
-      const pending = await prisma.contractApproval.findFirst({ where: { mandatId: mandat.id, status: 'PENDING' } });
-      return {
-        ok: false, error: 'needs_admin_approval',
-        approvalStatus: pending ? 'PENDING' : 'NONE',
-        message: pending
-          ? `A ${fee}% fee is below the ${FEE_FLOOR}% floor. An admin approval request (${Number(pending.feeRequested)}%) is already pending for this mandate: an admin must approve it before the contract can be generated.`
-          : `A ${fee}% fee is below the ${FEE_FLOOR}% floor and needs admin approval first. Call generate_contract again with discount_reason to send the approval request to the admins.`,
-      };
-    }
+    const match = (s: string) => rows.find((r) => r.status === s && canonicalExceptions(approvalExceptions(r)) === wanted);
+    const approved = match('APPROVED');
+    const pending = match('PENDING');
+    if (approved) { approval = 'approved'; approvalId = approved.id; }
+    else if (pending) { approval = 'pending'; approvalId = pending.id; }
+    else approval = 'required';
+  } else if (hasExceptions) {
+    approval = 'required';
   }
 
   const terms: ContractForm = {
@@ -170,9 +283,9 @@ export async function generateContract(input: GenerateContractInput, userId: str
     email: (input.signatoryEmail ?? contact?.email ?? '').trim(),
     pays: resolveCountry(input.country ?? mandat?.applicableCountry, lang),
     feePct: String(Number(fee.toFixed(2))),
-    garantieMois: String(input.guaranteeMonths ?? 3),
-    proprieteMois: String(input.ownershipMonths ?? 12),
-    paiement: resolvePayment(input.paymentTerms ?? mandat?.paymentTerms, lang),
+    garantieMois: String(guarantee),
+    proprieteMois: String(ownership),
+    paiement: resolvePayment(paymentRaw, lang),
     poste: (input.jobTitle ?? mandat?.titrePoste ?? '').trim(),
   };
 
@@ -182,7 +295,34 @@ export async function generateContract(input: GenerateContractInput, userId: str
   if (!terms.rep) missing.push('signatory_name');
   if (!terms.email) missing.push('signatory_email');
 
-  const pdf = await renderContractPdf(terms, lang);
+  const articles = contractArticles(lang, terms).map(artHead);
+  if (customClause) articles.push(customClauseHeading(lang));
+
+  const summary: ContractSummary = {
+    lang, mandatId: mandat?.id ?? null, entrepriseId: entreprise.id, terms, customClause, articles,
+    exceptions, exceptionLabels: labels, approval, approvalId, missing,
+  };
+
+  if (input.preview) return { ok: true, preview: true, ...summary };
+
+  if (approval === 'required' || approval === 'pending') {
+    const list = labels.join('; ');
+    let message: string;
+    if (!mandat) {
+      message = `Outside the standard terms (${list}). Admin approval is tied to a mandate: create the mandate first, or stay within the standard terms.`;
+    } else if (approval === 'pending') {
+      message = `Outside the standard terms (${list}). An admin approval request for exactly these terms is already pending: an admin must approve it before the contract can be generated.`;
+    } else {
+      message = `Outside the standard terms (${list}). This needs admin approval first. Call generate_contract again with the same values and exception_reason to send the request to the admins.`;
+    }
+    return {
+      ok: false, error: 'needs_admin_approval', message,
+      approvalStatus: approval === 'pending' ? 'PENDING' : 'NONE',
+      exceptions, exceptionLabels: labels,
+    };
+  }
+
+  const pdf = await renderContractPdf(terms, lang, { customClause });
   const filename = `${lang === 'fr' ? 'Contrat' : 'Agreement'}_HumanUp_${fileSafe(entreprise.nom)}.pdf`;
   const doc = await uploadDocument(mandat ? 'mandat' : 'entreprise', mandat?.id ?? entreprise.id, pdf, filename, 'application/pdf');
   const url = `${PORTAL_BASE}${doc.url}`;
@@ -191,18 +331,19 @@ export async function generateContract(input: GenerateContractInput, userId: str
     data: {
       type: 'NOTE',
       titre: lang === 'fr' ? 'Contrat généré' : 'Contract generated',
-      contenu: `Fee ${terms.feePct}% · ${terms.paiement} · ${lang === 'fr' ? 'droit' : 'law'} : ${terms.pays} · ${lang.toUpperCase()}`,
+      contenu: `Fee ${terms.feePct}% · ${terms.paiement} · ${lang === 'fr' ? 'droit' : 'law'} : ${terms.pays} · ${lang.toUpperCase()}`
+        + (hasExceptions ? ` · ${lang === 'fr' ? 'hors conditions standard, validé par un admin' : 'non-standard terms approved by an admin'}` : ''),
       entiteType: mandat ? 'MANDAT' : 'ENTREPRISE',
       entiteId: mandat?.id ?? entreprise.id,
       userId,
       source: 'AGENT_IA',
-      metadata: { contractGenerated: true, url, fee: Number(terms.feePct), lang },
+      metadata: {
+        contractGenerated: true, url, fee: Number(terms.feePct), lang,
+        ...(hasExceptions ? { exceptions: exceptions as Record<string, string | number>, approvalId } : {}),
+      },
       fichiers: { create: [{ nom: filename, url, mimeType: 'application/pdf', taille: pdf.length }] },
     },
   });
 
-  return {
-    ok: true, url, filename, sizeBytes: pdf.length, lang,
-    mandatId: mandat?.id ?? null, entrepriseId: entreprise.id, terms, missing,
-  };
+  return { ok: true, preview: false, url, filename, sizeBytes: pdf.length, ...summary };
 }
