@@ -11,6 +11,7 @@ type Tool = 'home' | 'contrat' | 'cv';
 type Lang = 'fr' | 'en';
 
 // ─── CONTRAT : articles rédigés (FR/EN) ─────────────
+// Copie serveur : apps/api/src/modules/contracts/contract-text.ts (PDF du MCP generate_contract). Reporter toute modif d'article dans les deux.
 interface Article { num: string; title: string; blocks: { lead: string; text: string }[] }
 const A = (num: string, title: string, blocks: [string, string][]): Article => ({ num, title, blocks: blocks.map(([lead, text]) => ({ lead, text })) });
 

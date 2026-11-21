@@ -17,7 +17,7 @@ type MandatRef = { id: string; titrePoste: string; entreprise: string; client: {
  * plutot que de prendre le premier : un acces portail ouvert sur le mauvais mandat
  * montrerait des profils au mauvais client.
  */
-async function resolveMandat(args: Record<string, unknown>): Promise<MandatRef | { error: string; message: string; candidates?: unknown[] }> {
+export async function resolveMandat(args: Record<string, unknown>): Promise<MandatRef | { error: string; message: string; candidates?: unknown[] }> {
   const select = { id: true, titrePoste: true, entreprise: { select: { nom: true } }, client: { select: { id: true, nom: true, prenom: true, email: true } } } as const;
   const shape = (m: { id: string; titrePoste: string; entreprise: { nom: string }; client: MandatRef['client'] }): MandatRef =>
     ({ id: m.id, titrePoste: m.titrePoste, entreprise: m.entreprise.nom, client: m.client });
