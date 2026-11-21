@@ -153,13 +153,13 @@ describe('outil MCP generate_contract (base réelle)', () => {
   it('génère par nom de société et renvoie un lien vers un PDF existant', async () => {
     const res = await call({ company_name: `${PREFIX} Acme SAS`, fee_percent: 20 });
     expect(res.success).toBe(true);
-    expect(res.terms).toMatchObject({ client: `${PREFIX} Acme SAS`, fee_percent: 20, signatory: 'Claire Martin' });
+    expect(res.content).toMatchObject({ client: `${PREFIX} Acme SAS`, fee_percent: 20, signatory: 'Claire Martin' });
     await expect(fs.stat(localPath(res.pdf_url))).resolves.toBeTruthy();
   });
 
   it('génère par id de mandat', async () => {
     const res = await call({ mandate_id: mandatId, language: 'en' });
-    expect(res).toMatchObject({ success: true, mandate_id: mandatId, language: 'en' });
+    expect(res).toMatchObject({ success: true, mandate_id: mandatId, content: { language: 'en' } });
   });
 
   it('renvoie une erreur lisible pour un mandat inconnu', async () => {
