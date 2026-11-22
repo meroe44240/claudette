@@ -1525,3 +1525,26 @@ model Presentation {
   @@index([presentedAt])
   @@map("presentations")
 }
+
+// ============================================
+// WEBHOOKS SORTANTS — un abonnement reçoit en POST les événements choisis (voir lib/events.ts),
+// signés HMAC-SHA256 avec son secret. Désactivé automatiquement après 20 échecs d'affilée.
+// ============================================
+
+model Webhook {
+  id                  String    @id @default(uuid()) @db.Uuid
+  url                 String    @db.VarChar(1000)
+  eventTypes          String[]  @default([]) @map("event_types") // vide = tous les événements
+  secret              String    @db.VarChar(100)
+  description         String?   @db.VarChar(255)
+  active              Boolean   @default(true)
+  createdById         String?   @map("created_by_id") @db.Uuid
+  lastDeliveryAt      DateTime? @map("last_delivery_at") @db.Timestamptz()
+  lastStatus          Int?      @map("last_status")
+  lastError           String?   @map("last_error") @db.VarChar(500)
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("webhooks")
+}

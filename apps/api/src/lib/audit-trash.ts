@@ -27,7 +27,7 @@ export const TRACKED_MODELS = new Set([
 export function recordLabel(row: Record<string, any> | null | undefined): string | null {
   if (!row) return null;
   const person = [row.prenom, row.nom].filter(Boolean).join(' ');
-  const v = person || row.titrePoste || row.titre || row.title || row.name || row.intituleType || row.company || row.contact
+  const v = person || row.titrePoste || row.titre || row.title || row.name || row.intituleType || row.company || row.contact || row.inviteeName
     || row.raisonSociale || row.email || row.objet || row.nom;
   return v ? String(v).slice(0, 480) : null;
 }
@@ -151,13 +151,31 @@ type AuditInput = {
   metadata?: Record<string, unknown>;
 };
 
+/**
+ * Écritures sans auteur (tâches automatiques, pages publiques) : journalisées seulement pour
+ * les données qui produisent des événements (lib/events.ts), pour que get_events et les
+ * webhooks voient aussi ce que font les automatismes (détection Gmail, réservation publique…).
+ */
+export const SYSTEM_EVENT_MODELS = new Set(['Mandat', 'Candidat', 'Candidature', 'Lead', 'Booking', 'Presentation', 'Entreprise', 'Client', 'Document']);
+
+/** Faut-il journaliser une écriture sur ce modèle dans le contexte courant ? */
+export function shouldAudit(model: string) {
+  const ctx = getContext();
+  if (ctx?.dryRun) return false;
+  if (ctx?.userId) return TRACKED_MODELS.has(model) || model === 'Document';
+  return SYSTEM_EVENT_MODELS.has(model);
+}
+
 export async function writeAudit(client: PrismaClient, entries: AuditInput[]) {
   const ctx = getContext();
-  if (!ctx?.userId || ctx.dryRun || entries.length === 0) return;
+  if (ctx?.dryRun || entries.length === 0) return;
+  if (!ctx?.userId) entries = entries.filter((e) => SYSTEM_EVENT_MODELS.has(e.model));
+  if (!entries.length) return;
+  const batchId = ctx?.batchId ?? randomUUID();
   try {
     await client.auditLog.createMany({
       data: entries.map((e) => ({
-        userId: ctx.userId!,
+        userId: ctx?.userId ?? null,
         action: e.action,
         entityType: e.model.toUpperCase(),
         entityId: e.entityId && uuidRe.test(e.entityId) ? e.entityId : null,
@@ -166,12 +184,17 @@ export async function writeAudit(client: PrismaClient, entries: AuditInput[]) {
         metadata: (e.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
         before: (slim(e.before) ?? undefined) as Prisma.InputJsonValue | undefined,
         after: (slim(e.after) ?? undefined) as Prisma.InputJsonValue | undefined,
-        source: ctx.source,
-        toolName: ctx.toolName ?? null,
-        externe: !!ctx.externe || e.action === 'EXTERNAL',
-        batchId: ctx.batchId,
+        source: ctx?.source ?? 'SYSTEM',
+        toolName: ctx?.toolName ?? null,
+        externe: !!ctx?.externe || e.action === 'EXTERNAL',
+        batchId,
       })),
     });
+    // Événements → webhooks abonnés (en arrière-plan, ne bloque jamais l'écriture).
+    const meta = { userId: ctx?.userId ?? null, source: ctx?.source ?? 'SYSTEM', toolName: ctx?.toolName ?? null };
+    import('../modules/webhooks/webhook.service.js')
+      .then((m) => m.dispatchFromAudit(entries.map((e) => ({ ...e, ...meta }))))
+      .catch((err) => console.warn('[webhooks] envoi impossible :', (err as Error).message));
   } catch (err) {
     // Le journal ne doit jamais faire échouer l'action elle-même.
     console.error('[audit] écriture impossible :', (err as Error).message);
@@ -257,29 +280,34 @@ export async function restoreBatch(client: PrismaClient, batchId: string) {
       // Profondeur croissante : les parents avant les enfants. Parmi les racines d'un même lot,
       // une ligne peut dépendre d'une autre : on réessaie celles qui échouent sur une clé.
       let queue = [...pending];
-      for (let pass = 0; pass < 4 && queue.length; pass++) {
+      // On repasse tant qu'un passage remet au moins une ligne : l'ordre de suppression peut
+      // être l'inverse de l'ordre des liens (historique, puis candidatures, puis mandat…).
+      while (queue.length) {
         const retry: typeof queue = [];
+        let progress = false;
+        let blocked: (typeof queue)[number] | null = null;
         for (const e of queue) {
           const d = (tx as any)[lc(e.model)];
           const exists = await d.findUnique({ where: { id: e.recordId }, select: { id: true } });
-          if (exists) { skipped.push({ model: e.model, id: e.recordId, reason: 'already exists' }); continue; }
+          if (exists) { skipped.push({ model: e.model, id: e.recordId, reason: 'already exists' }); progress = true; continue; }
           try {
             await tx.$executeRawUnsafe('SAVEPOINT restore_row');
             await d.create({ data: reviveRow(e.model, e.data as Record<string, any>) });
             await tx.$executeRawUnsafe('RELEASE SAVEPOINT restore_row');
             restored.push({ model: e.model, id: e.recordId, label: e.label });
+            progress = true;
           } catch (err: any) {
             await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT restore_row');
-            if (err?.code === 'P2003' && pass < 3) { retry.push(e); continue; }
+            if (err?.code === 'P2003') { retry.push(e); blocked = e; continue; }
             if (err?.code === 'P2002') {
               const fields = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : String(err.meta?.target ?? '');
               throw new RestoreError(`Cannot restore ${e.model} "${e.label ?? e.recordId}": another record already uses the same ${fields}.`);
             }
-            if (err?.code === 'P2003') {
-              throw new RestoreError(`Cannot restore ${e.model} "${e.label ?? e.recordId}": a record it points to no longer exists.`);
-            }
             throw err;
           }
+        }
+        if (retry.length && !progress && blocked) {
+          throw new RestoreError(`Cannot restore ${blocked.model} "${blocked.label ?? blocked.recordId}": a record it points to no longer exists.`);
         }
         queue = retry;
       }
@@ -333,20 +361,20 @@ export function installAuditAndTrash(client: PrismaClient) {
       $allModels: {
         async create({ model, args, query }) {
           const result: any = await query(args);
-          if (TRACKED_MODELS.has(model)) {
+          if (shouldAudit(model)) {
             await writeAudit(client, [{ action: 'CREATE', model, entityId: result?.id, label: recordLabel(result), after: result }]);
           }
           return result;
         },
         async createMany({ model, args, query }) {
           const result: any = await query(args);
-          if (TRACKED_MODELS.has(model) && result?.count) {
+          if (shouldAudit(model) && result?.count) {
             await writeAudit(client, [{ action: 'CREATE', model, metadata: { count: result.count, bulk: true } }]);
           }
           return result;
         },
         async update({ model, args, query }) {
-          if (!TRACKED_MODELS.has(model) || !getContext()?.userId) return query(args);
+          if (!shouldAudit(model)) return query(args);
           const before = await delegate(client, model).findUnique({ where: args.where });
           const result: any = await query(args);
           const after = await afterRow(client, model, args, result);
@@ -357,7 +385,7 @@ export function installAuditAndTrash(client: PrismaClient) {
           return result;
         },
         async upsert({ model, args, query }) {
-          if (!TRACKED_MODELS.has(model) || !getContext()?.userId) return query(args);
+          if (!shouldAudit(model)) return query(args);
           const before = await delegate(client, model).findUnique({ where: args.where });
           const result: any = await query(args);
           const after = await afterRow(client, model, args, result);
@@ -371,7 +399,7 @@ export function installAuditAndTrash(client: PrismaClient) {
           return result;
         },
         async updateMany({ model, args, query }) {
-          if (!TRACKED_MODELS.has(model) || !getContext()?.userId) return query(args);
+          if (!shouldAudit(model)) return query(args);
           const before: any[] = await delegate(client, model).findMany({ where: args.where, take: 500 });
           const result = await query(args);
           if (before.length) {

@@ -10,6 +10,7 @@ import { rawPrisma } from '../../lib/db.js';
 import { registerTrashAuditTools } from './tools/trash-audit.js';
 import { registerRecordTools } from './tools/records.js';
 import { registerOwnershipPresentationTools } from './tools/ownership-presentations.js';
+import { registerEventTools } from './tools/events.js';
 // Track last tool call for health check
 let _lastToolCallAt: string | null = null;
 export function getLastToolCallAt() { return _lastToolCallAt; }
@@ -118,7 +119,7 @@ export const EXTERNAL_TOOLS = new Set([
 ]);
 
 /** Outils de lecture : pas de clé d'idempotence, pas de batch_id. */
-export const READ_TOOL = /^(get|list|search|find|suggest|plan|match|export|is)_/;
+export const READ_TOOL = /^(get|list|search|find|suggest|plan|match|export|is|describe|test)_/;
 
 function stableJson(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(stableJson).join(',')}]`;
@@ -167,5 +168,6 @@ export function registerAllTools(rawServer: McpServer) {
   registerTrashAuditTools(server);
   registerRecordTools(server);
   registerOwnershipPresentationTools(server);
+  registerEventTools(server);
   registerBlockedTools(server);
 }

@@ -37,6 +37,7 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   get_team_stats:                { level: 'free', roles: ['ADMIN'] },
   get_team_brief:                { level: 'free', roles: ['ADMIN'] },
   get_recruiter_stats:           { level: 'free', roles: ['ADMIN'] },
+  get_team_daily_report:         { level: 'free', roles: ['ADMIN'] },
 
   // ═══ CONFIRM — ecriture ═══
   send_email:                    { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
@@ -139,6 +140,15 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   update_presentation:           { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   list_presentations:            { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_candidate_push_status:     { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+
+  // ═══ ÉVÉNEMENTS, SCHÉMA, WEBHOOKS (lot 4) ═══
+  get_events:                    { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  describe_schema:               { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  list_webhooks:                 { level: 'free',    roles: ['ADMIN'] },
+  create_webhook:                { level: 'confirm', roles: ['ADMIN'] },
+  update_webhook:                { level: 'confirm', roles: ['ADMIN'] },
+  delete_webhook:                { level: 'confirm', roles: ['ADMIN'] },
+  test_webhook:                  { level: 'free',    roles: ['ADMIN'] },
 
   // ═══ SUPPRESSIONS (vers la corbeille, restaurables 30 jours) ═══
   delete_candidate:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
