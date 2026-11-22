@@ -10,53 +10,56 @@ datasource db {
 // ─── USERS ───────────────────────────────────────────
 
 model User {
-  id                 String    @id @default(uuid()) @db.Uuid
-  email              String    @unique @db.VarChar(255)
-  passwordHash       String    @db.VarChar(255)
-  nom                String    @db.VarChar(255)
-  prenom             String?   @db.VarChar(255)
-  avatarUrl          String?   @db.VarChar(500)
-  avatarData         String?   @db.Text   @map("avatar_data") // vignette uploadée (data-URI base64)
-  telephone          String?   @db.VarChar(50)
-  role               Role      @default(RECRUTEUR)
-  mustChangePassword Boolean   @default(true)
-  apiKey             String?   @unique @db.VarChar(255)
-  lastLoginAt        DateTime? @db.Timestamptz()
+  id                   String    @id @default(uuid()) @db.Uuid
+  email                String    @unique @db.VarChar(255)
+  passwordHash         String    @db.VarChar(255)
+  nom                  String    @db.VarChar(255)
+  prenom               String?   @db.VarChar(255)
+  avatarUrl            String?   @db.VarChar(500)
+  avatarData           String?   @map("avatar_data") @db.Text // vignette uploadée (data-URI base64)
+  telephone            String?   @db.VarChar(50)
+  role                 Role      @default(RECRUTEUR)
+  mustChangePassword   Boolean   @default(true)
+  apiKey               String?   @unique @db.VarChar(255)
+  lastLoginAt          DateTime? @db.Timestamptz()
   // Compensation (admin-only)
-  monthlySalary      Float?    // Coût mensuel chargé (salaire brut + charges)
-  variableRate       Float?    // Commission % sur les fees placés
-  startDate          DateTime? @db.Timestamptz() // Date de début pour prorata
-  calendlyUrl        String?   @db.VarChar(500)
-  slackUserId        String?   @db.VarChar(30) // Slack user id (e.g. U0123ABC) for DMs
-  fonction             Fonction @default(RECRUTEUR)
-  excludeFromTeamStats Boolean  @default(false)
+  monthlySalary        Float? // Coût mensuel chargé (salaire brut + charges)
+  variableRate         Float? // Commission % sur les fees placés
+  startDate            DateTime? @db.Timestamptz() // Date de début pour prorata
+  calendlyUrl          String?   @db.VarChar(500)
+  slackUserId          String?   @db.VarChar(30) // Slack user id (e.g. U0123ABC) for DMs
+  fonction             Fonction  @default(RECRUTEUR)
+  excludeFromTeamStats Boolean   @default(false)
   status               String    @default("ACTIVE") @db.VarChar(20) // ACTIVE | ARCHIVED
+  // Compte agent (IA) : peut écrire les profils recherchés par MCP sans confirmation
+  estAgent             Boolean   @default(false) @map("est_agent")
   dateSortie           DateTime? @map("date_sortie") @db.Timestamptz()
-  createdAt          DateTime  @default(now()) @db.Timestamptz()
-  updatedAt          DateTime  @updatedAt @db.Timestamptz()
+  createdAt            DateTime  @default(now()) @db.Timestamptz()
+  updatedAt            DateTime  @updatedAt @db.Timestamptz()
 
-  candidatsCreated    Candidat[]     @relation("CandidatCreatedBy")
-  clientsCreated      Client[]       @relation("ClientCreatedBy")
-  entreprisesCreated  Entreprise[]   @relation("EntrepriseCreatedBy")
-  mandatsCreated      Mandat[]       @relation("MandatCreatedBy")
-  candidaturesCreated Candidature[]  @relation("CandidatureCreatedBy")
-  activites           Activite[]     @relation("ActiviteUser")
-  assignedCandidats   Candidat[]     @relation("CandidatAssignedTo")
-  assignedClients     Client[]       @relation("ClientAssignedTo")
-  assignedMandats     Mandat[]       @relation("MandatAssignedTo")
-  sourcedMandats      Mandat[]       @relation("MandatSourceur")
-  salesMandats        Mandat[]       @relation("MandatSales")
-  recruteurMandats    Mandat[]       @relation("MandatRecruteur")
-  auditLogs           AuditLog[]     @relation("AuditLogUser")
-  reminders           Reminder[]     @relation("ReminderUser")
-  calendarSuggestions AiCalendarSuggestion[] @relation("CalendarSuggestionUser")
-  pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionUser")
-  onboardingCompleted  Boolean   @default(false)
-  mcpActionLogs        McpActionLog[]          @relation("McpActionLogUser")
-  recruiterObjectives  RecruiterObjective[]    @relation("RecruiterObjectiveUser")
-  aiPendingValidations AiPendingValidation[]   @relation("AiPendingValidationUser")
-  postsLinkedin        PostLinkedin[]          @relation("PostLinkedinAuteur")
-  postLinkedinComments PostLinkedinComment[]   @relation("PostLinkedinCommentAuteur")
+  candidatsCreated          Candidat[]             @relation("CandidatCreatedBy")
+  clientsCreated            Client[]               @relation("ClientCreatedBy")
+  entreprisesCreated        Entreprise[]           @relation("EntrepriseCreatedBy")
+  mandatsCreated            Mandat[]               @relation("MandatCreatedBy")
+  candidaturesCreated       Candidature[]          @relation("CandidatureCreatedBy")
+  activites                 Activite[]             @relation("ActiviteUser")
+  assignedCandidats         Candidat[]             @relation("CandidatAssignedTo")
+  assignedClients           Client[]               @relation("ClientAssignedTo")
+  assignedMandats           Mandat[]               @relation("MandatAssignedTo")
+  sourcedMandats            Mandat[]               @relation("MandatSourceur")
+  salesMandats              Mandat[]               @relation("MandatSales")
+  recruteurMandats          Mandat[]               @relation("MandatRecruteur")
+  auditLogs                 AuditLog[]             @relation("AuditLogUser")
+  reminders                 Reminder[]             @relation("ReminderUser")
+  calendarSuggestions       AiCalendarSuggestion[] @relation("CalendarSuggestionUser")
+  pipelineSuggestions       AiPipelineSuggestion[] @relation("PipelineSuggestionUser")
+  onboardingCompleted       Boolean                @default(false)
+  mcpActionLogs             McpActionLog[]         @relation("McpActionLogUser")
+  recruiterObjectives       RecruiterObjective[]   @relation("RecruiterObjectiveUser")
+  aiPendingValidations      AiPendingValidation[]  @relation("AiPendingValidationUser")
+  postsLinkedin             PostLinkedin[]         @relation("PostLinkedinAuteur")
+  postLinkedinComments      PostLinkedinComment[]  @relation("PostLinkedinCommentAuteur")
+  profilsRecherchesAnalyses ProfilRecherche[]      @relation("ProfilRechercheAnalysePar")
 
   @@map("users")
 }
@@ -79,16 +82,16 @@ enum Fonction {
 // ─── ENTREPRISES ─────────────────────────────────────
 
 model Entreprise {
-  id           String            @id @default(uuid()) @db.Uuid
-  nom          String            @db.VarChar(255)
-  secteur      String?           @db.VarChar(100)
-  siteWeb      String?           @db.VarChar(500)
-  domaine      String?           @db.VarChar(255)
-  taille       TailleEntreprise?
-  localisation String?           @db.VarChar(255)
-  linkedinUrl  String?           @db.VarChar(500)
-  logoUrl      String?           @db.VarChar(1000)
-  notes        String?           @db.Text
+  id                String            @id @default(uuid()) @db.Uuid
+  nom               String            @db.VarChar(255)
+  secteur           String?           @db.VarChar(100)
+  siteWeb           String?           @db.VarChar(500)
+  domaine           String?           @db.VarChar(255)
+  taille            TailleEntreprise?
+  localisation      String?           @db.VarChar(255)
+  linkedinUrl       String?           @db.VarChar(500)
+  logoUrl           String?           @db.VarChar(1000)
+  notes             String?           @db.Text
   // Pappers (données légales françaises)
   siren             String?           @db.VarChar(9)
   siret             String?           @db.VarChar(14)
@@ -103,13 +106,17 @@ model Entreprise {
   pappersUrl        String?           @db.VarChar(500)
   pappersEnrichedAt DateTime?         @db.Timestamptz()
   pappersRawData    Json?
-  createdById  String?           @db.Uuid
-  createdBy    User?             @relation("EntrepriseCreatedBy", fields: [createdById], references: [id])
-  createdAt    DateTime          @default(now()) @db.Timestamptz()
-  updatedAt    DateTime          @updatedAt @db.Timestamptz()
+  // Profils recherchés : résumé court (« Cherche : ... / Pour : ... ») + date
+  resumeProfils     String?           @map("resume_profils") @db.Text
+  resumeProfilsDate DateTime?         @map("resume_profils_date") @db.Timestamptz()
+  createdById       String?           @db.Uuid
+  createdBy         User?             @relation("EntrepriseCreatedBy", fields: [createdById], references: [id])
+  createdAt         DateTime          @default(now()) @db.Timestamptz()
+  updatedAt         DateTime          @updatedAt @db.Timestamptz()
 
-  clients Client[]
-  mandats Mandat[]
+  clients           Client[]
+  mandats           Mandat[]
+  profilsRecherches ProfilRecherche[]
 
   @@map("entreprises")
 }
@@ -145,7 +152,7 @@ model Client {
   createdAt    DateTime     @default(now()) @db.Timestamptz()
   updatedAt    DateTime     @updatedAt @db.Timestamptz()
 
-  mandats Mandat[]
+  mandats        Mandat[]
   portalAccesses PortalAccess[] @relation("PortalAccessClient")
 
   @@map("clients")
@@ -180,52 +187,52 @@ enum TypeClient {
 // ─── CANDIDATS ───────────────────────────────────────
 
 model Candidat {
-  id                 String    @id @default(uuid()) @db.Uuid
-  nom                String    @db.VarChar(255)
-  prenom             String?   @db.VarChar(255)
-  email              String?   @db.VarChar(255)
-  telephone          String?   @db.VarChar(50)
-  linkedinUrl        String?   @db.VarChar(500)
-  photoUrl           String?   @db.VarChar(1000)
-  cvUrl              String?   @db.VarChar(500)
-  cvTexte            String?   @db.Text
-  posteActuel        String?   @db.VarChar(255)
-  entrepriseActuelle String?   @db.VarChar(255)
-  localisation       String?   @db.VarChar(255)
-  salaireActuel      Int?
-  salaireSouhaite    Int?
-  anneesExperience   Int?
-  disponibilite      String?   @db.VarChar(100)
-  mobilite           String?   @db.VarChar(255)
-  source             String?   @db.VarChar(100)
-  aPlayer            Boolean   @default(false)
+  id                  String    @id @default(uuid()) @db.Uuid
+  nom                 String    @db.VarChar(255)
+  prenom              String?   @db.VarChar(255)
+  email               String?   @db.VarChar(255)
+  telephone           String?   @db.VarChar(50)
+  linkedinUrl         String?   @db.VarChar(500)
+  photoUrl            String?   @db.VarChar(1000)
+  cvUrl               String?   @db.VarChar(500)
+  cvTexte             String?   @db.Text
+  posteActuel         String?   @db.VarChar(255)
+  entrepriseActuelle  String?   @db.VarChar(255)
+  localisation        String?   @db.VarChar(255)
+  salaireActuel       Int?
+  salaireSouhaite     Int?
+  anneesExperience    Int?
+  disponibilite       String?   @db.VarChar(100)
+  mobilite            String?   @db.VarChar(255)
+  source              String?   @db.VarChar(100)
+  aPlayer             Boolean   @default(false)
   // Niveau choisi par le recruteur : A, B ou C
-  tier               String?   @db.VarChar(1)
-  tags               String[]  @default([])
-  notes              String?   @db.Text
-  consentementRgpd   Boolean   @default(false)
-  consentementDate   DateTime? @db.Timestamptz()
+  tier                String?   @db.VarChar(1)
+  tags                String[]  @default([])
+  notes               String?   @db.Text
+  consentementRgpd    Boolean   @default(false)
+  consentementDate    DateTime? @db.Timestamptz()
   // Consentement général de transfert du CV aux clients (confirmé par le candidat)
-  cvConsent          Boolean   @default(false) @map("cv_consent")
-  cvConsentDate      DateTime? @db.Timestamptz() @map("cv_consent_date")
+  cvConsent           Boolean   @default(false) @map("cv_consent")
+  cvConsentDate       DateTime? @map("cv_consent_date") @db.Timestamptz()
   // AI-generated fields
   aiPitchShort        String?   @db.VarChar(500)
   aiPitchLong         String?   @db.Text
-  aiSellingPoints     Json?     // string[] - key selling points
+  aiSellingPoints     Json? // string[] - key selling points
   aiIdealFor          String?   @db.Text
-  aiAnonymizedProfile Json?     // { titre, summary, bulletPoints }
+  aiAnonymizedProfile Json? // { titre, summary, bulletPoints }
   aiParsedAt          DateTime? @db.Timestamptz()
   // Carte de qualification (socle standard) : { <fieldKey>: { v: string, src: 'ia'|'manuel', at: iso } }
   qualification       Json?     @map("qualification")
-  createdById        String?   @db.Uuid
-  createdBy          User?     @relation("CandidatCreatedBy", fields: [createdById], references: [id])
-  assignedToId       String?   @db.Uuid
-  assignedTo         User?     @relation("CandidatAssignedTo", fields: [assignedToId], references: [id])
-  createdAt          DateTime  @default(now()) @db.Timestamptz()
-  updatedAt          DateTime  @updatedAt @db.Timestamptz()
+  createdById         String?   @db.Uuid
+  createdBy           User?     @relation("CandidatCreatedBy", fields: [createdById], references: [id])
+  assignedToId        String?   @db.Uuid
+  assignedTo          User?     @relation("CandidatAssignedTo", fields: [assignedToId], references: [id])
+  createdAt           DateTime  @default(now()) @db.Timestamptz()
+  updatedAt           DateTime  @updatedAt @db.Timestamptz()
 
-  candidatures Candidature[]
-  experiences  CandidatExperience[]
+  candidatures     Candidature[]
+  experiences      CandidatExperience[]
   candidateAccount CandidateAccount?
 
   @@map("candidats")
@@ -234,17 +241,17 @@ model Candidat {
 // ─── EXPERIENCES CANDIDAT ────────────────────────────
 
 model CandidatExperience {
-  id           String   @id @default(uuid()) @db.Uuid
-  candidatId   String   @db.Uuid
-  candidat     Candidat @relation(fields: [candidatId], references: [id], onDelete: Cascade)
-  titre        String   @db.VarChar(255)
-  entreprise   String   @db.VarChar(255)
-  anneeDebut   Int
-  anneeFin     Int?
-  highlights   String[] @default([])
-  source       String   @default("cv") @db.VarChar(20)
-  createdAt    DateTime @default(now()) @db.Timestamptz()
-  updatedAt    DateTime @updatedAt @db.Timestamptz()
+  id         String   @id @default(uuid()) @db.Uuid
+  candidatId String   @db.Uuid
+  candidat   Candidat @relation(fields: [candidatId], references: [id], onDelete: Cascade)
+  titre      String   @db.VarChar(255)
+  entreprise String   @db.VarChar(255)
+  anneeDebut Int
+  anneeFin   Int?
+  highlights String[] @default([])
+  source     String   @default("cv") @db.VarChar(20)
+  createdAt  DateTime @default(now()) @db.Timestamptz()
+  updatedAt  DateTime @updatedAt @db.Timestamptz()
 
   @@index([candidatId])
   @@index([titre])
@@ -260,75 +267,76 @@ enum MandatType {
 }
 
 model Mandat {
-  id               String       @id @default(uuid()) @db.Uuid
-  titrePoste       String       @db.VarChar(255)
+  id                   String             @id @default(uuid()) @db.Uuid
+  titrePoste           String             @db.VarChar(255)
   // CLIENT = mandat classique (contrat, fee, portail, compte dans les stats).
   // VIVIER = annonce de sourcing sans client : ni contrat, ni fee, ni portail, exclu des stats.
-  type             MandatType   @default(CLIENT)
-  natureContrat    String?      @map("nature_contrat") @db.VarChar(20) // CDI | CDD | INTERIM | FREELANCE
-  entrepriseId     String       @db.Uuid
-  entreprise       Entreprise   @relation(fields: [entrepriseId], references: [id])
-  clientId         String?      @db.Uuid
-  client           Client?      @relation(fields: [clientId], references: [id])
-  description      String?      @db.Text
-  localisation     String?      @db.VarChar(255)
-  salaireMin       Int?
-  salaireMax       Int?
-  feePourcentage   Decimal      @default(20.00) @db.Decimal(5, 2)
-  feeMontantEstime Int?
-  feeMontantFacture Int?
-  feeStatut        FeeStatut    @default(NON_FACTURE)
-  statut           StatutMandat @default(OUVERT)
-  isDormant        Boolean      @default(false) @map("is_dormant") // marqué à la main (rapport standup)
-  priorite         Priorite     @default(NORMALE)
+  type                 MandatType         @default(CLIENT)
+  natureContrat        String?            @map("nature_contrat") @db.VarChar(20) // CDI | CDD | INTERIM | FREELANCE
+  entrepriseId         String             @db.Uuid
+  entreprise           Entreprise         @relation(fields: [entrepriseId], references: [id])
+  clientId             String?            @db.Uuid
+  client               Client?            @relation(fields: [clientId], references: [id])
+  description          String?            @db.Text
+  localisation         String?            @db.VarChar(255)
+  salaireMin           Int?
+  salaireMax           Int?
+  feePourcentage       Decimal            @default(20.00) @db.Decimal(5, 2)
+  feeMontantEstime     Int?
+  feeMontantFacture    Int?
+  feeStatut            FeeStatut          @default(NON_FACTURE)
+  statut               StatutMandat       @default(OUVERT)
+  isDormant            Boolean            @default(false) @map("is_dormant") // marqué à la main (rapport standup)
+  priorite             Priorite           @default(NORMALE)
   // Étape du board cycle-de-vie (Prospection, 1er rendez-vous, Signature du mandat, Sourcing, Placé, Perdu)
-  etapeCycle       String?      @db.VarChar(60)
-  dateOuverture    DateTime     @default(now()) @db.Date
-  dateCloture      DateTime?    @db.Date
-  notes            String?      @db.Text
-  slug             String?      @unique @db.VarChar(255)
-  salaryRange      String?      @db.VarChar(255)
-  pitchPoints      Json?
-  isBookingPublic  Boolean      @default(true)
-  createdById      String?      @db.Uuid
-  createdBy        User?        @relation("MandatCreatedBy", fields: [createdById], references: [id])
-  assignedToId     String?      @db.Uuid
-  assignedTo       User?        @relation("MandatAssignedTo", fields: [assignedToId], references: [id])
-  sourceurId       String?      @db.Uuid
-  sourceur         User?        @relation("MandatSourceur", fields: [sourceurId], references: [id])
+  etapeCycle           String?            @db.VarChar(60)
+  dateOuverture        DateTime           @default(now()) @db.Date
+  dateCloture          DateTime?          @db.Date
+  notes                String?            @db.Text
+  slug                 String?            @unique @db.VarChar(255)
+  salaryRange          String?            @db.VarChar(255)
+  pitchPoints          Json?
+  isBookingPublic      Boolean            @default(true)
+  createdById          String?            @db.Uuid
+  createdBy            User?              @relation("MandatCreatedBy", fields: [createdById], references: [id])
+  assignedToId         String?            @db.Uuid
+  assignedTo           User?              @relation("MandatAssignedTo", fields: [assignedToId], references: [id])
+  sourceurId           String?            @db.Uuid
+  sourceur             User?              @relation("MandatSourceur", fields: [sourceurId], references: [id])
   // Binome : Sales chasse le mandat cote client, Recruteur source les candidats.
   // Backfill : salesId = assignedToId, recruteurId = sourceurId.
   // assignedTo/sourceur restent pour compat mais salesId/recruteurId sont la
   // source de verite pour le recap et les futures attributions CA/prime.
-  salesId          String?      @db.Uuid
-  sales            User?        @relation("MandatSales", fields: [salesId], references: [id])
-  recruteurId      String?      @db.Uuid
-  recruteur        User?        @relation("MandatRecruteur", fields: [recruteurId], references: [id])
-  transcript           String?      @db.Text
-  ficheDePoste         String?      @db.Text
+  salesId              String?            @db.Uuid
+  sales                User?              @relation("MandatSales", fields: [salesId], references: [id])
+  recruteurId          String?            @db.Uuid
+  recruteur            User?              @relation("MandatRecruteur", fields: [recruteurId], references: [id])
+  transcript           String?            @db.Text
+  ficheDePoste         String?            @db.Text
   scorecard            Json?
-  scorecardGeneratedAt DateTime?    @db.Timestamptz()
-  sourceLead       String?      @db.VarChar(255)
+  scorecardGeneratedAt DateTime?          @db.Timestamptz()
+  sourceLead           String?            @db.VarChar(255)
   // Stages visibles côté client via le portail (chantier 3) et le bouton
   // "Aperçu client" du kanban. Par défaut : les étapes où le client a du
   // contexte à voir (Screening, Case, Culture Fit, Offre, Engagé, Perdu).
-  visibleStages    StageCandidature[] @default([ENVOYE_CLIENT, ENTRETIEN_CLIENT, PROCESS, OFFRE, PLACE, REFUSE])
+  visibleStages        StageCandidature[] @default([ENVOYE_CLIENT, ENTRETIEN_CLIENT, PROCESS, OFFRE, PLACE, REFUSE])
   // Contrat mandat (envoi signature). Placeholder tant qu'aucun provider
   // (DocuSign/Yousign) n'est branché — trace en base seulement.
-  contractStatus   ContractStatus @default(DRAFT)
-  contractSentAt   DateTime?    @db.Timestamptz()
-  contractSignedAt DateTime?    @db.Timestamptz()
-  paymentTerms     String?      @db.VarChar(50)     // "reception", "30j", "45j_fdm", "60j", "signature"
-  applicableCountry String?     @db.VarChar(2)      // ISO-3166-1 alpha-2 (FR, GB, HK…)
-  createdAt        DateTime     @default(now()) @db.Timestamptz()
-  updatedAt        DateTime     @updatedAt @db.Timestamptz()
+  contractStatus       ContractStatus     @default(DRAFT)
+  contractSentAt       DateTime?          @db.Timestamptz()
+  contractSignedAt     DateTime?          @db.Timestamptz()
+  paymentTerms         String?            @db.VarChar(50) // "reception", "30j", "45j_fdm", "60j", "signature"
+  applicableCountry    String?            @db.VarChar(2) // ISO-3166-1 alpha-2 (FR, GB, HK…)
+  createdAt            DateTime           @default(now()) @db.Timestamptz()
+  updatedAt            DateTime           @updatedAt @db.Timestamptz()
 
-  trame               Json?                 // trame de qualification : [{ id, text }]
+  trame Json? // trame de qualification : [{ id, text }]
 
   candidatures        Candidature[]
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionMandat")
   contractApprovals   ContractApproval[]
   portalAccesses      PortalAccess[]         @relation("PortalAccessMandat")
+  profilsRecherches   ProfilRecherche[]
 
   @@map("mandats")
 }
@@ -344,21 +352,21 @@ enum ContractStatus {
 // (fee sous 18 %, garantie, propriété, paiement, clause libre). Bloque la
 // génération / l'envoi tant qu'un admin n'a pas approuvé.
 model ContractApproval {
-  id             String                 @id @default(uuid()) @db.Uuid
-  mandatId       String                 @db.Uuid
-  mandat         Mandat                 @relation(fields: [mandatId], references: [id], onDelete: Cascade)
-  requestedById  String                 @db.Uuid
-  feeRequested   Decimal                @db.Decimal(5, 2)  // ex: 15.00 (%)
-  reason         String                 @db.Text
+  id            String                 @id @default(uuid()) @db.Uuid
+  mandatId      String                 @db.Uuid
+  mandat        Mandat                 @relation(fields: [mandatId], references: [id], onDelete: Cascade)
+  requestedById String                 @db.Uuid
+  feeRequested  Decimal                @db.Decimal(5, 2) // ex: 15.00 (%)
+  reason        String                 @db.Text
   // Valeurs hors bornes demandées (fee_percent, guarantee_months, ownership_months,
   // payment_terms, custom_clause). null = ancienne demande, fee seul.
-  exceptions     Json?
-  status         ContractApprovalStatus @default(PENDING)
-  approvedById   String?                @db.Uuid
-  approvedAt     DateTime?              @db.Timestamptz()
-  rejectionNote  String?                @db.Text
-  createdAt      DateTime               @default(now()) @db.Timestamptz()
-  updatedAt      DateTime               @updatedAt @db.Timestamptz()
+  exceptions    Json?
+  status        ContractApprovalStatus @default(PENDING)
+  approvedById  String?                @db.Uuid
+  approvedAt    DateTime?              @db.Timestamptz()
+  rejectionNote String?                @db.Text
+  createdAt     DateTime               @default(now()) @db.Timestamptz()
+  updatedAt     DateTime               @updatedAt @db.Timestamptz()
 
   @@index([mandatId])
   @@index([status])
@@ -378,18 +386,18 @@ enum ContractApprovalStatus {
 // Un compte d'accès au portail : (Client contact) x (Mandat).
 // Un même client peut avoir plusieurs accès sur plusieurs mandats.
 model PortalAccess {
-  id           String   @id @default(uuid()) @db.Uuid
-  mandatId     String   @db.Uuid
-  mandat       Mandat   @relation("PortalAccessMandat", fields: [mandatId], references: [id], onDelete: Cascade)
-  clientId     String   @db.Uuid
-  client       Client   @relation("PortalAccessClient", fields: [clientId], references: [id], onDelete: Cascade)
-  email        String   @db.VarChar(255)
-  name         String?  @db.VarChar(255) // nom du contact invité (affiché dans le portail)
+  id           String    @id @default(uuid()) @db.Uuid
+  mandatId     String    @db.Uuid
+  mandat       Mandat    @relation("PortalAccessMandat", fields: [mandatId], references: [id], onDelete: Cascade)
+  clientId     String    @db.Uuid
+  client       Client    @relation("PortalAccessClient", fields: [clientId], references: [id], onDelete: Cascade)
+  email        String    @db.VarChar(255)
+  name         String?   @db.VarChar(255) // nom du contact invité (affiché dans le portail)
   notifSeenAt  DateTime? @map("notif_seen_at") @db.Timestamptz() // cloche : notifications lues jusqu'à
-  passwordHash String   @db.VarChar(255)
+  passwordHash String    @db.VarChar(255)
   lastLoginAt  DateTime? @db.Timestamptz()
   revokedAt    DateTime? @db.Timestamptz()
-  createdAt    DateTime @default(now()) @db.Timestamptz()
+  createdAt    DateTime  @default(now()) @db.Timestamptz()
 
   events    PortalEvent[]    @relation("PortalEventAccess")
   decisions PortalDecision[] @relation("PortalDecisionAccess")
@@ -405,14 +413,14 @@ model PortalAccess {
 // comment) écrit ici. Alimente la sidebar "Activité client" de la fiche
 // mandat + le dashboard "Activité client".
 model PortalEvent {
-  id             String            @id @default(uuid()) @db.Uuid
-  portalAccessId String            @db.Uuid
-  portalAccess   PortalAccess      @relation("PortalEventAccess", fields: [portalAccessId], references: [id], onDelete: Cascade)
-  mandatId       String            @db.Uuid  // dénormalisé pour indexer les queries dashboard
+  id             String          @id @default(uuid()) @db.Uuid
+  portalAccessId String          @db.Uuid
+  portalAccess   PortalAccess    @relation("PortalEventAccess", fields: [portalAccessId], references: [id], onDelete: Cascade)
+  mandatId       String          @db.Uuid // dénormalisé pour indexer les queries dashboard
   type           PortalEventType
-  candidatureId  String?           @db.Uuid  // renseigne quand l'event concerne un candidat spécifique
-  payload        Json              @default("{}")
-  createdAt      DateTime          @default(now()) @db.Timestamptz()
+  candidatureId  String?         @db.Uuid // renseigne quand l'event concerne un candidat spécifique
+  payload        Json            @default("{}")
+  createdAt      DateTime        @default(now()) @db.Timestamptz()
 
   @@index([mandatId, createdAt])
   @@index([portalAccessId])
@@ -431,14 +439,14 @@ enum PortalEventType {
 // Décision client sur une candidature (dénormalisée à part pour requêtes
 // rapides "combien de rencontrer / à discuter / écarter par mandat").
 model PortalDecision {
-  id             String                 @id @default(uuid()) @db.Uuid
-  portalAccessId String                 @db.Uuid
-  portalAccess   PortalAccess           @relation("PortalDecisionAccess", fields: [portalAccessId], references: [id], onDelete: Cascade)
-  candidatureId  String                 @db.Uuid
-  candidature    Candidature            @relation("PortalDecisionCandidature", fields: [candidatureId], references: [id], onDelete: Cascade)
+  id             String             @id @default(uuid()) @db.Uuid
+  portalAccessId String             @db.Uuid
+  portalAccess   PortalAccess       @relation("PortalDecisionAccess", fields: [portalAccessId], references: [id], onDelete: Cascade)
+  candidatureId  String             @db.Uuid
+  candidature    Candidature        @relation("PortalDecisionCandidature", fields: [candidatureId], references: [id], onDelete: Cascade)
   decision       PortalDecisionType
-  reason         String?                @db.Text
-  createdAt      DateTime               @default(now()) @db.Timestamptz()
+  reason         String?            @db.Text
+  createdAt      DateTime           @default(now()) @db.Timestamptz()
 
   @@index([candidatureId])
   @@index([portalAccessId])
@@ -476,16 +484,16 @@ model PortalComment {
 // ═══════════════════════════════════════════════════════════════════════════
 
 model MarketList {
-  id                String                     @id @default(uuid()) @db.Uuid
-  name              String                     @db.VarChar(255)
-  sectorTags        String[]                   @default([])  // metier(s) ciblé(s)
-  zones             String[]                   @default([])  // départements/villes/régions
-  excludedCompanies String[]                   @default([])  // sociétés a ne pas prospecter
-  candidatId        String?                    @db.Uuid // A-player rattaché : la liste lui appartient
-  candidatCtx       Json?                      // ctx technique dénormalisé { materiaux, technos, production, application }
-  createdById       String?                    @db.Uuid
-  createdAt         DateTime                   @default(now()) @db.Timestamptz()
-  updatedAt         DateTime                   @updatedAt @db.Timestamptz()
+  id                String   @id @default(uuid()) @db.Uuid
+  name              String   @db.VarChar(255)
+  sectorTags        String[] @default([]) // metier(s) ciblé(s)
+  zones             String[] @default([]) // départements/villes/régions
+  excludedCompanies String[] @default([]) // sociétés a ne pas prospecter
+  candidatId        String?  @db.Uuid // A-player rattaché : la liste lui appartient
+  candidatCtx       Json? // ctx technique dénormalisé { materiaux, technos, production, application }
+  createdById       String?  @db.Uuid
+  createdAt         DateTime @default(now()) @db.Timestamptz()
+  updatedAt         DateTime @updatedAt @db.Timestamptz()
 
   establishments MarketListEstablishment[]
 
@@ -495,23 +503,23 @@ model MarketList {
 }
 
 model MarketListEstablishment {
-  id            String                  @id @default(uuid()) @db.Uuid
-  marketListId  String                  @db.Uuid
-  marketList    MarketList              @relation(fields: [marketListId], references: [id], onDelete: Cascade)
+  id           String                    @id @default(uuid()) @db.Uuid
+  marketListId String                    @db.Uuid
+  marketList   MarketList                @relation(fields: [marketListId], references: [id], onDelete: Cascade)
   // Etablissement identifie via les CV ingerés
-  name          String                  @db.VarChar(255)
-  city          String?                 @db.VarChar(120)
-  sector        String?                 @db.VarChar(120)
-  effectif      String?                 @db.VarChar(60)
-  titles        String[]                @default([])  // intitulés de postes trouvés dans les CV
-  frequency     Int                     @default(1)    // combien de candidats ingérés ont travaillé ici
-  contexte      Json?                   // ctx technique { materiaux, technos, production, application } (matching + highlights)
-  contact       Json?                   // décideur résolu { civilite, prenom, nom, email, phone }
-  status        MarketEstablishmentStatus @default(NEW)
+  name         String                    @db.VarChar(255)
+  city         String?                   @db.VarChar(120)
+  sector       String?                   @db.VarChar(120)
+  effectif     String?                   @db.VarChar(60)
+  titles       String[]                  @default([]) // intitulés de postes trouvés dans les CV
+  frequency    Int                       @default(1) // combien de candidats ingérés ont travaillé ici
+  contexte     Json? // ctx technique { materiaux, technos, production, application } (matching + highlights)
+  contact      Json? // décideur résolu { civilite, prenom, nom, email, phone }
+  status       MarketEstablishmentStatus @default(NEW)
   // Lien optionnel vers l'Entreprise du CRM si créée
-  entrepriseId  String?                 @db.Uuid
-  createdAt     DateTime                @default(now()) @db.Timestamptz()
-  updatedAt     DateTime                @updatedAt @db.Timestamptz()
+  entrepriseId String?                   @db.Uuid
+  createdAt    DateTime                  @default(now()) @db.Timestamptz()
+  updatedAt    DateTime                  @updatedAt @db.Timestamptz()
 
   @@unique([marketListId, name])
   @@index([marketListId])
@@ -520,10 +528,10 @@ model MarketListEstablishment {
 }
 
 enum MarketEstablishmentStatus {
-  NEW              // Vient d'etre trouve
-  EXCLUDED         // Retire manuellement de la campagne
-  PROSPECTION      // Un lead / mandat a ete cree dessus
-  CLIENT_EXISTING  // Déjà client dans le CRM
+  NEW // Vient d'etre trouve
+  EXCLUDED // Retire manuellement de la campagne
+  PROSPECTION // Un lead / mandat a ete cree dessus
+  CLIENT_EXISTING // Déjà client dans le CRM
 }
 
 enum FeeStatut {
@@ -561,8 +569,8 @@ model Candidature {
   datePresentation    DateTime?        @db.Timestamptz()
   dateEntretienClient DateTime?        @db.Timestamptz()
   interlocuteurClient String?          @map("interlocuteur_client") @db.VarChar(255) // présentation : personne côté client
-  googleEventId       String?          @map("google_event_id") @db.VarChar(255)      // event agenda rattaché
-  presentationNoShow  Boolean          @default(false) @map("presentation_no_show")  // no-show : compte en RDV, pas en présentation
+  googleEventId       String?          @map("google_event_id") @db.VarChar(255) // event agenda rattaché
+  presentationNoShow  Boolean          @default(false) @map("presentation_no_show") // no-show : compte en RDV, pas en présentation
   dateDemarrage       DateTime?        @db.Date
   sourcePlacement     String?          @db.VarChar(255)
   motifRefus          MotifRefus?
@@ -571,14 +579,14 @@ model Candidature {
   // Colonne du portail client (Case / Culture Fit partagent l'étape PROCESS)
   portalStage         String?          @map("portal_stage") @db.VarChar(20)
   interetConfirme     Boolean          @default(false) @map("interet_confirme")
-  interetConfirmeDate DateTime?        @db.Timestamptz() @map("interet_confirme_date")
+  interetConfirmeDate DateTime?        @map("interet_confirme_date") @db.Timestamptz()
   createdById         String?          @db.Uuid
   createdBy           User?            @relation("CandidatureCreatedBy", fields: [createdById], references: [id])
   createdAt           DateTime         @default(now()) @db.Timestamptz()
   updatedAt           DateTime         @updatedAt @db.Timestamptz()
 
-  trameAnswers        Json?                 // réponses IA à la trame : [{ questionId, answer, source, filledAt }]
-  qualifFit           Json?  @map("qualif_fit") // fit par candidature : { <key>: { v, src, at } } (fitPoste, goNoGo, nextSteps)
+  trameAnswers Json? // réponses IA à la trame : [{ questionId, answer, source, filledAt }]
+  qualifFit    Json? @map("qualif_fit") // fit par candidature : { <key>: { v, src, at } } (fitPoste, goNoGo, nextSteps)
 
   stageHistory        StageHistory[]
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionCandidature")
@@ -629,16 +637,16 @@ enum MotifRefus {
 // ─── HISTORIQUE DES STAGES ───────────────────────────
 
 model StageHistory {
-  id            String            @id @default(uuid()) @db.Uuid
-  candidatureId String            @db.Uuid
-  candidature   Candidature       @relation(fields: [candidatureId], references: [id], onDelete: Cascade)
-  fromStage     StageCandidature?
-  toStage       StageCandidature
-  changedById   String?           @db.Uuid
-  changedAt     DateTime          @default(now()) @db.Timestamptz()
+  id                 String            @id @default(uuid()) @db.Uuid
+  candidatureId      String            @db.Uuid
+  candidature        Candidature       @relation(fields: [candidatureId], references: [id], onDelete: Cascade)
+  fromStage          StageCandidature?
+  toStage            StageCandidature
+  changedById        String?           @db.Uuid
+  changedAt          DateTime          @default(now()) @db.Timestamptz()
   // Espace candidat : message au candidat (écrit en français, traduit en anglais)
-  candidateMessage   String?      @map("candidate_message") @db.Text
-  candidateMessageEn String?      @map("candidate_message_en") @db.Text
+  candidateMessage   String?           @map("candidate_message") @db.Text
+  candidateMessageEn String?           @map("candidate_message_en") @db.Text
 
   @@index([candidatureId])
   @@map("stage_history")
@@ -751,16 +759,16 @@ model FichierActivite {
 
 // ─── INTEGRATION CONFIG ────────────────────────────
 model IntegrationConfig {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @db.Uuid
-  provider     String   @db.VarChar(50)  // 'allo', 'gmail', 'calendar'
-  accessToken  String?  @db.Text
-  refreshToken String?  @db.Text
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  provider     String    @db.VarChar(50) // 'allo', 'gmail', 'calendar'
+  accessToken  String?   @db.Text
+  refreshToken String?   @db.Text
   tokenExpiry  DateTime? @db.Timestamptz()
-  config       Json     @default("{}")    // extra config (drive folder id, etc.)
-  enabled      Boolean  @default(true)
-  createdAt    DateTime @default(now()) @db.Timestamptz()
-  updatedAt    DateTime @updatedAt @db.Timestamptz()
+  config       Json      @default("{}") // extra config (drive folder id, etc.)
+  enabled      Boolean   @default(true)
+  createdAt    DateTime  @default(now()) @db.Timestamptz()
+  updatedAt    DateTime  @updatedAt @db.Timestamptz()
 
   @@unique([userId, provider])
   @@map("integration_configs")
@@ -782,7 +790,7 @@ model AuditLog {
   entityType  String   @db.VarChar(50) // CANDIDAT, CLIENT, ENTREPRISE, MANDAT, etc.
   entityId    String   @db.Uuid
   entityLabel String?  @db.VarChar(500) // "Jean Dupont" for display
-  changes     Json?    // { field: { old: value, new: value } }
+  changes     Json? // { field: { old: value, new: value } }
   metadata    Json?
   createdAt   DateTime @default(now()) @db.Timestamptz()
 
@@ -817,7 +825,7 @@ model Reminder {
 
 model AiUsageLog {
   id           String   @id @default(uuid()) @db.Uuid
-  feature      String   @db.VarChar(50)  // cv_parsing, call_summary, call_brief, prospect_detection
+  feature      String   @db.VarChar(50) // cv_parsing, call_summary, call_brief, prospect_detection
   model        String   @db.VarChar(100) // claude-haiku-4-5-20251001, claude-sonnet-4-5-20250929
   userId       String   @db.Uuid
   inputTokens  Int      @default(0)
@@ -840,10 +848,10 @@ model AiUsageLog {
 model AiCallSummary {
   id              String   @id @default(uuid()) @db.Uuid
   activiteId      String   @unique @db.Uuid
-  entityType      String   @db.VarChar(20)  // CANDIDAT, CLIENT
+  entityType      String   @db.VarChar(20) // CANDIDAT, CLIENT
   entityId        String   @db.Uuid
   userId          String   @db.Uuid
-  summaryJson     Json     @default("{}")  // Full Claude response
+  summaryJson     Json     @default("{}") // Full Claude response
   actionsAccepted Json     @default("[]") // IDs of accepted action items
   updatesApplied  Json     @default("[]") // IDs of applied info updates
   createdAt       DateTime @default(now()) @db.Timestamptz()
@@ -858,12 +866,12 @@ model AiCallSummary {
 
 model AiCallBrief {
   id              String   @id @default(uuid()) @db.Uuid
-  entityType      String   @db.VarChar(20)  // CANDIDAT, CLIENT
+  entityType      String   @db.VarChar(20) // CANDIDAT, CLIENT
   entityId        String   @db.Uuid
   calendarEventId String?  @db.VarChar(255)
   userId          String   @db.Uuid
-  briefJson       Json     @default("{}")  // Structured brief content
-  webResultsRaw   Json?                    // Raw web search results for audit
+  briefJson       Json     @default("{}") // Structured brief content
+  webResultsRaw   Json? // Raw web search results for audit
   generatedAt     DateTime @default(now()) @db.Timestamptz()
   expiresAt       DateTime @db.Timestamptz() // 24h cache
 
@@ -875,16 +883,16 @@ model AiCallBrief {
 // ─── AI PROSPECT SEARCHES (Détection signaux faibles) ─
 
 model AiProspectSearch {
-  id               String   @id @default(uuid()) @db.Uuid
-  candidatId       String   @db.Uuid
-  campaignId       String?  @db.Uuid
-  userId           String   @db.Uuid
-  searchParams     Json     @default("{}")  // { sectors, locations, companySize, signalTypes }
-  resultsJson      Json     @default("[]") // Full results array
-  prospectsSelected Json    @default("[]") // Selected prospects
-  resultCount      Int      @default(0)
-  createdAt        DateTime @default(now()) @db.Timestamptz()
-  expiresAt        DateTime @db.Timestamptz() // 48h cache
+  id                String   @id @default(uuid()) @db.Uuid
+  candidatId        String   @db.Uuid
+  campaignId        String?  @db.Uuid
+  userId            String   @db.Uuid
+  searchParams      Json     @default("{}") // { sectors, locations, companySize, signalTypes }
+  resultsJson       Json     @default("[]") // Full results array
+  prospectsSelected Json     @default("[]") // Selected prospects
+  resultCount       Int      @default(0)
+  createdAt         DateTime @default(now()) @db.Timestamptz()
+  expiresAt         DateTime @db.Timestamptz() // 48h cache
 
   @@index([candidatId])
   @@index([expiresAt])
@@ -908,7 +916,7 @@ model AiCalendarSuggestion {
   createdAt       DateTime  @default(now()) @db.Timestamptz()
   resolvedAt      DateTime? @db.Timestamptz()
 
-  user            User      @relation("CalendarSuggestionUser", fields: [userId], references: [id])
+  user User @relation("CalendarSuggestionUser", fields: [userId], references: [id])
 
   @@index([userId, status])
   @@index([calendarEventId])
@@ -918,24 +926,24 @@ model AiCalendarSuggestion {
 // ─── AI PIPELINE SUGGESTIONS ─────────────────────
 
 model AiPipelineSuggestion {
-  id              String   @id @default(uuid()) @db.Uuid
-  candidatureId   String   @db.Uuid
-  mandatId        String   @db.Uuid
-  userId          String   @db.Uuid
-  currentStage    String   @db.VarChar(50)
-  suggestedStage  String   @db.VarChar(50)
-  confidence      Float
-  reasoning       String?  @db.Text
-  triggerType     String   @db.VarChar(50) // 'calendar_event', 'email', 'call', 'inactivity'
-  triggerData     Json?    @db.JsonB
-  status          String   @default("pending") @db.VarChar(20)
-  appliedStage    String?  @db.VarChar(50)
-  createdAt       DateTime @default(now()) @db.Timestamptz()
-  resolvedAt      DateTime? @db.Timestamptz()
+  id             String    @id @default(uuid()) @db.Uuid
+  candidatureId  String    @db.Uuid
+  mandatId       String    @db.Uuid
+  userId         String    @db.Uuid
+  currentStage   String    @db.VarChar(50)
+  suggestedStage String    @db.VarChar(50)
+  confidence     Float
+  reasoning      String?   @db.Text
+  triggerType    String    @db.VarChar(50) // 'calendar_event', 'email', 'call', 'inactivity'
+  triggerData    Json?     @db.JsonB
+  status         String    @default("pending") @db.VarChar(20)
+  appliedStage   String?   @db.VarChar(50)
+  createdAt      DateTime  @default(now()) @db.Timestamptz()
+  resolvedAt     DateTime? @db.Timestamptz()
 
-  candidature     Candidature @relation("PipelineSuggestionCandidature", fields: [candidatureId], references: [id])
-  mandat          Mandat      @relation("PipelineSuggestionMandat", fields: [mandatId], references: [id])
-  user            User        @relation("PipelineSuggestionUser", fields: [userId], references: [id])
+  candidature Candidature @relation("PipelineSuggestionCandidature", fields: [candidatureId], references: [id])
+  mandat      Mandat      @relation("PipelineSuggestionMandat", fields: [mandatId], references: [id])
+  user        User        @relation("PipelineSuggestionUser", fields: [userId], references: [id])
 
   @@index([userId, status])
   @@index([candidatureId])
@@ -1055,29 +1063,29 @@ model RecapRun {
 // Lead froid (push List Push / cold / call / csv) qui avance de « nouveau »
 // jusqu'à « RDV obtenu », puis peut être converti en Client (funnel /clients/pipeline).
 model Lead {
-  id             String            @id @default(uuid()) @db.Uuid
-  company        String            @db.VarChar(255)
-  contact        String            @db.VarChar(255)
-  role           String?           @db.VarChar(160)
-  city           String?           @db.VarChar(120)
-  sector         String?           @db.VarChar(120)
-  headcount      String?           @db.VarChar(60)
-  phone          String?           @db.VarChar(60)
-  email          String?           @db.VarChar(255)
-  source         String?           @db.VarChar(255) // libellé provenance
-  src            String            @default("cold") @db.VarChar(20) // push|cold|call|csv
-  stage          String            @default("nouveau") @db.VarChar(20) // nouveau|contacte|r1..r7|rdv|gagne|perdu
-  ownerId        String?           @db.Uuid
-  entrepriseId   String?           @db.Uuid
-  clientId       String?           @db.Uuid // Client créé à la conversion
+  id             String    @id @default(uuid()) @db.Uuid
+  company        String    @db.VarChar(255)
+  contact        String    @db.VarChar(255)
+  role           String?   @db.VarChar(160)
+  city           String?   @db.VarChar(120)
+  sector         String?   @db.VarChar(120)
+  headcount      String?   @db.VarChar(60)
+  phone          String?   @db.VarChar(60)
+  email          String?   @db.VarChar(255)
+  source         String?   @db.VarChar(255) // libellé provenance
+  src            String    @default("cold") @db.VarChar(20) // push|cold|call|csv
+  stage          String    @default("nouveau") @db.VarChar(20) // nouveau|contacte|r1..r7|rdv|gagne|perdu
+  ownerId        String?   @db.Uuid
+  entrepriseId   String?   @db.Uuid
+  clientId       String?   @db.Uuid // Client créé à la conversion
   pushedCandidat Json? // snapshot du candidat poussé
-  lostReason     String?           @db.VarChar(160)
-  lostNote       String?           @db.Text
-  lastContactAt  DateTime?         @db.Timestamptz()
-  createdAt      DateTime          @default(now()) @db.Timestamptz()
-  updatedAt      DateTime          @updatedAt @db.Timestamptz()
+  lostReason     String?   @db.VarChar(160)
+  lostNote       String?   @db.Text
+  lastContactAt  DateTime? @db.Timestamptz()
+  createdAt      DateTime  @default(now()) @db.Timestamptz()
+  updatedAt      DateTime  @updatedAt @db.Timestamptz()
 
-  interactions   LeadInteraction[]
+  interactions LeadInteraction[]
 
   @@index([ownerId])
   @@index([stage])
@@ -1098,34 +1106,34 @@ model LeadInteraction {
 }
 
 model JobOffer {
-  id            String   @id @default(uuid()) @db.Uuid
-  slug          String   @unique @db.VarChar(255)
-  titre         String   @db.VarChar(255)
-  description   String   @db.Text                         // accroche / résumé court (optionnel côté UI)
-  descriptionSociete String? @db.Text @map("description_societe")
-  missions      String?  @db.Text
-  packageInfo   String?  @db.Text @map("package_info")
-  localisation  String?  @db.VarChar(255)
+  id                   String   @id @default(uuid()) @db.Uuid
+  slug                 String   @unique @db.VarChar(255)
+  titre                String   @db.VarChar(255)
+  description          String   @db.Text // accroche / résumé court (optionnel côté UI)
+  descriptionSociete   String?  @map("description_societe") @db.Text
+  missions             String?  @db.Text
+  packageInfo          String?  @map("package_info") @db.Text
+  localisation         String?  @db.VarChar(255)
   // ── Versions anglaises (job board bilingue FR/EN) ──
-  titreEn            String? @db.VarChar(255) @map("titre_en")
-  descriptionEn      String? @db.Text         @map("description_en")
-  descriptionSocieteEn String? @db.Text       @map("description_societe_en")
-  missionsEn         String? @db.Text         @map("missions_en")
-  packageInfoEn      String? @db.Text         @map("package_info_en")
-  localisationEn     String? @db.VarChar(255) @map("localisation_en")
-  contractType  String?  @db.VarChar(50)   // CDI, CDD, FREELANCE, STAGE, ALTERNANCE
-  remote        String?  @db.VarChar(50)   // ONSITE, HYBRID, REMOTE
-  salaireMin    Int?
-  salaireMax    Int?
-  currency      String?  @default("EUR") @db.VarChar(3)  // EUR | GBP | USD (devise du salaire)
-  secteur       String?  @db.VarChar(100)
-  entrepriseNom String?  @db.VarChar(255)  // affiché publiquement, ou null = confidentiel
-  tags          String[] @default([])
-  published     Boolean  @default(false)
-  mandatId      String?  @db.Uuid
-  createdById   String?  @db.Uuid
-  createdAt     DateTime @default(now()) @db.Timestamptz()
-  updatedAt     DateTime @updatedAt @db.Timestamptz()
+  titreEn              String?  @map("titre_en") @db.VarChar(255)
+  descriptionEn        String?  @map("description_en") @db.Text
+  descriptionSocieteEn String?  @map("description_societe_en") @db.Text
+  missionsEn           String?  @map("missions_en") @db.Text
+  packageInfoEn        String?  @map("package_info_en") @db.Text
+  localisationEn       String?  @map("localisation_en") @db.VarChar(255)
+  contractType         String?  @db.VarChar(50) // CDI, CDD, FREELANCE, STAGE, ALTERNANCE
+  remote               String?  @db.VarChar(50) // ONSITE, HYBRID, REMOTE
+  salaireMin           Int?
+  salaireMax           Int?
+  currency             String?  @default("EUR") @db.VarChar(3) // EUR | GBP | USD (devise du salaire)
+  secteur              String?  @db.VarChar(100)
+  entrepriseNom        String?  @db.VarChar(255) // affiché publiquement, ou null = confidentiel
+  tags                 String[] @default([])
+  published            Boolean  @default(false)
+  mandatId             String?  @db.Uuid
+  createdById          String?  @db.Uuid
+  createdAt            DateTime @default(now()) @db.Timestamptz()
+  updatedAt            DateTime @updatedAt @db.Timestamptz()
 
   @@index([published])
   @@map("job_offers")
@@ -1152,18 +1160,18 @@ model BookingSettings {
 }
 
 model Booking {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @db.Uuid      // le recruteur (proprietaire du creneau)
-  slotStart    DateTime @db.Timestamptz()
-  slotEnd      DateTime @db.Timestamptz()
-  inviteeName  String   @db.VarChar(200)
-  inviteeEmail String   @db.VarChar(255)
-  inviteeNote  String?  @db.Text
-  meetLink     String?  @db.VarChar(500)
-  googleEventId String? @db.VarChar(255)
-  status       String   @default("CONFIRMED") @db.VarChar(20) // CONFIRMED | CANCELLED
-  candidatId   String?  @db.Uuid
-  createdAt    DateTime @default(now()) @db.Timestamptz()
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid // le recruteur (proprietaire du creneau)
+  slotStart     DateTime @db.Timestamptz()
+  slotEnd       DateTime @db.Timestamptz()
+  inviteeName   String   @db.VarChar(200)
+  inviteeEmail  String   @db.VarChar(255)
+  inviteeNote   String?  @db.Text
+  meetLink      String?  @db.VarChar(500)
+  googleEventId String?  @db.VarChar(255)
+  status        String   @default("CONFIRMED") @db.VarChar(20) // CONFIRMED | CANCELLED
+  candidatId    String?  @db.Uuid
+  createdAt     DateTime @default(now()) @db.Timestamptz()
 
   @@index([userId, slotStart])
   @@map("bookings")
@@ -1273,4 +1281,110 @@ model NoteUserSettings {
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   @@map("note_user_settings")
+}
+
+// ─── PROFILS RECHERCHÉS (photo, à la date d'analyse, des profils qu'une
+// société recrute, déduite de ses offres). Module séparé : ni mandats, ni job
+// board, ni stats. Anti-doublon : (société, fonction, intitulé normalisé).
+
+enum FonctionProfil {
+  ENGINEERING
+  SALES
+}
+
+enum SenioriteProfil {
+  JUNIOR
+  CONFIRME
+  SENIOR
+  LEAD
+  MANAGER
+  DIRECTION
+}
+
+enum RemoteProfil {
+  ONSITE
+  HYBRID
+  REMOTE
+}
+
+enum MarcheProfil {
+  FRANCE
+  EUROPE
+  UK
+  US
+  CANADA
+  APAC
+}
+
+enum LienMandatProfil {
+  CONCURRENT_DIRECT
+  SIMILAIRE
+  VOISINE
+}
+
+enum SegmentClient {
+  SMB
+  MID_MARKET
+  ENTERPRISE
+  PUBLIC
+}
+
+enum MotionVente {
+  OUTBOUND
+  INBOUND
+  PLG
+  PARTENAIRES
+  FIELD_SALES
+}
+
+model ProfilRecherche {
+  id                 String            @id @default(uuid()) @db.Uuid
+  entrepriseId       String            @map("entreprise_id") @db.Uuid
+  entreprise         Entreprise        @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
+  fonction           FonctionProfil
+  intituleType       String            @map("intitule_type") @db.VarChar(255)
+  // Clé anti-doublon : intitulé en minuscules, sans accents ni espaces multiples
+  intituleCle        String            @map("intitule_cle") @db.VarChar(255)
+  seniorite          SenioriteProfil?
+  pays               String?           @db.VarChar(100)
+  ville              String?           @db.VarChar(150)
+  remote             RemoteProfil?
+  langues            String[]          @default([])
+  salaireMin         Int?              @map("salaire_min")
+  salaireMax         Int?              @map("salaire_max")
+  devise             String?           @db.VarChar(3)
+  ote                String?           @db.VarChar(255)
+  equity             String?           @db.VarChar(255)
+  marche             MarcheProfil?
+  // [{ titre, url, dateVue, source }]
+  offresSources      Json              @default("[]") @map("offres_sources")
+  dateAnalyse        DateTime          @default(now()) @map("date_analyse") @db.Timestamptz()
+  analyseParId       String?           @map("analyse_par_id") @db.Uuid
+  analysePar         User?             @relation("ProfilRechercheAnalysePar", fields: [analyseParId], references: [id], onDelete: SetNull)
+  analyseParNom      String?           @map("analyse_par_nom") @db.VarChar(100)
+  mandatLieId        String?           @map("mandat_lie_id") @db.Uuid
+  mandatLie          Mandat?           @relation(fields: [mandatLieId], references: [id], onDelete: SetNull)
+  typeLien           LienMandatProfil? @map("type_lien")
+  experienceAttendue String?           @map("experience_attendue") @db.Text
+  // Engineering
+  technos            String[]          @default([])
+  perimetre          String?           @db.Text
+  projets            String?           @db.Text
+  // Sales
+  segments           SegmentClient[]   @default([])
+  secteurs           String[]          @default([])
+  acheteurType       String?           @map("acheteur_type") @db.VarChar(255)
+  cycleDeVente       String?           @map("cycle_de_vente") @db.VarChar(100)
+  panierMoyenAcv     String?           @map("panier_moyen_acv") @db.VarChar(100)
+  motion             MotionVente[]     @default([])
+  territoire         String?           @db.VarChar(255)
+  quota              String?           @db.VarChar(255)
+  outilsMethodo      String[]          @default([]) @map("outils_methodo")
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@unique([entrepriseId, fonction, intituleCle])
+  @@index([fonction])
+  @@index([dateAnalyse])
+  @@map("profils_recherches")
 }

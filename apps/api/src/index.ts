@@ -53,6 +53,7 @@ import jobOfferRouter, { jobOfferPublicRouter } from './modules/job-offers/job-o
 import bookingRouter, { bookingPublicRouter } from './modules/booking/booking.router.js';
 import candidateSpaceRouter from './modules/candidate-space/candidate-space.router.js';
 import postLinkedinRouter from './modules/post-linkedin/post-linkedin.router.js';
+import profilRechercheRouter from './modules/profils-recherches/profil-recherche.router.js';
 import confirmationRouter, { confirmationPublicRouter } from './modules/confirmation/confirmation.router.js';
 import notesRouter, { notesRecallRouter } from './modules/notes/notes.router.js';
 
@@ -192,6 +193,7 @@ async function buildApp() {
   await app.register(jobOfferPublicRouter, { prefix: '/api/v1/public/job-offers' });
   await app.register(bookingRouter, { prefix: '/api/v1/booking' });
   await app.register(postLinkedinRouter, { prefix: '/api/v1/posts-linkedin' });
+  await app.register(profilRechercheRouter, { prefix: '/api/v1/profils-recherches' });
   // Pages de réservation publiques (remplace Calendly) — aucune auth.
   await app.register(bookingPublicRouter, { prefix: '/api/v1/public/booking' });
   // Confirmation candidat (intérêt + consentement transfert CV)

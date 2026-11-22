@@ -23,6 +23,7 @@ import { registerLeadTools } from './tools/leads.js';
 import { registerPortalTools } from './tools/portal.js';
 import { registerMergeTools } from './tools/merge.js';
 import { registerContractTools } from './tools/contracts.js';
+import { registerTargetProfileTools } from './tools/target-profiles.js';
 
 export type ToolHandler = (args: Record<string, unknown>) => Promise<{ content: Array<{ type: 'text'; text: string }> }>;
 
@@ -76,5 +77,6 @@ export function registerAllTools(server: McpServer) {
   registerPortalTools(server);
   registerMergeTools(server);
   registerContractTools(server);
+  registerTargetProfileTools(server);
   registerBlockedTools(server);
 }

@@ -43,6 +43,7 @@ const BookPage = lazy(() => import('./pages/book/index'));
 const CalendrierLinkedinPage = lazy(() => import('./pages/calendrier-linkedin/index'));
 const ListPushPage = lazy(() => import('./pages/list-push/index'));
 const SourcingKalentPage = lazy(() => import('./pages/sourcing/index'));
+const ProfilsRecherchesPage = lazy(() => import('./pages/profils-recherches/index'));
 const SettingsPage = lazy(() => import('./pages/settings/index'));
 const CandidatsPage = lazy(() => import('./pages/candidats/index'));
 const CandidatDetailPage = lazy(() => import('./pages/candidats/[id]'));
@@ -134,6 +135,7 @@ export default function App() {
           <Route path="calendrier-linkedin" element={<CalendrierLinkedinPage />} />
           <Route path="list-push" element={<ListPushPage />} />
           <Route path="sourcing" element={<SourcingKalentPage />} />
+          <Route path="profils-recherches" element={<ProfilsRecherchesPage />} />
           <Route path="notes" element={<NotesPage />} />
           <Route path="notes/:id" element={<NoteCallPage />} />
           <Route path="candidats" element={<CandidatsPage />} />

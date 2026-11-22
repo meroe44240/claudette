@@ -83,6 +83,13 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   merge_clients:                 { level: 'confirm', roles: ['ADMIN'] },
   merge_companies:               { level: 'confirm', roles: ['ADMIN'] },
 
+  // ═══ PROFILS RECHERCHÉS (écriture : admins + comptes agents, contrôlé dans le service) ═══
+  get_company_target_profiles:   { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  search_target_profiles:        { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  match_candidate_to_profiles:   { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  upsert_target_profile:         { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  set_company_profiles_summary:  { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+
   // ═══ PUSHES ═══
 
   // ═══ AUTO-PUSH (3-step flow) ═══
