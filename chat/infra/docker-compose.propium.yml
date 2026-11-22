@@ -10,6 +10,11 @@ services:
       default: {}
       propium:
         aliases: [humanup-chat]
+  hub:
+    networks:
+      default: {}
+      propium:
+        aliases: [humanup-chat-hub]
   postgres:
     mem_limit: 512m
   caddy:

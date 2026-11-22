@@ -1,0 +1,153 @@
+# Agent Hub
+
+The Agent Hub sits between Humanup Chat (Mattermost) and the agents. People write to an agent in their private conversation; the Hub queues the message, hands it to the agent, and posts the agent's answers, questions and redirects under the agent's own name. Agents never hold a Mattermost token: they only talk to the Hub, and every rule (who they may write to, daily caps) is applied here.
+
+Base URL for agents: `https://chat.propium.co/hub` (REST under `/v1`, MCP at `/mcp`).
+Auth: `Authorization: Bearer hub_<agent>_...` (one key per agent).
+
+## Connect a new agent in 5 minutes
+
+1. **Declare it** in `chat/agents.yaml` (key, name, what it does, scope, who it may write to). Then, on the server:
+   ```bash
+   cd /opt/humanup-chat/infra && C="docker compose -f docker-compose.yml -f docker-compose.propium.yml"
+   $C build seed && $C run --rm seed     # creates its Mattermost bot and DMs
+   $C restart hub                        # imports it and creates its API key
+   cat .secrets/agent-keys.json          # the agent's key (shown once here; only its hash is in the database)
+   ```
+2. **Choose how it receives messages** in `.secrets/agents.secrets.json`, then `$C restart hub`:
+   ```json
+   { "linh":  { "delivery_mode": "doorbell", "wake_url": "https://api2.cursor.sh/automations/webhook/<routine-id>", "wake_key": "crsr_..." },
+     "awa":   { "delivery_mode": "poll" },
+     "hugo":  { "delivery_mode": "webhook", "webhook_url": "https://my-agent.example.com/hook", "webhook_secret": "<random>" },
+     "khoa":  { "delivery_mode": "claude-test" } }
+   ```
+   | Mode | What the Hub does | For |
+   |---|---|---|
+   | `doorbell` | POSTs a small wake (`{"event":"pending_messages","count":2,...}`) to the routine URL with the routine's key. The agent then pulls its messages over MCP or REST. Wakes are grouped; it rings again after 2 min if nobody came. | Grok Bot (its webhook does not reliably pass the message body) |
+   | `poll` | Nothing. The agent calls `get_pending_messages` whenever it runs. | Agents on a schedule (Théo, weekly) |
+   | `webhook` | POSTs the events, signed. The response can carry replies. Retries with backoff. | Your own servers |
+   | `claude-test` | The built-in Claude adapter plays the agent (needs `ANTHROPIC_API_KEY`). | Testing without Grok Bot |
+3. **Test it** with curl (below), then write to the agent in the app.
+
+## curl
+
+```bash
+HUB=https://chat.propium.co/hub
+KEY=hub_linh_xxxxxxxx
+
+# What is waiting for me? (marks the events delivered)
+curl -s $HUB/v1/agents/me/pending -H "Authorization: Bearer $KEY"
+
+# Answer a message (post_id comes from the event)
+curl -s -X POST $HUB/v1/tools/reply -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+  -d '{"reply_to_post_id":"<post_id>","text":"Je regarde la fiche tout de suite."}'
+
+# Ask Léa a question she can answer in one click
+curl -s -X POST $HUB/v1/tools/ask_human -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' -d '{
+  "to": "lea", "subject": "Stage check: Anh Tran",
+  "question": "BNP declined Anh Tran yesterday. Move her to Lost?",
+  "choices": ["Yes", "No"],
+  "object": {"type": "candidate", "label": "Anh Tran · CFO Vietnam", "url": "https://ats.propium.co/candidats/<id>"},
+  "deadline": "2026-11-25T10:00:00Z"
+}'
+
+# Once you acted on the answer
+curl -s -X POST $HUB/v1/tools/resolve_question -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+  -d '{"question_id":"q_...","confirmation":"C’est fait, Anh Tran est en Perdu.","propium_action":"Moved Anh Tran (CFO Vietnam) to Lost"}'
+```
+
+## Python (standard library only)
+
+A complete polling agent: fetch, answer, ack.
+
+```python
+import json, time, urllib.request
+
+HUB = "https://chat.propium.co/hub"
+KEY = "hub_awa_xxxxxxxx"
+
+def call(path, body=None):
+    req = urllib.request.Request(
+        HUB + path,
+        data=None if body is None else json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"},
+        method="GET" if body is None else "POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.load(r)
+
+while True:
+    for ev in call("/v1/agents/me/pending")["events"]:
+        who = ev["from"]
+        if ev["type"] == "message":
+            text = "Bien reçu, je m'en occupe." if who["lang"] == "fr" else "Got it, on it."
+            call("/v1/tools/reply", {"reply_to_post_id": ev["post_id"], "text": text})  # replying acks the event
+        elif ev["type"] == "answer":
+            # ev["choice"] (button) or ev["text"] (free answer); do the work in Propium, then:
+            call("/v1/tools/resolve_question", {
+                "question_id": ev["question_id"], "confirmation": "C'est noté.",
+                "propium_action": f"Applied answer {ev.get('choice') or ev.get('text')}",
+            })
+    time.sleep(30)
+```
+
+Verifying a webhook (mode `webhook`):
+
+```python
+import hmac, hashlib
+
+def verify(secret: str, body: bytes, header: str) -> bool:
+    # header: "t=<unix>,v1=<hex>"
+    parts = dict(p.split("=", 1) for p in header.split(","))
+    expected = hmac.new(secret.encode(), f"{parts['t']}.".encode() + body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, parts["v1"])
+# Reply in the HTTP response if you want: {"replies": [{"reply_to_post_id": "...", "text": "..."}]}
+```
+
+## Grok Bot
+
+1. In the agent's Grok Bot, add the MCP server `https://chat.propium.co/hub/mcp` with the header `Authorization: Bearer hub_<agent>_...` (same way as the Propium MCP).
+2. Create a routine with a **Webhook** trigger. Put its URL and `crsr_` key in `agents.secrets.json` (`doorbell` mode).
+3. Routine instructions:
+   > You were woken because messages are waiting for you on Humanup Chat. Call `get_pending_messages`. For each event: if it is outside your scope, call `redirect_to_agent`; otherwise answer with `reply` (reply_to_post_id = the event's post_id) in the person's language (`from.lang`). For an `answer` event, act in Propium (log in English), then call `resolve_question`. When you need something from someone, use `ask_human` with 2 to 4 choices when you can.
+4. Optional fallback if wakes are slow: a scheduled routine every few minutes with the same instructions (the queue is the same).
+
+## Tools
+
+Same names and inputs over REST (`POST /v1/tools/<name>`) and MCP.
+
+| Tool | What it does |
+|---|---|
+| `get_pending_messages` | Messages and answers waiting for you, marked delivered. Re-delivered after 10 min if never acked |
+| `ack` | `{"event_ids":[...]}`: done with these (replying to a post acks it) |
+| `reply` | `reply_to_post_id` to answer, or `to` (person key) to start a message; your rules decide who you may write to |
+| `ask_human` | Question card: subject, Propium object + link, question, 2 to 4 choices, deadline (default 24 h). Max 10 per person per day by default |
+| `resolve_question` | Closes a question: one-line confirmation in the thread + what you did in Propium (for the registry) |
+| `redirect_to_agent` | Out of scope: one line naming the right agent + a button to forward the message |
+| `get_thread` | Read a thread in one of your conversations |
+| `list_agents` | Directory: key, name, what they do, scope |
+| `list_my_questions` | Your questions and their status |
+| `query_registry` | The registry of every question (agents allowed to read it, e.g. Inès) |
+
+## Events
+
+```json
+{ "event_id": 42, "type": "message",
+  "from": { "key": "lea", "name": "Léa Tonnoir", "first_name": "Léa", "lang": "fr", "timezone": "Asia/Ho_Chi_Minh" },
+  "text": "Bonjour Khoa, peux-tu vérifier la fiche de Anh Tran ?",
+  "post_id": "8pc5eq...", "thread_root_id": null, "created_at": "2026-11-23T03:12:00Z",
+  "forwarded_from": "linh" }
+
+{ "event_id": 43, "type": "answer", "question_id": "q_By_e64z", "from": { "key": "lea", ... },
+  "choice": "Yes", "text": null, "question": { "subject": "...", "body": "...", "choices": ["Yes","No"], "object": { ... } } }
+```
+
+## For Méroë and Inès
+
+- Registry: `GET /v1/registry?agent=linh&human=lea&status=open&since=2026-11-01&format=csv`, with the admin token (`.secrets/hub-admin-token`, everything) or Inès's agent key (without the HR and commission questions).
+- Audit log: `GET /v1/admin/audit?since=...&format=csv` (admin token).
+- In the app: `/inbox` (your open questions, by deadline) and `/agents` (who does what).
+
+## Tests
+
+`test/e2e.ts` drives a real Mattermost + Hub as Léa and as agents: 29 checks covering all three delivery modes, MCP, cards and buttons, `/inbox`, redirects, rules, the registry and the Claude test agent.

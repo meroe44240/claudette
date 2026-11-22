@@ -138,6 +138,32 @@ services:
       - mm_data:/mattermost-data:ro
       - ./backup/rclone.conf:/config/rclone/rclone.conf:ro
 
+  # Agent Hub: routes conversations between people and agents (REST + MCP for agents).
+  hub:
+    build: ../hub
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mattermost:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      DATABASE_URL: postgres://${POSTGRES_USER:-mmuser}:${POSTGRES_PASSWORD}@chat-db:5432/agenthub
+      MM_URL: http://mattermost:8065
+      MM_PUBLIC_URL: https://${CHAT_DOMAIN}
+      HUB_URL_FOR_MM: http://hub:3100
+      HUB_PUBLIC_URL: https://${CHAT_DOMAIN}/hub
+      CONFIG_DIR: /config
+      SECRETS_DIR: /secrets
+      # Only for agents set to "claude-test" in .secrets/agents.secrets.json.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ../humans.yaml:/config/humans.yaml:ro
+      - ../agents.yaml:/config/agents.yaml:ro
+      - ./.secrets:/secrets
+    mem_limit: 384m
+
   # One-shot seed (accounts, bots, channels, sidebars):  docker compose run --rm seed
   seed:
     build:
