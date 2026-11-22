@@ -119,6 +119,15 @@ export async function upload(
     createdAt: new Date().toISOString(),
   };
 
+  // Pas de ligne en base pour un document : on le journalise pour l'événement document.added.
+  const { writeAudit } = await import('../../lib/audit-trash.js');
+  const { rawPrisma } = await import('../../lib/db.js');
+  const ENTITY_EN: Record<EntityType, string> = { candidat: 'candidate', client: 'client', entreprise: 'company', mandat: 'mandate' };
+  await writeAudit(rawPrisma, [{
+    action: 'CREATE', model: 'Document', entityId: id, label: originalName,
+    metadata: { url: meta.url, filename: originalName, mime_type: mimeType, size: meta.size, entity_type: ENTITY_EN[entityType], entity_id: entityId },
+  }]);
+
   return meta;
 }
 

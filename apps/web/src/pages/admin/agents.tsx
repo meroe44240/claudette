@@ -5,6 +5,7 @@ import { Bot, Copy, KeyRound, Pause, Play, Plus, ScrollText, Trash2 } from 'luci
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import { t, LOCALE } from '../../lib/i18n';
+import WebhooksSection from '../../components/agents/WebhooksSection';
 
 interface Agent {
   id: string;
@@ -221,6 +222,8 @@ export default function AgentsPage() {
           </tbody>
         </table>
       </div>
+
+      <WebhooksSection />
     </div>
   );
 }

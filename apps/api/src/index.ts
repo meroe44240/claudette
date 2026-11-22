@@ -59,6 +59,7 @@ import agentsRouter from './modules/agents/agents.router.js';
 import auditRouter from './modules/audit/audit.router.js';
 import trashRouter from './modules/trash/trash.router.js';
 import { presentationRouter, ownershipRouter } from './modules/presentations/presentation.router.js';
+import webhookRouter from './modules/webhooks/webhook.router.js';
 import confirmationRouter, { confirmationPublicRouter } from './modules/confirmation/confirmation.router.js';
 import notesRouter, { notesRecallRouter } from './modules/notes/notes.router.js';
 
@@ -209,6 +210,7 @@ async function buildApp() {
   await app.register(trashRouter, { prefix: '/api/v1/corbeille' });
   await app.register(presentationRouter, { prefix: '/api/v1/presentations' });
   await app.register(ownershipRouter, { prefix: '/api/v1/ownership' });
+  await app.register(webhookRouter, { prefix: '/api/v1/webhooks' });
   // Pages de réservation publiques (remplace Calendly) — aucune auth.
   await app.register(bookingPublicRouter, { prefix: '/api/v1/public/booking' });
   // Confirmation candidat (intérêt + consentement transfert CV)

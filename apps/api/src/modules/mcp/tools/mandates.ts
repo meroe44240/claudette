@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { wrapTool } from '../mcp.tools.js';
+import prisma from '../../../lib/db.js';
 import * as mandatService from '../../mandats/mandat.service.js';
 import * as candidatureService from '../../candidatures/candidature.service.js';
 import * as settingsService from '../../settings/settings.service.js';
@@ -235,7 +236,7 @@ export function registerMandateTools(server: McpServer) {
     "[CONFIRMATION REQUIRED] Moves a candidate to another stage in a mandate pipeline. Always talk to the user with the English stage names: " + STAGES_DOC + ". " +
       "Some stages REQUIRE extra input (same as the forms in the web app) and the tool REFUSES the move if it is missing: " +
       "PLACE (Won) needs fee_montant_facture + date_demarrage + source_placement + source_lead. " +
-      "ENTRETIEN_CLIENT (Client interview) needs date_entretien_client, the date and time of the interview with the client. " +
+      "ENTRETIEN_CLIENT (Client interview) needs date_entretien_client, the date and time of the interview with the client, and interlocuteur_client, the person met on the client side. " +
       "REFUSE (Lost) needs motif_refus (closed list). " +
       "Always ask the recruiter or sales for these values before calling, then call again with all params. You MUST ask for confirmation.",
     {
@@ -244,6 +245,7 @@ export function registerMandateTools(server: McpServer) {
       motif_refus: z.string().optional().describe('REQUIRED for REFUSE (Lost): ' + MOTIFS_DOC),
       motif_refus_detail: z.string().optional().describe('Optional for REFUSE: free-text detail of the reason.'),
       date_entretien_client: z.string().optional().describe('REQUIRED for ENTRETIEN_CLIENT (Client interview): date and time of the interview with the client (ISO 8601, e.g. 2026-08-05T14:30:00). Saved as dateEntretienClient.'),
+      interlocuteur_client: z.string().optional().describe('REQUIRED for ENTRETIEN_CLIENT (Client interview): name of the person the candidate meets on the client side (e.g. "Claire Martin, HR Director").'),
       brief_client: z.string().optional().describe('Recommended for ENVOYE_CLIENT (Sent to client): candidate brief sent to the client (text). Saved as a note.'),
       fee_montant_facture: z.number().int().nonnegative().optional().describe('REQUIRED for PLACE (Won): invoice amount in euros (integer). Writes feeMontantFacture + feeStatut=FACTURE on the mandate.'),
       date_demarrage: z.string().optional().describe('REQUIRED for PLACE (Won): candidate start date (YYYY-MM-DD or ISO 8601).'),
@@ -275,6 +277,16 @@ export function registerMandateTools(server: McpServer) {
             'If the interview is not scheduled yet, offer two options: leave the candidate at the current stage, or move them to Sent to client (ENVOYE_CLIENT) for now, which needs no date.',
         };
       }
+      if (args.new_stage === 'ENTRETIEN_CLIENT' && !String(args.interlocuteur_client ?? '').trim()) {
+        const current = await prisma.candidature.findUnique({ where: { id: args.candidature_id as string }, select: { interlocuteurClient: true } });
+        if (!current?.interlocuteurClient?.trim()) {
+          return {
+            error: 'interlocuteur_client_required',
+            missing_fields: ['interlocuteur_client'],
+            message: 'The Client interview stage needs the person the candidate meets on the client side (same rule as in the web app). Ask the user, then call again with interlocuteur_client.',
+          };
+        }
+      }
       if (args.new_stage === 'REFUSE' && !args.motif_refus) {
         return {
           error: 'motif_refus_required',
@@ -292,6 +304,7 @@ export function registerMandateTools(server: McpServer) {
       if (args.new_stage === 'ENTRETIEN_CLIENT') {
         const raw = String(args.date_entretien_client);
         updates.dateEntretienClient = raw.includes('T') ? raw : new Date(`${raw}T09:00:00`).toISOString();
+        if (args.interlocuteur_client) updates.interlocuteurClient = String(args.interlocuteur_client).trim();
       }
 
       if (args.new_stage === 'PLACE') {
