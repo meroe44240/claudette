@@ -7,6 +7,7 @@ import cookie from '@fastify/cookie';
 import formbody from '@fastify/formbody';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
+import { runWithContext } from './lib/request-context.js';
 import fastifyStatic from '@fastify/static';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
@@ -54,6 +55,9 @@ import bookingRouter, { bookingPublicRouter } from './modules/booking/booking.ro
 import candidateSpaceRouter from './modules/candidate-space/candidate-space.router.js';
 import postLinkedinRouter from './modules/post-linkedin/post-linkedin.router.js';
 import profilRechercheRouter from './modules/profils-recherches/profil-recherche.router.js';
+import agentsRouter from './modules/agents/agents.router.js';
+import auditRouter from './modules/audit/audit.router.js';
+import trashRouter from './modules/trash/trash.router.js';
 import confirmationRouter, { confirmationPublicRouter } from './modules/confirmation/confirmation.router.js';
 import notesRouter, { notesRecallRouter } from './modules/notes/notes.router.js';
 
@@ -94,6 +98,11 @@ async function buildApp() {
     root: path.join(process.cwd(), 'uploads'),
     prefix: '/uploads/',
     decorateReply: false,
+  });
+
+  // Contexte de requête (auteur, lot) pour le journal d'audit et la corbeille.
+  app.addHook('onRequest', (request, _reply, done) => {
+    runWithContext({ source: request.url.startsWith('/mcp') ? 'MCP' : 'WEB' }, done);
   });
 
   await app.register(rateLimit, {
@@ -194,6 +203,9 @@ async function buildApp() {
   await app.register(bookingRouter, { prefix: '/api/v1/booking' });
   await app.register(postLinkedinRouter, { prefix: '/api/v1/posts-linkedin' });
   await app.register(profilRechercheRouter, { prefix: '/api/v1/profils-recherches' });
+  await app.register(agentsRouter, { prefix: '/api/v1/agents' });
+  await app.register(auditRouter, { prefix: '/api/v1/audit' });
+  await app.register(trashRouter, { prefix: '/api/v1/corbeille' });
   // Pages de réservation publiques (remplace Calendly) — aucune auth.
   await app.register(bookingPublicRouter, { prefix: '/api/v1/public/booking' });
   // Confirmation candidat (intérêt + consentement transfert CV)

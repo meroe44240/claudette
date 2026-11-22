@@ -100,6 +100,11 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   search_talents_kalent:         { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_enrich_credits:            { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
+  // ═══ CORBEILLE ET JOURNAL ═══
+  list_trash:                    { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  restore_record:                { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  get_record_history:            { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+
   // ═══ DELETE (avec confirmation) ═══
   delete_candidate:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
@@ -115,11 +120,13 @@ export function getToolPermission(toolName: string): ToolPermission {
   return TOOL_PERMISSIONS[toolName] || { level: 'blocked', roles: [] };
 }
 
-export function checkToolAccess(toolName: string, userRole: Role): { allowed: boolean; level: PermissionLevel; reason?: string } {
+export function checkToolAccess(toolName: string, userRole: Role, estAgent = false): { allowed: boolean; level: PermissionLevel; reason?: string } {
   const perm = getToolPermission(toolName);
   if (perm.level === 'blocked') {
     return { allowed: false, level: 'blocked', reason: 'This action is not allowed over MCP for security reasons.' };
   }
+  // Les agents ont accès à tout ce qui n'est pas bloqué : tout est tracé et réversible.
+  if (estAgent) return { allowed: true, level: 'free' };
   if (!perm.roles.includes(userRole)) {
     return { allowed: false, level: perm.level, reason: `This tool is not available to the ${userRole} role. Ask an admin to do it.` };
   }

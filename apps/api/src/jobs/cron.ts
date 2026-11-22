@@ -336,6 +336,18 @@ export function startCronJobs(): void {
   cronStarted = true;
   console.log('[Cron] Starting scheduled jobs...');
 
+  // Corbeille : purge de ce qui a plus de 30 jours, toutes les 6 heures
+  const trashPurgeInterval = setInterval(async () => {
+    try {
+      const { purgeExpired } = await import('../modules/trash/trash.service.js');
+      const n = await purgeExpired();
+      if (n) console.log(`[Cron] Corbeille : ${n} entrées purgées`);
+    } catch (err) {
+      console.error('[Cron] Purge corbeille :', (err as Error).message);
+    }
+  }, 6 * 60 * 60 * 1000);
+  intervals.push(trashPurgeInterval);
+
   // Check Slack report every 60 seconds
   const slackInterval = setInterval(checkSlackReport, 60 * 1000);
   intervals.push(slackInterval);

@@ -1,7 +1,8 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { verifyAccessToken } from '../lib/jwt.js';
-import prisma from '../lib/db.js';
 import { UnauthorizedError, ForbiddenError } from '../lib/errors.js';
+import { setContextUser } from '../lib/request-context.js';
+import { findUserByApiKey } from '../modules/agents/agent-keys.js';
 import type { Role } from '@prisma/client';
 
 declare module 'fastify' {
@@ -16,11 +17,13 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   const apiKey = request.headers['x-api-key'] as string | undefined;
 
   if (apiKey) {
-    const user = await prisma.user.findUnique({ where: { apiKey } });
+    const user = await findUserByApiKey(apiKey);
     if (!user) throw new UnauthorizedError('API Key invalide');
+    if (user.status !== 'ACTIVE') throw new UnauthorizedError('Compte suspendu ou désactivé');
     request.userId = user.id;
     request.userEmail = user.email;
     request.userRole = user.role;
+    setContextUser(user.id, 'API');
     return;
   }
 
@@ -35,6 +38,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     request.userId = payload.sub;
     request.userEmail = payload.email;
     request.userRole = payload.role as Role;
+    setContextUser(payload.sub);
   } catch {
     throw new UnauthorizedError('Token invalide ou expiré');
   }

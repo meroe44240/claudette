@@ -2,6 +2,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getMcpUser } from './mcp.auth.js';
 import { checkToolAccess, getToolPermission } from './mcp.permissions.js';
 import { logMcpAction } from './mcp.logging.js';
+import { runWithContext } from '../../lib/request-context.js';
+import { writeAudit } from '../../lib/audit-trash.js';
+import { rawPrisma } from '../../lib/db.js';
+import { registerTrashAuditTools } from './tools/trash-audit.js';
 // Track last tool call for health check
 let _lastToolCallAt: string | null = null;
 export function getLastToolCallAt() { return _lastToolCallAt; }
@@ -40,25 +44,39 @@ export function wrapTool(toolName: string, handler: (args: Record<string, unknow
       return { content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Not authenticated. Please sign in via OAuth.' }) }] };
     }
 
-    const access = checkToolAccess(toolName, user.userRole);
+    const access = checkToolAccess(toolName, user.userRole, user.estAgent);
+    const externe = EXTERNAL_TOOLS.has(toolName);
     if (!access.allowed) {
-      await logMcpAction({ userId: user.userId, toolName, level: access.level, input: args, success: false, error: access.reason });
+      await logMcpAction({ userId: user.userId, toolName, level: access.level, input: args, success: false, error: access.reason, externe });
       return { content: [{ type: 'text' as const, text: JSON.stringify({ error: access.reason }) }] };
     }
 
-    try {
-      const result = await handler(args, user);
-      const durationMs = Date.now() - start;
-      _lastToolCallAt = new Date().toISOString();
-      await logMcpAction({ userId: user.userId, toolName, level: access.level, input: args, output: result, success: true, durationMs });
-      return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
-    } catch (err: any) {
-      const durationMs = Date.now() - start;
-      await logMcpAction({ userId: user.userId, toolName, level: access.level, input: args, success: false, error: err.message, durationMs });
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: err.message || 'Internal error' }) }] };
-    }
+    // Un appel d'outil = un contexte : ses écritures partagent un lot (journal, corbeille).
+    return runWithContext({ source: 'MCP', userId: user.userId, toolName, externe }, async () => {
+      try {
+        const result = await handler(args, user);
+        const durationMs = Date.now() - start;
+        _lastToolCallAt = new Date().toISOString();
+        await logMcpAction({ userId: user.userId, toolName, level: access.level, input: args, output: result, success: true, durationMs, externe });
+        // Une action externe qui a échoué (ex. : Gmail non branché) n'est pas journalisée comme faite.
+        const failed = !!result && typeof result === 'object' && 'error' in (result as Record<string, unknown>);
+        if (externe && !failed) {
+          await writeAudit(rawPrisma, [{ action: 'EXTERNAL', model: 'MCP_TOOL', label: toolName, metadata: { input: args as Record<string, unknown> } }]);
+        }
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+      } catch (err: any) {
+        const durationMs = Date.now() - start;
+        await logMcpAction({ userId: user.userId, toolName, level: access.level, input: args, success: false, error: err.message, durationMs, externe });
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ error: err.message || 'Internal error' }) }] };
+      }
+    });
   };
 }
+
+/** Outils qui agissent hors de Propium : autorisés, mais marqués « externe » dans le journal. */
+export const EXTERNAL_TOOLS = new Set([
+  'send_email', 'grant_portal_access', 'revoke_portal_access', 'click_to_call', 'create_rdv', 'enrich_contact',
+]);
 
 export function registerAllTools(server: McpServer) {
   registerCandidateTools(server);
@@ -78,5 +96,6 @@ export function registerAllTools(server: McpServer) {
   registerMergeTools(server);
   registerContractTools(server);
   registerTargetProfileTools(server);
+  registerTrashAuditTools(server);
   registerBlockedTools(server);
 }

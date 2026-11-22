@@ -15,7 +15,9 @@ export async function login(input: LoginInput) {
   const valid = await verifyPassword(input.password, user.passwordHash);
   if (!valid) throw new UnauthorizedError('Email ou mot de passe incorrect');
 
-  if (user.status === 'ARCHIVED') throw new UnauthorizedError('Compte désactivé. Contactez votre administrateur.');
+  if (user.status !== 'ACTIVE') throw new UnauthorizedError('Compte désactivé. Contactez votre administrateur.');
+  // Un agent IA travaille uniquement par MCP, avec sa clé.
+  if (user.estAgent) throw new UnauthorizedError('Les comptes agents ne se connectent pas à l\'interface.');
 
   await prisma.user.update({
     where: { id: user.id },
@@ -47,7 +49,7 @@ export async function refreshTokens(refreshToken: string) {
     const payload = await verifyRefreshToken(refreshToken);
     const user = await prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user) throw new UnauthorizedError('Utilisateur introuvable');
-    if (user.status === 'ARCHIVED') throw new UnauthorizedError('Compte désactivé');
+    if (user.status !== 'ACTIVE' || user.estAgent) throw new UnauthorizedError('Compte désactivé');
 
     const tokenPayload = { sub: user.id, email: user.email, role: user.role };
     const newAccessToken = await generateAccessToken(tokenPayload);

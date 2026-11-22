@@ -79,6 +79,9 @@ const AlertsPage = lazy(() => import('./pages/dashboard/alerts'));
 const EmailsPage = lazy(() => import('./pages/emails/index'));
 const McpLogsPage = lazy(() => import('./pages/mcp-logs/index'));
 const AdminAnalyticsPage = lazy(() => import('./pages/admin/analytics'));
+const AgentsPage = lazy(() => import('./pages/admin/agents'));
+const JournalPage = lazy(() => import('./pages/admin/journal'));
+const CorbeillePage = lazy(() => import('./pages/corbeille/index'));
 const NotesPage = lazy(() => import('./pages/notes/index'));
 const NoteCallPage = lazy(() => import('./pages/notes/[id]'));
 const NotesLivePanel = lazy(() => import('./pages/notes/live'));
@@ -174,6 +177,9 @@ export default function App() {
           <Route path="emails" element={<EmailsPage />} />
           <Route path="mcp-logs" element={<McpLogsPage />} />
           <Route path="admin/analytics" element={<AdminAnalyticsPage />} />
+          <Route path="admin/agents" element={<AgentsPage />} />
+          <Route path="admin/journal" element={<JournalPage />} />
+          <Route path="corbeille" element={<CorbeillePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
