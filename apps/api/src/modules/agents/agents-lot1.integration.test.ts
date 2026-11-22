@@ -23,22 +23,31 @@ async function login(email: string) {
   return res;
 }
 
+// Le transport MCP écrit directement sur la socket : on passe par un vrai serveur HTTP local
+// (les requêtes simulées de Fastify n'émulent pas toute la socket selon la version de Node).
+let baseUrl = '';
+
+async function mcpPost(key: string, body: unknown, session?: string) {
+  const r = await fetch(`${baseUrl}/mcp`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${key}`, accept: 'application/json, text/event-stream', 'content-type': 'application/json',
+      ...(session ? { 'mcp-session-id': session } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await r.text();
+  return { statusCode: r.status, headers: r.headers, body: text, json: () => JSON.parse(text) };
+}
+
 /** Ouvre une session MCP et renvoie l'en-tête de session. */
 async function mcpInit(key: string) {
-  const res = await app.inject({
-    method: 'POST', url: '/mcp',
-    headers: { authorization: `Bearer ${key}`, accept: 'application/json, text/event-stream', 'content-type': 'application/json' },
-    payload: { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '1' } } },
-  });
-  return { res, session: res.headers['mcp-session-id'] as string | undefined };
+  const res = await mcpPost(key, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '1' } } });
+  return { res, session: res.headers.get('mcp-session-id') ?? undefined };
 }
 
 async function mcpCall(key: string, session: string, name: string, args: Record<string, unknown>, id = 2) {
-  return app.inject({
-    method: 'POST', url: '/mcp',
-    headers: { authorization: `Bearer ${key}`, accept: 'application/json, text/event-stream', 'content-type': 'application/json', 'mcp-session-id': session },
-    payload: { jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } },
-  });
+  return mcpPost(key, { jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } }, session);
 }
 
 /** Le transport MCP répond en SSE : on extrait le JSON du message. */
@@ -51,7 +60,9 @@ function mcpResult(body: string): any {
 
 beforeAll(async () => {
   app = await buildApp();
-  await app.ready();
+  await app.listen({ port: 0, host: '127.0.0.1' });
+  const addr = app.server.address();
+  baseUrl = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
   for (const [email, role] of [[ADMIN, 'ADMIN'], [RECRUTEUR, 'RECRUTEUR']] as const) {
     await prisma.user.upsert({
       where: { email },
