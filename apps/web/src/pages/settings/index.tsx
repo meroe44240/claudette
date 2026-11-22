@@ -471,26 +471,6 @@ export default function SettingsPage() {
       ),
     },
     {
-      key: 'estAgent',
-      header: t('Compte agent'),
-      render: (u: User) => (
-        <label className="inline-flex cursor-pointer items-center gap-2" title={t('Peut écrire les profils recherchés par MCP')}>
-          <input
-            type="checkbox"
-            checked={!!u.estAgent}
-            onChange={(e) =>
-              updateUserMutation.mutate({
-                id: u.id,
-                patch: { estAgent: e.target.checked },
-              })
-            }
-            className="h-4 w-4 cursor-pointer rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
-          />
-          <span className="text-xs text-neutral-500">{u.estAgent ? t('Agent') : '—'}</span>
-        </label>
-      ),
-    },
-    {
       key: 'objectifCaTrimestre',
       header: t('Objectif CA / trim. (€)'),
       render: (u: User) => (

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar, Wrench, Megaphone, CalendarClock, Plug, Linkedin, UserSearch, Video, Crosshair } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar, Wrench, Megaphone, CalendarClock, Plug, Linkedin, UserSearch, Video, Crosshair, Bot, ScrollText, Trash2 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 import { t } from '../../lib/i18n';
 
@@ -56,6 +56,9 @@ const navSections: NavSection[] = [
 // Bas du bandeau : "Mes intégrations" (tous) + Paramètres (admin only)
 const integrationsItem: NavItem = { to: '/settings/integrations', icon: Plug, label: t('Mes intégrations') };
 const paramItem: NavItem = { to: '/settings', icon: Settings, label: t('Paramètres') };
+const trashItem: NavItem = { to: '/corbeille', icon: Trash2, label: t('Corbeille') };
+const agentsItem: NavItem = { to: '/admin/agents', icon: Bot, label: t('Agents') };
+const journalItem: NavItem = { to: '/admin/journal', icon: ScrollText, label: t('Journal') };
 
 const SHORTCUT_HINTS: Record<string, string> = {
   '/': 'd',
@@ -245,8 +248,13 @@ export default function Sidebar({ collapsed = false, onToggleCollapse, isOpen = 
       {/* Bas — Mes intégrations (tous) + Paramètres (admin) */}
       <div style={{ borderTop: '1px solid rgba(230,233,175,0.12)', paddingTop: 4 }}>
         <NavItemLink item={integrationsItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
+        <NavItemLink item={trashItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
         {user?.role === 'ADMIN' && (
-          <NavItemLink item={paramItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
+          <>
+            <NavItemLink item={agentsItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
+            <NavItemLink item={journalItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
+            <NavItemLink item={paramItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
+          </>
         )}
       </div>
 

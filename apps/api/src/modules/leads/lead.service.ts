@@ -94,10 +94,11 @@ export async function loseLead(id: string, lostReason: string, lostNote?: string
 
 export async function addInteraction(leadId: string, type: string | null, text: string, createdById?: string) {
   await getLead(leadId);
-  const [interaction] = await prisma.$transaction([
-    prisma.leadInteraction.create({ data: { leadId, type, text, createdById: createdById ?? null } }),
-    prisma.lead.update({ where: { id: leadId }, data: { lastContactAt: new Date() } }),
-  ]);
+  const interaction = await prisma.$transaction(async (tx) => {
+    const created = await tx.leadInteraction.create({ data: { leadId, type, text, createdById: createdById ?? null } });
+    await tx.lead.update({ where: { id: leadId }, data: { lastContactAt: new Date() } });
+    return created;
+  });
   return interaction;
 }
 

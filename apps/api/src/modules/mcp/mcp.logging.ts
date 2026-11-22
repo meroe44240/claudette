@@ -10,6 +10,7 @@ export async function logMcpAction(params: {
   success?: boolean;
   error?: string;
   durationMs?: number;
+  externe?: boolean;
 }) {
   try {
     await prisma.mcpActionLog.create({
@@ -22,6 +23,7 @@ export async function logMcpAction(params: {
         success: params.success ?? true,
         error: params.error,
         durationMs: params.durationMs,
+        externe: params.externe ?? false,
       },
     });
   } catch (err) {

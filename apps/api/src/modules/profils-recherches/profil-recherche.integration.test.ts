@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../index.js';
 import prisma from '../../lib/db.js';
 import { hashPassword } from '../../lib/password.js';
+import { hashKey } from '../agents/agent-keys.js';
 
 let app: FastifyInstance;
 const tokens: Record<string, string> = {};
@@ -16,7 +17,9 @@ const USERS = [
   { email: 'tp-recruteur@humanup.io', role: 'RECRUTEUR' as const, estAgent: false },
 ];
 
-const auth = (who: string) => ({ authorization: `Bearer ${tokens[who]}` });
+// Un compte agent ne se connecte pas : il travaille avec sa clé.
+const AGENT_KEY = 'pk_agent_test_profils_recherches_0123456789';
+const auth = (who: string) => (who === 'tp-agent' ? { 'x-api-key': AGENT_KEY } : { authorization: `Bearer ${tokens[who]}` });
 
 beforeAll(async () => {
   app = await buildApp();
@@ -27,6 +30,10 @@ beforeAll(async () => {
       update: { estAgent: u.estAgent, role: u.role },
       create: { email: u.email, passwordHash: await hashPassword('TestPass1'), nom: u.email.split('@')[0], role: u.role, estAgent: u.estAgent, mustChangePassword: false },
     });
+    if (u.estAgent) {
+      await prisma.user.update({ where: { email: u.email }, data: { apiKeyHash: hashKey(AGENT_KEY) } });
+      continue;
+    }
     const res = await app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { email: u.email, password: 'TestPass1' } });
     tokens[u.email.split('@')[0]] = res.json().accessToken;
   }

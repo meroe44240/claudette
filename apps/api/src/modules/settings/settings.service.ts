@@ -22,6 +22,8 @@ const userSelect = {
 
 export async function listUsers() {
   const users = await prisma.user.findMany({
+    // Les comptes agents se gèrent sur la page Agents.
+    where: { estAgent: false },
     select: userSelect,
     orderBy: { createdAt: 'desc' },
   });

@@ -33,6 +33,10 @@ model User {
   status               String    @default("ACTIVE") @db.VarChar(20) // ACTIVE | ARCHIVED
   // Compte agent (IA) : peut écrire les profils recherchés par MCP sans confirmation
   estAgent             Boolean   @default(false) @map("est_agent")
+  apiKeyHash           String?   @unique @map("api_key_hash") @db.VarChar(64)
+  apiKeyPrefix         String?   @map("api_key_prefix") @db.VarChar(16)
+  apiKeyCreatedAt      DateTime? @map("api_key_created_at") @db.Timestamptz()
+  limiteParMinute      Int       @default(120) @map("limite_par_minute")
   dateSortie           DateTime? @map("date_sortie") @db.Timestamptz()
   createdAt            DateTime  @default(now()) @db.Timestamptz()
   updatedAt            DateTime  @updatedAt @db.Timestamptz()
@@ -784,18 +788,25 @@ model IntegrationConfig {
 
 model AuditLog {
   id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @db.Uuid
-  user        User     @relation("AuditLogUser", fields: [userId], references: [id])
+  userId      String?  @db.Uuid
+  user        User?    @relation("AuditLogUser", fields: [userId], references: [id], onDelete: SetNull)
   action      String   @db.VarChar(20) // CREATE, UPDATE, DELETE
   entityType  String   @db.VarChar(50) // CANDIDAT, CLIENT, ENTREPRISE, MANDAT, etc.
-  entityId    String   @db.Uuid
+  entityId    String?  @db.Uuid
   entityLabel String?  @db.VarChar(500) // "Jean Dupont" for display
   changes     Json? // { field: { old: value, new: value } }
   metadata    Json?
+  source      String   @default("WEB") @db.VarChar(10)
+  toolName    String?  @map("tool_name") @db.VarChar(100)
+  externe     Boolean  @default(false)
+  batchId     String?  @map("batch_id") @db.Uuid
+  before      Json?
+  after       Json?
   createdAt   DateTime @default(now()) @db.Timestamptz()
 
   @@index([entityType, entityId])
   @@index([userId])
+  @@index([batchId])
   @@index([createdAt])
   @@map("audit_logs")
 }
@@ -967,6 +978,7 @@ model McpActionLog {
   success    Boolean  @default(true)
   error      String?  @db.Text
   durationMs Int?
+  externe    Boolean  @default(false)
   createdAt  DateTime @default(now()) @db.Timestamptz()
 
   @@index([userId])
@@ -1387,4 +1399,35 @@ model ProfilRecherche {
   @@index([fonction])
   @@index([dateAnalyse])
   @@map("profils_recherches")
+}
+
+// ============================================
+// CORBEILLE — suppression douce. Toute suppression d'une donnée métier copie ici la ligne
+// et tout ce que la base efface ou détache avec elle, puis supprime. Restauration par lot
+// (batch = une requête ou un appel d'outil MCP). Purge automatique après 30 jours.
+// ============================================
+
+model TrashEntry {
+  id             String    @id @default(uuid()) @db.Uuid
+  batchId        String    @map("batch_id") @db.Uuid
+  model          String    @db.VarChar(60)
+  recordId       String    @map("record_id") @db.Uuid
+  isRoot         Boolean   @default(false) @map("is_root")
+  depth          Int       @default(0)
+  label          String?   @db.VarChar(500)
+  data           Json
+  // Lignes d'autres tables dont la clé a été remise à vide par la suppression : [{model, id, field}]
+  detached       Json?
+  deletedById    String?   @map("deleted_by_id") @db.Uuid
+  deletedByLabel String?   @map("deleted_by_label") @db.VarChar(255)
+  source         String    @default("WEB") @db.VarChar(10)
+  toolName       String?   @map("tool_name") @db.VarChar(100)
+  deletedAt      DateTime  @default(now()) @map("deleted_at") @db.Timestamptz()
+  restoredAt     DateTime? @map("restored_at") @db.Timestamptz()
+  restoredById   String?   @map("restored_by_id") @db.Uuid
+
+  @@index([batchId])
+  @@index([deletedAt])
+  @@index([model, recordId])
+  @@map("trash_entries")
 }

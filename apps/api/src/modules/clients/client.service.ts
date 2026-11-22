@@ -510,22 +510,7 @@ export async function assignClient(
     },
   });
 
-  // Create an audit log entry
-  await prisma.auditLog.create({
-    data: {
-      userId: callerUserId,
-      action: 'UPDATE',
-      entityType: 'CLIENT',
-      entityId: clientId,
-      entityLabel: clientLabel,
-      changes: {
-        assignedToId: {
-          old: client.assignedToId,
-          new: assignedToId,
-        },
-      },
-    },
-  });
+  // Le journal d'audit enregistre déjà la modification (lib/audit-trash.ts).
 
   // Fetch lastActivityAt for the response
   const lastActivity = await prisma.activite.findFirst({

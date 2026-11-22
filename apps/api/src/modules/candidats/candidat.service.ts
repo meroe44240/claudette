@@ -1,3 +1,4 @@
+import { runWithoutTrash } from '../../lib/request-context.js';
 import prisma from '../../lib/db.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { paginatedResult, paginationToSkipTake } from '../../lib/pagination.js';
@@ -313,6 +314,11 @@ export async function remove(id: string) {
 }
 
 export async function gdprDelete(id: string) {
+  // Effacement RGPD : définitif, rien ne part en corbeille.
+  return runWithoutTrash(() => gdprDeleteNow(id));
+}
+
+async function gdprDeleteNow(id: string) {
   const existing = await prisma.candidat.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError('Candidat', id);
 

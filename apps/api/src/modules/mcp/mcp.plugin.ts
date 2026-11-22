@@ -4,6 +4,8 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { verifyAccessToken } from '../../lib/jwt.js';
 import prisma from '../../lib/db.js';
 import { runWithMcpUser } from './mcp.auth.js';
+import { findUserByApiKey } from '../agents/agent-keys.js';
+import { checkRateLimit } from '../agents/rate-limit.js';
 import { registerAllTools, getLastToolCallAt } from './mcp.tools.js';
 import type { Role } from '@prisma/client';
 
@@ -50,22 +52,38 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
   });
 
   // ─── Helper: extract and verify user from auth header ───
-  async function authenticateMcpRequest(request: any): Promise<{ userId: string; userEmail: string; userRole: Role } | null> {
+  async function authenticateMcpRequest(request: any): Promise<{ userId: string; userEmail: string; userRole: Role; estAgent: boolean } | null> {
     const authHeader = request.headers.authorization as string | undefined;
     const headerKey = request.headers['x-api-key'] as string | undefined;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : headerKey?.trim();
     if (!token) return null;
     try {
       const payload = await verifyAccessToken(token);
-      return { userId: payload.sub, userEmail: payload.email, userRole: payload.role as Role };
+      // Un compte suspendu ou archivé perd l'accès tout de suite, même avec un jeton encore valide.
+      const u = await prisma.user.findUnique({ where: { id: payload.sub }, select: { status: true, estAgent: true } });
+      if (!u || u.status !== 'ACTIVE') return null;
+      return { userId: payload.sub, userEmail: payload.email, userRole: payload.role as Role, estAgent: u.estAgent };
     } catch {
-      // Pas un jeton OAuth : clé API de l'utilisateur, pour les agents qui ne savent pas
-      // faire le parcours OAuth (Grok, scripts). Un compte archivé n'a plus accès.
-      if (token.length < 24) return null;
-      const u = await prisma.user.findUnique({ where: { apiKey: token }, select: { id: true, email: true, role: true, status: true } });
-      if (!u || u.status === 'ARCHIVED') return null;
-      return { userId: u.id, userEmail: u.email, userRole: u.role };
+      // Pas un jeton OAuth : clé d'agent ou clé API de l'utilisateur, pour les clients qui ne
+      // savent pas faire le parcours OAuth (Grok, scripts).
+      const u = await findUserByApiKey(token);
+      if (!u || u.status !== 'ACTIVE') return null;
+      return { userId: u.id, userEmail: u.email, userRole: u.role, estAgent: u.estAgent };
     }
+  }
+
+  /** Nombre d'appels d'outils dans un message JSON-RPC (seuls eux comptent dans la limite). */
+  function toolCallCount(body: unknown): number {
+    const msgs = Array.isArray(body) ? body : [body];
+    return msgs.filter((m: any) => m && m.method === 'tools/call').length;
+  }
+
+  async function rateLimited(user: { userId: string }, request: any, reply: any): Promise<boolean> {
+    const hit = await checkRateLimit(user.userId, toolCallCount(request.body));
+    if (!hit) return false;
+    const id = Array.isArray(request.body) ? null : (request.body as any)?.id ?? null;
+    reply.status(429).header('Retry-After', String(hit.retryAfter)).send({ jsonrpc: '2.0', error: { code: -32029, message: hit.message }, id });
+    return true;
   }
 
   // ─── GET /mcp/health — MCP health check ────────────────
@@ -91,6 +109,8 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
         id: null,
       });
     }
+
+    if (await rateLimited(user, request, reply)) return;
 
     const sessionId = request.headers['mcp-session-id'] as string | undefined;
 

@@ -446,7 +446,7 @@ export function registerCandidateTools(server: McpServer) {
   // ─── delete_candidate ─────────────────────────────────
   server.tool(
     'delete_candidate',
-    "[CONFIRMATION REQUIRED] Deletes a candidate. Not possible while the candidate has active candidatures. For a duplicate, use merge_candidates instead. You MUST ask for confirmation.",
+    "Deletes a candidate (moves it to the trash with its notes and applications for 30 days; restore_record brings everything back). Not possible while the candidate has active candidatures. For a duplicate, use merge_candidates instead. Human users must confirm first; agent accounts do not need to.",
     {
       candidate_id: z.string().describe('UUID of the candidate to delete'),
     },
