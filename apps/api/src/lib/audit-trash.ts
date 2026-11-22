@@ -20,6 +20,7 @@ export const TRACKED_MODELS = new Set([
   'Activite', 'FichierActivite', 'Lead', 'LeadInteraction', 'JobOffer', 'PostLinkedin',
   'PostLinkedinComment', 'NoteCall', 'ProfilRecherche', 'MarketList', 'MarketListEstablishment',
   'QuestionTemplate', 'Booking', 'ContractApproval', 'PortalAccess', 'PortalComment', 'StageHistory',
+  'Presentation', 'Ownership',
 ]);
 
 /** Libellé lisible d'une ligne, pour le journal et la corbeille. */

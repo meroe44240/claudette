@@ -51,6 +51,8 @@ export async function checkClientOwnershipExpiry() {
         where: { id: client.id },
         data: { assignedToId: null },
       });
+      const { closeForInactivity } = await import('../ownership/ownership.service.js');
+      await closeForInactivity('CLIENT', client.id);
 
       const clientLabel = [client.prenom, client.nom].filter(Boolean).join(' ');
 

@@ -44,16 +44,20 @@ interface Lead {
   src: string;
   stage: string;
   pushedCandidat: { name?: string; role?: string; score?: string } | null;
+  nbPostes?: number | null;
+  packageMoyen?: number | null;
+  valeurOpportunite?: number | null;
   _count?: { interactions: number };
 }
 
+const fmtK = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k€` : `${n}€`);
 const initials = (s: string) => s.split(' ').map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 
 export default function LeadsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ company: '', contact: '', email: '', phone: '', role: '' });
+  const [form, setForm] = useState({ company: '', contact: '', email: '', phone: '', role: '', nbPostes: '', packageMoyen: '' });
   const [loseFor, setLoseFor] = useState<Lead | null>(null);
   const [loseReason, setLoseReason] = useState(LOST_REASONS[0]);
   // Enchaînement (session d'appels façon lead)
@@ -90,8 +94,8 @@ export default function LeadsPage() {
     onError: () => { toast('error', t('Déplacement impossible')); invalidate(); },
   });
   const createMutation = useMutation({
-    mutationFn: () => api.post('/leads', { company: form.company.trim(), contact: form.contact.trim(), email: form.email.trim() || null, phone: form.phone.trim() || null, role: form.role.trim() || null, src: 'cold' }),
-    onSuccess: () => { toast('success', t('Lead créé')); setCreateOpen(false); setForm({ company: '', contact: '', email: '', phone: '', role: '' }); invalidate(); },
+    mutationFn: () => api.post('/leads', { company: form.company.trim(), contact: form.contact.trim(), email: form.email.trim() || null, phone: form.phone.trim() || null, role: form.role.trim() || null, src: 'cold', nbPostes: Number(form.nbPostes) || null, packageMoyen: Number(form.packageMoyen.replace(/\s/g, '')) || null }),
+    onSuccess: () => { toast('success', t('Lead créé')); setCreateOpen(false); setForm({ company: '', contact: '', email: '', phone: '', role: '', nbPostes: '', packageMoyen: '' }); invalidate(); },
     onError: () => toast('error', t('Création impossible')),
   });
   const convertMutation = useMutation({
@@ -173,6 +177,9 @@ export default function LeadsPage() {
                           </span>
                           <span style={{ fontFamily: MANROPE, fontWeight: 800, fontSize: 11.5, color: '#fff', background: stage.accent, borderRadius: 999, minWidth: 18, textAlign: 'center', padding: '1px 6px' }}>{cards.length}</span>
                         </div>
+                        {cards.some((l) => l.valeurOpportunite) && (
+                          <div title={t("Valeur d'opportunité : postes × package × 22 %")} style={{ fontSize: 11, fontWeight: 700, color: '#2C6B3F', margin: '-4px 2px 9px' }}>{fmtK(cards.reduce((s, l) => s + (l.valeurOpportunite ?? 0), 0))}</div>
+                        )}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                           {cards.map((l, i) => (
                             <Draggable draggableId={l.id} index={i} key={l.id}>
@@ -185,6 +192,11 @@ export default function LeadsPage() {
                                       <div style={{ fontSize: 10.5, color: '#8A8699', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.contact}{l.role ? ` · ${l.role}` : ''}</div>
                                     </div>
                                   </div>
+                                  {!!l.valeurOpportunite && (
+                                    <div title={t('{n} poste(s) × {pkg} × 22 %', { n: l.nbPostes ?? 0, pkg: fmtK(l.packageMoyen ?? 0) })} style={{ marginTop: 7, marginRight: 5, display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 800, color: '#2C6B3F', background: '#EAF3EC', borderRadius: 999, padding: '2px 8px' }}>
+                                      {fmtK(l.valeurOpportunite)}
+                                    </div>
+                                  )}
                                   {l.pushedCandidat?.name && (
                                     <div style={{ marginTop: 7, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: '#5B4B9E', background: '#EDEAF9', borderRadius: 999, padding: '2px 8px' }}>
                                       <Send size={10} /> {l.pushedCandidat.name}
@@ -228,6 +240,10 @@ export default function LeadsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="Email" style={input} />
                 <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder={t('Téléphone')} style={input} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <input value={form.nbPostes} inputMode="numeric" onChange={(e) => setForm((f) => ({ ...f, nbPostes: e.target.value.replace(/\D/g, '') }))} placeholder={t('Nombre de postes')} aria-label={t('Nombre de postes')} style={input} />
+                <input value={form.packageMoyen} inputMode="numeric" onChange={(e) => setForm((f) => ({ ...f, packageMoyen: e.target.value.replace(/[^\d\s]/g, '') }))} placeholder={t('Package moyen (€)')} aria-label={t('Package moyen (€)')} style={input} />
               </div>
             </div>
             <button onClick={() => { if (!form.company.trim() || !form.contact.trim()) { toast('error', t('Entreprise et contact requis')); return; } createMutation.mutate(); }} disabled={createMutation.isPending} style={{ width: '100%', marginTop: 16, fontFamily: MANROPE, fontWeight: 700, fontSize: 15, background: NAVY, color: LIME, border: 'none', borderRadius: 12, padding: 13, cursor: 'pointer', opacity: createMutation.isPending ? 0.6 : 1 }}>{createMutation.isPending ? t('Création…') : t('Créer le lead')}</button>

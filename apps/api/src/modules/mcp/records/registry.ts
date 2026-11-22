@@ -6,6 +6,7 @@ import * as leadService from '../../leads/lead.service.js';
 import * as candidatureService from '../../candidatures/candidature.service.js';
 import * as activiteService from '../../activites/activite.service.js';
 import * as jobOfferService from '../../job-offers/job-offer.service.js';
+import { opportunityValue } from '../../leads/lead.service.js';
 
 /**
  * Entités exposées aux outils génériques (list_records, get_record, create_record…).
@@ -39,6 +40,8 @@ export interface EntityDef {
   remove?: (id: string) => Promise<unknown>;
   /** EntiteType des activités rattachées (notes, appels, emails, tâches). */
   activityType?: 'CANDIDAT' | 'CLIENT' | 'ENTREPRISE' | 'MANDAT';
+  /** Champs calculés ajoutés à chaque ligne renvoyée. */
+  computed?: (row: Record<string, any>) => Record<string, unknown>;
 }
 
 const activities: IncludeDef = { relation: 'activities', description: 'last 50 notes, calls, emails, meetings and tasks' };
@@ -51,6 +54,7 @@ export const ENTITIES: EntityDef[] = [
     includes: {
       experiences: { relation: 'experiences', description: 'work experiences', orderBy: { anneeDebut: 'desc' } },
       applications: { relation: 'candidatures', description: 'applications to mandates, with the mandate title and stage', select: { id: true, stage: true, mandatId: true, updatedAt: true, mandat: { select: { titrePoste: true, entreprise: { select: { nom: true } } } } } },
+      presentations: { relation: 'presentations', description: 'companies the candidate was presented to', orderBy: { presentedAt: 'desc' } },
       activities,
     },
     authorField: 'createdById', activityType: 'CANDIDAT',
@@ -59,13 +63,15 @@ export const ENTITIES: EntityDef[] = [
   {
     name: 'company', model: 'Entreprise', description: 'Companies (clients and prospects)',
     searchFields: ['nom', 'secteur', 'domaine', 'localisation', 'siren'],
-    listFields: ['id', 'nom', 'secteur', 'taille', 'localisation', 'siteWeb', 'domaine', 'siren', 'createdAt', 'updatedAt'],
+    listFields: ['id', 'nom', 'secteur', 'taille', 'localisation', 'siteWeb', 'domaine', 'siren', 'ownerId', 'createdAt', 'updatedAt'],
     includes: {
       contacts: { relation: 'clients', description: 'client contacts', select: { id: true, prenom: true, nom: true, poste: true, email: true, telephone: true, statutClient: true } },
       mandates: { relation: 'mandats', description: 'mandates', select: { id: true, titrePoste: true, statut: true, dateOuverture: true } },
       target_profiles: { relation: 'profilsRecherches', description: 'target profiles' },
+      presentations: { relation: 'presentations', description: 'candidates presented to this company', orderBy: { presentedAt: 'desc' } },
       activities,
     },
+    lockedFields: { ownerId: 'Use claim_owner / release_owner (they keep the ownership period and reason).' },
     authorField: 'createdById', activityType: 'ENTREPRISE',
     remove: (id) => entrepriseService.remove(id),
   },
@@ -102,9 +108,10 @@ export const ENTITIES: EntityDef[] = [
   {
     name: 'lead', model: 'Lead', description: 'Sales leads (prospection pipeline)',
     searchFields: ['company', 'contact', 'email', 'phone', 'city', 'sector', 'role'],
-    listFields: ['id', 'company', 'contact', 'role', 'email', 'phone', 'city', 'sector', 'stage', 'src', 'source', 'ownerId', 'entrepriseId', 'lastContactAt', 'createdAt', 'updatedAt'],
+    listFields: ['id', 'company', 'contact', 'role', 'email', 'phone', 'city', 'sector', 'stage', 'src', 'source', 'ownerId', 'entrepriseId', 'nbPostes', 'packageMoyen', 'lastContactAt', 'createdAt', 'updatedAt'],
     includes: { interactions: { relation: 'interactions', description: 'calls, emails, notes', orderBy: { createdAt: 'desc' } } },
-    lockedFields: { stage: 'Use move_lead_stage, lose_lead or convert_lead.' },
+    lockedFields: { stage: 'Use move_lead_stage, lose_lead or convert_lead.', ownerId: 'Use claim_owner / release_owner (they keep the ownership period and reason).' },
+    computed: (r) => ('nbPostes' in r || 'packageMoyen' in r ? { valeurOpportunite: opportunityValue(r) } : {}),
     remove: (id) => leadService.removeLead(id),
   },
   {
@@ -127,6 +134,15 @@ export const ENTITIES: EntityDef[] = [
     includes: { files: { relation: 'fichiers', description: 'attached files' } },
     authorField: 'userId',
     remove: (id) => activiteService.remove(id),
+  },
+  {
+    name: 'presentation', model: 'Presentation', description: 'Candidates presented to companies (prefer create_presentation / update_presentation)',
+    searchFields: ['note'], listFields: ['id', 'candidatId', 'entrepriseId', 'clientId', 'mandatId', 'candidatureId', 'leadId', 'canal', 'statut', 'accordCandidat', 'anonyme', 'cvUrl', 'source', 'presentedById', 'presentedAt'],
+    authorField: 'presentedById',
+  },
+  {
+    name: 'ownership', model: 'Ownership', description: 'Ownership periods of companies, leads and clients (read only, use claim_owner / release_owner)', readOnly: true,
+    searchFields: ['motif'], listFields: ['id', 'entiteType', 'entiteId', 'ownerId', 'motif', 'claimedAt', 'expiresAt', 'releasedAt', 'releaseMotif'],
   },
   {
     name: 'lead_interaction', model: 'LeadInteraction', description: 'Interactions logged on a lead',

@@ -18,6 +18,8 @@ const createSchema = z.object({
   ownerId: z.string().uuid().nullable().optional(),
   entrepriseId: z.string().uuid().nullable().optional(),
   pushedCandidat: z.any().optional(),
+  nbPostes: z.number().int().min(1).max(1000).nullable().optional(),
+  packageMoyen: z.number().int().min(1).max(10_000_000).nullable().optional(),
 });
 
 const updateSchema = z.object({
@@ -29,6 +31,8 @@ const updateSchema = z.object({
   phone: z.string().nullable().optional(),
   city: z.string().nullable().optional(),
   ownerId: z.string().uuid().nullable().optional(),
+  nbPostes: z.number().int().min(1).max(1000).nullable().optional(),
+  packageMoyen: z.number().int().min(1).max(10_000_000).nullable().optional(),
 });
 
 export default async function leadRouter(fastify: FastifyInstance) {
@@ -65,7 +69,7 @@ export default async function leadRouter(fastify: FastifyInstance) {
     handler: async (request) => {
       const { id } = request.params as { id: string };
       const input = updateSchema.parse(request.body);
-      return leadService.updateLead(id, input);
+      return leadService.updateLead(id, input, request.userId);
     },
   });
 

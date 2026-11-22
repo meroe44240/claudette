@@ -14,6 +14,7 @@ import { espace } from './espace';
 import { notes } from './notes';
 import { profils } from './profils';
 import { agents } from './agents';
+import { presentations } from './presentations';
 
 // Un fichier par zone de l'interface ; `common` (menu, boutons, statuts partagés) l'emporte en cas de doublon.
-export const EN: Record<string, string> = { ...dashboard, ...candidats, ...clients, ...mandats, ...mandats2, ...taches, ...settings, ...stats, ...sourcing, ...outils, ...portail, ...espace, ...notes, ...profils, ...agents, ...common };
+export const EN: Record<string, string> = { ...dashboard, ...candidats, ...clients, ...mandats, ...mandats2, ...taches, ...settings, ...stats, ...sourcing, ...outils, ...portail, ...espace, ...notes, ...profils, ...agents, ...presentations, ...common };

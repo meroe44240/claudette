@@ -238,6 +238,7 @@ function present(def: EntityDef, row: Record<string, any>, truncate: boolean) {
     else if (truncate && typeof v === 'string' && v.length > 1000) out[key] = v.slice(0, 1000) + `… [${v.length} characters, use get_record for the full text]`;
     else out[key] = v;
   }
+  if (def.computed) Object.assign(out, def.computed(row));
   return out;
 }
 

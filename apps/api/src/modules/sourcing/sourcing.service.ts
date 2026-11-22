@@ -81,6 +81,14 @@ export async function pushEstablishment(
     data: { status: 'PROSPECTION' },
   });
 
+  // Le candidat de la liste (A-player) est présenté à cette société.
+  const list = await prisma.marketList.findUnique({ where: { id: est.marketListId }, select: { candidatId: true } });
+  if (list?.candidatId && entrepriseId) {
+    const { create } = await import('../presentations/presentation.service.js');
+    await create({ candidatId: list.candidatId, entrepriseId, leadId: lead.id, canal: 'EMAIL', anonyme: true }, userId, 'LIST_PUSH')
+      .catch((e) => console.warn('[List Push] présentation non enregistrée :', (e as Error).message));
+  }
+
   return lead;
 }
 

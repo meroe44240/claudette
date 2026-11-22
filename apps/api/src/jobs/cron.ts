@@ -342,6 +342,10 @@ export function startCronJobs(): void {
       const { purgeExpired } = await import('../modules/trash/trash.service.js');
       const n = await purgeExpired();
       if (n) console.log(`[Cron] Corbeille : ${n} entrées purgées`);
+      // Propriétés arrivées à échéance : libérées.
+      const { expireOwnerships } = await import('../modules/ownership/ownership.service.js');
+      const exp = await expireOwnerships();
+      if (exp) console.log(`[Cron] Propriété : ${exp} échéance(s) libérée(s)`);
       // Clés d'idempotence MCP : gardées 7 jours.
       const { default: prisma } = await import('../lib/db.js');
       await prisma.mcpIdempotencyKey.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - 7 * 24 * 3600 * 1000) } } });

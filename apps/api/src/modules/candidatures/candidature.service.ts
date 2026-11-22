@@ -255,6 +255,7 @@ export async function create(data: CreateCandidatureInput, createdById: string) 
       changedById: createdById,
     },
   });
+  await import('../presentations/presentation.service.js').then((m) => m.syncFromStage(candidature.id, String(data.stage ?? 'SOURCING'), createdById));
 
   // Fire-and-forget: log "candidat added to mandat" activity
   prisma.mandat
@@ -416,6 +417,7 @@ export async function update(
         candidateMessage: data.candidateMessage?.trim() || null,
       },
     });
+    await import('../presentations/presentation.service.js').then((m) => m.syncFromStage(id, String(data.stage), changedById));
     // Espace candidat : traduction du message, email au candidat, tâche si un refus n'a pas de message.
     import('../candidate-space/candidate-space.service.js')
       .then((m) => m.onStageChanged(history.id, changedById))
@@ -573,6 +575,7 @@ export async function bulkUpdateStage(
         changedById,
       },
     });
+    await import('../presentations/presentation.service.js').then((m) => m.syncFromStage(id, stage, changedById));
     import('../candidate-space/candidate-space.service.js')
       .then((m) => m.onStageChanged(history.id, changedById))
       .catch((e) => console.warn('[Candidature] espace candidat', (e as Error).message));
