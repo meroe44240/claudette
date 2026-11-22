@@ -36,5 +36,15 @@ ats.propium.co {
 # Humanup Chat (Mattermost, deployed separately in /opt/humanup-chat, joined to this network)
 chat.propium.co {
   encode zstd gzip
-  reverse_proxy humanup-chat:8065
+
+  # Agent Hub API for the agents (REST + MCP). /mm/* is only for Mattermost, inside Docker.
+  handle_path /hub/* {
+    @internal path /mm/*
+    respond @internal 404
+    reverse_proxy humanup-chat-hub:3100
+  }
+
+  handle {
+    reverse_proxy humanup-chat:8065
+  }
 }

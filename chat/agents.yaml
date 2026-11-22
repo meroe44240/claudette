@@ -6,6 +6,7 @@
 # recipients: who the agent may write to on its own (all | team | team-except-meroe | list of human keys | []).
 # hidden_from_team: the agent lives in the "Private" team and only talks to the people in recipients.
 # registry: who sees its questions in the registry (team | admin-only).
+# registry_reader: may read the registry of questions through the API.
 # dm: who gets a DM with the agent (all by default; hidden agents: their recipients; [] = nobody).
 
 defaults:
@@ -25,6 +26,7 @@ agents:
     reports_to: meroe
     scope: Coordination across the team and the agents, priorities, follow-ups, sensitive emails
     approval_required: [sensitive_email]
+    registry_reader: true
   camille:
     name: Camille
     title: "Handles Méroë's personal logistics"
