@@ -12,6 +12,8 @@ import CompanyLogo from '../../components/entreprises/CompanyLogo';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import NoteContent from '../../components/activity/NoteContent';
 import CompanyProfilsTab, { useCompanyProfils } from '../../components/profils-recherches/CompanyProfilsTab';
+import PresentationsPanel, { usePresentations } from '../../components/presentations/PresentationsPanel';
+import OwnerBox from '../../components/ownership/OwnerBox';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Contact { id: string; nom: string; prenom: string | null; email: string | null; telephone: string | null; poste: string | null }
@@ -49,7 +51,11 @@ export default function EntrepriseDetailPage() {
   usePageTitle(t('Fiche société'));
   const [railTab, setRailTab] = useState<'rel' | 'notes'>('rel');
   const [note, setNote] = useState('');
-  const [mainTab, setMainTab] = useState<'vue' | 'profils'>(() => (new URLSearchParams(window.location.search).get('onglet') === 'profils' ? 'profils' : 'vue'));
+  const [mainTab, setMainTab] = useState<'vue' | 'profils' | 'presentations'>(() => {
+    const o = new URLSearchParams(window.location.search).get('onglet');
+    return o === 'profils' || o === 'presentations' ? o : 'vue';
+  });
+  const { data: pres } = usePresentations('entreprise', id);
   const { data: profils } = useCompanyProfils(id);
   const nbProfils = (profils?.engineering.length ?? 0) + (profils?.sales.length ?? 0);
 
@@ -121,15 +127,17 @@ export default function EntrepriseDetailPage() {
 
           {/* ONGLETS */}
           <div style={{ display: 'flex', gap: 5, marginTop: 22, borderBottom: '1px solid rgba(34,23,122,.1)' }}>
-            {([['vue', t("Vue d'ensemble")], ['profils', t('Profils recherchés')]] as const).map(([k, l]) => (
+            {([['vue', t("Vue d'ensemble")], ['profils', t('Profils recherchés')], ['presentations', t('Présentations')]] as const).map(([k, l]) => (
               <button key={k} onClick={() => setMainTab(k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13.5, fontWeight: 700, padding: '9px 14px', border: 'none', borderBottom: mainTab === k ? '2.5px solid #22177A' : '2.5px solid transparent', marginBottom: -1, background: 'none', cursor: 'pointer', color: mainTab === k ? '#22177A' : '#8A8699' }}>
                 {l}
                 {k === 'profils' && nbProfils > 0 && <span style={{ fontSize: 11, fontWeight: 800, color: '#22177A', background: '#E6E9AF', borderRadius: 999, padding: '1px 8px' }}>{nbProfils}</span>}
+                {k === 'presentations' && (pres?.total ?? 0) > 0 && <span style={{ fontSize: 11, fontWeight: 800, color: '#22177A', background: '#E6E9AF', borderRadius: 999, padding: '1px 8px' }}>{pres!.total}</span>}
               </button>
             ))}
           </div>
 
           {mainTab === 'profils' && <CompanyProfilsTab entrepriseId={e.id} />}
+          {mainTab === 'presentations' && <div style={{ marginTop: 22 }}><PresentationsPanel mode="entreprise" id={e.id} /></div>}
 
           {mainTab === 'vue' && <>
           {/* KPIs */}
@@ -219,6 +227,7 @@ export default function EntrepriseDetailPage() {
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 18px 22px' }}>
             {railTab === 'rel' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <OwnerBox type="company" id={e.id} />
                 {[[t('CA généré'), fmtEur(revenue)], [t('Mandats actifs'), String(actifs)], [t('Total mandats'), String(e._count.mandats)], [t('Contacts'), String(e._count.clients)], [t('Secteur'), e.secteur || '—'], [t('Effectif'), e.effectif || (e.taille ? TAILLE_LABELS[e.taille] : '—')]].map(([k, v]) => (
                   <div key={k} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 13px', background: '#FBFBF3', border: '1px solid rgba(34,23,122,.08)', borderRadius: 11 }}>
                     <span style={{ fontSize: 12.5, color: '#6E6A85' }}>{k}</span><span style={{ fontSize: 13.5, fontWeight: 800, color: '#1A1533' }}>{v}</span>

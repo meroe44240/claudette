@@ -64,6 +64,9 @@ model User {
   postsLinkedin             PostLinkedin[]         @relation("PostLinkedinAuteur")
   postLinkedinComments      PostLinkedinComment[]  @relation("PostLinkedinCommentAuteur")
   profilsRecherchesAnalyses ProfilRecherche[]      @relation("ProfilRechercheAnalysePar")
+  entreprisesOwned          Entreprise[]           @relation("EntrepriseOwner")
+  ownerships                Ownership[]            @relation("OwnershipOwner")
+  presentationsFaites       Presentation[]         @relation("PresentationPresentedBy")
 
   @@map("users")
 }
@@ -115,13 +118,18 @@ model Entreprise {
   resumeProfilsDate DateTime?         @map("resume_profils_date") @db.Timestamptz()
   createdById       String?           @db.Uuid
   createdBy         User?             @relation("EntrepriseCreatedBy", fields: [createdById], references: [id])
+  // Propriétaire actuel (humain ou agent), tenu à jour par claim_owner / release_owner (table ownerships)
+  ownerId           String?           @map("owner_id") @db.Uuid
+  owner             User?             @relation("EntrepriseOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   createdAt         DateTime          @default(now()) @db.Timestamptz()
   updatedAt         DateTime          @updatedAt @db.Timestamptz()
 
   clients           Client[]
   mandats           Mandat[]
   profilsRecherches ProfilRecherche[]
+  presentations     Presentation[]
 
+  @@index([ownerId])
   @@map("entreprises")
 }
 
@@ -238,6 +246,7 @@ model Candidat {
   candidatures     Candidature[]
   experiences      CandidatExperience[]
   candidateAccount CandidateAccount?
+  presentations    Presentation[]
 
   @@map("candidats")
 }
@@ -1091,6 +1100,9 @@ model Lead {
   entrepriseId   String?   @db.Uuid
   clientId       String?   @db.Uuid // Client créé à la conversion
   pushedCandidat Json? // snapshot du candidat poussé
+  // Valeur d'opportunité = nbPostes × packageMoyen × 22 % (calculée à la lecture)
+  nbPostes       Int?      @map("nb_postes")
+  packageMoyen   Int?      @map("package_moyen") // package annuel brut moyen par poste, en euros
   lostReason     String?   @db.VarChar(160)
   lostNote       String?   @db.Text
   lastContactAt  DateTime? @db.Timestamptz()
@@ -1449,4 +1461,67 @@ model McpIdempotencyKey {
   @@unique([userId, key])
   @@index([createdAt])
   @@map("mcp_idempotency_keys")
+}
+
+// ============================================
+// PROPRIÉTÉ — qui (humain ou agent) a la main sur une société, un lead ou un contact client,
+// depuis quand, pourquoi, jusqu'à quand. Une ligne par période ; la période active n'a pas
+// de releasedAt. Les champs Entreprise.ownerId, Lead.ownerId et Client.assignedToId sont
+// tenus à jour pour les filtres et l'affichage.
+// ============================================
+
+model Ownership {
+  id           String    @id @default(uuid()) @db.Uuid
+  entiteType   String    @map("entite_type") @db.VarChar(20) // ENTREPRISE | LEAD | CLIENT
+  entiteId     String    @map("entite_id") @db.Uuid
+  ownerId      String    @map("owner_id") @db.Uuid
+  owner        User      @relation("OwnershipOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  motif        String?   @db.Text
+  claimedAt    DateTime  @default(now()) @map("claimed_at") @db.Timestamptz()
+  expiresAt    DateTime? @map("expires_at") @db.Timestamptz()
+  releasedAt   DateTime? @map("released_at") @db.Timestamptz()
+  releasedById String?   @map("released_by_id") @db.Uuid
+  releaseMotif String?   @map("release_motif") @db.Text
+
+  @@index([entiteType, entiteId])
+  @@index([ownerId])
+  @@index([expiresAt])
+  @@map("ownerships")
+}
+
+// ============================================
+// PRÉSENTATIONS — un candidat présenté (poussé) à une société : canal, statut, accord du
+// candidat, CV envoyé. Créées à la main ou par MCP, et automatiquement au passage d'une
+// candidature en « Envoi client » et à chaque push List Push.
+// ============================================
+
+model Presentation {
+  id             String     @id @default(uuid()) @db.Uuid
+  candidatId     String     @map("candidat_id") @db.Uuid
+  candidat       Candidat   @relation(fields: [candidatId], references: [id], onDelete: Cascade)
+  entrepriseId   String     @map("entreprise_id") @db.Uuid
+  entreprise     Entreprise @relation(fields: [entrepriseId], references: [id], onDelete: Cascade)
+  clientId       String?    @map("client_id") @db.Uuid // contact à qui le profil a été envoyé
+  mandatId       String?    @map("mandat_id") @db.Uuid
+  candidatureId  String?    @unique @map("candidature_id") @db.Uuid
+  leadId         String?    @map("lead_id") @db.Uuid
+  canal          String     @default("EMAIL") @db.VarChar(20) // EMAIL | LINKEDIN | TELEPHONE | PORTAIL | RDV | AUTRE
+  statut         String     @default("ENVOYEE") @db.VarChar(20) // ENVOYEE | SANS_REPONSE | INTERESSE | ENTRETIEN | REFUSEE | EMBAUCHE
+  accordCandidat Boolean    @default(false) @map("accord_candidat")
+  accordDate     DateTime?  @map("accord_date") @db.Timestamptz()
+  anonyme        Boolean    @default(true)
+  cvUrl          String?    @map("cv_url") @db.VarChar(1000)
+  note           String?    @db.Text
+  source         String     @default("MANUEL") @db.VarChar(20) // MANUEL | PIPELINE | LIST_PUSH | GMAIL | REPRISE
+  presentedById  String?    @map("presented_by_id") @db.Uuid
+  presentedBy    User?      @relation("PresentationPresentedBy", fields: [presentedById], references: [id], onDelete: SetNull)
+  presentedAt    DateTime   @default(now()) @map("presented_at") @db.Timestamptz()
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([candidatId])
+  @@index([entrepriseId])
+  @@index([leadId])
+  @@index([presentedAt])
+  @@map("presentations")
 }

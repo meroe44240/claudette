@@ -345,6 +345,7 @@ async function ensurePushed(
     await prisma.stageHistory.create({ data: { candidatureId, fromStage: existing!.stage as any, toStage: 'ENVOYE_CLIENT' as any, changedById: userId, changedAt: msg.date } as any });
   }
   // else : déjà à ENVOYE_CLIENT ou au-delà → on log seulement l'activité de push.
+  await import('../presentations/presentation.service.js').then((m) => m.syncFromStage(candidatureId!, 'ENVOYE_CLIENT', userId, 'GMAIL'));
 
   // Activité de push (idempotence + trace) sur le candidat.
   await prisma.activite.create({

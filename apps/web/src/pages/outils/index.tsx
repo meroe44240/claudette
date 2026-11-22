@@ -508,7 +508,8 @@ function contratHtml(f: ContractForm, lang: Lang): string {
 // ═════════════════════════════════════════════════════
 export default function OutilsPage() {
   usePageTitle(t('Outil Recruteurs'));
-  const [tool, setTool] = useState<Tool>('home');
+  // Lien direct : /outils?outil=cv&candidat=<id> ouvre le one-pager du candidat.
+  const [tool, setTool] = useState<Tool>(() => (new URLSearchParams(window.location.search).get('outil') === 'cv' ? 'cv' : 'home'));
 
   return (
     <div>
@@ -665,7 +666,7 @@ function CvTool() {
   const [openSec, setOpenSec] = useState<Set<string>>(() => new Set(['strengths', 'experience']));
   const [q, setQ] = useState('');
   const [debQ, setDebQ] = useState('');
-  const [selId, setSelId] = useState<string | null>(null);
+  const [selId, setSelId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('candidat'));
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);

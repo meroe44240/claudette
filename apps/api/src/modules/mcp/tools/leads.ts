@@ -8,22 +8,28 @@ const STAGES = 'nouveau (new), contacte (contacted), r1, r2, r3, r4, r5, r6, r7 
 export function registerLeadTools(server: McpServer) {
   server.tool(
     'list_leads',
-    "Lists prospecting leads (the sales follow-up pipeline). Use when a salesperson asks 'where are my leads', 'my follow-ups to do', etc.",
+    "Lists prospecting leads (the sales follow-up pipeline), with their opportunity value (positions × average package × 22 %, null when either is missing). Use when a salesperson asks 'where are my leads', 'my follow-ups to do', 'biggest opportunities', etc. " +
+      'Example: {"sort":"value","owner_id":"<user id>"} → {"total":12,"total_opportunity_value":184800,"leads":[{"company":"Acme","positions":2,"average_package":70000,"opportunity_value":30800}]}',
     {
       stage: z.string().optional().describe(`Filter by stage: ${STAGES}`),
       query: z.string().optional().describe('Free-text search (company, contact)'),
+      owner_id: z.string().uuid().optional().describe('Only leads owned by this user'),
+      sort: z.enum(['last_contact', 'value']).optional().describe('Default last_contact; value = biggest opportunity first'),
       limit: z.number().optional().default(30),
     },
     wrapTool('list_leads', async (args) => {
       const all = (await leadService.listLeads()) as any[];
       let leads = all;
       if (args.stage) leads = leads.filter((l) => l.stage === args.stage);
+      if (args.owner_id) leads = leads.filter((l) => l.ownerId === args.owner_id);
+      if (args.sort === 'value') leads = [...leads].sort((a, b) => (b.valeurOpportunite ?? -1) - (a.valeurOpportunite ?? -1));
       if (args.query) {
         const q = String(args.query).toLowerCase();
         leads = leads.filter((l) => `${l.company || ''} ${l.contact || ''} ${l.role || ''}`.toLowerCase().includes(q));
       }
       return {
         total: leads.length,
+        total_opportunity_value: leads.reduce((s, l) => s + (l.valeurOpportunite ?? 0), 0),
         leads: leads.slice(0, (args.limit as number) || 30).map((l) => ({
           id: l.id,
           company: l.company,
@@ -32,6 +38,8 @@ export function registerLeadTools(server: McpServer) {
           city: l.city,
           stage: l.stage,
           source: l.source,
+          positions: l.nbPostes, average_package: l.packageMoyen, opportunity_value: l.valeurOpportunite,
+          owner_id: l.ownerId,
           last_contact_at: l.lastContactAt,
         })),
       };

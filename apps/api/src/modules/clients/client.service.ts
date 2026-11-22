@@ -490,6 +490,9 @@ export async function assignClient(
     },
   });
 
+  const { recordAssignment } = await import('../ownership/ownership.service.js');
+  await recordAssignment('CLIENT', clientId, assignedToId, callerUserId);
+
   // Create an activity log
   const clientLabel = [client.prenom, client.nom].filter(Boolean).join(' ');
   const actionLabel = assignedToId

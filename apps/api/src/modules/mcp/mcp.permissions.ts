@@ -130,6 +130,16 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   send_sms:                      { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   request_candidate_confirmation:{ level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
+  // ═══ PROPRIÉTÉ, PRÉSENTATIONS, PUSH (lot 3) ═══
+  claim_owner:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  release_owner:                 { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  get_owner:                     { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  is_candidate_presented:        { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  create_presentation:           { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  update_presentation:           { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  list_presentations:            { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  get_candidate_push_status:     { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+
   // ═══ SUPPRESSIONS (vers la corbeille, restaurables 30 jours) ═══
   delete_candidate:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   delete_client:                 { level: 'confirm', roles: ['ADMIN'] },

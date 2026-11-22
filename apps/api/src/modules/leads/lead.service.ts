@@ -21,6 +21,21 @@ export interface CreateLeadInput {
   ownerId?: string | null;
   entrepriseId?: string | null;
   pushedCandidat?: unknown;
+  nbPostes?: number | null;
+  packageMoyen?: number | null;
+}
+
+/** Taux d'honoraires retenu pour la valeur d'opportunité d'un lead. */
+export const OPPORTUNITY_FEE_RATE = 0.22;
+
+/** Valeur d'opportunité = postes × package moyen × 22 %, ou null si une des deux données manque. */
+export function opportunityValue(l: { nbPostes?: number | null; packageMoyen?: number | null }): number | null {
+  if (!l.nbPostes || !l.packageMoyen) return null;
+  return Math.round(l.nbPostes * l.packageMoyen * OPPORTUNITY_FEE_RATE);
+}
+
+function withValue<T extends { nbPostes?: number | null; packageMoyen?: number | null }>(l: T) {
+  return { ...l, valeurOpportunite: opportunityValue(l) };
 }
 
 const leadInclude = {
@@ -29,21 +44,22 @@ const leadInclude = {
 };
 
 export async function listLeads(ownerId?: string) {
-  return prisma.lead.findMany({
+  const rows = await prisma.lead.findMany({
     where: ownerId ? { ownerId } : undefined,
     include: leadInclude,
     orderBy: { lastContactAt: { sort: 'desc', nulls: 'last' } },
   });
+  return rows.map(withValue);
 }
 
 export async function getLead(id: string) {
   const lead = await prisma.lead.findUnique({ where: { id }, include: leadInclude });
   if (!lead) throw new NotFoundError('Lead', id);
-  return lead;
+  return withValue(lead);
 }
 
 export async function createLead(data: CreateLeadInput, ownerId?: string) {
-  return prisma.lead.create({
+  const lead = await prisma.lead.create({
     data: {
       company: data.company,
       contact: data.contact,
@@ -59,14 +75,21 @@ export async function createLead(data: CreateLeadInput, ownerId?: string) {
       ownerId: data.ownerId ?? ownerId ?? null,
       entrepriseId: data.entrepriseId ?? null,
       pushedCandidat: (data.pushedCandidat as any) ?? undefined,
+      nbPostes: data.nbPostes ?? null,
+      packageMoyen: data.packageMoyen ?? null,
       lastContactAt: new Date(),
     },
     include: leadInclude,
   });
+  return withValue(lead);
 }
 
-export async function updateLead(id: string, data: Partial<CreateLeadInput> & { lostReason?: string | null; lostNote?: string | null }) {
-  await getLead(id);
+export async function updateLead(id: string, data: Partial<CreateLeadInput> & { lostReason?: string | null; lostNote?: string | null }, byUserId?: string) {
+  const before = await getLead(id);
+  if (data.ownerId !== undefined && data.ownerId !== before.ownerId) {
+    const { recordAssignment } = await import('../ownership/ownership.service.js');
+    await recordAssignment('LEAD', id, data.ownerId ?? null, byUserId);
+  }
   return prisma.lead.update({
     where: { id },
     data: {
@@ -78,9 +101,11 @@ export async function updateLead(id: string, data: Partial<CreateLeadInput> & { 
       ...(data.phone !== undefined ? { phone: data.phone } : {}),
       ...(data.city !== undefined ? { city: data.city } : {}),
       ...(data.ownerId !== undefined ? { ownerId: data.ownerId } : {}),
+      ...(data.nbPostes !== undefined ? { nbPostes: data.nbPostes } : {}),
+      ...(data.packageMoyen !== undefined ? { packageMoyen: data.packageMoyen } : {}),
     },
     include: leadInclude,
-  });
+  }).then(withValue);
 }
 
 export async function loseLead(id: string, lostReason: string, lostNote?: string) {

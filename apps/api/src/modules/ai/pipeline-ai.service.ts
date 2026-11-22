@@ -618,6 +618,7 @@ export async function applySuggestion(id: string, userId: string, stage?: string
       changedById: userId,
     },
   });
+  await import('../presentations/presentation.service.js').then((m) => m.syncFromStage(suggestion.candidatureId, String(targetStage), userId));
 
   // 3. Create Activite record
   const isInactivity = suggestion.triggerType === 'inactivity';

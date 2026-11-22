@@ -22,6 +22,7 @@ import EspaceCandidatCard from '../../components/candidats/EspaceCandidatCard';
 import { useStageChange } from '../../components/mandats/useStageChange';
 import { t, LOCALE } from '../../lib/i18n';
 import CandidatMatchCard from '../../components/profils-recherches/CandidatMatchCard';
+import PresentationsPanel, { usePresentations } from '../../components/presentations/PresentationsPanel';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Candidature {
@@ -84,7 +85,7 @@ function relTime(iso: string) {
 const authHeader = (): Record<string, string> => { const t = localStorage.getItem('accessToken'); return t ? { Authorization: `Bearer ${t}` } : {}; };
 
 // ═════════════════════════════════════════════════════
-type TabKey = 'apercu' | 'mandats' | 'appels' | 'entretiens' | 'cv' | 'notes' | 'messages';
+type TabKey = 'apercu' | 'mandats' | 'presentations' | 'appels' | 'entretiens' | 'cv' | 'notes' | 'messages';
 const TIER_META: Record<string, { bg: string; fg: string }> = {
   A: { bg: '#EAF3EC', fg: '#2C6B3F' },
   B: { bg: '#E8EEF9', fg: '#2A4A8A' },
@@ -127,6 +128,7 @@ export default function CandidatDetailPage() {
   const synthRef = useRef<SynthesesTabHandle>(null);
 
   const { data: c, isLoading } = useQuery({ queryKey: ['candidat', id], queryFn: () => api.get<CandidatDetail>(`/candidats/${id}`), enabled: !!id });
+  const { data: pres } = usePresentations('candidat', id);
   const { data: actsRaw } = useQuery({ queryKey: ['activites', 'candidat', id], queryFn: () => api.get<{ data: Activite[] }>(`/activites?entiteType=CANDIDAT&entiteId=${id}&perPage=100`), enabled: !!id });
   const { data: mandatsData } = useQuery({ queryKey: ['mandats', 'open'], queryFn: () => api.get<{ data: { id: string; titrePoste: string; entreprise: { nom: string } }[] }>('/mandats?statut=OUVERT&perPage=200&scope=all'), staleTime: 5 * 60 * 1000 });
   const { data: portail } = useQuery({ queryKey: ['candidat-portail', id], queryFn: () => api.get<PortailSummary>(`/candidats/${id}/portail`), enabled: !!id });
@@ -196,7 +198,7 @@ export default function CandidatDetailPage() {
     { label: t('Mobilité'), value: c.mobilite ?? null },
   ];
   const tabs: [TabKey, string, number | null][] = [
-    ['apercu', t('Aperçu'), null], ['mandats', t('Mandats'), c.candidatures.length], ['appels', t('Appels'), calls.length],
+    ['apercu', t('Aperçu'), null], ['mandats', t('Mandats'), c.candidatures.length], ['presentations', t('Présentations'), pres?.total ?? 0], ['appels', t('Appels'), calls.length],
     ['entretiens', t('Entretiens'), null], ['cv', 'CV', null], ['notes', 'Notes', notes.length], ['messages', 'Messages', null],
   ];
   const card: React.CSSProperties = { background: '#fff', border: '1px solid rgba(34,23,122,.09)', borderRadius: 16, padding: '18px 20px' };
@@ -400,6 +402,8 @@ export default function CandidatDetailPage() {
               })}
             </>
           )}
+
+          {tab === 'presentations' && <PresentationsPanel mode="candidat" id={c.id} />}
 
           {tab === 'appels' && (
             <div style={card}>
