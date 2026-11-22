@@ -7,6 +7,7 @@ import {
   asAgent, accessByChannel, getAgent, permalink,
 } from './core.js';
 import { queryRegistry } from './registry.js';
+import { postInOps } from './ops.js';
 
 type Schema = Record<string, unknown>;
 export type Tool = {
@@ -115,6 +116,18 @@ export const tools: Tool[] = [
         })),
       };
     },
+  },
+  {
+    name: 'post_in_agents_ops',
+    description: 'Coordinate with other agents in the private #agents-ops channel (the team does not see it). '
+      + 'Mention agents with @key (e.g. @khoa) to hand them the message: they get an "ops" event. '
+      + 'To answer an ops message, pass its post_id as reply_to_post_id. More than 6 agent messages in a row '
+      + 'without a person are refused (anti-loop).',
+    input_schema: obj({
+      text: { type: 'string', minLength: 1, maxLength: 8000 },
+      reply_to_post_id: { type: 'string' },
+    }, ['text']),
+    handler: (agent, input) => postInOps(agent, input),
   },
   {
     name: 'list_agents',

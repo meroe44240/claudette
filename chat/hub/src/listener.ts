@@ -4,6 +4,8 @@ import WebSocket from 'ws';
 import { env } from './env.js';
 import { q } from './db.js';
 import { accessByChannel, humanByMmId, onHumanPost } from './core.js';
+import { channelId } from './guard.js';
+import { deliverMentions, mentionedKeys } from './ops.js';
 
 const sockets = new Map<string, WebSocket>();
 
@@ -42,9 +44,18 @@ function connect(a: { key: string; mm_token: string; mm_user_id: string }, delay
 
 async function handle(a: { key: string; mm_user_id: string }, raw: string) {
   const msg = JSON.parse(raw);
-  if (msg.event !== 'posted' || msg.data?.channel_type !== 'D') return;
+  if (msg.event !== 'posted') return;
   const post = JSON.parse(msg.data.post);
   if (post.user_id === a.mm_user_id || (post.type && post.type !== '')) return;
+  if (msg.data.channel_type === 'P' && post.channel_id === (await channelId('agents-ops'))) {
+    // A person in #agents-ops: each mentioned agent's listener hands it over once.
+    if (!mentionedKeys(post.message).includes(a.key)) return;
+    const person = await humanByMmId(post.user_id);
+    if (!person) return;
+    await deliverMentions(post.message, { human: person.key }, post.id, post.root_id || null, a.key);
+    return;
+  }
+  if (msg.data.channel_type !== 'D') return;
   const acc = await accessByChannel(post.channel_id);
   if (!acc || acc.agent_key !== a.key) return;
   const human = await humanByMmId(post.user_id);

@@ -8,7 +8,9 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { env } from './env.js';
 import { one, q } from './db.js';
-import { type Agent, ToolError } from './core.js';
+import { type Agent, ToolError, audit } from './core.js';
+import { setPaused, sentToday } from './guard.js';
+import { buildPolicy } from './policy.js';
 import { sha256 } from './sync.js';
 import { tools, runTool } from './tools.js';
 import { queryRegistry, toCsv } from './registry.js';
@@ -118,6 +120,47 @@ export async function buildServer() {
   });
   app.get('/mcp', async (_req, reply) => reply.code(405).send({ error: 'Use POST' }));
   app.delete('/mcp', async (_req, reply) => reply.code(405).send({ error: 'Stateless server' }));
+
+  // ── Admin: agents, counters, kill switch ───────────────────────────────────
+  app.get('/v1/admin/agents', async (req, reply) => {
+    if (!isAdmin(req)) return reply.code(403).send({ error: 'Not allowed' });
+    const rows = await q<any>(
+      `select a.key, a.name, a.title, a.status, a.paused_at, a.paused_by, a.delivery_mode, a.provider,
+              coalesce((a.rules->>'daily_message_budget')::int, 200) as budget,
+              (select count(*)::int from questions qq where qq.agent_key=a.key and qq.status='open') as open_questions,
+              (select count(*)::int from events e where e.agent_key=a.key and e.status='pending') as pending_events
+         from agents a order by a.name`);
+    for (const r of rows) r.sent_today = await sentToday(r.key);
+    return { agents: rows };
+  });
+  app.post<{ Params: { key: string; action: string } }>('/v1/admin/agents/:key/:action', async (req, reply) => {
+    if (!isAdmin(req)) return reply.code(403).send({ error: 'Not allowed' });
+    const { key, action } = req.params;
+    if (action !== 'pause' && action !== 'resume') return reply.code(404).send({ error: 'pause or resume' });
+    const done = await setPaused(key === 'all' ? 'all' : [key], action === 'pause', 'admin-api');
+    if (!done.length) return reply.code(404).send({ error: 'Unknown agent' });
+    return { [action === 'pause' ? 'paused' : 'resumed']: done.map((d) => d.key) };
+  });
+
+  // ── Called by the Mattermost plugin (internal network only; Caddy blocks /hub/mm/*) ──
+  const isPlugin = (req: FastifyRequest) => {
+    const a = Buffer.from(bearer(req));
+    const b = Buffer.from(env.PLUGIN_SECRET);
+    return a.length === b.length && timingSafeEqual(a, b);
+  };
+  app.get('/mm/policy', async (req, reply) => {
+    if (!isPlugin(req)) return reply.code(401).send({ error: 'Unauthorized' });
+    return buildPolicy();
+  });
+  app.post('/mm/audit', async (req, reply) => {
+    if (!isPlugin(req)) return reply.code(401).send({ error: 'Unauthorized' });
+    const b = (req.body ?? {}) as Record<string, string>;
+    const who = await one<{ key: string; type: string }>(
+      `select key, 'agent' as type from agents where mm_user_id=$1 union all select key, 'human' from humans where mm_user_id=$1`, [b.user_id]);
+    await audit((who?.type as 'agent' | 'human') ?? 'hub', who?.key ?? b.user_id ?? 'unknown', `plugin.${b.reason ?? 'blocked'}`,
+      b.channel_id, { channel_id: b.channel_id });
+    return { ok: true };
+  });
 
   // ── Called by Mattermost ───────────────────────────────────────────────────
   app.post('/mm/actions', async (req) => handleAction(req.body));

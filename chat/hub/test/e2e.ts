@@ -11,6 +11,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { MM } from '../src/mm.js';
 import { env } from '../src/env.js';
+import { pool } from '../src/db.js';
+import { inWindow } from '../src/guard.js';
 
 const HUB = process.env.HUB ?? 'http://localhost:3100';
 const seed = JSON.parse(readFileSync(join(env.SECRETS_DIR, 'seed-secrets.json'), 'utf8'));
@@ -54,7 +56,7 @@ async function tool(agent: string, name: string, input: unknown = {}) {
 
 async function pending(agent: string) {
   const res = await fetch(`${HUB}/v1/agents/me/pending`, { headers: { Authorization: `Bearer ${keys[agent]}` } });
-  return ((await res.json()) as any).events as any[];
+  return (((await res.json()) as any).events ?? []) as any[]; // a paused agent gets an error, i.e. nothing
 }
 
 async function main() {
@@ -67,7 +69,12 @@ async function main() {
     const r = await lea.mm.get(`/channels/${channel}/posts?per_page=20`);
     return (r.order as string[]).map((id) => r.posts[id]).find((p: any) => p.user_id === seed.bots[agent].user_id) ?? null;
   };
-  for (const a of ['khoa', 'theo', 'maya', 'hugo', 'nathan']) await pending(a); // drain leftovers from earlier runs
+  // Test database only: make earlier runs of today count as yesterday (daily caps, once-a-day alerts), resume everyone.
+  await pool.query(`update questions set created_at = created_at - interval '2 days' where created_at > now() - interval '2 days'`);
+  await pool.query(`update audit_log set ts = ts - interval '2 days' where ts > now() - interval '2 days'`);
+  await pool.query(`delete from kv where key like 'alert:%'`);
+  await fetch(`${HUB}/v1/admin/agents/all/resume`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}` } });
+  for (const a of ['khoa', 'theo', 'maya', 'hugo', 'nathan', 'ines', 'awa']) await pending(a); // drain leftovers from earlier runs
 
   // Local endpoint standing in for agents' webhook / wake URLs
   const wakes: any[] = [];
@@ -225,7 +232,87 @@ async function main() {
     console.log('SKIP  Claude test agent (no ANTHROPIC_API_KEY)');
   }
 
+  // ── Phase 3: guardrails ───────────────────────────────────────────────────
+  const meroe = await login('meroe');
+  const chan = async (name: string) => (await lea.mm.get(`/teams/${teamId}/channels/name/${name}`)).id as string;
+  const asBot = (agent: string) => new MM(env.MM_URL, seed.bots[agent].token);
+  const rejected = async (fn: () => Promise<unknown>) => {
+    try { await fn(); return false; } catch (e: any) { return e.status >= 400; }
+  };
+  const [newsId, perfId, generalId] = [await chan('news'), await chan('performance'), await chan('town-square')];
+  const opsId = (await meroe.mm.get(`/teams/${teamId}/channels/name/agents-ops`)).id as string;
+
+  // 15. Plugin: read-only channels, no agents in #general
+  check(await rejected(() => lea.mm.post('/posts', { channel_id: newsId, message: 'hello news' })), 'plugin: Léa cannot post in #news');
+  check(await rejected(() => lea.mm.post('/posts', { channel_id: perfId, message: 'hello perf' })), 'plugin: Léa cannot post in #performance');
+  const mayaPerf = await asBot('maya').post('/posts', { channel_id: perfId, message: 'Daily report test (Maya)' }).catch(() => null);
+  check(!!mayaPerf, 'plugin: Maya can post in #performance');
+  check(await rejected(() => asBot('khoa').post('/posts', { channel_id: perfId, message: 'x' })), 'plugin: Khoa cannot post in #performance');
+  check(await rejected(() => asBot('khoa').post('/posts', { channel_id: generalId, message: 'x' })), 'plugin: agents cannot post in #general');
+  const leaGeneral = await lea.mm.post('/posts', { channel_id: generalId, message: 'Test: people still post in #general' }).catch(() => null);
+  check(!!leaGeneral, 'people still post in #general');
+  const pluginAudit = await waitFor(async () => {
+    const rows: any = await (await fetch(`${HUB}/v1/admin/audit`, { headers: { Authorization: `Bearer ${adminToken}` } })).json();
+    return rows.entries?.some((e: any) => e.action === 'plugin.read_only' && e.actor === 'lea');
+  });
+  check(pluginAudit, 'plugin blocks are in the audit log');
+
+  // 16. Kill switch
+  const khoaDm = await dm('khoa');
+  const pauseRes = await meroe.mm.post('/commands/execute', { channel_id: opsId, command: '/agents pause khoa', team_id: teamId });
+  check(/Khoa/.test(pauseRes.text ?? ''), '/agents pause khoa (Méroë)', pauseRes.text);
+  const leaPause = await lea.mm.post('/commands/execute', { channel_id: await dm('khoa'), command: '/agents pause theo', team_id: teamId });
+  check(/admin/i.test(leaPause.text ?? ''), 'only an admin can pause', leaPause.text);
+  const r16 = await tool('khoa', 'reply', { to: 'lea', text: 'still here?' });
+  check(r16.status === 423, 'paused agent: the Hub refuses its actions', r16);
+  const blockedDirect = await waitFor(async () => (await rejected(() => asBot('khoa').post('/posts', { channel_id: khoaDm, message: 'direct' }))) || null, 40_000, 3000);
+  check(blockedDirect, 'paused agent: the plugin blocks its bot account too');
+  const p16 = await say('khoa', 'Message pendant la pause');
+  await sleep(1500);
+  check((await pending('khoa')).length === 0, 'paused agent: nothing delivered');
+  const status16 = await meroe.mm.post('/commands/execute', { channel_id: opsId, command: '/agents', team_id: teamId });
+  check(/⏸/.test(status16.text ?? '') && /\/ 200/.test(status16.text ?? ''), '/agents (admin): status and messages sent today / budget', status16.text?.slice(0, 200));
+  await meroe.mm.post('/commands/execute', { channel_id: opsId, command: '/agents resume Khoa', team_id: teamId });
+  const ev16 = await waitFor(async () => (await pending('khoa')).find((e) => e.post_id === p16.id));
+  check(!!ev16, 'resume: the message written during the pause is delivered');
+  await waitFor(async () => !(await rejected(() => asBot('khoa').post('/posts', { channel_id: khoaDm, message: 'back' }))) || null, 40_000, 3000);
+
+  // 17. Question cap: the 11th question is not posted, Inès is told
+  let capped: any = null;
+  for (let i = 0; i < 12 && !capped; i++) {
+    const r = await tool('awa', 'ask_human', { to: 'vicky', subject: `Invoice check ${i + 1}`, question: 'Paid?', choices: ['Yes', 'No'] });
+    if (r.status === 429) capped = { i, r };
+  }
+  check(capped?.i === 10, 'question cap: 10 questions to Vicky, the 11th refused', capped);
+  const inesAlert = await waitFor(async () => (await pending('ines')).find((e) => e.type === 'alert' && e.reason === 'question_cap'));
+  check(inesAlert?.agent === 'awa' && inesAlert?.asked_to === 'vicky', 'question cap: Inès gets the extra question', inesAlert);
+
+  // 18. #agents-ops: @mention hands the message over; anti-loop after 6 agent messages
+  const o1 = await tool('khoa', 'post_in_agents_ops', { text: '@theo can you confirm the commission rule for Léa?' });
+  const ev18 = await waitFor(async () => (await pending('theo')).find((e) => e.type === 'ops' && e.from_agent === 'khoa'));
+  check(o1.status === 200 && ev18?.post_id === o1.body.post_id, '#agents-ops: @theo gets Khoa\'s message', o1.body);
+  let n = 1;
+  let loop: any = null;
+  for (let i = 0; i < 7 && !loop; i++) {
+    const r = await tool(i % 2 ? 'khoa' : 'theo', 'post_in_agents_ops', { text: `reply ${i}`, reply_to_post_id: o1.body.post_id });
+    if (r.status === 429) loop = r; else n++;
+  }
+  check(n === 6 && loop?.body?.error?.includes('Loop'), 'anti-loop: 6 agent messages in a row, the 7th refused', { n, loop });
+  const opsPosts = await meroe.mm.get(`/channels/${opsId}/posts?per_page=10`);
+  check(Object.values<any>(opsPosts.posts).some((p) => /Loop stopped/.test(p.message)), 'anti-loop: alert in #agents-ops');
+  await meroe.mm.post('/posts', { channel_id: opsId, root_id: o1.body.post_id, message: 'OK, I am looking at it. @maya can you add the numbers?' });
+  const after = await tool('theo', 'post_in_agents_ops', { text: 'Thanks', reply_to_post_id: o1.body.post_id });
+  check(after.status === 200, 'anti-loop: a person steps in, agents can post again', after);
+  const ev18b = await waitFor(async () => (await pending('maya')).find((e) => e.type === 'ops' && e.from_human === 'meroe'));
+  check(!!ev18b, '#agents-ops: Méroë\'s @maya reaches Maya');
+
+  // 19. Time window: Théo writes first only on Monday 09:00-12:00 (Ho Chi Minh)
+  const r19 = await tool('theo', 'reply', { to: 'lea', text: 'Your commission statement is ready.' });
+  const open = inWindow('MON 09:00-12:00');
+  check(open ? r19.status === 200 : r19.status === 403 && /MON 09:00-12:00/.test(r19.body.error), `time window (${open ? 'open now' : 'closed now'})`, r19);
+
   srv.close();
+  await pool.end();
   console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
   process.exit(failures ? 1 : 0);
 }

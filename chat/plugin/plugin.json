@@ -1,0 +1,20 @@
+{
+  "id": "humanup-agents",
+  "name": "Humanup Agents",
+  "description": "Channel rules for Humanup Chat: read-only #news and #performance, no agents in #general, paused agents silenced. Rules come from the Agent Hub.",
+  "version": "0.1.0",
+  "min_server_version": "10.0.0",
+  "server": {
+    "executables": {
+      "linux-amd64": "server/dist/plugin-linux-amd64",
+      "linux-arm64": "server/dist/plugin-linux-arm64"
+    }
+  },
+  "settings_schema": {
+    "header": "Rules are fetched from the Agent Hub every 30 seconds.",
+    "settings": [
+      { "key": "HubURL", "display_name": "Agent Hub URL", "type": "text", "default": "http://hub:3100" },
+      { "key": "HubSecret", "display_name": "Agent Hub plugin secret", "type": "text", "secret": true, "default": "" }
+    ]
+  }
+}
