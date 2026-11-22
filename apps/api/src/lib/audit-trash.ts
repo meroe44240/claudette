@@ -19,7 +19,7 @@ export const TRACKED_MODELS = new Set([
   'Entreprise', 'Client', 'Candidat', 'CandidatExperience', 'Mandat', 'Candidature',
   'Activite', 'FichierActivite', 'Lead', 'LeadInteraction', 'JobOffer', 'PostLinkedin',
   'PostLinkedinComment', 'NoteCall', 'ProfilRecherche', 'MarketList', 'MarketListEstablishment',
-  'QuestionTemplate', 'Booking', 'ContractApproval', 'PortalAccess', 'PortalComment',
+  'QuestionTemplate', 'Booking', 'ContractApproval', 'PortalAccess', 'PortalComment', 'StageHistory',
 ]);
 
 /** Libellé lisible d'une ligne, pour le journal et la corbeille. */
@@ -140,7 +140,7 @@ export function forgetUserLabel(userId: string) { userLabels.delete(userId); }
 
 // ─── Journal ───
 type AuditInput = {
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'RESTORE' | 'EXTERNAL';
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'RESTORE' | 'EXTERNAL' | 'UNDO';
   model: string;
   entityId?: string | null;
   label?: string | null;
@@ -152,7 +152,7 @@ type AuditInput = {
 
 export async function writeAudit(client: PrismaClient, entries: AuditInput[]) {
   const ctx = getContext();
-  if (!ctx?.userId || entries.length === 0) return;
+  if (!ctx?.userId || ctx.dryRun || entries.length === 0) return;
   try {
     await client.auditLog.createMany({
       data: entries.map((e) => ({
@@ -216,8 +216,8 @@ async function captureCascade(client: PrismaClient, model: string, roots: Record
 }
 
 async function storeInTrash(client: PrismaClient, captured: Captured[], detached: Detached[]) {
-  if (!captured.length) return;
   const ctx = getContext();
+  if (!captured.length || ctx?.dryRun) return;
   const batchId = ctx?.batchId ?? randomUUID();
   const byLabel = await actorLabel(client, ctx?.userId);
   // Les lignes détachées sont rattachées à la première racine du lot.
@@ -300,6 +300,30 @@ export async function restoreBatch(client: PrismaClient, batchId: string) {
   return { batch_id: batchId, restored, skipped };
 }
 
+/**
+ * Ligne après écriture. Le résultat de Prisma suffit quand il est complet (pas de select) :
+ * on évite une relecture, qui hors transaction verrait encore l'ancienne valeur.
+ */
+async function afterRow(client: PrismaClient, model: string, args: any, result: any) {
+  if (result && typeof result === 'object' && !args?.select) {
+    const m = MODELS.get(model);
+    if (!m) return result;
+    const out: Record<string, any> = {};
+    for (const f of m.fields) if (f.kind !== 'object' && f.name in result) out[f.name] = result[f.name];
+    return out;
+  }
+  return result?.id ? delegate(client, model).findUnique({ where: { id: result.id } }) : result;
+}
+
+/** Ce qu'une suppression emporterait, sans rien supprimer (mode essai). */
+export async function previewDelete(client: PrismaClient, model: string, ids: string[]) {
+  const roots: Record<string, any>[] = await delegate(client, model).findMany({ where: { id: { in: ids } } });
+  if (!roots.length) return { found: 0, cascade: {}, detached: {} };
+  const { captured, detached } = await captureCascade(client, model, roots);
+  const count = (xs: Array<{ model: string }>) => xs.reduce<Record<string, number>>((acc, x) => { acc[x.model] = (acc[x.model] ?? 0) + 1; return acc; }, {});
+  return { found: roots.length, cascade: count(captured.filter((c) => !c.isRoot)), detached: count(detached) };
+}
+
 // ─── Extension ───
 export function installAuditAndTrash(client: PrismaClient) {
   return client.$extends({
@@ -324,7 +348,7 @@ export function installAuditAndTrash(client: PrismaClient) {
           if (!TRACKED_MODELS.has(model) || !getContext()?.userId) return query(args);
           const before = await delegate(client, model).findUnique({ where: args.where });
           const result: any = await query(args);
-          const after = result?.id ? await delegate(client, model).findUnique({ where: { id: result.id } }) : result;
+          const after = await afterRow(client, model, args, result);
           const changes = diff(before, after);
           if (changes && Object.keys(changes).length) {
             await writeAudit(client, [{ action: 'UPDATE', model, entityId: after?.id, label: recordLabel(after), before, after, changes }]);
@@ -335,7 +359,7 @@ export function installAuditAndTrash(client: PrismaClient) {
           if (!TRACKED_MODELS.has(model) || !getContext()?.userId) return query(args);
           const before = await delegate(client, model).findUnique({ where: args.where });
           const result: any = await query(args);
-          const after = result?.id ? await delegate(client, model).findUnique({ where: { id: result.id } }) : result;
+          const after = await afterRow(client, model, args, result);
           if (!before) await writeAudit(client, [{ action: 'CREATE', model, entityId: after?.id, label: recordLabel(after), after }]);
           else {
             const changes = diff(before, after);

@@ -26,17 +26,18 @@ interface AuditEntry {
 interface Facets { entities: string[]; tools: string[]; users: Array<{ id: string; name: string; is_agent: boolean }> }
 
 const ACTION_LABEL: Record<string, string> = {
-  CREATE: t('Création'), UPDATE: t('Modification'), DELETE: t('Suppression'), RESTORE: t('Restauration'), EXTERNAL: t('Action externe'),
+  CREATE: t('Création'), UPDATE: t('Modification'), DELETE: t('Suppression'), RESTORE: t('Restauration'), EXTERNAL: t('Action externe'), UNDO: t('Annulation'),
 };
 const ACTION_STYLE: Record<string, string> = {
   CREATE: 'bg-green-100 text-green-700', UPDATE: 'bg-sky-100 text-sky-700', DELETE: 'bg-red-100 text-red-700',
-  RESTORE: 'bg-violet-100 text-violet-700', EXTERNAL: 'bg-amber-100 text-amber-800',
+  RESTORE: 'bg-violet-100 text-violet-700', EXTERNAL: 'bg-amber-100 text-amber-800', UNDO: 'bg-neutral-200 text-neutral-700',
 };
 const ENTITY_LABEL: Record<string, string> = {
   CANDIDAT: t('Candidat'), CLIENT: t('Client'), ENTREPRISE: t('Société'), MANDAT: t('Mandat'), CANDIDATURE: t('Candidature'),
   ACTIVITE: t('Activité'), LEAD: t('Lead'), LEADINTERACTION: t('Interaction lead'), JOBOFFER: t('Offre'), PROFILRECHERCHE: t('Profil recherché'),
   NOTECALL: t("Note d'appel"), POSTLINKEDIN: t('Post LinkedIn'), BOOKING: t('Rendez-vous'), MCP_TOOL: t('Outil MCP'),
   CANDIDATEXPERIENCE: t('Expérience'), FICHIERACTIVITE: t('Fichier'), PORTALACCESS: t('Accès portail'), CONTRACTAPPROVAL: t('Validation de contrat'),
+  STAGEHISTORY: t("Historique d'étape"), BATCH: t("Lot d'actions"),
 };
 const ENTITY_ROUTE: Record<string, string> = { CANDIDAT: '/candidats/', CLIENT: '/clients/', ENTREPRISE: '/entreprises/', MANDAT: '/mandats/' };
 

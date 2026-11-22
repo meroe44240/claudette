@@ -15,6 +15,8 @@ export interface RequestContext {
   externe?: boolean;
   /** Effacement définitif voulu (RGPD) : la corbeille ne garde rien. */
   skipTrash?: boolean;
+  /** Mode essai : les écritures sont annulées à la fin, rien n'est journalisé ni mis en corbeille. */
+  dryRun?: boolean;
 }
 
 const store = new AsyncLocalStorage<RequestContext>();
@@ -39,4 +41,10 @@ export function setContextUser(userId: string, source?: RequestContext['source']
 export function runWithoutTrash<T>(fn: () => T): T {
   const ctx = store.getStore();
   return store.run({ ...(ctx ?? { source: 'SYSTEM', batchId: randomUUID() }), skipTrash: true }, fn);
+}
+
+/** Exécute fn en mode essai (voir RequestContext.dryRun). */
+export function runDry<T>(fn: () => T): T {
+  const ctx = store.getStore();
+  return store.run({ ...(ctx ?? { source: 'SYSTEM', batchId: randomUUID() }), dryRun: true }, fn);
 }
