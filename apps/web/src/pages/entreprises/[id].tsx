@@ -11,6 +11,7 @@ import { t, LOCALE } from '../../lib/i18n';
 import CompanyLogo from '../../components/entreprises/CompanyLogo';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import NoteContent from '../../components/activity/NoteContent';
+import CompanyProfilsTab, { useCompanyProfils } from '../../components/profils-recherches/CompanyProfilsTab';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Contact { id: string; nom: string; prenom: string | null; email: string | null; telephone: string | null; poste: string | null }
@@ -48,6 +49,9 @@ export default function EntrepriseDetailPage() {
   usePageTitle(t('Fiche société'));
   const [railTab, setRailTab] = useState<'rel' | 'notes'>('rel');
   const [note, setNote] = useState('');
+  const [mainTab, setMainTab] = useState<'vue' | 'profils'>(() => (new URLSearchParams(window.location.search).get('onglet') === 'profils' ? 'profils' : 'vue'));
+  const { data: profils } = useCompanyProfils(id);
+  const nbProfils = (profils?.engineering.length ?? 0) + (profils?.sales.length ?? 0);
 
   const { data: e, isLoading } = useQuery({ queryKey: ['entreprise', id], queryFn: () => api.get<Entreprise>(`/entreprises/${id}`), enabled: !!id });
   const { data: actsRaw } = useQuery({ queryKey: ['activites', 'entreprise', id], queryFn: () => api.get<{ data: Activite[] }>(`/activites?entiteType=ENTREPRISE&entiteId=${id}&perPage=50`), enabled: !!id });
@@ -115,6 +119,19 @@ export default function EntrepriseDetailPage() {
             </div>
           </div>
 
+          {/* ONGLETS */}
+          <div style={{ display: 'flex', gap: 5, marginTop: 22, borderBottom: '1px solid rgba(34,23,122,.1)' }}>
+            {([['vue', t("Vue d'ensemble")], ['profils', t('Profils recherchés')]] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setMainTab(k)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13.5, fontWeight: 700, padding: '9px 14px', border: 'none', borderBottom: mainTab === k ? '2.5px solid #22177A' : '2.5px solid transparent', marginBottom: -1, background: 'none', cursor: 'pointer', color: mainTab === k ? '#22177A' : '#8A8699' }}>
+                {l}
+                {k === 'profils' && nbProfils > 0 && <span style={{ fontSize: 11, fontWeight: 800, color: '#22177A', background: '#E6E9AF', borderRadius: 999, padding: '1px 8px' }}>{nbProfils}</span>}
+              </button>
+            ))}
+          </div>
+
+          {mainTab === 'profils' && <CompanyProfilsTab entrepriseId={e.id} />}
+
+          {mainTab === 'vue' && <>
           {/* KPIs */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginTop: 22 }}>
             {[{ label: t('CA généré'), value: fmtEur(revenue), Icon: Banknote, color: '#2C6B3F' }, { label: t('Mandats actifs'), value: String(actifs), Icon: Briefcase, color: '#22177A' }, { label: t('Total mandats'), value: String(e._count.mandats), Icon: FileText, color: '#1A1533' }, { label: t('Contacts'), value: String(e._count.clients), Icon: Users, color: '#1A1533' }].map(k => (
@@ -189,6 +206,7 @@ export default function EntrepriseDetailPage() {
               </div>
             </div>
           )}
+          </>}
         </div>
 
         {/* RAIL */}

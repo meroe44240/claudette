@@ -15,6 +15,7 @@ const userSelect = {
   avatarUrl: true,
   telephone: true,
   excludeFromTeamStats: true,
+  estAgent: true,
   lastLoginAt: true,
   createdAt: true,
 } as any;
@@ -143,6 +144,7 @@ export async function updateUser(
     role?: Role;
     fonction?: Fonction;
     excludeFromTeamStats?: boolean;
+    estAgent?: boolean;
     telephone?: string;
     avatarUrl?: string;
     avatarData?: string;
@@ -160,6 +162,7 @@ export async function updateUser(
   if (data.fonction !== undefined) updateData.fonction = data.fonction;
   if (data.excludeFromTeamStats !== undefined)
     updateData.excludeFromTeamStats = data.excludeFromTeamStats;
+  if (data.estAgent !== undefined) updateData.estAgent = data.estAgent;
   if (data.telephone !== undefined) updateData.telephone = data.telephone;
   if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl;
   if (data.avatarData !== undefined) updateData.avatarData = data.avatarData;

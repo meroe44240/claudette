@@ -23,6 +23,8 @@ const updateUserSchema = z.object({
   role: z.enum(['ADMIN', 'RECRUTEUR']).optional(),
   fonction: fonctionEnum.optional(),
   excludeFromTeamStats: z.boolean().optional(),
+  // Compte agent (IA) : écrit les profils recherchés par MCP
+  estAgent: z.boolean().optional(),
   telephone: z.string().max(50).optional(),
   avatarUrl: z.string().max(1000).optional(),
   avatarData: z.string().max(3_000_000).optional(),

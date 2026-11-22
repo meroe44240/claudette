@@ -21,6 +21,7 @@ import PhotoMenu from '../../components/candidats/PhotoMenu';
 import EspaceCandidatCard from '../../components/candidats/EspaceCandidatCard';
 import { useStageChange } from '../../components/mandats/useStageChange';
 import { t, LOCALE } from '../../lib/i18n';
+import CandidatMatchCard from '../../components/profils-recherches/CandidatMatchCard';
 
 // ─── TYPES ──────────────────────────────────────────
 interface Candidature {
@@ -532,6 +533,8 @@ export default function CandidatDetailPage() {
               <button disabled={!linkSel} onClick={() => linkSel && linkMut.mutate(linkSel)} aria-label={t('Relier')} style={{ flexShrink: 0, background: linkSel ? '#22177A' : '#C4C1D0', color: '#E6E9AF', border: 'none', borderRadius: 10, padding: '0 12px', cursor: linkSel ? 'pointer' : 'default' }}><Plus size={14} strokeWidth={2.8} /></button>
             </div>
           </div>
+
+          <CandidatMatchCard candidatId={c.id} card={card} h2={h2} />
 
           <EspaceCandidatCard candidatId={c.id} />
 
