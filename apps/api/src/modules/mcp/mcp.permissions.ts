@@ -105,13 +105,39 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   restore_record:                { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
   get_record_history:            { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
-  // ═══ DELETE (avec confirmation) ═══
-  delete_candidate:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  // ═══ OUTILS GÉNÉRIQUES (toutes les entités) ═══
+  list_records:                  { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  get_record:                    { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  search_all:                    { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  create_record:                 { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  update_record:                 { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  delete_record:                 { level: 'confirm', roles: ['ADMIN'] },
+  bulk_create_records:           { level: 'confirm', roles: ['ADMIN', 'MANAGER'] },
+  bulk_update_records:           { level: 'confirm', roles: ['ADMIN', 'MANAGER'] },
+  bulk_delete_records:           { level: 'confirm', roles: ['ADMIN'] },
+  undo:                          { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  export_records_csv:            { level: 'free',    roles: ['ADMIN'] },
+  import_records_csv:            { level: 'confirm', roles: ['ADMIN', 'MANAGER'] },
 
-  // ═══ BLOCKED — destructif ═══
-  delete_client:                 { level: 'blocked', roles: [] },
-  delete_mandate:                { level: 'blocked', roles: [] },
-  delete_company:                { level: 'blocked', roles: [] },
+  // ═══ OUTILS NOMMÉS AJOUTÉS (lot 2) ═══
+  get_lead:                      { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  update_lead:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  update_mandate:                { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  duplicate_mandate:             { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  bulk_move_candidate_stage:     { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  list_tasks:                    { level: 'free',    roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  update_task:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  send_sms:                      { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  request_candidate_confirmation:{ level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+
+  // ═══ SUPPRESSIONS (vers la corbeille, restaurables 30 jours) ═══
+  delete_candidate:              { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  delete_client:                 { level: 'confirm', roles: ['ADMIN'] },
+  delete_mandate:                { level: 'confirm', roles: ['ADMIN'] },
+  delete_company:                { level: 'confirm', roles: ['ADMIN'] },
+  delete_lead:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER'] },
+
+  // ═══ BLOCKED ═══
   export_database:               { level: 'blocked', roles: [] },
   modify_settings:               { level: 'blocked', roles: [] },
 };

@@ -1431,3 +1431,22 @@ model TrashEntry {
   @@index([model, recordId])
   @@map("trash_entries")
 }
+
+// ============================================
+// IDEMPOTENCE MCP — un appel d'outil d'écriture rejoué avec la même clé renvoie la réponse
+// du premier appel au lieu de recommencer (pas de doublon, pas de second email). 7 jours.
+// ============================================
+
+model McpIdempotencyKey {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  key       String   @db.VarChar(200)
+  toolName  String   @map("tool_name") @db.VarChar(100)
+  argsHash  String   @map("args_hash") @db.VarChar(64)
+  response  Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@unique([userId, key])
+  @@index([createdAt])
+  @@map("mcp_idempotency_keys")
+}
