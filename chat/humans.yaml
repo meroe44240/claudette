@@ -1,0 +1,46 @@
+# Humans on Humanup Chat. Seeded by chat/seed. Edit, then re-run the seed (idempotent).
+# ui_locale: language of the Mattermost interface (en by default).
+# agent_lang: language agents use when they write to this person.
+# TO CONFIRM: emails other than Méroë's are guesses (firstname@humanup.io).
+defaults:
+  timezone: Asia/Ho_Chi_Minh
+  ui_locale: en
+  agent_lang: en
+
+humans:
+  meroe:
+    first_name: Méroë
+    last_name: Nguimbi
+    email: meroe@humanup.io
+    position: Founder
+    admin: true
+    agent_lang: fr
+    propium_user_id: fd77cf60-5736-4180-bdb2-addf2a5c4d7e
+  valentin:
+    first_name: Valentin
+    last_name: Murcia
+    email: valentin@humanup.io
+    position: Sales
+    agent_lang: fr
+    propium_user_id: b924b7cf-ac91-49a1-be99-b761136dd713
+  lea:
+    first_name: Léa
+    last_name: Tonnoir
+    email: lea@humanup.io
+    position: Recruiter
+    agent_lang: fr
+    propium_user_id: 759956ab-b0a6-4fe7-8b10-047001919e8c
+  vicky:
+    first_name: Vicky
+    last_name: Deletang
+    email: vicky@humanup.io
+    position: Recruiter
+    agent_lang: fr
+    propium_user_id: bf84bf64-c4c5-4e2d-a575-89f062db8041
+  max:
+    first_name: Max
+    last_name: Anderson
+    email: max@humanup.io
+    position: Recruiter
+    agent_lang: en
+    propium_user_id: f6176f9c-9c66-4891-9572-7e4bb03e9c0e

@@ -32,3 +32,9 @@ ats.propium.co {
     reverse_proxy web:80
   }
 }
+
+# Humanup Chat (Mattermost, deployed separately in /opt/humanup-chat, joined to this network)
+chat.propium.co {
+  encode zstd gzip
+  reverse_proxy humanup-chat:8065
+}
