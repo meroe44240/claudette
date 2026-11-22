@@ -1,0 +1,21 @@
+# On the Propium VPS (ats.propium.co): no Caddy of our own. Propium's Caddy owns ports 80/443
+# and proxies chat.propium.co to Mattermost through Propium's Docker network (docker_default).
+#   docker compose -f docker-compose.yml -f docker-compose.propium.yml up -d
+services:
+  mattermost:
+    environment:
+      MM_SERVICESETTINGS_SITEURL: https://${CHAT_DOMAIN}
+    mem_limit: 1536m
+    networks:
+      default: {}
+      propium:
+        aliases: [humanup-chat]
+  postgres:
+    mem_limit: 512m
+  caddy:
+    profiles: ["disabled"]
+
+networks:
+  propium:
+    external: true
+    name: docker_default

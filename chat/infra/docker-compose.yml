@@ -1,0 +1,166 @@
+# Humanup Chat: Mattermost Team Edition + Postgres + Caddy (HTTPS) + daily backups.
+# Run from chat/infra:  docker compose up -d
+# Settings are set here through MM_* variables (they show as locked in the System Console).
+
+name: humanup-chat
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # Unique name: on the Propium VPS, "postgres" would also resolve to Propium's database.
+    networks:
+      default:
+        aliases: [chat-db]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mmuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: mattermost
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mmuser} -d mattermost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mattermost:
+    image: mattermost/mattermost-team-edition:${MM_VERSION:-11.11.4}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://${POSTGRES_USER:-mmuser}:${POSTGRES_PASSWORD}@chat-db:5432/mattermost?sslmode=disable&connect_timeout=10
+      MM_SERVICESETTINGS_SITEURL: ${MM_SITEURL:-https://${CHAT_DOMAIN}}
+      MM_SERVICESETTINGS_LISTENADDRESS: ":8065"
+      # Local mode: lets bootstrap.sh run mmctl inside the container without a password.
+      MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
+      MM_SERVICESETTINGS_ENABLEBOTACCOUNTCREATION: "true"
+      MM_SERVICESETTINGS_ENABLEUSERACCESSTOKENS: "true"
+      MM_SERVICESETTINGS_ENABLEPOSTUSERNAMEOVERRIDE: "false"
+      MM_SERVICESETTINGS_ENABLEPOSTICONOVERRIDE: "false"
+      MM_SERVICESETTINGS_ENABLEINCOMINGWEBHOOKS: "true"
+      MM_SERVICESETTINGS_ENABLEOUTGOINGWEBHOOKS: "false"
+      MM_SERVICESETTINGS_ENABLECOMMANDS: "true"
+      MM_SERVICESETTINGS_COLLAPSEDTHREADS: always_on
+      # No Mattermost tour: the one-page team guide covers it.
+      MM_SERVICESETTINGS_ENABLEONBOARDINGFLOW: "false"
+      MM_SERVICESETTINGS_ENABLETUTORIAL: "false"
+      # The Agent Hub (phase 2) runs on the same Docker network; Mattermost must be allowed to call it.
+      MM_SERVICESETTINGS_ALLOWEDUNTRUSTEDINTERNALCONNECTIONS: "hub"
+      MM_TEAMSETTINGS_SITENAME: Humanup Chat
+      MM_TEAMSETTINGS_ENABLEOPENSERVER: "false"
+      MM_TEAMSETTINGS_ENABLEUSERCREATION: "true"
+      # DMs only between people who share a team: how Camille and Malik stay invisible to the team.
+      MM_TEAMSETTINGS_RESTRICTDIRECTMESSAGE: team
+      MM_TEAMSETTINGS_TEAMMATENAMEDISPLAY: full_name
+      MM_TEAMSETTINGS_MAXUSERSPERTEAM: "100"
+      MM_PRIVACYSETTINGS_SHOWEMAILADDRESS: "false"
+      MM_DISPLAYSETTINGS_EXPERIMENTALTIMEZONE: "true"
+      MM_LOCALIZATIONSETTINGS_DEFAULTSERVERLOCALE: en
+      MM_LOCALIZATIONSETTINGS_DEFAULTCLIENTLOCALE: en
+      MM_EMAILSETTINGS_REQUIREEMAILVERIFICATION: "false"
+      MM_EMAILSETTINGS_ENABLESIGNUPWITHEMAIL: "true"
+      MM_EMAILSETTINGS_SENDEMAILNOTIFICATIONS: ${MM_SEND_EMAILS:-false}
+      MM_EMAILSETTINGS_FEEDBACKNAME: Humanup Chat
+      MM_EMAILSETTINGS_FEEDBACKEMAIL: ${MM_FROM_EMAIL:-chat@humanup.io}
+      MM_EMAILSETTINGS_REPLYTOADDRESS: ${MM_FROM_EMAIL:-chat@humanup.io}
+      MM_EMAILSETTINGS_SMTPSERVER: ${SMTP_HOST:-}
+      MM_EMAILSETTINGS_SMTPPORT: ${SMTP_PORT:-465}
+      MM_EMAILSETTINGS_CONNECTIONSECURITY: ${SMTP_SECURITY:-TLS}
+      MM_EMAILSETTINGS_ENABLESMTPAUTH: "true"
+      MM_EMAILSETTINGS_SMTPUSERNAME: ${SMTP_USER:-}
+      MM_EMAILSETTINGS_SMTPPASSWORD: ${SMTP_PASSWORD:-}
+      # Push: Mattermost's free relay for Team Edition (no SLA).
+      MM_EMAILSETTINGS_SENDPUSHNOTIFICATIONS: "true"
+      MM_EMAILSETTINGS_PUSHNOTIFICATIONSERVER: https://push-test.mattermost.com
+      # full = message text in the push preview; generic = sender and channel only.
+      MM_EMAILSETTINGS_PUSHNOTIFICATIONCONTENTS: ${MM_PUSH_CONTENTS:-full}
+      MM_PLUGINSETTINGS_ENABLE: "true"
+      MM_PLUGINSETTINGS_ENABLEUPLOADS: "true"
+      MM_FILESETTINGS_MAXFILESIZE: "104857600"
+      MM_LOGSETTINGS_CONSOLELEVEL: INFO
+      MM_LOGSETTINGS_ENABLEDIAGNOSTICS: "false"
+      MM_SERVICESETTINGS_ENABLESECURITYFIXALERT: "true"
+    volumes:
+      - mm_config:/mattermost/config
+      - mm_data:/mattermost/data
+      - mm_logs:/mattermost/logs
+      - mm_plugins:/mattermost/plugins
+      - mm_client_plugins:/mattermost/client/plugins
+      - mm_bleve:/mattermost/bleve-indexes
+    healthcheck:
+      test: ["CMD", "/mattermost/bin/mmctl", "--local", "system", "status"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      - mattermost
+    environment:
+      CHAT_DOMAIN: ${CHAT_DOMAIN:?set CHAT_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:-meroe@humanup.io}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  backup:
+    build: ./backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      PGHOST: chat-db
+      PGUSER: ${POSTGRES_USER:-mmuser}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      # Optional off-site copy, e.g. "hetzner:humanup-chat-backups" (configure rclone.conf in ./backup/rclone.conf).
+      RCLONE_REMOTE: ${RCLONE_REMOTE:-}
+    volumes:
+      - backups:/backups
+      - mm_data:/mattermost-data:ro
+      - ./backup/rclone.conf:/config/rclone/rclone.conf:ro
+
+  # One-shot seed (accounts, bots, channels, sidebars):  docker compose run --rm seed
+  seed:
+    build:
+      context: ..
+      dockerfile: seed/Dockerfile
+    profiles: ["tools"]
+    depends_on:
+      mattermost:
+        condition: service_healthy
+    environment:
+      MM_URL: http://mattermost:8065
+      SECRETS_DIR: /secrets
+    volumes:
+      - ./.secrets:/secrets
+
+volumes:
+  pgdata:
+  mm_config:
+  mm_data:
+  mm_logs:
+  mm_plugins:
+  mm_client_plugins:
+  mm_bleve:
+  caddy_data:
+  caddy_config:
+  backups:

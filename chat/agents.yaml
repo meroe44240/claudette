@@ -1,0 +1,141 @@
+# Agents on Humanup Chat. title = what the agent does, shown next to its name.
+# Identity (phase 1) and rules (enforced by the Agent Hub from phase 2).
+# The seed imports this file; at runtime the Hub database is the truth and the admin screen
+# can export it back here.
+#
+# recipients: who the agent may write to on its own (all | team | team-except-meroe | list of human keys | []).
+# hidden_from_team: the agent lives in the "Private" team and only talks to the people in recipients.
+# registry: who sees its questions in the registry (team | admin-only).
+# dm: who gets a DM with the agent (all by default; hidden agents: their recipients; [] = nobody).
+
+defaults:
+  provider: grok
+  delivery_mode: doorbell
+  can_initiate: true
+  recipients: all
+  registry: team
+  escalate_after: 24h
+  daily_question_cap_per_person: 10
+  daily_message_budget: 200
+
+agents:
+  ines:
+    name: Inès
+    title: "Coordinates the team and the agents, follows up on priorities"
+    reports_to: meroe
+    scope: Coordination across the team and the agents, priorities, follow-ups, sensitive emails
+    approval_required: [sensitive_email]
+  camille:
+    name: Camille
+    title: "Handles Méroë's personal logistics"
+    reports_to: meroe
+    scope: Méroë's personal logistics
+    recipients: [meroe]
+    hidden_from_team: true
+    registry: admin-only
+  malik:
+    name: Malik
+    title: "Coaches Méroë"
+    reports_to: meroe
+    scope: Coaching for Méroë
+    recipients: [meroe]
+    hidden_from_team: true
+    registry: admin-only
+  antoine:
+    name: Antoine
+    title: "Runs finance: cash, budgets, payments"
+    reports_to: meroe
+    scope: Finance, cash, budgets, payments
+    approval_required: [transfer]
+  awa:
+    name: Awa
+    title: "Sends invoices and chases unpaid ones"
+    reports_to: antoine
+    scope: Invoices, payment reminders, collections
+  theo:
+    name: Théo
+    title: "Calculates commissions and bonuses"
+    scope: Commissions and bonuses
+    recipients: team
+    initiate_window: "MON 09:00-12:00"
+    registry: admin-only
+  clara:
+    name: Clara
+    title: "Handles HR: contracts, leave, onboarding"
+    scope: HR, contracts, leave, onboarding
+    recipients: team
+    registry: admin-only
+  maya:
+    name: Maya
+    title: "Tracks team activity, posts the daily performance report"
+    reports_to: ines
+    scope: Activity and performance figures
+    recipients: team-except-meroe
+    report:
+      channel: performance
+      cron: "0 11 * * *"
+  bastien:
+    name: Bastien
+    title: "Oversees delivery of the mandates in progress"
+    scope: Delivery, mandates in progress, recruiting operations
+  linh:
+    name: Linh
+    title: "Checks pipeline stages and coding in Propium"
+    reports_to: bastien
+    escalation: meroe
+    scope: Pipeline stages and coding of candidates and mandates in Propium
+    recipients: [lea, vicky, max, valentin]
+  khoa:
+    name: Khoa
+    title: "Cleans and completes records in Propium"
+    reports_to: linh
+    scope: Candidate, company and contact records and data quality in Propium
+    recipients: [lea, vicky, max, valentin]
+  karim:
+    name: Karim
+    title: "Runs the Propium product: features and bugs"
+    scope: Propium product, features and bugs
+  nathan:
+    name: Nathan
+    title: "Leads prospecting in France"
+    scope: Go-to-market France, prospecting strategy
+  amara:
+    name: Amara
+    title: "Prospects new clients in France"
+    reports_to: nathan
+    scope: Prospecting France
+  tom:
+    name: Tom
+    title: "Prospects new clients in France"
+    reports_to: nathan
+    scope: Prospecting France
+  victor:
+    name: Victor
+    title: "Writes and runs outreach sequences"
+    reports_to: nathan
+    scope: Outreach sequences
+    approval_required: [sequence]
+  yanis:
+    name: Yanis
+    title: "Maps which profiles companies hire (France, Europe)"
+    reports_to: nathan
+    scope: Target profiles of companies (FR/EU)
+  ethan:
+    name: Ethan
+    title: "Maps which profiles US companies hire, from their career pages"
+    scope: US career pages and target profiles
+  leila:
+    name: Leïla
+    title: "Runs marketing and the brand"
+    scope: Marketing, brand, LinkedIn
+  hugo:
+    name: Hugo
+    title: "Writes content: LinkedIn posts, articles"
+    reports_to: leila
+    scope: Content, posts, articles
+  sentinel:
+    name: Sentinel
+    title: "Watches the agents and flags problems"
+    scope: Supervision of the agents in #agents-ops
+    recipients: []
+    dm: []

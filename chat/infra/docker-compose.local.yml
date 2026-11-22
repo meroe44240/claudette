@@ -1,0 +1,12 @@
+# Local test on a laptop: Mattermost on http://localhost:8065, no Caddy, no backups.
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+services:
+  mattermost:
+    environment:
+      MM_SERVICESETTINGS_SITEURL: http://localhost:8065
+    ports:
+      - "8065:8065"
+  caddy:
+    profiles: ["disabled"]
+  backup:
+    profiles: ["disabled"]
