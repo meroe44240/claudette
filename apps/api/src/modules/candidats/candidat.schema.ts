@@ -1,11 +1,12 @@
 import { z } from 'zod';
+import { isPlaceholder, isLinkedinProfileOrEmpty } from '../../lib/data-quality.js';
 
 export const createCandidatSchema = z.object({
-  nom: z.string().min(1, 'Le nom est requis'),
+  nom: z.string().min(1, 'Le nom est requis').refine((v) => !isPlaceholder(v), 'Le nom ne peut pas être un texte de remplissage (test, N/A, inconnu…)'),
   prenom: z.string().optional(),
   email: z.string().email('Email invalide').optional().nullable(),
   telephone: z.string().optional().nullable(),
-  linkedinUrl: z.string().optional().nullable(),
+  linkedinUrl: z.string().refine(isLinkedinProfileOrEmpty, 'Lien LinkedIn invalide (attendu : https://www.linkedin.com/in/…)').optional().nullable(),
   photoUrl: z.string().url().optional().nullable(),
   posteActuel: z.string().optional().nullable(),
   entrepriseActuelle: z.string().optional().nullable(),

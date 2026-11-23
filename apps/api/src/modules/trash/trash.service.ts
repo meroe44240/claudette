@@ -77,8 +77,12 @@ export async function emptyTrash(userId: string) {
 }
 
 /** Purge quotidienne : ce qui a plus de 30 jours disparaît pour de bon. */
+// Le nettoyage de la base de novembre 2026 reste restaurable plus longtemps (jusqu'au 1er mars 2027).
+const KEEP_LONGER = { toolName: 'cleanup-2026-11', until: new Date('2027-03-01T00:00:00Z') };
+
 export async function purgeExpired() {
-  const r = await rawPrisma.trashEntry.deleteMany({ where: { deletedAt: { lt: cutoff() } } });
+  const keep = new Date() < KEEP_LONGER.until ? [{ toolName: KEEP_LONGER.toolName }] : [];
+  const r = await rawPrisma.trashEntry.deleteMany({ where: { deletedAt: { lt: cutoff() }, ...(keep.length ? { NOT: keep } : {}) } });
   return r.count;
 }
 

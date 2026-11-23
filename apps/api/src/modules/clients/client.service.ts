@@ -6,6 +6,7 @@ import {
   paginatedResult,
 } from '../../lib/pagination.js';
 import type { CreateClientInput, UpdateClientInput } from './client.schema.js';
+import { canonicalLinkedin, normalizeEmail } from '../../lib/data-quality.js';
 import { StageCandidature } from '@prisma/client';
 import type { StatutClient, TypeClient } from '@prisma/client';
 
@@ -307,6 +308,34 @@ export async function create(data: CreateClientInput, createdById: string) {
     where: { id: data.entrepriseId },
   });
   if (!entreprise) throw new NotFoundError('Entreprise', data.entrepriseId);
+
+  // Doublon : même email (ou même LinkedIn) déjà en base → on complète la fiche existante au lieu
+  // d'en créer une seconde (les champs déjà renseignés ne sont pas écrasés).
+  const email = normalizeEmail(data.email);
+  const li = canonicalLinkedin(data.linkedinUrl, 'in');
+  const existing = (email || (li && li !== 'INVALID'))
+    ? await prisma.client.findFirst({
+        where: { OR: [
+          ...(email ? [{ email: { equals: email, mode: 'insensitive' as const } }] : []),
+          ...(li && li !== 'INVALID' ? [{ linkedinUrl: { equals: li, mode: 'insensitive' as const } }] : []),
+        ] },
+        orderBy: { createdAt: 'asc' },
+      })
+    : null;
+  if (existing) {
+    const fill: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (k === 'entrepriseId' || v === undefined || v === null || v === '') continue;
+      const cur = (existing as Record<string, unknown>)[k];
+      if (cur === null || cur === undefined || cur === '') fill[k] = v;
+    }
+    const updated = await prisma.client.update({
+      where: { id: existing.id },
+      data: fill as any,
+      include: { entreprise: { select: { id: true, nom: true } } },
+    });
+    return { ...updated, _updated: true, _duplicateOf: existing.id };
+  }
 
   return prisma.client.create({
     data: {

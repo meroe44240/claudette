@@ -5,6 +5,7 @@ import { paginatedResult, paginationToSkipTake } from '../../lib/pagination.js';
 import type { PaginationParams } from '../../lib/pagination.js';
 import type { CreateCandidatInput, UpdateCandidatInput, CreateExperienceInput, UpdateExperienceInput } from './candidat.schema.js';
 import { hostIfExternal, isHosted } from './photo.service.js';
+import { canonicalLinkedin, normalizeEmail, phoneE164 } from '../../lib/data-quality.js';
 
 export async function list(
   params: PaginationParams,
@@ -241,14 +242,18 @@ export async function create(data: CreateCandidatInput, createdById: string) {
 
   // Upsert: if a candidat with the same linkedinUrl already exists, update it
   if (data.linkedinUrl) {
-    // Normalize URL for matching: remove trailing slashes and query params
-    const normalized = data.linkedinUrl.replace(/\/+$/, '').split('?')[0].split('#')[0];
-    const withSlash = normalized + '/';
+    // Forme canonique (https://www.linkedin.com/in/<slug>), celle que la base stocke ; les
+    // anciennes variantes (slash final, paramètres) restent reconnues.
+    const canonical = canonicalLinkedin(data.linkedinUrl, 'in');
+    const raw = data.linkedinUrl.replace(/\/+$/, '').split('?')[0].split('#')[0];
+    const normalized = canonical && canonical !== 'INVALID' ? canonical : raw;
+    const withSlash = raw + '/';
 
     const existing = await prisma.candidat.findFirst({
       where: {
         OR: [
-          { linkedinUrl: normalized },
+          { linkedinUrl: { equals: normalized, mode: 'insensitive' } },
+          { linkedinUrl: raw },
           { linkedinUrl: withSlash },
           { linkedinUrl: data.linkedinUrl },
         ],
@@ -270,6 +275,35 @@ export async function create(data: CreateCandidatInput, createdById: string) {
       hostPhotoLater(updated.id, updated.photoUrl);
       return { ...updated, _updated: true };
     }
+  }
+
+  // Même email (ou même téléphone, à nom identique) : pas de nouvelle fiche, on complète les champs
+  // vides de la fiche existante sans écraser ce qui est déjà renseigné.
+  const email = normalizeEmail(data.email);
+  const phone = phoneE164(data.telephone);
+  const sameContact = (email || phone)
+    ? await prisma.candidat.findFirst({
+        where: {
+          OR: [
+            ...(email ? [{ email: { equals: email, mode: 'insensitive' as const } }] : []),
+            ...(phone ? [{ telephone: phone, nom: { equals: data.nom.trim(), mode: 'insensitive' as const } }] : []),
+          ],
+        },
+        orderBy: { createdAt: 'asc' },
+      })
+    : null;
+  if (sameContact) {
+    const fill: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(prismaData)) {
+      if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) continue;
+      const cur = (sameContact as Record<string, unknown>)[k];
+      if (cur === null || cur === undefined || cur === '' || (Array.isArray(cur) && !cur.length)) fill[k] = v;
+    }
+    const updated = Object.keys(fill).length
+      ? await prisma.candidat.update({ where: { id: sameContact.id }, data: fill as any })
+      : sameContact;
+    hostPhotoLater(updated.id, updated.photoUrl);
+    return { ...updated, _updated: true, _duplicateOf: sameContact.id };
   }
 
   const created = await prisma.candidat.create({

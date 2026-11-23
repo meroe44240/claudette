@@ -192,6 +192,16 @@ export async function mergeCandidats(primaryId: string, duplicateId: string, use
     await tx.aiProspectSearch.updateMany({ where: { candidatId: dup.id }, data: { candidatId: primary.id } });
     await tx.booking.updateMany({ where: { candidatId: dup.id }, data: { candidatId: primary.id } });
     await tx.noteCall.updateMany({ where: { candidatId: dup.id }, data: { candidatId: primary.id } });
+    // Présentations (supprimées en cascade avec le doublon sinon). Une présentation liée à une
+    // candidature fusionnée suit la candidature gardée, sauf si celle-ci en a déjà une.
+    for (const p of await tx.presentation.findMany({ where: { candidatId: dup.id } })) {
+      const dc = dup.candidatures.find((c) => c.id === p.candidatureId);
+      const pc = dc && primary.candidatures.find((c) => c.mandatId === dc.mandatId);
+      let candidatureId = p.candidatureId;
+      if (pc) candidatureId = (await tx.presentation.findFirst({ where: { candidatureId: pc.id } })) ? null : pc.id;
+      await tx.presentation.update({ where: { id: p.id }, data: { candidatId: primary.id, candidatureId } });
+    }
+    await tx.ownership.updateMany({ where: { entiteId: dup.id }, data: { entiteId: primary.id } });
     const activites = await movePolymorphic(tx, 'CANDIDAT', dup.id, primary.id);
 
     // 5. Champs de la fiche
@@ -257,6 +267,8 @@ export async function mergeClients(primaryId: string, duplicateId: string, userI
     const acces = await tx.portalAccess.updateMany({ where: { clientId: dup.id }, data: { clientId: primary.id } });
     await tx.lead.updateMany({ where: { clientId: dup.id }, data: { clientId: primary.id } });
     await tx.noteCall.updateMany({ where: { clientId: dup.id }, data: { clientId: primary.id } });
+    await tx.presentation.updateMany({ where: { clientId: dup.id }, data: { clientId: primary.id } });
+    await tx.ownership.updateMany({ where: { entiteId: dup.id }, data: { entiteId: primary.id } });
     const activites = await movePolymorphic(tx, 'CLIENT', dup.id, primary.id);
 
     // Statut : on garde le plus avancé dans le cycle commercial
@@ -324,6 +336,10 @@ export async function mergeEntreprises(primaryId: string, duplicateId: string, u
     const mandats = await tx.mandat.updateMany({ where: { entrepriseId: dup.id }, data: { entrepriseId: primary.id } });
     await tx.lead.updateMany({ where: { entrepriseId: dup.id }, data: { entrepriseId: primary.id } });
     await tx.marketListEstablishment.updateMany({ where: { entrepriseId: dup.id }, data: { entrepriseId: primary.id } });
+    // Présentations et profils recherchés : supprimés en cascade avec le doublon sinon.
+    await tx.presentation.updateMany({ where: { entrepriseId: dup.id }, data: { entrepriseId: primary.id } });
+    await tx.profilRecherche.updateMany({ where: { entrepriseId: dup.id }, data: { entrepriseId: primary.id } });
+    await tx.ownership.updateMany({ where: { entiteId: dup.id }, data: { entiteId: primary.id } });
     const activites = await movePolymorphic(tx, 'ENTREPRISE', dup.id, primary.id);
 
     await tx.entreprise.update({

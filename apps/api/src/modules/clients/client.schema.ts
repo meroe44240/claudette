@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { isPlaceholder, isLinkedinProfileOrEmpty } from '../../lib/data-quality.js';
 
 export const createClientSchema = z.object({
-  nom: z.string().min(1, 'Le nom est requis'),
+  nom: z.string().min(1, 'Le nom est requis').refine((v) => !isPlaceholder(v), 'Le nom ne peut pas être un texte de remplissage (test, N/A, inconnu…)'),
   prenom: z.string().optional(),
   email: z.string().email('Email invalide').optional(),
   telephone: z.string().optional(),
@@ -9,7 +10,7 @@ export const createClientSchema = z.object({
   roleContact: z
     .enum(['HIRING_MANAGER', 'DRH', 'PROCUREMENT', 'CEO', 'AUTRE'])
     .optional(),
-  linkedinUrl: z.string().optional(),
+  linkedinUrl: z.string().refine(isLinkedinProfileOrEmpty, 'Lien LinkedIn invalide (attendu : https://www.linkedin.com/in/…)').optional(),
   photoUrl: z.string().optional().nullable(),
   entrepriseId: z.string().uuid('entrepriseId doit etre un UUID valide'),
   statutClient: z

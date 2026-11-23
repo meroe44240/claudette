@@ -7,6 +7,7 @@ import {
 } from '../../lib/pagination.js';
 import { StageCandidature } from '@prisma/client';
 import type { CreateEntrepriseInput, UpdateEntrepriseInput } from './entreprise.schema.js';
+import { domainOf } from '../../lib/data-quality.js';
 import { enrichEntreprise } from '../integrations/pappers.service.js';
 
 /**
@@ -240,6 +241,28 @@ export async function create(data: CreateEntrepriseInput, createdById: string) {
 
   // If SIREN is provided (from Pappers), mark as pre-enriched with creation data
   const hasPappersData = !!(data.siren || data.siret || data.codeNAF);
+
+  // Doublon : même domaine (ou même SIREN) déjà en base → on complète la fiche existante.
+  const domain = domainOf((data as any).domaine) ?? domainOf(data.siteWeb);
+  const existing = (domain || data.siren)
+    ? await prisma.entreprise.findFirst({
+        where: { OR: [
+          ...(domain ? [{ domaine: { equals: domain, mode: 'insensitive' as const } }] : []),
+          ...(data.siren ? [{ siren: data.siren }] : []),
+        ] },
+        orderBy: { createdAt: 'asc' },
+      })
+    : null;
+  if (existing) {
+    const fill: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (v === undefined || v === null || v === '') continue;
+      const cur = (existing as Record<string, unknown>)[k];
+      if (cur === null || cur === undefined || cur === '') fill[k] = v;
+    }
+    const updated = Object.keys(fill).length ? await prisma.entreprise.update({ where: { id: existing.id }, data: fill as any }) : existing;
+    return { ...updated, _updated: true, _duplicateOf: existing.id };
+  }
 
   const entreprise = await prisma.entreprise.create({
     data: {
