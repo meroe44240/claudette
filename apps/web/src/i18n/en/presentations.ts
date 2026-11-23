@@ -56,4 +56,11 @@ export const presentations: Record<string, string> = {
   '{n} poste(s) × {pkg} × 22 %': '{n} position(s) × {pkg} × 22%',
   'Nombre de postes': 'Number of positions',
   'Package moyen (€)': 'Average package (€)',
+  'Valeur mise à jour': 'Value updated',
+  'Mise à jour impossible': 'Could not update',
+  '+ valeur': '+ value',
+  "Valeur d'opportunité": 'Opportunity value',
+  'Fermer': 'Close',
+  'Valeur : {v} ({n} × {pkg} × 22 %)': 'Value: {v} ({n} × {pkg} × 22%)',
+  'Renseigne les deux champs pour calculer la valeur.': 'Fill in both fields to compute the value.',
 };

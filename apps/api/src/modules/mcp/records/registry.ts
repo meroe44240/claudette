@@ -58,7 +58,7 @@ export const ENTITIES: EntityDef[] = [
       activities,
     },
     authorField: 'createdById', activityType: 'CANDIDAT',
-    remove: (id) => candidatService.remove(id),
+    remove: (id) => removeCandidate(id),
   },
   {
     name: 'company', model: 'Entreprise', description: 'Companies (clients and prospects)',
@@ -212,6 +212,25 @@ export const ENTITIES: EntityDef[] = [
     searchFields: ['content'], listFields: ['id', 'candidatureId', 'mandatId', 'portalAccessId', 'content', 'createdAt'],
   },
 ];
+
+/**
+ * Même garde-fou que delete_candidate : un candidat encore en process (candidature hors Perdu)
+ * ne se supprime pas par les outils MCP, génériques ou en masse compris.
+ */
+async function removeCandidate(id: string) {
+  const { default: prisma } = await import('../../../lib/db.js');
+  const active = await prisma.candidature.findMany({
+    where: { candidatId: id, stage: { notIn: ['REFUSE'] } },
+    select: { stage: true, mandat: { select: { titrePoste: true } } },
+  });
+  if (active.length) {
+    throw new RecordError(
+      `This candidate cannot be deleted: they are still in process on ${active.map((a) => `"${a.mandat?.titrePoste}" (${a.stage})`).join(', ')}. ` +
+      'Move them to Lost (REFUSE) on these mandates first, or use list_records / update tools instead of deleting.',
+    );
+  }
+  return candidatService.remove(id);
+}
 
 const byName = new Map<string, EntityDef>();
 for (const e of ENTITIES) {

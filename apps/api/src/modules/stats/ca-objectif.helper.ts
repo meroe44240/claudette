@@ -21,12 +21,36 @@ export function currentQuarter(now: Date = new Date()): Quarter {
   return { start, end, label: `T${qIndex + 1} ${year}`, q: qIndex + 1, year };
 }
 
+/**
+ * À qui revient le CA d'un mandat (décision du 2026-11-23) : au sales du mandat ; s'il n'y a pas
+ * de sales, à l'assigné ; à défaut, au créateur. Un mandat n'est compté qu'une fois : le recruteur
+ * du binôme voit ses placements, pas le CA.
+ */
+export function caOwnerWhere(userId: string) {
+  return {
+    OR: [
+      { salesId: userId },
+      { salesId: null, assignedToId: userId },
+      { salesId: null, assignedToId: null, createdById: userId },
+    ],
+  };
+}
+
+/** Mandats sur lesquels la personne travaille (binôme compris) : pour compter mandats et victoires. */
+export function mandateTeamWhere(userId: string) {
+  return {
+    OR: [
+      { createdById: userId }, { assignedToId: userId }, { salesId: userId }, { recruteurId: userId }, { sourceurId: userId },
+    ],
+  };
+}
+
 const feeOf = (m: { feeMontantFacture: number | null; feeMontantEstime: number | null }): number =>
   m.feeMontantFacture ?? m.feeMontantEstime ?? 0;
 
 /**
  * CA « gagné » sur une période (mandats GAGNE). Si `userId` fourni, ne compte
- * que les mandats où la personne est sales / recruteur / assigné / créateur.
+ * que les mandats dont le CA lui revient (voir caOwnerWhere).
  */
 export async function wonCa(
   range: { start: Date; end: Date },
@@ -35,16 +59,7 @@ export async function wonCa(
   const mandats = await prisma.mandat.findMany({
     where: {
       statut: 'GAGNE',
-      ...(userId
-        ? {
-            OR: [
-              { salesId: userId },
-              { recruteurId: userId },
-              { assignedToId: userId },
-              { createdById: userId },
-            ],
-          }
-        : {}),
+      ...(userId ? caOwnerWhere(userId) : {}),
     },
     select: { feeMontantFacture: true, feeMontantEstime: true, dateCloture: true, updatedAt: true },
   });

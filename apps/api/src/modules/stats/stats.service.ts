@@ -1,3 +1,4 @@
+import { caOwnerWhere, mandateTeamWhere } from './ca-objectif.helper.js';
 import prisma from '../../lib/db.js';
 
 // ─── CONSTANTS ──────────────────────────────────────
@@ -231,7 +232,7 @@ export async function getStatsData(
         type: 'CLIENT',
         statut: 'GAGNE',
         updatedAt: { gte: start, lte: end },
-        OR: [{ createdById: effectiveUserId }, { assignedToId: effectiveUserId }],
+        ...mandateTeamWhere(effectiveUserId),
       },
     }),
     // ── Previous period appels ──
@@ -252,7 +253,7 @@ export async function getStatsData(
         type: 'CLIENT',
         statut: 'GAGNE',
         updatedAt: { gte: prevStart, lte: prevEnd },
-        OR: [{ createdById: effectiveUserId }, { assignedToId: effectiveUserId }],
+        ...mandateTeamWhere(effectiveUserId),
       },
     }),
     // ── Sparkline appels (last 7 days) ──
@@ -275,7 +276,7 @@ export async function getStatsData(
       where: {
         statut: 'GAGNE',
         updatedAt: { gte: last7Start, lte: last7End },
-        OR: [{ createdById: effectiveUserId }, { assignedToId: effectiveUserId }],
+        ...mandateTeamWhere(effectiveUserId),
       },
       select: { updatedAt: true },
     }),
@@ -284,7 +285,7 @@ export async function getStatsData(
       where: {
         feeStatut: { in: ['FACTURE', 'PAYE'] },
         updatedAt: { gte: start, lte: end },
-        OR: [{ createdById: effectiveUserId }, { assignedToId: effectiveUserId }],
+        ...caOwnerWhere(effectiveUserId),
       },
       _sum: { feeMontantFacture: true },
     }),
@@ -293,7 +294,7 @@ export async function getStatsData(
       where: {
         feeStatut: { in: ['FACTURE', 'PAYE'] },
         updatedAt: { gte: prevStart, lte: prevEnd },
-        OR: [{ createdById: effectiveUserId }, { assignedToId: effectiveUserId }],
+        ...caOwnerWhere(effectiveUserId),
       },
       _sum: { feeMontantFacture: true },
     }),
@@ -302,7 +303,7 @@ export async function getStatsData(
       where: {
         feeStatut: { in: ['FACTURE', 'PAYE'] },
         updatedAt: { gte: last7Start, lte: last7End },
-        OR: [{ createdById: effectiveUserId }, { assignedToId: effectiveUserId }],
+        ...caOwnerWhere(effectiveUserId),
       },
       select: { feeMontantFacture: true, updatedAt: true },
     }),
@@ -408,7 +409,7 @@ export async function getStatsData(
       where: {
         feeStatut: { in: ['FACTURE', 'PAYE'] },
         updatedAt: { gte: yearStart, lte: yearEnd },
-        OR: [{ createdById: effectiveUserId }, { assignedToId: effectiveUserId }],
+        ...caOwnerWhere(effectiveUserId),
       },
       _sum: { feeMontantFacture: true },
     }),
@@ -416,7 +417,7 @@ export async function getStatsData(
     prisma.mandat.aggregate({
       where: {
         statut: { in: ['OUVERT', 'EN_COURS'] },
-        OR: [{ createdById: effectiveUserId }, { assignedToId: effectiveUserId }],
+        ...caOwnerWhere(effectiveUserId),
       },
       _sum: { feeMontantEstime: true },
     }),
@@ -424,7 +425,7 @@ export async function getStatsData(
     prisma.mandat.aggregate({
       where: {
         feeStatut: 'FACTURE',
-        OR: [{ createdById: effectiveUserId }, { assignedToId: effectiveUserId }],
+        ...caOwnerWhere(effectiveUserId),
       },
       _sum: { feeMontantFacture: true },
     }),
@@ -698,7 +699,7 @@ export async function getStatsData(
         where: {
           feeStatut: { in: ['FACTURE', 'PAYE'] },
           updatedAt: { gte: mStart, lte: mEnd },
-          OR: [{ createdById: effectiveUserId }, { assignedToId: effectiveUserId }],
+          ...caOwnerWhere(effectiveUserId),
         },
         _sum: { feeMontantFacture: true },
       }),
@@ -706,7 +707,7 @@ export async function getStatsData(
         where: {
           feeStatut: 'PAYE',
           updatedAt: { gte: mStart, lte: mEnd },
-          OR: [{ createdById: effectiveUserId }, { assignedToId: effectiveUserId }],
+          ...caOwnerWhere(effectiveUserId),
         },
         _sum: { feeMontantFacture: true },
       }),
@@ -880,7 +881,7 @@ export async function getStatsData(
             where: {
               feeStatut: { in: ['FACTURE', 'PAYE'] },
               updatedAt: { gte: start, lte: end },
-              OR: [{ createdById: member.id }, { assignedToId: member.id }],
+              ...caOwnerWhere(member.id),
             },
             _sum: { feeMontantFacture: true },
           }),

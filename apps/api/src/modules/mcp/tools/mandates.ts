@@ -213,7 +213,7 @@ export function registerMandateTools(server: McpServer) {
 
   server.tool(
     'create_mandate',
-    "[CONFIRMATION REQUIRED] [ADMIN ONLY] Creates a new mandate. You MUST ask for confirmation.",
+    "[CONFIRMATION REQUIRED] Creates a new mandate (open to every role). You MUST ask for confirmation. Example: {\"titrePoste\":\"Account Executive\",\"entrepriseId\":\"…\",\"salaireMin\":60000,\"salaireMax\":70000} → {\"success\":true,\"mandate_id\":\"…\"}",
     {
       titrePoste: z.string().describe('Job title'),
       entrepriseId: z.string().describe('Company UUID'),

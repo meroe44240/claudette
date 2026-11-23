@@ -1,3 +1,4 @@
+import { caOwnerWhere } from '../stats/ca-objectif.helper.js';
 import prisma from '../../lib/db.js';
 
 // ─── TYPES ──────────────────────────────────────────
@@ -150,7 +151,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       // CA Facture
       prisma.mandat.aggregate({
         where: {
-          assignedToId: user.id,
+          ...caOwnerWhere(user.id),
           feeStatut: { in: ['FACTURE', 'PAYE'] },
         },
         _sum: { feeMontantFacture: true },
@@ -158,7 +159,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       // CA Encaisse
       prisma.mandat.aggregate({
         where: {
-          assignedToId: user.id,
+          ...caOwnerWhere(user.id),
           feeStatut: 'PAYE',
         },
         _sum: { feeMontantFacture: true },
