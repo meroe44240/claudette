@@ -12,7 +12,9 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { MM } from '../src/mm.js';
 import { env } from '../src/env.js';
 import { pool } from '../src/db.js';
-import { inWindow } from '../src/guard.js';
+import { inWindow, TEAM_TZ } from '../src/guard.js';
+import { sign } from '../src/core.js';
+import { localParts, zonedTime } from '../src/time.js';
 
 const HUB = process.env.HUB ?? 'http://localhost:3100';
 const seed = JSON.parse(readFileSync(join(env.SECRETS_DIR, 'seed-secrets.json'), 'utf8'));
@@ -73,6 +75,9 @@ async function main() {
   await pool.query(`update questions set created_at = created_at - interval '2 days' where created_at > now() - interval '2 days'`);
   await pool.query(`update audit_log set ts = ts - interval '2 days' where ts > now() - interval '2 days'`);
   await pool.query(`delete from kv where key like 'alert:%'`);
+  await pool.query(`update questions set status='cancelled' where status='open'`);
+  await pool.query(`delete from reports`);
+  await pool.query(`update scheduled_messages set status='cancelled' where status='pending'`);
   await fetch(`${HUB}/v1/admin/agents/all/resume`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}` } });
   for (const a of ['khoa', 'theo', 'maya', 'hugo', 'nathan', 'ines', 'awa']) await pending(a); // drain leftovers from earlier runs
 
@@ -310,6 +315,100 @@ async function main() {
   const r19 = await tool('theo', 'reply', { to: 'lea', text: 'Your commission statement is ready.' });
   const open = inWindow('MON 09:00-12:00');
   check(open ? r19.status === 200 : r19.status === 403 && /MON 09:00-12:00/.test(r19.body.error), `time window (${open ? 'open now' : 'closed now'})`, r19);
+
+  // ── Phase 4: reminders, escalations, approvals, reports, scheduled messages ──
+  const tick = async (now?: Date) => {
+    const r = await fetch(`${HUB}/v1/admin/tick${now ? `?now=${now.toISOString()}` : ''}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${adminToken}` } });
+    return r.json() as Promise<any>;
+  };
+  const meroeDm = async (agent: string) => (await meroe.mm.post('/channels/direct', [meroe.id, seed.bots[agent].user_id])).id as string;
+  const threadOf = async (root: string) => Object.values<any>((await lea.mm.get(`/posts/${root}/thread`)).posts);
+
+  // 20. Halfway reminder, then escalation to Méroë, who answers on Léa's behalf
+  const q20 = await tool('khoa', 'ask_human', { to: 'lea', subject: 'Phone for Anh Tran', question: 'Is +84 90 123 4567 still hers?',
+    choices: ['Yes', 'No'], deadline: new Date(Date.now() + 2 * 3600_000).toISOString() });
+  await pool.query(`update questions set created_at = now() - interval '2 hours 5 minutes' where id=$1`, [q20.body.question_id]);
+  await tick();
+  await tick();
+  const reminders20 = (await threadOf(q20.body.post_id)).filter((p) => /⏰/.test(p.message));
+  check(reminders20.length === 1 && reminders20[0].user_id === seed.bots.khoa.user_id, 'halfway reminder in the thread, once', reminders20.length);
+  await pool.query(`update questions set created_at = now() - interval '3 hours', deadline = now() - interval '1 minute' where id=$1`, [q20.body.question_id]);
+  await tick();
+  const row20 = (await pool.query(`select escalated_to, escalation_post_id from questions where id=$1`, [q20.body.question_id])).rows[0];
+  check(row20?.escalated_to === 'meroe' && row20?.escalation_post_id, 'escalation: no answer by the deadline → Méroë (Khoa reports to an agent)', row20);
+  const copy = row20?.escalation_post_id ? await meroe.mm.get(`/posts/${row20.escalation_post_id}`) : null;
+  check(copy?.channel_id === await meroeDm('khoa') && /Léa/.test(copy?.props?.attachments?.[0]?.text ?? '')
+    && copy?.props?.attachments?.[0]?.actions?.length === 2, 'escalation: copy of the card with the buttons in Méroë\'s chat with Khoa');
+  check((await threadOf(q20.body.post_id)).some((p) => /Méroë/.test(p.message) && p.user_id === seed.bots.khoa.user_id),
+    'escalation: Léa\'s thread says it went to Méroë');
+  const inbox20 = await meroe.mm.post('/commands/execute', { channel_id: opsId, command: '/inbox', team_id: teamId });
+  check((inbox20.text ?? '').includes(row20?.escalation_post_id), 'escalation: in Méroë\'s /inbox, linked to her copy', inbox20.text);
+  await meroe.mm.post(`/posts/${row20.escalation_post_id}/actions/c0`, {});
+  const ev20 = await waitFor(async () => (await pending('khoa')).find((e) => e.type === 'answer' && e.question_id === q20.body.question_id));
+  check(ev20?.choice === 'Yes' && ev20?.from?.key === 'meroe' && ev20?.on_behalf_of === 'lea', 'Méroë answers on Léa\'s behalf → Khoa gets it', ev20);
+  const orig20 = await lea.mm.get(`/posts/${q20.body.post_id}`);
+  check(!orig20.props.attachments[0].actions?.length, 'Léa\'s card is closed too');
+
+  // 21. Approvals: approve, edit, reject
+  const apprId = (await meroe.mm.get(`/teams/${teamId}/channels/name/approvals`)).id as string;
+  const a1 = await tool('antoine', 'request_approval', { kind: 'transfer', title: 'Bonus transfer to Vicky',
+    summary: 'Q4 placement bonus', draft: 'Transfer 8,000,000 VND to Vicky Deletang', payload: { amount: 8000000, currency: 'VND' } });
+  const card21 = a1.body.permalink ? await meroe.mm.get(`/posts/${a1.body.permalink.split('/').pop()}`) : null;
+  const acts21 = card21?.props?.attachments?.[0]?.actions ?? [];
+  check(a1.status === 200 && card21?.channel_id === apprId && acts21.map((a: any) => a.id).join() === 'approve,edit,reject',
+    'approval card in #approvals with Approve / Edit / Reject', a1.body);
+  check(await rejected(() => lea.mm.get(`/channels/${apprId}`)), '#approvals is invisible to Léa');
+  await meroe.mm.post(`/posts/${card21.id}/actions/approve`, {});
+  const ev21 = await waitFor(async () => (await pending('antoine')).find((e) => e.type === 'approval' && e.approval_id === a1.body.approval_id));
+  check(ev21?.decision === 'approved' && ev21?.payload?.amount === 8000000, 'Approve → Antoine gets "approved" with his payload', ev21);
+  const card21b = await meroe.mm.get(`/posts/${card21.id}`);
+  check(!card21b.props.attachments[0].actions?.length && /✅/.test(card21b.props.attachments[0].text), 'card shows the decision, buttons gone');
+
+  const submitDialog = (aid: string, mode: string, submission: Record<string, string>) => meroe.mm.post('/actions/dialogs/submit', {
+    url: `${process.env.HUB_URL_FOR_MM ?? HUB}/mm/dialog`, callback_id: aid, channel_id: apprId, team_id: teamId,
+    state: JSON.stringify({ aid, mode, sig: sign('dialog', aid, mode) }), submission, cancelled: false });
+  const a2 = await tool('ines', 'request_approval', { kind: 'email', title: 'Reply to Acme about fees',
+    draft: 'Dear Sarah, our fee is 20% of the first-year salary.' });
+  const a2post = a2.body.permalink.split('/').pop();
+  await meroe.mm.post(`/posts/${a2post}/actions/edit`, {}); // opens the dialog in Méroë's app
+  await submitDialog(a2.body.approval_id, 'edit', { draft: 'Dear Sarah, our fee is 18% of the first-year salary.', comment: 'Use the Q4 rate' });
+  const ev21b = await waitFor(async () => (await pending('ines')).find((e) => e.type === 'approval' && e.approval_id === a2.body.approval_id));
+  check(ev21b?.decision === 'edited' && /18%/.test(ev21b?.edited_draft ?? '') && ev21b?.comment === 'Use the Q4 rate',
+    'Edit → Inès gets the edited text and the note', ev21b);
+  const a3 = await tool('victor', 'request_approval', { kind: 'sequence', title: 'Sequence: CFOs in Lyon', draft: 'Step 1: ...' });
+  await submitDialog(a3.body.approval_id, 'reject', { comment: 'Wrong segment' });
+  const ev21c = await waitFor(async () => (await pending('victor')).find((e) => e.type === 'approval' && e.approval_id === a3.body.approval_id));
+  check(ev21c?.decision === 'rejected' && ev21c?.comment === 'Wrong segment', 'Reject → Victor gets "rejected" and the reason', ev21c);
+
+  // 22. Maya's report: woken at 10:45, published at 11:00 in #performance, alert when missing
+  const today = localParts(new Date(), TEAM_TZ);
+  const at = (h: number, mi: number, plusDays = 0) => new Date(zonedTime(today.y, today.mo, today.d, h, mi, TEAM_TZ).getTime() + plusDays * 86_400_000);
+  await tick(at(10, 46));
+  const task22 = await waitFor(async () => (await pending('maya')).find((e) => e.type === 'task' && e.task === 'daily_report'));
+  check(task22?.channel === 'performance', 'report: Maya is woken before 11:00 with the task', task22);
+  const rep = await tool('maya', 'post_report', { text: `📊 Daily performance ${today.date} (test)` });
+  check(rep.status === 200, `report handed over (${rep.body.status})`, rep.body);
+  await tick(at(11, 1));
+  const perf22 = await lea.mm.get(`/channels/${perfId}/posts?per_page=5`);
+  const published = Object.values<any>(perf22.posts).find((p) => p.message.includes(`Daily performance ${today.date}`));
+  check(published?.user_id === seed.bots.maya.user_id, 'report published in #performance by Maya');
+  const again = await tool('maya', 'post_report', { text: 'second' });
+  check(again.status === 409, 'one report per day', again.body);
+  await tick(at(11, 6, 1)); // tomorrow, nothing sent
+  const opsTail = await meroe.mm.get(`/channels/${opsId}/posts?per_page=5`);
+  check(Object.values<any>(opsTail.posts).some((p) => /report for #performance/.test(p.message)), 'missing report → alert in #agents-ops');
+  await pool.query(`delete from reports where day > $1`, [today.date]);
+
+  // 23. Scheduled messages
+  const s1 = await tool('khoa', 'schedule_message', { to: 'lea', text: 'Rappel planifié : relance Anh Tran.', send_at: new Date(Date.now() + 3600_000).toISOString() });
+  const s2 = await tool('khoa', 'schedule_message', { to: 'lea', text: 'Message annulé.', send_at: new Date(Date.now() + 3600_000).toISOString() });
+  const c2 = await tool('khoa', 'cancel_scheduled_message', { scheduled_id: s2.body.scheduled_id });
+  await tick(new Date(Date.now() + 3601_000));
+  const dm23 = await lea.mm.get(`/channels/${khoaDm}/posts?per_page=10`);
+  const msgs23 = Object.values<any>(dm23.posts).map((p) => p.message);
+  check(s1.status === 200 && msgs23.includes('Rappel planifié : relance Anh Tran.'), 'scheduled message sent at its time');
+  check(c2.status === 200 && !msgs23.includes('Message annulé.'), 'cancelled scheduled message not sent');
 
   srv.close();
   await pool.end();

@@ -12,6 +12,7 @@ export async function queryRegistry(f: RegistryFilter) {
             q.subject, q.object_type, q.object_label, q.object_url, q.body as question, q.choices,
             q.created_at as asked_at, q.deadline, q.status, q.answer_choice, q.answer_text, q.answered_via, q.answered_at,
             case when q.answered_at is not null then round(extract(epoch from q.answered_at - q.created_at) / 60) end as response_minutes,
+            q.answered_by, q.reminded_at, q.escalated_at, q.escalated_to,
             q.resolution, q.propium_action, q.resolved_at
        from questions q join agents a on a.key=q.agent_key join humans h on h.key=q.human_key
       where ($1::text is null or q.agent_key=$1) and ($2::text is null or q.human_key=$2)

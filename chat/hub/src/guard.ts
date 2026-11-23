@@ -133,19 +133,22 @@ export async function questionCapExceeded(agent: Agent, human: Human, cap: numbe
     `qcap:${agent.key}:${human.key}`, { reason: 'question_cap', agent: agent.key, human: human.key });
 }
 
-/** Anti-loop for #agents-ops: refuse a 7th agent message in a row with no person in between. */
-export async function guardLoop(agent: Agent, channel: string, rootId: string | null, botIds: Set<string>) {
+/**
+ * Anti-loop for #agents-ops: refuse a 7th agent message in a row with no person in between
+ * (in the thread when replying, otherwise in the whole channel). Hub alerts (system bots) neither count nor reset.
+ */
+export async function guardLoop(agent: Agent, channel: string, rootId: string | null, agentIds: Set<string>, systemIds: Set<string>) {
   const mm = admin();
-  let recent: any[];
+  let posts: any[];
   if (rootId) {
-    const thread = await mm.get(`/posts/${rootId}/thread`);
-    recent = Object.values<any>(thread.posts).sort((a, b) => b.create_at - a.create_at).slice(0, LOOP_LIMIT);
+    posts = Object.values<any>((await mm.get(`/posts/${rootId}/thread`)).posts);
   } else {
-    const r = await mm.get(`/channels/${channel}/posts?per_page=${LOOP_LIMIT}`);
-    recent = (r.order as string[]).map((id) => r.posts[id]);
+    const r = await mm.get(`/channels/${channel}/posts?per_page=60`);
+    posts = Object.values<any>(r.posts);
   }
-  const userPosts = recent.filter((p) => !p.type);
-  if (userPosts.length >= LOOP_LIMIT && userPosts.every((p) => botIds.has(p.user_id))) {
+  const recent = posts.filter((p) => !p.type && !systemIds.has(p.user_id))
+    .sort((a, b) => b.create_at - a.create_at).slice(0, LOOP_LIMIT);
+  if (recent.length >= LOOP_LIMIT && recent.every((p) => agentIds.has(p.user_id))) {
     await audit('agent', agent.key, 'blocked.loop', channel, { root_id: rootId });
     await alertOps(`Loop stopped: ${LOOP_LIMIT} agent messages in a row without anyone in #agents-ops${rootId ? ' (thread)' : ''}. `
       + `${agent.name}'s next message was refused. A person must step in.`, `loop:${rootId ?? channel}`, { reason: 'loop', agent: agent.key });

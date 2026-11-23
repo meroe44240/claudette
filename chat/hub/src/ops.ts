@@ -10,12 +10,13 @@ export function mentionedKeys(text: string): string[] {
 }
 
 async function botIds() {
-  const ids = new Set((await q<{ mm_user_id: string }>('select mm_user_id from agents')).map((r) => r.mm_user_id));
+  const agents = new Set((await q<{ mm_user_id: string }>('select mm_user_id from agents')).map((r) => r.mm_user_id));
+  const system = new Set<string>();
   for (const b of ['humanup', 'propium'] as const) {
     const bot = await systemBot(b);
-    if (bot) ids.add(bot.user_id);
+    if (bot) system.add(bot.user_id);
   }
-  return ids;
+  return { agents, system };
 }
 
 /** Hands an #agents-ops message to the agents it mentions. */
@@ -44,7 +45,8 @@ export async function postInOps(agent: Agent, input: { text: string; reply_to_po
     rootId = p.root_id || p.id;
   }
   await guardSend(agent, { initiate: false, what: 'ops' });
-  await guardLoop(agent, ops, rootId, await botIds());
+  const ids = await botIds();
+  await guardLoop(agent, ops, rootId, ids.agents, ids.system);
   const post = await postAs(agent, ops, input.text, { rootId: rootId ?? undefined });
   await audit('agent', agent.key, 'ops.post', 'agents-ops', { post_id: post.id });
   const notified = await deliverMentions(input.text, { agent: agent.key }, post.id, rootId);
