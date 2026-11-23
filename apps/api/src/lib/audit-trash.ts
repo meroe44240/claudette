@@ -169,6 +169,16 @@ export function shouldAudit(model: string) {
 export async function writeAudit(client: PrismaClient, entries: AuditInput[]) {
   const ctx = getContext();
   if (ctx?.dryRun || entries.length === 0) return;
+  if (ctx?.pending) {
+    // Dans une transaction : écrit après le commit, avec le contexte d'aujourd'hui.
+    const snapshot = { ...ctx, pending: undefined };
+    ctx.pending.push(() => persistAudit(client, entries, snapshot));
+    return;
+  }
+  return persistAudit(client, entries, ctx);
+}
+
+async function persistAudit(client: PrismaClient, entries: AuditInput[], ctx: ReturnType<typeof getContext>) {
   if (!ctx?.userId) entries = entries.filter((e) => SYSTEM_EVENT_MODELS.has(e.model));
   if (!entries.length) return;
   const batchId = ctx?.batchId ?? randomUUID();
@@ -242,6 +252,15 @@ async function captureCascade(client: PrismaClient, model: string, roots: Record
 async function storeInTrash(client: PrismaClient, captured: Captured[], detached: Detached[]) {
   const ctx = getContext();
   if (!captured.length || ctx?.dryRun) return;
+  if (ctx?.pending) {
+    // Dans une transaction : la corbeille n'est remplie que si la suppression est validée.
+    ctx.pending.push(() => storeInTrashNow(client, captured, detached, { ...ctx, pending: undefined }));
+    return;
+  }
+  return storeInTrashNow(client, captured, detached, ctx);
+}
+
+async function storeInTrashNow(client: PrismaClient, captured: Captured[], detached: Detached[], ctx: ReturnType<typeof getContext>) {
   const batchId = ctx?.batchId ?? randomUUID();
   const byLabel = await actorLabel(client, ctx?.userId);
   // Les lignes détachées sont rattachées à la première racine du lot.
@@ -367,9 +386,16 @@ export function installAuditAndTrash(client: PrismaClient) {
           return result;
         },
         async createMany({ model, args, query }) {
+          // Données qui produisent des événements : on fixe les ids avant l'insertion pour pouvoir
+          // journaliser une création par ligne (sinon un import en masse n'aurait pas d'événements).
+          const rows = Array.isArray((args as any)?.data) ? (args as any).data as Record<string, any>[] : (args as any)?.data ? [(args as any).data] : [];
+          const perRow = shouldAudit(model) && SYSTEM_EVENT_MODELS.has(model) && !(args as any)?.skipDuplicates && rows.length > 0 && rows.length <= 1000;
+          if (perRow) for (const r of rows) if (!r.id) r.id = randomUUID();
           const result: any = await query(args);
           if (shouldAudit(model) && result?.count) {
-            await writeAudit(client, [{ action: 'CREATE', model, metadata: { count: result.count, bulk: true } }]);
+            await writeAudit(client, perRow
+              ? rows.map((r) => ({ action: 'CREATE' as const, model, entityId: r.id, label: recordLabel(r), after: r }))
+              : [{ action: 'CREATE', model, metadata: { count: result.count, bulk: true } }]);
           }
           return result;
         },

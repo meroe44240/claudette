@@ -8,6 +8,8 @@ import { resolvePersonPhoto } from '../../../lib/photo.js';
 import * as dossierService from '../../candidats/dossier.service.js';
 import * as syntheseService from '../../candidats/synthese.service.js';
 import { STAGES_DOC, stageEn } from '../labels.js';
+import * as cvUploadService from '../../candidats/cv-upload.service.js';
+import * as cvParsingService from '../../ai/cv-parsing.service.js';
 
 export function registerCandidateTools(server: McpServer) {
   // ─── search_candidates ────────────────────────────────
@@ -219,6 +221,83 @@ export function registerCandidateTools(server: McpServer) {
         protected: d.manuel,
         contact_visible_to_client: d.coordonneesVisibles,
         updated_at: d.modifieLe,
+      };
+    }),
+  );
+
+  // ─── get_cv_upload_link ───────────────────────────────
+  server.tool(
+    'get_cv_upload_link',
+    "Use when the recruiter wants to upload a CV they have at hand (file attached to the conversation, on their computer or phone). A file attached to a conversation CANNOT be passed to the ATS by a tool: this tool returns an upload link valid for 2 hours. Give upload_page_url to the recruiter so they drop the PDF there. If a local file upload tool is available (upload_cv_file) and you know the file path, call it with this link instead of showing it. With candidate_id the CV is attached to that record (replaces the previous one); without, a new candidate is created from the CV. If the CV is in an email or behind a link, use upload_candidate_cv instead. Example: {\"candidate_id\":\"…\"} → {\"upload_page_url\":\"https://ats.propium.co/depot-cv?token=…\",\"expires_at\":\"…\"}",
+    {
+      candidate_id: z.string().optional().describe('Candidate UUID that receives the CV. Omitted: a new candidate is created from the uploaded CV.'),
+    },
+    wrapTool('get_cv_upload_link', async (args, user) => {
+      const link = await cvUploadService.createDepotLink(user.userId, (args.candidate_id as string | undefined) || null);
+      return {
+        upload_page_url: link.pageUrl,
+        expires_at: link.expiresAt.toISOString(),
+        accepts: 'PDF, 10 MB max',
+        target: args.candidate_id ? 'the given candidate record' : 'a new candidate created from the CV',
+        message: 'Give this link to the recruiter: they drop the PDF there. Personal link, valid for 2 hours.',
+      };
+    }),
+  );
+
+  // ─── upload_candidate_cv ──────────────────────────────
+  server.tool(
+    'upload_candidate_cv',
+    "[CONFIRMATION REQUIRED] Uploads a CV (PDF, 10 MB max) to a candidate record; it replaces the previous CV and can be downloaded by the client on the portal (emits document.added). ONE source: file_url (direct link, or Google Drive / Dropbox shared link), gmail_message_id or gmail_query (PDF attachment of an email in the connected recruiter's Gmail), file_base64 (PDF content, small files only). Without candidate_id a NEW candidate is created from the CV (check duplicates with search_candidates first). update_profile=true re-reads the CV to update the record (identity, title, experiences, summary); a protected client dossier is not overwritten. Example: {\"candidate_id\":\"…\",\"file_url\":\"https://drive.google.com/file/d/…/view\"} → {\"success\":true,\"cv_url\":\"…\",\"replaced_previous_cv\":true}",
+    {
+      candidate_id: z.string().optional().describe('Candidate UUID. Omitted: a new candidate is created from the CV.'),
+      file_url: z.string().optional().describe('http(s) link to the PDF (direct download, or a Google Drive / Dropbox link shared with anyone who has the link)'),
+      gmail_message_id: z.string().optional().describe("Id of an email in the recruiter's Gmail with the CV attached"),
+      gmail_query: z.string().optional().describe('Gmail search to find the email (Gmail syntax, e.g. "from:first.last@gmail.com" or "CV Dupont"): the most recent one with a PDF is used'),
+      attachment_name: z.string().optional().describe('Part of the attachment name to pick when the email has several PDFs'),
+      file_base64: z.string().optional().describe('Base64-encoded PDF content'),
+      filename: z.string().optional().describe('File name to show (e.g. "CV First Last.pdf")'),
+      update_profile: z.boolean().optional().default(false).describe('Re-read the CV to update the candidate record (ignored on creation: the record is always filled from the CV)'),
+    },
+    wrapTool('upload_candidate_cv', async (args, user) => {
+      const file = await cvUploadService.readCvSource(user.userId, {
+        fileUrl: args.file_url as string | undefined,
+        fileBase64: args.file_base64 as string | undefined,
+        filename: args.filename as string | undefined,
+        gmailMessageId: args.gmail_message_id as string | undefined,
+        gmailQuery: args.gmail_query as string | undefined,
+        attachmentName: args.attachment_name as string | undefined,
+      });
+      // Le contenu du fichier n'a rien a faire dans le journal des actions MCP.
+      if (args.file_base64) args.file_base64 = `[PDF, ${Math.round(file.buffer.length / 1024)} KB]`;
+
+      let candidateId = args.candidate_id as string | undefined;
+      let created = false;
+      let profileUpdated = false;
+      if (!candidateId) {
+        const res = await cvParsingService.createCandidatFromCv(file.buffer, file.filename, user.userId);
+        candidateId = res.candidat.id as string;
+        created = true;
+        profileUpdated = true;
+      }
+      const out = await cvUploadService.attachCv(candidateId, user.userId, file);
+      if (!created && args.update_profile) {
+        await cvParsingService.updateCandidatFromCv(file.buffer, file.filename, user.userId, candidateId);
+        profileUpdated = true;
+      }
+      const c = await prisma.candidat.findUnique({ where: { id: candidateId }, select: { prenom: true, nom: true, posteActuel: true } });
+      return {
+        success: true,
+        candidate_id: candidateId,
+        candidate_name: `${c?.prenom ?? ''} ${c?.nom ?? ''}`.trim(),
+        candidate_created: created,
+        cv_url: out.cvUrl,
+        filename: out.filename,
+        size_kb: Math.round(out.size / 1024),
+        source: file.origin,
+        replaced_previous_cv: out.replaced,
+        profile_updated_from_cv: profileUpdated,
+        other_pdf_attachments: file.otherAttachments?.length ? file.otherAttachments : undefined,
+        message: created ? 'Candidate created from the CV, CV attached to the record' : `CV attached to the record${out.replaced ? ' (replaced the previous one)' : ''}`,
       };
     }),
   );

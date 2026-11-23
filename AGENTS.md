@@ -44,7 +44,7 @@ How AI agents work in Propium (HumanUp's ATS) through its MCP server. This file 
 
 Each event gives its type, the record (type, id, label), who did it (`null` for automations), when, and details. Webhooks receive the same JSON, signed with `X-Propium-Signature: sha256=<HMAC-SHA256 of the raw body>`.
 
-## Tools (122)
+## Tools (124)
 
 ### Start here
 
@@ -111,6 +111,7 @@ Each event gives its type, the record (type, id, label), who did it (`null` for 
 | `find_duplicates` | Lists likely duplicates. | **entity** |
 | `get_candidate` | Gets the full candidate record: details, experience, linked mandates, latest activity. | candidate_id, candidate_name |
 | `get_candidate_dossier` | Reads the client dossier of a candidate: what the client sees on the portal (photo, summary, info cards, fit for the role, sections such as Background). | **candidate_id** |
+| `get_cv_upload_link` | Use when the recruiter wants to upload a CV they have at hand (file attached to the conversation, on their computer or phone). | candidate_id |
 | `list_candidate_debriefs` | Lists the interview debriefs stored on a candidate record (Interviews tab), with the proposed update and its status (propose = to review, applique = applied, erreur = error). | **candidate_id** |
 | `match_candidate_to_profiles` | For an S-Tier, A-tier or A-Player candidate, lists the target profiles that fit, with the reasons (Engineering: shared technos, seniority, location/remote; Sales: client type, buyer, cycle, motion). | **candidate_id** |
 | `merge_candidates` | Merges two duplicate candidate records (open to all recruiters). | **primary_id**, **duplicate_id**, confirm |
@@ -122,6 +123,7 @@ Each event gives its type, the record (type, id, label), who did it (`null` for 
 | `suggest_candidates_for_mandate` | Looks in the talent pool for candidates who could fit a mandate. | **mandate_id**, title_keywords, city, limit |
 | `update_candidate` | Updates a candidate details. | **candidate_id**, nom, prenom, email, linkedinUrl, salaire, disponibilite, posteActuel, entrepriseActuelle, telephone, localisation, tags |
 | `update_candidate_dossier` | Updates the client dossier of a candidate (visible to the client on the portal). | **candidate_id**, synthese, infos, adequation, sections, photo_url, show_contact, protect |
+| `upload_candidate_cv` | Uploads a CV (PDF, 10 MB max) to a candidate record; it replaces the previous CV and can be downloaded by the client on the portal (emits document.added). | candidate_id, file_url, gmail_message_id, gmail_query, attachment_name, file_base64, filename, update_profile |
 
 ### Mandates and pipeline
 
@@ -129,7 +131,7 @@ Each event gives its type, the record (type, id, label), who did it (`null` for 
 |---|---|---|
 | `assign_mandate` | Assigns the pair working a mandate: the SALES (owns the client side) and/or the RECRUITER (sources candidates). | mandate_id, mandate_name, sales, recruteur, clear_sales, clear_recruteur |
 | `create_job_offer` | Creates a job board offer (read by the website through the public API). | **titre**, **description**, entreprise_nom, localisation, contract_type, remote, salaire_min, salaire_max, secteur, tags, published |
-| `create_mandate` | [ADMIN ONLY] Creates a new mandate. | **titrePoste**, **entrepriseId**, clientId, description, localisation, salaireMin, salaireMax, feePourcentage, priorite |
+| `create_mandate` | Creates a new mandate (open to every role). | **titrePoste**, **entrepriseId**, clientId, description, localisation, salaireMin, salaireMax, feePourcentage, priorite |
 | `delete_mandate` | Deletes a mandate. | **id**, dry_run |
 | `duplicate_mandate` | Duplicates a mandate (same company, contact, salary, fee, description) as a new open mandate titled "<title> (copie)", without its candidates. | **id** |
 | `generate_contract` | Generates the HumanUp recruitment services agreement (success-fee contract) as a PDF and returns a download link. | mandate_id, mandate_name, company_id, company_name, preview, language, fee_percent, payment_terms, country, guarantee_months, ownership_months, signatory_name, signatory_email, address, registration, job_title, special_conditions, exception_reason, discount_reason |

@@ -1,3 +1,4 @@
+import { caOwnerWhere, mandateTeamWhere } from '../stats/ca-objectif.helper.js';
 import prisma from '../../lib/db.js';
 import { getObjectifFinancier } from '../stats/ca-objectif.helper.js';
 
@@ -792,7 +793,7 @@ export async function getSpaData(
       where: {
         feeStatut: { in: ['FACTURE', 'PAYE'] },
         updatedAt: { gte: startOfMonth, lte: endOfMonth },
-        ...(isTeam ? {} : { OR: [{ createdById: userId }, { assignedToId: userId }] }),
+        ...(isTeam ? {} : caOwnerWhere(userId)),
       },
       _sum: { feeMontantFacture: true },
     }),
@@ -802,7 +803,7 @@ export async function getSpaData(
       where: {
         feeStatut: { in: ['FACTURE', 'PAYE'] },
         updatedAt: { gte: prevMonthStart, lte: prevMonthEnd },
-        ...(isTeam ? {} : { OR: [{ createdById: userId }, { assignedToId: userId }] }),
+        ...(isTeam ? {} : caOwnerWhere(userId)),
       },
       _sum: { feeMontantFacture: true },
     }),

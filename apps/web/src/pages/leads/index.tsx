@@ -59,6 +59,8 @@ export default function LeadsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ company: '', contact: '', email: '', phone: '', role: '', nbPostes: '', packageMoyen: '' });
   const [loseFor, setLoseFor] = useState<Lead | null>(null);
+  const [valueFor, setValueFor] = useState<Lead | null>(null);
+  const [valueForm, setValueForm] = useState({ nbPostes: '', packageMoyen: '' });
   const [loseReason, setLoseReason] = useState(LOST_REASONS[0]);
   // Enchaînement (session d'appels façon lead)
   const [sessionOpen, setSessionOpen] = useState(false);
@@ -98,6 +100,12 @@ export default function LeadsPage() {
     onSuccess: () => { toast('success', t('Lead créé')); setCreateOpen(false); setForm({ company: '', contact: '', email: '', phone: '', role: '', nbPostes: '', packageMoyen: '' }); invalidate(); },
     onError: () => toast('error', t('Création impossible')),
   });
+  const valueMutation = useMutation({
+    mutationFn: (p: { id: string; nbPostes: number | null; packageMoyen: number | null }) => api.put(`/leads/${p.id}`, { nbPostes: p.nbPostes, packageMoyen: p.packageMoyen }),
+    onSuccess: () => { toast('success', t('Valeur mise à jour')); setValueFor(null); invalidate(); },
+    onError: () => toast('error', t('Mise à jour impossible')),
+  });
+  const openValue = (l: Lead) => { setValueFor(l); setValueForm({ nbPostes: l.nbPostes ? String(l.nbPostes) : '', packageMoyen: l.packageMoyen ? String(l.packageMoyen) : '' }); };
   const convertMutation = useMutation({
     mutationFn: (id: string) => api.post(`/leads/${id}/convert`, {}),
     onSuccess: () => { toast('success', t('Lead converti en client 🎉')); invalidate(); },
@@ -192,10 +200,14 @@ export default function LeadsPage() {
                                       <div style={{ fontSize: 10.5, color: '#8A8699', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.contact}{l.role ? ` · ${l.role}` : ''}</div>
                                     </div>
                                   </div>
-                                  {!!l.valeurOpportunite && (
-                                    <div title={t('{n} poste(s) × {pkg} × 22 %', { n: l.nbPostes ?? 0, pkg: fmtK(l.packageMoyen ?? 0) })} style={{ marginTop: 7, marginRight: 5, display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 800, color: '#2C6B3F', background: '#EAF3EC', borderRadius: 999, padding: '2px 8px' }}>
+                                  {l.valeurOpportunite ? (
+                                    <button onClick={(e) => { e.stopPropagation(); openValue(l); }} title={t('{n} poste(s) × {pkg} × 22 %', { n: l.nbPostes ?? 0, pkg: fmtK(l.packageMoyen ?? 0) })} style={{ marginTop: 7, marginRight: 5, display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 800, color: '#2C6B3F', background: '#EAF3EC', border: 'none', borderRadius: 999, padding: '2px 8px', cursor: 'pointer' }}>
                                       {fmtK(l.valeurOpportunite)}
-                                    </div>
+                                    </button>
+                                  ) : (
+                                    <button onClick={(e) => { e.stopPropagation(); openValue(l); }} style={{ marginTop: 7, marginRight: 5, display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 700, color: '#8A8699', background: 'transparent', border: '1px dashed rgba(34,23,122,.2)', borderRadius: 999, padding: '1px 8px', cursor: 'pointer' }}>
+                                      {t('+ valeur')}
+                                    </button>
                                   )}
                                   {l.pushedCandidat?.name && (
                                     <div style={{ marginTop: 7, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: '#5B4B9E', background: '#EDEAF9', borderRadius: 999, padding: '2px 8px' }}>
@@ -247,6 +259,27 @@ export default function LeadsPage() {
               </div>
             </div>
             <button onClick={() => { if (!form.company.trim() || !form.contact.trim()) { toast('error', t('Entreprise et contact requis')); return; } createMutation.mutate(); }} disabled={createMutation.isPending} style={{ width: '100%', marginTop: 16, fontFamily: MANROPE, fontWeight: 700, fontSize: 15, background: NAVY, color: LIME, border: 'none', borderRadius: 12, padding: 13, cursor: 'pointer', opacity: createMutation.isPending ? 0.6 : 1 }}>{createMutation.isPending ? t('Création…') : t('Créer le lead')}</button>
+          </div>
+        </div>
+      )}
+
+      {/* Modale valeur d'opportunité */}
+      {valueFor && (
+        <div onClick={() => setValueFor(null)} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(26,21,51,.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t("Valeur d'opportunité")} style={{ width: 400, maxWidth: '100%', background: '#fff', borderRadius: 20, boxShadow: '0 40px 90px -40px rgba(26,21,51,0.6)', padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontFamily: ARCHIVO, fontSize: 18, color: INK }}>{valueFor.company}</div>
+              <button onClick={() => setValueFor(null)} aria-label={t('Fermer')} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: '#F5F4EA', color: '#8A8699', cursor: 'pointer' }}><X size={15} /></button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 16 }}>
+              <input value={valueForm.nbPostes} inputMode="numeric" onChange={(e) => setValueForm((f) => ({ ...f, nbPostes: e.target.value.replace(/\D/g, '') }))} placeholder={t('Nombre de postes')} aria-label={t('Nombre de postes')} style={input} />
+              <input value={valueForm.packageMoyen} inputMode="numeric" onChange={(e) => setValueForm((f) => ({ ...f, packageMoyen: e.target.value.replace(/[^\d\s]/g, '') }))} placeholder={t('Package moyen (€)')} aria-label={t('Package moyen (€)')} style={input} />
+            </div>
+            {(() => {
+              const n = Number(valueForm.nbPostes) || 0; const pkg = Number(valueForm.packageMoyen.replace(/\s/g, '')) || 0;
+              return <div style={{ marginTop: 12, fontSize: 13, color: '#4A4568' }}>{n && pkg ? t('Valeur : {v} ({n} × {pkg} × 22 %)', { v: fmtK(Math.round(n * pkg * 0.22)), n, pkg: fmtK(pkg) }) : t('Renseigne les deux champs pour calculer la valeur.')}</div>;
+            })()}
+            <button onClick={() => valueMutation.mutate({ id: valueFor.id, nbPostes: Number(valueForm.nbPostes) || null, packageMoyen: Number(valueForm.packageMoyen.replace(/\s/g, '')) || null })} disabled={valueMutation.isPending} style={{ width: '100%', marginTop: 16, fontFamily: MANROPE, fontWeight: 700, fontSize: 15, background: NAVY, color: LIME, border: 'none', borderRadius: 12, padding: 13, cursor: 'pointer', opacity: valueMutation.isPending ? 0.6 : 1 }}>{t('Enregistrer')}</button>
           </div>
         </div>
       )}

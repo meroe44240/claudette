@@ -192,7 +192,8 @@ async function presentations(uid: string, s: Date, e: Date) {
 
 async function mandats(uid: string) {
   const rows = await prisma.mandat.findMany({
-    where: { assignedToId: uid, statut: { in: ['OUVERT', 'EN_COURS'] } },
+    // Mandats actifs de la personne, binôme compris (assigné, sales ou recruteur).
+    where: { OR: [{ assignedToId: uid }, { salesId: uid }, { recruteurId: uid }], statut: { in: ['OUVERT', 'EN_COURS'] } },
     select: { isDormant: true } as any,
   });
   const actifs = (rows as any[]).filter((m) => !m.isDormant).length;
