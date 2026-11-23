@@ -79,7 +79,7 @@ async function main() {
   await pool.query(`delete from reports`);
   await pool.query(`update scheduled_messages set status='cancelled' where status='pending'`);
   await fetch(`${HUB}/v1/admin/agents/all/resume`, { method: 'POST', headers: { Authorization: `Bearer ${adminToken}` } });
-  for (const a of ['khoa', 'theo', 'maya', 'hugo', 'nathan', 'ines', 'awa']) await pending(a); // drain leftovers from earlier runs
+  for (const a of ['khoa', 'theo', 'maya', 'hugo', 'nathan', 'ines', 'awa', 'bastien', 'antoine', 'victor']) await pending(a); // drain leftovers from earlier runs
 
   // Local endpoint standing in for agents' webhook / wake URLs
   const wakes: any[] = [];
@@ -409,6 +409,47 @@ async function main() {
   const msgs23 = Object.values<any>(dm23.posts).map((p) => p.message);
   check(s1.status === 200 && msgs23.includes('Rappel planifié : relance Anh Tran.'), 'scheduled message sent at its time');
   check(c2.status === 200 && !msgs23.includes('Message annulé.'), 'cancelled scheduled message not sent');
+
+  // ── Domains: activity feed and coordination in #d-<domain> ─────────────────
+  const delivery = (await meroe.mm.get(`/teams/${teamId}/channels/name/d-delivery`)).id as string;
+  const finance = (await meroe.mm.get(`/teams/${teamId}/channels/name/d-finance`)).id as string;
+  const recentIn = async (ch: string, n = 15) => {
+    const r = await meroe.mm.get(`/channels/${ch}/posts?per_page=${n}`);
+    return (r.order as string[]).map((id) => r.posts[id]);
+  };
+  check(await rejected(() => lea.mm.get(`/channels/${delivery}`)), 'domain channels are invisible to the team');
+
+  // 24. Feed: question, answer, resolution, approval
+  const subj = `Feed check ${Date.now()}`;
+  const q24 = await tool('khoa', 'ask_human', { to: 'lea', subject: subj, question: 'OK?', choices: ['Yes', 'No'],
+    object: { type: 'candidate', label: 'Anh Tran' } });
+  await lea.mm.post(`/posts/${q24.body.post_id}/actions/c0`, {});
+  await waitFor(async () => (await pending('khoa')).find((e) => e.question_id === q24.body.question_id));
+  await tool('khoa', 'resolve_question', { question_id: q24.body.question_id, confirmation: 'Noté.', propium_action: 'Checked Anh Tran record' });
+  const feed24 = await waitFor(async () => {
+    const posts = (await recentIn(delivery)).filter((p) => p.message.includes(subj));
+    return posts.length >= 3 ? posts : null;
+  });
+  const lines = (feed24 ?? []).map((p: any) => p.message).join('\n');
+  check(/❓ Khoa .*Léa.*Anh Tran/.test(lines), 'feed: question asked (who, to whom, about what)', lines);
+  check(/💬 Léa .*Khoa.*Yes/.test(lines), 'feed: answer');
+  check(/✅ Khoa .*Propium: Checked Anh Tran record/.test(lines), 'feed: resolution with the Propium action');
+  check((feed24 ?? []).every((p: any) => p.user_id === seed.bots.humanup.user_id), 'feed lines come from the Humanup bot');
+  const a24 = await tool('antoine', 'request_approval', { kind: 'transfer', title: `Feed approval ${Date.now()}` });
+  const feedA = await waitFor(async () => (await recentIn(finance)).find((p) => p.message.includes('🔏') && p.message.includes('Antoine')));
+  check(a24.status === 200 && !!feedA, 'feed: approval request shows in #d-finance');
+
+  // 25. Coordination inside the domain
+  const c25 = await tool('khoa', 'post_in_domain', { text: '@bastien the BNP pipeline has 3 stale candidates, can you look?' });
+  const ev25 = await waitFor(async () => (await pending('bastien')).find((e) => e.type === 'ops' && e.channel === 'd-delivery'));
+  check(c25.status === 200 && ev25?.from_agent === 'khoa', 'post_in_domain: @bastien gets Khoa\'s message', c25.body);
+  const c25b = await tool('khoa', 'post_in_domain', { text: '@theo commission question' });
+  check(c25b.status === 200 && c25b.body.notified?.length === 0, '@mention outside the domain is not delivered (use #agents-ops)', c25b.body);
+  await meroe.mm.post('/posts', { channel_id: delivery, message: '@khoa merci, tiens-moi au courant' });
+  const ev25c = await waitFor(async () => (await pending('khoa')).find((e) => e.type === 'ops' && e.from_human === 'meroe' && e.channel === 'd-delivery'));
+  check(!!ev25c, 'Méroë\'s @khoa in #d-delivery reaches Khoa');
+  const c25d = await tool('camille', 'post_in_domain', { text: 'hi' });
+  check(c25d.status === 403, 'private agents have no domain channel', c25d.body);
 
   srv.close();
   await pool.end();

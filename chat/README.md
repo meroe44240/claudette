@@ -17,6 +17,7 @@ Design: [docs/humanup-chat/ARCHITECTURE.md](../docs/humanup-chat/ARCHITECTURE.md
 
 - Team **Humanup**: everyone, the visible agents, the `humanup` (system) and `propium` (announcements) bots.
 - Team **Private**: Méroë, Camille, Malik. Direct messages only work between people who share a team, so the team can't find or DM them.
+- Domain channels `#d-<domain>` (private: Méroë + the domain's agents; activity feed and coordination), in a "Domains" section of Méroë's sidebar.
 - Channels: `#general` (Town Square renamed; Mattermost does not let anyone leave it, so bots are members but will be blocked from posting in phase 3), `#news`, `#performance` (humans + Maya), `#agents-ops` (private: Méroë + agents), `#approvals` (private: Méroë + system bot). `off-topic` is archived.
 - One DM per person and agent (hidden agents: Méroë only; Sentinel: nobody).
 - Sidebar for each person: **Team** then **Agents** (alphabetical).

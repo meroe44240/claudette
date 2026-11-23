@@ -8,6 +8,7 @@ import { q, one } from './db.js';
 import { MM } from './mm.js';
 import { t, fmtDate } from './i18n.js';
 import { guardSend, questionCapExceeded } from './guard.js';
+import { feed, quote } from './feed.js';
 
 export type Agent = {
   key: string; name: string; title: string; scope: string;
@@ -253,6 +254,8 @@ export async function askHuman(agent: Agent, input: {
   const post = await postAs(agent, channel, '', { props: questionProps(qn, agent, human) });
   await q('update questions set root_post_id=$2 where id=$1', [id, post.id]);
   await audit('agent', agent.key, 'question.ask', human.key, { question_id: id, subject: input.subject });
+  void feed(agent.key, 'feed_question', { agent: agent.name, person: human.first_name, subject: input.subject,
+    about: input.object?.label ? ` · ${input.object.label}` : '', date: deadline });
   return { question_id: id, post_id: post.id, permalink: permalink(post.id), deadline: deadline.toISOString() };
 }
 
@@ -270,6 +273,10 @@ export async function answerQuestion(qn: Question, human: Human, answer: { choic
       type: qn.object_type, id: qn.object_id, label: qn.object_label, url: qn.object_url } : null },
   });
   await audit('human', human.key, 'question.answer', qn.id, { choice: answer.choice, via: answer.via });
+  const asked = human.key !== qn.human_key ? (await getHuman(qn.human_key))?.first_name : null;
+  void feed(qn.agent_key, asked ? 'feed_answer_for' : 'feed_answer', {
+    person: human.first_name, agent: (await getAgent(qn.agent_key))?.name ?? qn.agent_key, asked,
+    answer: answer.choice ?? `"${quote(answer.text, 80)}"`, subject: qn.subject });
   return updated;
 }
 
@@ -284,6 +291,8 @@ export async function resolveQuestion(agent: Agent, input: { question_id: string
   await refreshCard(updated);
   await q(`update events set status='acked', acked_at=now() where agent_key=$1 and payload->>'question_id'=$2 and status<>'acked'`, [agent.key, qn.id]);
   await audit('agent', agent.key, 'question.resolve', qn.human_key, { question_id: qn.id, propium_action: input.propium_action });
+  void feed(agent.key, 'feed_resolved', { agent: agent.name, subject: qn.subject,
+    action: input.propium_action ? ` · Propium: ${quote(input.propium_action, 160)}` : '' });
   return { status: 'resolved' };
 }
 
@@ -310,6 +319,7 @@ export async function redirectToAgent(agent: Agent, input: { reply_to_post_id: s
   await q('update redirects set offer_post_id=$2 where id=$1', [id, offer.id]);
   await ackByPost(agent.key, post.id);
   await audit('agent', agent.key, 'redirect', human.key, { to_agent: target.key, redirect_id: id });
+  void feed(agent.key, 'feed_redirect', { agent: agent.name, person: human.first_name, target: target.name });
   return { redirect_id: id, post_id: offer.id };
 }
 

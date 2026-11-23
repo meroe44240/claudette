@@ -35,7 +35,7 @@ async function main() {
   const adminToken = process.env.MM_ADMIN_TOKEN ?? readIf(join(SECRETS_DIR, 'admin-token'));
   if (!adminToken) throw new Error(`No admin token: set MM_ADMIN_TOKEN or run infra/bootstrap.sh (looked in ${SECRETS_DIR})`);
   const mm = new MM(MM_URL, adminToken.trim());
-  const { humans, agents } = loadConfig(CONFIG_DIR);
+  const { humans, agents, domains } = loadConfig(CONFIG_DIR);
   const secrets = loadSecrets();
 
   // ── Teams ────────────────────────────────────────────────────────────────
@@ -122,22 +122,36 @@ async function main() {
     }
   }
 
-  // ── Sidebars: "Team" then "Agents" ───────────────────────────────────────
+  // ── Domain channels (Méroë + the domain's agents): activity feed and coordination ──
+  const domainChannels: any[] = [];
+  for (const d of domains) {
+    const ch = await ensureChannel(mm, team.id, `d-${d.key}`, d.name, 'P',
+      `${d.name}: what the agents do (activity feed) and how they coordinate. Invisible to the team.`);
+    domainChannels.push(ch);
+    if (meroe) await addToChannel(mm, ch.id, humanIds[meroe.key]);
+    await addToChannel(mm, ch.id, botIds.humanup);
+    for (const a of agents.filter((x) => x.domain === d.key)) await addToChannel(mm, ch.id, botIds[a.key]);
+  }
+
+  // ── Sidebars: "Team", ("Domains" for Méroë), "Agents" ────────────────────
   for (const h of humans) {
     const teamChannels = [general.id, news.id, performance.id];
     if (h.admin) teamChannels.push(approvals.id, agentsOps.id);
     const agentChannels = (dmsByHuman[h.key] ?? [])
       .sort((x, y) => x.agent.name.localeCompare(y.agent.name))
       .map((d) => d.channelId);
-    await setSidebar(mm, humanIds[h.key], team.id, teamChannels, agentChannels);
+    const sections: [string, string[]][] = [['Team', teamChannels]];
+    if (h.admin && domainChannels.length) sections.push(['Domains', domainChannels.map((c) => c.id)]);
+    sections.push(['Agents', agentChannels]);
+    await setSidebar(mm, humanIds[h.key], team.id, sections);
     if (h.admin) {
-      await setSidebar(mm, humanIds[h.key], privateTeam.id, [privGeneral.id], agentChannels);
+      await setSidebar(mm, humanIds[h.key], privateTeam.id, [['Team', [privGeneral.id]], ['Agents', agentChannels]]);
     }
   }
 
   // The seed account becomes a member of what it creates; take it out so it shows nowhere.
   const me = await mm.get('/users/me');
-  for (const c of [news, performance, agentsOps, approvals]) await leave(mm, `/channels/${c.id}/members/${me.id}`);
+  for (const c of [news, performance, agentsOps, approvals, ...domainChannels]) await leave(mm, `/channels/${c.id}/members/${me.id}`);
   for (const t of [team, privateTeam]) await leave(mm, `/teams/${t.id}/members/${me.id}`);
 
   log(`done: ${humans.length} humans, ${agents.length} agents + ${SYSTEM_BOTS.length} system bots, `
@@ -244,28 +258,27 @@ async function ensureChannel(mm: MM, teamId: string, name: string, display: stri
   return ch;
 }
 
-/** Custom "Team" and "Agents" categories on top; our channels removed from every other category. */
-async function setSidebar(mm: MM, userId: string, teamId: string, teamChannels: string[], agentChannels: string[]) {
+/** Our custom categories on top, in this order; our channels removed from every other category. */
+async function setSidebar(mm: MM, userId: string, teamId: string, sections: [string, string[]][]) {
   const base = `/users/${userId}/teams/${teamId}/channels/categories`;
   const get = () => mm.get<{ categories: any[]; order: string[] }>(base);
   let { categories } = await get();
-  for (const name of ['Team', 'Agents']) {
+  for (const [name] of sections) {
     if (!categories.some((c) => c.type === 'custom' && c.display_name === name)) {
       await mm.post(base, { user_id: userId, team_id: teamId, display_name: name, type: 'custom', channel_ids: [] });
     }
   }
   ({ categories } = await get());
-  const ours = new Set([...teamChannels, ...agentChannels]);
+  const ours = new Set(sections.flatMap(([, ids]) => ids));
+  const wanted = new Map(sections);
   const updated = categories.map((c) => {
-    if (c.type === 'custom' && c.display_name === 'Team') return { ...c, channel_ids: teamChannels, sorting: 'manual' };
-    if (c.type === 'custom' && c.display_name === 'Agents') return { ...c, channel_ids: agentChannels, sorting: 'manual' };
+    if (c.type === 'custom' && wanted.has(c.display_name)) return { ...c, channel_ids: wanted.get(c.display_name), sorting: 'manual' };
     return { ...c, channel_ids: c.channel_ids.filter((id: string) => !ours.has(id)) };
   });
   await mm.put(base, updated);
-  const teamCat = updated.find((c) => c.type === 'custom' && c.display_name === 'Team')!;
-  const agentsCat = updated.find((c) => c.type === 'custom' && c.display_name === 'Agents')!;
-  const rest = updated.filter((c) => c !== teamCat && c !== agentsCat).map((c) => c.id);
-  await mm.put(`${base}/order`, [teamCat.id, agentsCat.id, ...rest]);
+  const top = sections.map(([name]) => updated.find((c) => c.type === 'custom' && c.display_name === name)!.id);
+  const rest = updated.map((c) => c.id).filter((id) => !top.includes(id));
+  await mm.put(`${base}/order`, [...top, ...rest]);
 }
 
 async function welcome(mm: MM, secrets: Secrets, a: Agent, h: Human, channelId: string) {

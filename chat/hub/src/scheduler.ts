@@ -9,6 +9,7 @@ import {
 import { TEAM_TZ, alertOps, channelId, guardSend } from './guard.js';
 import { cronToday, duration, localParts } from './time.js';
 import { t, fmtDate } from './i18n.js';
+import { feed } from './feed.js';
 
 const REPORT_WAKE_BEFORE_MS = 15 * 60_000;
 const REPORT_GRACE_MS = 5 * 60_000;
@@ -42,6 +43,7 @@ async function reminders(now: Date) {
     await q('update questions set reminded_at=$2 where id=$1', [qn.id, now]);
     await refreshCard({ ...qn, reminded_at: now });
     await audit('hub', 'scheduler', 'question.remind', qn.human_key, { question_id: qn.id });
+    void feed(agent.key, 'feed_reminder', { person: human.first_name, agent: agent.name, subject: qn.subject });
   }
   return due.length;
 }
@@ -87,6 +89,7 @@ async function escalations(now: Date) {
       .catch(() => {});
     await refreshCard({ ...updated, escalation_post_id: copy.id });
     await audit('hub', 'scheduler', 'question.escalate', target.key, { question_id: qn.id, asked: asked.key, post_id: copy.id });
+    void feed(agent.key, 'feed_escalated', { target: target.first_name, person: asked.first_name, agent: agent.name, subject: qn.subject });
     n++;
   }
   return n;
@@ -108,6 +111,7 @@ async function publishReport(agent: Agent, channel: string, id: string, text: st
   const post = await postAs(agent, chId, text);
   await q(`update reports set posted_at=$2, post_id=$3 where id=$1`, [id, now, post.id]);
   await audit('agent', agent.key, 'report.post', channel, { post_id: post.id });
+  void feed(agent.key, 'feed_report', { agent: agent.name, channel });
   return post;
 }
 

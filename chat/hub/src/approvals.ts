@@ -7,6 +7,7 @@ import { MM } from './mm.js';
 import { type Agent, type Human, ToolError, admin, enqueue, audit, newId, sign, getAgent, permalink } from './core.js';
 import { channelId, systemBot } from './guard.js';
 import { t } from './i18n.js';
+import { feed } from './feed.js';
 
 type Approval = {
   id: string; agent_key: string; kind: string; title: string; summary: string | null; draft: string | null; payload: any;
@@ -63,6 +64,7 @@ export async function requestApproval(agent: Agent, input: {
   const post = await (await bot()).post('/posts', { channel_id: ch, message: '', props: cardProps(a, agent, await deciderLang()) });
   await q('update approvals set post_id=$2 where id=$1', [id, post.id]);
   await audit('agent', agent.key, 'approval.request', 'approvals', { approval_id: id, kind: input.kind, title: input.title });
+  void feed(agent.key, 'feed_approval', { agent: agent.name, title: input.title, link: permalink(post.id) });
   return { approval_id: id, status: 'pending', permalink: permalink(post.id) };
 }
 
@@ -88,6 +90,7 @@ async function decide(a: Approval, human: Human, decision: 'approved' | 'edited'
     text: `${human.first_name} ${decision === 'rejected' ? 'rejected' : decision === 'edited' ? 'approved with edits' : 'approved'}: ${a.title}`,
   });
   await audit('human', human.key, `approval.${decision}`, agent.key, { approval_id: a.id });
+  void feed(agent.key, `feed_${decision}`, { title: a.title, agent: agent.name });
   return updated;
 }
 

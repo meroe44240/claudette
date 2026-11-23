@@ -16,6 +16,8 @@ export type Human = {
   propium_user_id?: string;
 };
 
+export type Domain = { key: string; name: string };
+
 export type Recipients = 'all' | 'team' | 'team-except-meroe' | string[];
 
 export type Agent = {
@@ -30,12 +32,13 @@ export type Agent = {
   hidden_from_team: boolean;
   registry: 'team' | 'admin-only';
   report?: { channel: string; cron: string };
+  domain?: string;
   [k: string]: unknown;
 };
 
 const USERNAME = /^[a-z][a-z0-9._-]{2,21}$/;
 
-export function loadConfig(dir: string): { humans: Human[]; agents: Agent[] } {
+export function loadConfig(dir: string): { humans: Human[]; agents: Agent[]; domains: Domain[] } {
   const h = parse(readFileSync(join(dir, 'humans.yaml'), 'utf8'));
   const a = parse(readFileSync(join(dir, 'agents.yaml'), 'utf8'));
 
@@ -52,7 +55,9 @@ export function loadConfig(dir: string): { humans: Human[]; agents: Agent[] } {
     ...v,
   }));
 
+  const domains: Domain[] = Object.entries<any>(a.domains ?? {}).map(([key, v]) => ({ key, name: v?.name ?? key }));
   const errors: string[] = [];
+  for (const d of domains) if (!/^[a-z][a-z0-9-]{1,40}$/.test(d.key)) errors.push(`domain key "${d.key}" must be lowercase letters, digits, dashes`);
   const humanKeys = new Set(humans.map((x) => x.key));
   const allKeys = new Set([...humanKeys, ...agents.map((x) => x.key)]);
   for (const x of humans) {
@@ -69,6 +74,8 @@ export function loadConfig(dir: string): { humans: Human[]; agents: Agent[] } {
       const v = x[field];
       if (Array.isArray(v)) for (const r of v) if (!humanKeys.has(r)) errors.push(`agent ${x.key}.${field}: unknown human "${r}"`);
     }
+    if (x.domain && !domains.some((d) => d.key === x.domain)) errors.push(`agent ${x.key}: unknown domain "${x.domain}"`);
+    if (x.domain && x.hidden_from_team) errors.push(`agent ${x.key}: a private agent has no domain channel`);
     if (x.hidden_from_team && !Array.isArray(x.recipients)) {
       errors.push(`agent ${x.key}: a hidden agent needs an explicit recipients list`);
     }
@@ -77,7 +84,7 @@ export function loadConfig(dir: string): { humans: Human[]; agents: Agent[] } {
   for (const x of humanAgentClash) errors.push(`"${x.key}" is both a human and an agent`);
   if (humans.filter((x) => x.admin).length !== 1) errors.push('exactly one human must have admin: true');
   if (errors.length) throw new Error('Invalid config:\n  ' + errors.join('\n  '));
-  return { humans, agents };
+  return { humans, agents, domains };
 }
 
 /** Humans who get a DM with this agent. */

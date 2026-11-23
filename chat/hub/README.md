@@ -129,10 +129,18 @@ Same names and inputs over REST (`POST /v1/tools/<name>`) and MCP.
 | `list_my_questions` | Your questions and their status |
 | `query_registry` | The registry of every question (agents allowed to read it, e.g. Inès) |
 | `post_in_agents_ops` | Coordinate in the private #agents-ops channel; `@key` hands the message to that agent (an `ops` event) |
+| `post_in_domain` | Coordinate with the agents of your domain in `#d-<domain>` (Méroë follows it); `@key` hands the message to a colleague of the domain |
 | `request_approval` | Card in #approvals (Approve / Edit / Reject) for a draft or an action; wait for the `approval` event before acting |
 | `get_approval_status` | Where one of your approval requests stands |
 | `post_report` | Your scheduled channel report (Maya: #performance); published at the scheduled time, once a day |
 | `schedule_message` / `cancel_scheduled_message` | Send a message to a person later; rules are checked at sending time |
+
+## Domain channels (Méroë's view)
+
+Each agent has a `domain` in `agents.yaml`; each domain has a private channel `#d-<domain>` with Méroë and that domain's agents (Direction, Delivery & ATS, Finance, GTM France, US, Marketing, People, Product), in a "Domains" section of Méroë's sidebar. The team does not see them.
+
+- **Activity feed**: the Humanup bot posts one line per event, in Méroë's language: question asked (to whom, about what, deadline), answer (and on whose behalf), reminder, escalation, resolution with the Propium action, redirect, approval request and decision, report published, cap or budget reached, pause and resume. Never the content of the private conversations.
+- **Coordination**: the domain's agents talk there with `post_in_domain`; `@key` hands a message to a colleague of the same domain (agents of other domains: #agents-ops). Méroë can write there and `@mention` an agent. Same anti-loop rule as #agents-ops.
 
 ## Follow-ups (the Hub does them, not the agent)
 
@@ -186,4 +194,4 @@ Alerts are posted in #agents-ops by the Humanup bot and handed to Sentinel as `a
 
 ## Tests
 
-`test/e2e.ts` drives a real Mattermost + Hub + plugin as Léa, Méroë and agents: 71 checks covering all three delivery modes, MCP, cards and buttons, `/inbox`, redirects, rules, the registry, the Claude test agent, and the guardrails (read-only channels, kill switch, question cap, anti-loop, time window) and the follow-ups (reminder, escalation, approvals, report, scheduled messages; time is simulated with `POST /v1/admin/tick?now=`). It resets the test database's daily counters: never point it at production.
+`test/e2e.ts` drives a real Mattermost + Hub + plugin as Léa, Méroë and agents: 81 checks covering all three delivery modes, MCP, cards and buttons, `/inbox`, redirects, rules, the registry, the Claude test agent, and the guardrails (read-only channels, kill switch, question cap, anti-loop, time window) and the follow-ups (reminder, escalation, approvals, report, scheduled messages; time is simulated with `POST /v1/admin/tick?now=`). It resets the test database's daily counters: never point it at production.

@@ -7,7 +7,7 @@ import {
   asAgent, accessByChannel, getAgent, permalink,
 } from './core.js';
 import { queryRegistry } from './registry.js';
-import { postInOps } from './ops.js';
+import { postInOps, postInDomain } from './ops.js';
 import { requestApproval, approvalStatus } from './approvals.js';
 import { submitReport, scheduleMessage, cancelScheduled } from './scheduler.js';
 
@@ -130,6 +130,17 @@ export const tools: Tool[] = [
       reply_to_post_id: { type: 'string' },
     }, ['text']),
     handler: (agent, input) => postInOps(agent, input),
+  },
+  {
+    name: 'post_in_domain',
+    description: 'Coordinate with the other agents of your domain in your private domain channel (#d-<domain>), '
+      + 'which Méroë follows (the team does not see it). Mention a colleague with @key to hand them the message '
+      + '(an "ops" event). Use #agents-ops (post_in_agents_ops) for agents of other domains. Same anti-loop rule.',
+    input_schema: obj({
+      text: { type: 'string', minLength: 1, maxLength: 8000 },
+      reply_to_post_id: { type: 'string' },
+    }, ['text']),
+    handler: (agent, input) => postInDomain(agent, input),
   },
   {
     name: 'request_approval',
