@@ -1,12 +1,13 @@
 import { z } from 'zod';
+import { isPlaceholder, isLinkedinCompanyOrEmpty } from '../../lib/data-quality.js';
 
 export const createEntrepriseSchema = z.object({
-  nom: z.string().min(1, 'Le nom est requis'),
+  nom: z.string().min(1, 'Le nom est requis').refine((v) => !isPlaceholder(v), 'Le nom ne peut pas être un texte de remplissage (test, N/A, inconnu…)'),
   secteur: z.string().optional(),
   siteWeb: z.string().optional(),
   taille: z.enum(['STARTUP', 'PME', 'ETI', 'GRAND_GROUPE']).optional(),
   localisation: z.string().optional(),
-  linkedinUrl: z.string().optional(),
+  linkedinUrl: z.string().refine(isLinkedinCompanyOrEmpty, 'Lien LinkedIn invalide (attendu : https://www.linkedin.com/company/…)').optional(),
   logoUrl: z.string().optional(),
   notes: z.string().optional(),
   // Pappers (données légales françaises)

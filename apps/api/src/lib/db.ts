@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { installAuditAndTrash } from './audit-trash.js';
+import { installDataQuality } from './data-quality.js';
 import { runDeferred } from './request-context.js';
 
 /**
@@ -15,7 +16,9 @@ export const rawPrisma = new PrismaClient({
  * (avant / après, auteur, outil), et chaque suppression passe par la corbeille.
  */
 // Typé comme un client ordinaire : l'extension ne change que le comportement, pas l'API.
-const extended = installAuditAndTrash(rawPrisma) as unknown as PrismaClient;
+// La normalisation (emails, téléphones, LinkedIn, domaines) passe avant le journal, qui voit donc
+// les valeurs telles qu'elles sont enregistrées.
+const extended = installDataQuality(installAuditAndTrash(rawPrisma) as unknown as PrismaClient);
 
 // Les transactions différent le journal et la corbeille jusqu'au commit (voir runDeferred) :
 // une transaction annulée ne laisse ni trace dans le journal ni webhook envoyé.

@@ -84,7 +84,7 @@ export async function startEnrichment(contacts: EnrichInput[], enrichFields?: st
 /**
  * Poll enrichment results. Retries up to maxRetries with delay.
  */
-export async function getEnrichmentResults(enrichmentId: string, maxRetries = 10, delayMs = 5000): Promise<EnrichResult[]> {
+export async function getEnrichmentResults(enrichmentId: string, maxRetries = 24, delayMs = 5000): Promise<EnrichResult[]> {
   for (let i = 0; i < maxRetries; i++) {
     const res = await fetch(`${BASE_URL}/contact/enrich/bulk/${enrichmentId}?forceResults=true`, {
       headers: headers(),
@@ -92,6 +92,14 @@ export async function getEnrichmentResults(enrichmentId: string, maxRetries = 10
 
     if (res.status === 200) {
       const json = (await res.json()) as any;
+      // L'API v2 répond 200 tant que le lot tourne (status IN_PROGRESS) : on attend FINISHED.
+      if (json.status && json.status !== 'FINISHED') {
+        if (['CANCELED', 'CREDITS_INSUFFICIENT', 'RATE_LIMIT', 'UNKNOWN'].includes(json.status)) {
+          throw new Error(`FullEnrich: enrichissement interrompu (${json.status})`);
+        }
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
       return json.data || [];
     }
 

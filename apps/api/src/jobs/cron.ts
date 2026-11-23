@@ -295,6 +295,22 @@ async function checkStandupReport(): Promise<void> {
   }
 }
 
+// ─── QUALITÉ DES DONNÉES (HEBDO, lundi ~7h Paris) ──
+let lastDataQualityDate = '';
+async function checkDataQualityWeekly(): Promise<void> {
+  try {
+    const { hours, minutes, dayOfWeek, dateKey } = getParisTime();
+    if (dayOfWeek !== 1 || lastDataQualityDate === dateKey) return;
+    if (hours !== 7 || minutes > 10) return;
+    lastDataQualityDate = dateKey;
+    const { runDataQualityWeekly } = await import('./data-quality-weekly.js');
+    const res = await runDataQualityWeekly();
+    console.log(`[Cron] Data quality check sent to ${res.recipients} admin(s)`);
+  } catch (err) {
+    console.error('[Cron] Data quality check failed:', (err as Error).message);
+  }
+}
+
 export function startCronJobs(): void {
   if (cronStarted) {
     console.log('[Cron] Already started, skipping...');
@@ -389,6 +405,10 @@ export function startCronJobs(): void {
   // Recap bi-hebdo check every 60 seconds (runs Mon/Fri 08:00 ICT only)
   const standupInterval = setInterval(checkStandupReport, 60 * 1000);
   intervals.push(standupInterval);
+
+  // Contrôle qualité des données, lundi matin
+  const dataQualityInterval = setInterval(checkDataQualityWeekly, 60 * 1000);
+  intervals.push(dataQualityInterval);
 
   const recapInterval = setInterval(checkRecap, 60 * 1000);
   intervals.push(recapInterval);
