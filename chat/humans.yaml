@@ -1,7 +1,7 @@
 # Humans on Humanup Chat. Seeded by chat/seed. Edit, then re-run the seed (idempotent).
 # ui_locale: language of the Mattermost interface (en by default).
 # agent_lang: language agents use when they write to this person.
-# TO CONFIRM: emails other than Méroë's are guesses (firstname@humanup.io).
+# Emails checked against Propium users (2026-11-23).
 defaults:
   timezone: Asia/Ho_Chi_Minh
   ui_locale: en
