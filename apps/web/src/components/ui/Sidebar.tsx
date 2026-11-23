@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar, Wrench, Megaphone, CalendarClock, Plug, Linkedin, UserSearch, Video, Crosshair, Bot, ScrollText, Trash2 } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar, Wrench, Megaphone, CalendarClock, Plug, Linkedin, UserSearch, Video, Crosshair, Bot, ScrollText, Trash2, MessagesSquare } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 import { t } from '../../lib/i18n';
 
@@ -59,6 +59,7 @@ const paramItem: NavItem = { to: '/settings', icon: Settings, label: t('Paramèt
 const trashItem: NavItem = { to: '/corbeille', icon: Trash2, label: t('Corbeille') };
 const agentsItem: NavItem = { to: '/admin/agents', icon: Bot, label: t('Agents') };
 const journalItem: NavItem = { to: '/admin/journal', icon: ScrollText, label: t('Journal') };
+const registryItem: NavItem = { to: '/admin/chat-registry', icon: MessagesSquare, label: t('Registre des agents') };
 
 const SHORTCUT_HINTS: Record<string, string> = {
   '/': 'd',
@@ -253,6 +254,7 @@ export default function Sidebar({ collapsed = false, onToggleCollapse, isOpen = 
           <>
             <NavItemLink item={agentsItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
             <NavItemLink item={journalItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
+            <NavItemLink item={registryItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
             <NavItemLink item={paramItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
           </>
         )}

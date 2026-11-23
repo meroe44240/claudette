@@ -13,6 +13,7 @@ import { setPaused, sentToday } from './guard.js';
 import { buildPolicy } from './policy.js';
 import { onApprovalDialog } from './approvals.js';
 import { runScheduler } from './scheduler.js';
+import { receivePropiumEvent, lastNews } from './news.js';
 import { humanByMmId } from './core.js';
 import { sha256 } from './sync.js';
 import { tools, runTool } from './tools.js';
@@ -45,6 +46,15 @@ function sendError(reply: FastifyReply, e: unknown) {
 export async function buildServer() {
   const app = Fastify({ logger: { level: env.LOG_LEVEL === 'debug' ? 'info' : 'warn' }, bodyLimit: 1_000_000 });
   await app.register(formbody);
+  // Keep the raw body: Propium webhooks are signed on the exact bytes.
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+    (req as any).rawBody = body;
+    try {
+      done(null, body ? JSON.parse(body as string) : {});
+    } catch (e) {
+      done(e as Error, undefined);
+    }
+  });
 
   app.get('/healthz', async () => ({ ok: true }));
 
@@ -171,6 +181,19 @@ export async function buildServer() {
     await audit((who?.type as 'agent' | 'human') ?? 'hub', who?.key ?? b.user_id ?? 'unknown', `plugin.${b.reason ?? 'blocked'}`,
       b.channel_id, { channel_id: b.channel_id });
     return { ok: true };
+  });
+
+  // ── Propium → #news (signed webhooks: client meetings, presentations, closed won) ──
+  app.post('/v1/propium/events', async (req, reply) => {
+    try {
+      return await receivePropiumEvent((req as any).rawBody ?? '', req.headers['x-propium-signature'] as string | undefined);
+    } catch (e) {
+      return sendError(reply, e);
+    }
+  });
+  app.get('/v1/admin/news', async (req, reply) => {
+    if (!isAdmin(req)) return reply.code(403).send({ error: 'Not allowed' });
+    return { events: await lastNews(50) };
   });
 
   // ── Called by Mattermost ───────────────────────────────────────────────────

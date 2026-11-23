@@ -71,7 +71,7 @@ export async function checkClientOwnershipExpiry() {
       released++;
     } else if (lastActivityDate < warningThreshold) {
       // Warning would have been sent as in-app notification (feature removed).
-      // TODO: pipe through Slack DM if needed.
+      // TODO: notify the new owner (email) if needed.
       warned++;
     }
   }

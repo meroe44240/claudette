@@ -23,6 +23,11 @@ export default async function webhookRouter(fastify: FastifyInstance) {
   fastify.put('/:id', { preHandler: admin }, async (request) => service.update((request.params as { id: string }).id, body.parse(request.body)));
   fastify.delete('/:id', { preHandler: admin }, async (request) => service.remove((request.params as { id: string }).id));
   fastify.post('/:id/test', { preHandler: admin }, async (request) => service.test((request.params as { id: string }).id));
+  // Journal des envois (statut, tentatives, prochaine reprise, dernière erreur).
+  fastify.get('/:id/deliveries', { preHandler: admin }, async (request) => {
+    const q = request.query as Record<string, string | undefined>;
+    return service.deliveries((request.params as { id: string }).id, { status: q.status, limit: q.limit ? Number(q.limit) : undefined });
+  });
   // Flux d'événements (même contenu que l'outil MCP get_events).
   fastify.get('/events', { preHandler: admin }, async (request) => {
     const q = request.query as Record<string, string | undefined>;

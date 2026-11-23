@@ -3,7 +3,7 @@ import prisma from '../../lib/db.js';
 import { AppError } from '../../lib/errors.js';
 import * as notificationService from '../notifications/notification.service.js';
 import { matchEmail } from './gmail.service.js';
-import { notifyNewMeeting } from '../slack/slack.service.js';
+import { notifyNewMeeting, notifyPresentation } from '../announcements/announcement.service.js';
 import type { MeetingKind } from '../meetings/meeting-kind.js';
 
 // ─── TYPES ──────────────────────────────────────────
@@ -28,7 +28,7 @@ interface CalendarEventData {
   entiteType?: 'CANDIDAT' | 'CLIENT' | 'ENTREPRISE' | 'MANDAT';
   entiteId?: string;
   withMeet?: boolean;                // génère un lien Google Meet (visioconférence)
-  kind?: MeetingKind;                // nature du meeting ; seul un RDV_CLIENT est annoncé sur Slack
+  kind?: MeetingKind;                // nature du meeting ; seul un RDV_CLIENT est annoncé (#news)
 }
 
 interface CalendlyParsedData {
@@ -621,7 +621,7 @@ export async function createEvent(userId: string, data: CalendarEventData, sendN
     entiteId,
   });
 
-  // Slack : seul un RDV client est annoncé ici (il a forcément une date ; il lui faut des interlocuteurs).
+  // #news : seul un RDV client est annoncé ici (il a forcément une date ; il lui faut des interlocuteurs).
   // Une présentation est annoncée par le pipeline, les autres meetings ne le sont pas.
   const interlocuteursInvites = (data.attendees || []).filter((e) => !e.toLowerCase().endsWith('@humanup.io'));
   const clientLie = entiteType === 'CLIENT' && entiteId !== '00000000-0000-0000-0000-000000000000';
@@ -649,9 +649,9 @@ export async function createEvent(userId: string, data: CalendarEventData, sendN
           interlocuteurs: interlocuteursInvites.join(', ') || null,
           date: data.startTime,
           lieu: data.location || null,
-        });
+        }, { key: activite.id, userId, clientId: clientLie ? entiteId : null });
       } catch (err) {
-        console.error('[Slack] Failed to send new meeting notification:', err);
+        console.error('[announcements] client meeting:', err);
       }
     })();
   }
@@ -1180,7 +1180,7 @@ async function resolveCandidat(
 }
 
 /**
- * Annonce Slack d'une présentation identifiée dans l'agenda (candidat + contact client connus).
+ * Annonce (#news) d'une présentation identifiée dans l'agenda (candidat + contact client connus).
  * Retourne true si le message est parti, false si la présentation était déjà annoncée par le pipeline.
  */
 async function annoncerPresentationAgenda(
@@ -1252,7 +1252,6 @@ async function annoncerPresentationAgenda(
     if (anyMandat) mandatTitre = anyMandat.titrePoste;
   }
 
-  const { notifyPresentation } = await import('../slack/slack.service.js');
   await notifyPresentation({
     candidatPrenom: candidat.prenom,
     candidatNom: candidat.nom,
@@ -1261,72 +1260,8 @@ async function annoncerPresentationAgenda(
     mandatTitre: mandatTitre || classified.summary,
     recruteurPrenom: recruiterName,
     date: start,
-  });
+  }, { key: candidat.id, candidatId: candidat.id, clientId: clientAtt.entityId ?? null });
   return true;
-}
-
-/**
- * Événement non identifié : message privé Slack avec un lien vers l'ATS pour dire
- * s'il s'agit d'un RDV client, d'une présentation ou d'autre chose. Sans slackUserId
- * ni SLACK_BOT_TOKEN, l'événement reste visible dans l'ATS sur /rdv/classer.
- */
-async function demanderClassement(
-  activiteId: string,
-  classified: ClassifiedEvent,
-  userId: string,
-): Promise<void> {
-  try {
-    const { sendSlackDm } = await import('../slack/slack.service.js');
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { slackUserId: true },
-    });
-    if (!user?.slackUserId) return;
-
-    const startDate = classified.startTime
-      ? new Date(classified.startTime).toLocaleString('en-GB', {
-          weekday: 'short',
-          day: '2-digit',
-          month: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZone: 'Europe/Paris',
-        })
-      : 'Unknown time';
-
-    const avec = classified.attendees
-      .filter((a) => a.role !== 'internal')
-      .map((a) => a.name || a.email)
-      .join(', ');
-
-    const lien = `${(process.env.APP_URL || 'https://ats.propium.co').replace(/\/$/, '')}/rdv/classer/${activiteId}`;
-
-    const blocks = [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: [
-            `❓ *Client meeting or presentation?*`,
-            ``,
-            `📅 *${classified.summary}* · ${startDate}`,
-            `👥 With: ${avec || 'unknown attendees'}`,
-            ``,
-            `<${lien}|Answer in the ATS>`,
-            `_Nothing is announced or counted until you answer._`,
-          ].join('\n'),
-        },
-      },
-    ];
-
-    const sent = await sendSlackDm(user.slackUserId, { blocks, text: `Client meeting or presentation? ${classified.summary}` });
-    if (sent) {
-      console.log(`[CalendarWatcher] Slack DM "à classer" sent for event: ${classified.summary}`);
-    }
-  } catch (err) {
-    console.error('[CalendarWatcher] Failed to send "à classer" DM:', err);
-  }
 }
 
 // In-memory lock to prevent duplicate processing when multiple webhooks fire simultaneously
@@ -1429,7 +1364,7 @@ async function _processClassifiedEventInner(
     entiteId = clientAtt.entityId;
   }
 
-  // Annonces Slack : uniquement pour ce qui est identifié.
+  // Annonces #news : uniquement pour ce qui est identifié (champ metadata historique : annonceSlack).
   let annonceSlack = false;
   try {
     if (kind === 'PRESENTATION' && candidat && clientAtt) {
@@ -1448,11 +1383,11 @@ async function _processClassifiedEventInner(
         entrepriseNom: client?.entreprise?.nom || null,
         date: classified.startTime || null,
         lieu: null,
-      });
+      }, { key: classified.googleEventId, clientId: clientAtt.entityId ?? null });
       annonceSlack = true;
     }
   } catch (err) {
-    console.error('[CalendarWatcher] Slack notification error:', err);
+    console.error('[CalendarWatcher] announcement error:', err);
   }
 
   const prefixes: Record<MeetingKind, string> = {
@@ -1491,9 +1426,7 @@ async function _processClassifiedEventInner(
     },
   });
 
-  if (kind === 'A_CLASSER') {
-    demanderClassement(activite.id, classified, userId).catch(() => {});
-  }
+  // A_CLASSER : l'événement attend sur /rdv/classer (plus de message privé Slack).
 
   console.log(
     `[CalendarWatcher] Created ${kind} activity for event "${classified.summary}" (user ${userId})`,
@@ -1508,7 +1441,7 @@ async function _processClassifiedEventInner(
  *  1. Fetch events created/modified in the last 16 minutes (overlap for safety)
  *  2. Classify each event
  *  3. Create Activite typed INTERVIEW / PRESENTATION / RDV_CLIENT / A_CLASSER
- *  4. Send Slack DM with an ATS link for A_CLASSER events
+ *  4. A_CLASSER events wait on /rdv/classer
  */
 export async function runCalendarWatcher(): Promise<void> {
   // Only run Mon-Fri 8h-19h Paris

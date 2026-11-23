@@ -3,7 +3,8 @@ import { NotFoundError } from '../../lib/errors.js';
 import { paginatedResult, paginationToSkipTake } from '../../lib/pagination.js';
 import type { PaginationParams } from '../../lib/pagination.js';
 import type { CreateActiviteInput, UpdateActiviteInput } from './activite.schema.js';
-import { notifyNewMeeting, notifyMention } from '../slack/slack.service.js';
+import { notifyNewMeeting } from '../announcements/announcement.service.js';
+import { notifyMention } from '../announcements/team-email.service.js';
 import { compteCommeRdvClient } from '../meetings/meeting-kind.js';
 
 interface ListFilters {
@@ -92,7 +93,7 @@ export async function create(data: CreateActiviteInput, userId: string) {
   });
 
   if (data.type === 'MEETING' && compteCommeRdvClient({ entiteType: data.entiteType, entiteId: data.entiteId, metadata: data.metadata ?? {} })) {
-    // Fire-and-forget Slack notification : RDV client daté, avec interlocuteurs
+    // Annonce #news (Humanup Chat) : RDV client daté, avec interlocuteurs
     (async () => {
       try {
         const user = await prisma.user.findUnique({ where: { id: userId }, select: { prenom: true } });
@@ -117,31 +118,28 @@ export async function create(data: CreateActiviteInput, userId: string) {
           interlocuteurs: typeof meta.interlocuteurs === 'string' ? meta.interlocuteurs : null,
           date: (meta.startTime as string) || null,
           lieu: (meta.location as string) || null,
-        });
+        }, { key: result.id, userId, clientId: data.entiteType === 'CLIENT' ? data.entiteId : null });
       } catch (err) {
-        console.error('[Slack] Failed to send new meeting notification:', err);
+        console.error('[announcements] client meeting:', err);
       }
     })();
   }
 
-  // @mentions → notif Slack aux personnes mentionnées
+  // @mentions → email aux personnes mentionnées
   if (data.mentionedUserIds && data.mentionedUserIds.length > 0) {
     (async () => {
       try {
         const ids = data.mentionedUserIds!.filter((id) => id !== userId);
         if (!ids.length) return;
-        const [author, mentioned] = await Promise.all([
-          prisma.user.findUnique({ where: { id: userId }, select: { prenom: true, nom: true } }),
-          prisma.user.findMany({ where: { id: { in: ids } }, select: { prenom: true, nom: true } }),
-        ]);
+        const author = await prisma.user.findUnique({ where: { id: userId }, select: { prenom: true, nom: true } });
         await notifyMention({
-          mentionedNames: mentioned.map((u) => `${u.prenom || ''} ${u.nom || ''}`.trim()).filter(Boolean),
+          mentionedUserIds: ids,
           byName: author ? `${author.prenom || ''} ${author.nom || ''}`.trim() : null,
           contextLabel: await mentionContext(data.entiteType, data.entiteId),
           excerpt: data.contenu || data.titre || '',
         });
       } catch (err) {
-        console.error('[Slack] mention notif failed:', err);
+        console.error('[team-email] mention failed:', err);
       }
     })();
   }

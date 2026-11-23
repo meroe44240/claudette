@@ -4,7 +4,6 @@ import { createEvent, getBusyTimes, deleteEvent } from '../integrations/calendar
 import { sendRawEmail } from '../integrations/gmail.service.js';
 import * as leadService from '../leads/lead.service.js';
 import { isPersonalEmail } from '../integrations/allo.service.js';
-import { notifyJobBoardApplication } from '../slack/slack.service.js';
 import { validTimeZone, zonedDate, zonedToUtc } from '../../lib/timezone.js';
 import { SignJWT, jwtVerify } from 'jose';
 
@@ -388,12 +387,6 @@ export async function recordCareersApplication(data: { name: string; email: stri
     select: { id: true },
   });
 
-  void notifyJobBoardApplication({
-    candidatNom: data.name.trim(),
-    offreTitre: `${role.title} (HumanUp internal hiring)`,
-    email,
-    telephone: phone,
-  });
   return { candidatId: candidat.id, created: !existing };
 }
 
@@ -462,9 +455,6 @@ export async function recordJobPageApplication(slug: string, data: { name: strin
     }
   }
 
-  if (!alreadyNoted) {
-    void notifyJobBoardApplication({ candidatNom: data.name.trim(), offreTitre: `${data.intake.label} (job page)`, email, telephone: phone });
-  }
   return { candidatId: candidat.id, created: !existing };
 }
 

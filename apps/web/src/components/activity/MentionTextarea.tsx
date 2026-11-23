@@ -17,7 +17,7 @@ function fullName(u: TeamUser) { return `${u.prenom || ''} ${u.nom || ''}`.trim(
 /**
  * Textarea avec mentions @ : taper "@" ouvre une liste des membres de l'équipe.
  * Sélectionner insère "@Prénom Nom". Les IDs mentionnés (membres dont le nom
- * apparaît en @mention dans le texte) sont remontés via onChange -> notif Slack.
+ * apparaît en @mention dans le texte) sont remontés via onChange -> email aux personnes mentionnées.
  */
 export default function MentionTextarea({ value, onChange, placeholder, style, minHeight = 90 }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);

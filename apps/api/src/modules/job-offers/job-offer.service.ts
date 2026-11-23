@@ -1,6 +1,5 @@
 import prisma from '../../lib/db.js';
 import { NotFoundError } from '../../lib/errors.js';
-import { notifyJobBoardApplication } from '../slack/slack.service.js';
 
 function slugify(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -213,18 +212,10 @@ export async function applyToOffer(slug: string, data: PublicApplicationInput) {
     candidatureId = candidature?.id ?? null;
   }
 
-  void notifyJobBoardApplication({
-    candidatNom: `${prenom ?? ''} ${nom}`.trim(),
-    offreTitre: offer.titre,
-    email: data.email,
-    telephone: data.telephone ?? null,
-    cvUrl: data.cvUrl ?? null,
-  });
-
   return { ok: true, candidatId: candidat.id, candidatureId };
 }
 
-// Candidature spontanée (aucune offre) : crée juste un candidat + notif Slack.
+// Candidature spontanée (aucune offre) : crée juste un candidat.
 export async function applySpontaneous(data: PublicApplicationInput) {
   const parts = data.nom.trim().split(/\s+/);
   const prenom = parts.length > 1 ? parts.shift()! : null;
@@ -244,14 +235,6 @@ export async function applySpontaneous(data: PublicApplicationInput) {
       consentementRgpd: true,
       consentementDate: new Date(),
     },
-  });
-
-  void notifyJobBoardApplication({
-    candidatNom: `${prenom ?? ''} ${nom}`.trim(),
-    offreTitre: null,
-    email: data.email,
-    telephone: data.telephone ?? null,
-    cvUrl: data.cvUrl ?? null,
   });
 
   return { ok: true, candidatId: candidat.id, candidatureId: null };

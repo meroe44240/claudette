@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Phone, Mail, Calendar, Link, Unlink, ExternalLink, Shield, RefreshCw, X, Check, MessageSquare, Send, Save, Building2, HardDrive, Folder } from 'lucide-react';
+import { Phone, Mail, Calendar, Link, Unlink, ExternalLink, Shield, RefreshCw, X, Check, Building2, HardDrive, Folder } from 'lucide-react';
 import { api } from '../../lib/api-client';
-import { useAuthStore } from '../../stores/auth-store';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -37,45 +36,17 @@ interface AuthUrlResponse {
   url: string;
 }
 
-interface SlackConfig {
-  webhookUrl: string;
-  enabled: boolean;
-  sendTime: string;
-}
-
 export default function IntegrationsSettingsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
-  const isAdmin = user?.role === 'ADMIN';
   const [alloModalOpen, setAlloModalOpen] = useState(false);
   const [alloApiKey, setAlloApiKey] = useState('');
   const [driveFolderId, setDriveFolderId] = useState('');
-
-  // Slack state
-  const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
-  const [slackEnabled, setSlackEnabled] = useState(true);
-  const [slackDirty, setSlackDirty] = useState(false);
 
   const { data: integrations, isLoading } = useQuery({
     queryKey: ['integrations', 'status'],
     queryFn: () => api.get<IntegrationsData>('/integrations/status'),
   });
-
-  // Slack config query
-  const { data: slackConfig, isLoading: slackLoading } = useQuery({
-    queryKey: ['slack', 'config'],
-    queryFn: () => api.get<SlackConfig>('/slack/config'),
-  });
-
-  // Sync Slack form state when config loads
-  useEffect(() => {
-    if (slackConfig) {
-      setSlackWebhookUrl(slackConfig.webhookUrl || '');
-      setSlackEnabled(slackConfig.enabled);
-      setSlackDirty(false);
-    }
-  }, [slackConfig]);
 
   const saveAlloMutation = useMutation({
     mutationFn: (apiKey: string) =>
@@ -149,35 +120,6 @@ export default function IntegrationsSettingsPage() {
     },
   });
 
-  // Slack mutations
-  const saveSlackMutation = useMutation({
-    mutationFn: (data: { webhookUrl: string; enabled: boolean }) =>
-      api.post<SlackConfig>('/slack/config', data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['slack', 'config'] });
-      toast('success', t('Configuration Slack sauvegardée'));
-      setSlackDirty(false);
-    },
-    onError: () => {
-      toast('error', t('Erreur lors de la sauvegarde Slack'));
-    },
-  });
-
-  const testSlackMutation = useMutation({
-    mutationFn: (webhookUrl?: string) =>
-      api.post<{ success: boolean; message: string }>('/slack/test', webhookUrl ? { webhookUrl } : {}),
-    onSuccess: (result) => {
-      if (result.success) {
-        toast('success', result.message);
-      } else {
-        toast('error', result.message);
-      }
-    },
-    onError: () => {
-      toast('error', t("Erreur lors de l'envoi du test Slack"));
-    },
-  });
-
   // Google Drive rides the same Google OAuth as Gmail (scope drive.readonly).
   const watchDriveMutation = useMutation({
     mutationFn: (folderId: string) => api.put('/transcripts/watch', { folderId }),
@@ -223,22 +165,6 @@ export default function IntegrationsSettingsPage() {
       window.open(data.url, '_blank');
     } catch {
       toast('error', t("Erreur lors de la récupération de l'URL d'authentification"));
-    }
-  };
-
-  const handleSaveSlack = () => {
-    if (!slackWebhookUrl.trim()) {
-      toast('error', t('Veuillez saisir une URL webhook Slack'));
-      return;
-    }
-    saveSlackMutation.mutate({ webhookUrl: slackWebhookUrl, enabled: slackEnabled });
-  };
-
-  const handleTestSlack = () => {
-    if (slackWebhookUrl.trim()) {
-      testSlackMutation.mutate(slackWebhookUrl);
-    } else {
-      testSlackMutation.mutate(undefined);
     }
   };
 
@@ -610,85 +536,6 @@ export default function IntegrationsSettingsPage() {
             </div>
           )}
         </Card>
-
-        {/* Slack Card — config globale, admin uniquement */}
-        {isAdmin && (
-        <Card>
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50">
-                <MessageSquare size={18} className="text-purple-600" />
-              </div>
-              <div>
-                <h3 className="text-[18px] font-semibold text-neutral-900">Slack</h3>
-                <p className="mt-0.5 text-[13px] text-neutral-500">
-                  {t("Résumé quotidien de l'équipe envoyé via webhook")}
-                </p>
-              </div>
-            </div>
-            <Badge variant={slackConfig?.enabled && slackConfig?.webhookUrl ? 'success' : 'default'}>
-              {slackConfig?.enabled && slackConfig?.webhookUrl ? t('Actif') : t('Inactif')}
-            </Badge>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {/* Webhook URL input */}
-            <div>
-              <label className="mb-1.5 block text-[13px] font-medium text-neutral-700">
-                Webhook URL
-              </label>
-              <input
-                type="text"
-                value={slackWebhookUrl}
-                onChange={(e) => {
-                  setSlackWebhookUrl(e.target.value);
-                  setSlackDirty(true);
-                }}
-                placeholder="https://hooks.slack.com/services/..."
-                className="w-full rounded-lg border border-[rgba(34,23,122,0.14)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(34,23,122,0.1)] focus:border-[#22177A]"
-              />
-            </div>
-
-            {/* Daily summary checkbox */}
-            <label className="flex items-center gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={slackEnabled}
-                onChange={(e) => {
-                  setSlackEnabled(e.target.checked);
-                  setSlackDirty(true);
-                }}
-                className="h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-[rgba(34,23,122,0.1)]"
-              />
-              <span className="text-sm text-neutral-700">
-                {t('Résumé quotidien (lundi-vendredi)')}
-              </span>
-            </label>
-          </div>
-
-          <div className="mt-4 flex gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="flex-1"
-              onClick={handleTestSlack}
-              disabled={testSlackMutation.isPending || !slackWebhookUrl.trim()}
-            >
-              <Send size={14} className={testSlackMutation.isPending ? 'animate-pulse' : ''} />
-              {testSlackMutation.isPending ? t('Envoi...') : t('Envoyer un test')}
-            </Button>
-            <Button
-              size="sm"
-              className="flex-1"
-              onClick={handleSaveSlack}
-              disabled={saveSlackMutation.isPending || !slackDirty}
-            >
-              <Save size={14} />
-              {saveSlackMutation.isPending ? t('Sauvegarde...') : t('Sauvegarder')}
-            </Button>
-          </div>
-        </Card>
-        )}
 
         {/* Pappers Card */}
         <Card>

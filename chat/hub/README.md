@@ -194,4 +194,12 @@ Alerts are posted in #agents-ops by the Humanup bot and handed to Sentinel as `a
 
 ## Tests
 
-`test/e2e.ts` drives a real Mattermost + Hub + plugin as Léa, Méroë and agents: 81 checks covering all three delivery modes, MCP, cards and buttons, `/inbox`, redirects, rules, the registry, the Claude test agent, and the guardrails (read-only channels, kill switch, question cap, anti-loop, time window) and the follow-ups (reminder, escalation, approvals, report, scheduled messages; time is simulated with `POST /v1/admin/tick?now=`). It resets the test database's daily counters: never point it at production.
+`test/e2e.ts` drives a real Mattermost + Hub + plugin as Léa, Méroë and agents: 88 checks covering all three delivery modes, MCP, cards and buttons, `/inbox`, redirects, rules, the registry, the Claude test agent, and the guardrails (read-only channels, kill switch, question cap, anti-loop, time window) and the follow-ups (reminder, escalation, approvals, report, scheduled messages; time is simulated with `POST /v1/admin/tick?now=`). It resets the test database's daily counters: never point it at production.
+
+## Propium → #news
+
+Propium sends three announcements, and nothing else reaches the chat: `announcement.client_meeting` (client or prospect meeting, typed, dated, with interlocutors), `announcement.presentation` (candidate presented to a client: client interview, dated, with an interlocutor) and `announcement.closed_won` (application moved to Won). They come from Propium's webhook module (signed `X-Propium-Signature: sha256=…`, logged in `webhook_deliveries`, retried at 1 min, 5 min, 30 min, 2 h, 12 h) to `POST /v1/propium/events`, and the Propium bot posts one line in #news. The same event is posted once; any other event type is ignored.
+
+Setup (once): a Propium webhook subscribed to the three `announcement.*` types, URL `http://humanup-chat-hub:3100/v1/propium/events` (internal Docker network; allowed by `WEBHOOK_ALLOWED_INTERNAL_HOSTS`), and its secret in `.secrets/propium-webhook-secret` on the chat side. Last received announcements: `GET /v1/admin/news` (admin token).
+
+Méroë's registry page in Propium (Admin › Registre des agents) reads `GET /v1/registry` and `GET /v1/admin/agents` with the hub admin token (`CHAT_HUB_ADMIN_TOKEN` in Propium's environment).

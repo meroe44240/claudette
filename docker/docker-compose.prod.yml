@@ -53,6 +53,10 @@ services:
       RECALL_REGION: ${RECALL_REGION:-eu-central-1}
       NOTES_FROM: ${NOTES_FROM:-}
       NOTES_DISABLED: ${NOTES_DISABLED:-false}
+      # Humanup Chat: announcements to #news (internal webhook) and the agents registry page.
+      WEBHOOK_ALLOWED_INTERNAL_HOSTS: ${WEBHOOK_ALLOWED_INTERNAL_HOSTS:-humanup-chat-hub}
+      CHAT_HUB_URL: ${CHAT_HUB_URL:-http://humanup-chat-hub:3100}
+      CHAT_HUB_ADMIN_TOKEN: ${CHAT_HUB_ADMIN_TOKEN:-}
     volumes:
       - uploads_data:/app/apps/api/uploads
     expose:

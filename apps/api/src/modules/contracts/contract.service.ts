@@ -11,7 +11,7 @@ import { NotFoundError, ValidationError, ForbiddenError } from '../../lib/errors
 import type { ContractStatus } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { canonicalExceptions, approvalExceptions, type ContractExceptions } from './contract-generate.service.js';
-import { notifyContractApprovalRequest } from '../slack/slack.service.js';
+import { notifyContractApprovalRequest } from '../announcements/team-email.service.js';
 
 const FEE_FLOOR = 18; // Plancher %
 
@@ -54,7 +54,7 @@ export async function requestApproval(
     },
   });
 
-  // Slack notif fire-and-forget aux admins
+  // Email fire-and-forget aux admins
   (async () => {
     const context = await prisma.mandat.findUnique({
       where: { id: data.mandatId },
@@ -77,7 +77,7 @@ export async function requestApproval(
         approvalId: approval.id,
       });
     }
-  })().catch((err) => console.error('[contract] slack notif failed:', err));
+  })().catch((err) => console.error('[contract] approval email failed:', err));
 
   return approval;
 }
@@ -130,7 +130,7 @@ export async function requestContractExceptions(
         customClause: data.exceptions.custom_clause ?? null,
       });
     }
-  })().catch((err) => console.error('[contract] slack notif failed:', err));
+  })().catch((err) => console.error('[contract] approval email failed:', err));
 
   return { approval, created: true };
 }

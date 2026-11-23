@@ -1,6 +1,6 @@
 import prisma from '../../lib/db.js';
 import { NotFoundError, ValidationError, AppError } from '../../lib/errors.js';
-import { notifyNewMeeting } from '../slack/slack.service.js';
+import { notifyNewMeeting } from '../announcements/announcement.service.js';
 import * as candidatureService from '../candidatures/candidature.service.js';
 import { meetingKindOf, type MeetingKind } from './meeting-kind.js';
 
@@ -195,7 +195,7 @@ export async function classer(id: string, userId: string, input: ClasserInput) {
         interlocuteurs: meta.interlocuteurs,
         date: meta.startTime,
         lieu: meta.location || null,
-      });
+      }, { key: id, userId: activite.userId ?? userId, clientId: client?.id ?? null });
     }
     return { kind: input.kind, annonce: !dejaAnnonce };
   }
@@ -219,7 +219,7 @@ export async function classer(id: string, userId: string, input: ClasserInput) {
     update.titre = `🤝 Présentation — ${meta.summary || activite.titre || ''}`.trim();
     await prisma.activite.update({ where: { id }, data: { ...update, metadata: meta } });
 
-    // La présentation, c'est la candidature en Entretien client : on l'y passe (annonce Slack
+    // La présentation, c'est la candidature en Entretien client : on l'y passe (annonce #news
     // + comptage faits par le pipeline). Si elle y est déjà ou plus loin, on ne touche à rien.
     const dejaPresentee = STAGES_APRES_PRESENTATION.includes(candidature.stage);
     if (!dejaPresentee) {
