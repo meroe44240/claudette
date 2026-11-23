@@ -7,10 +7,11 @@ import {
   forwardRedirect, permalink, ToolError, audit,
 } from './core.js';
 import { t, fmtDate } from './i18n.js';
+import { setPaused, sentToday } from './guard.js';
 
 const COMMANDS = [
   { trigger: 'inbox', description: 'Your open questions from every agent, by deadline', hint: '' },
-  { trigger: 'agents', description: 'Who does what among the agents', hint: '' },
+  { trigger: 'agents', description: 'Who does what among the agents (admins: pause / resume)', hint: '[pause|resume <name|all>]' },
 ];
 
 /** Creates (or points to the Hub) the slash commands in each team. Tokens are kept to check the calls. */
@@ -30,7 +31,9 @@ export async function ensureSlashCommands() {
         username: 'humanup',
       };
       if (!cmd) cmd = await mm.post('/commands', spec);
-      else if (cmd.url !== url) cmd = await mm.put(`/commands/${cmd.id}`, { ...cmd, ...spec });
+      else if (cmd.url !== url || cmd.auto_complete_hint !== spec.auto_complete_hint || cmd.auto_complete_desc !== spec.auto_complete_desc) {
+        cmd = await mm.put(`/commands/${cmd.id}`, { ...cmd, ...spec });
+      }
       tokens.push(cmd.token);
     }
   }
@@ -102,6 +105,37 @@ export async function handleCommand(form: Record<string, string>) {
   }
 
   if (cmd === 'agents') {
+    const [sub, ...args] = (form.text ?? '').trim().split(/\s+/).filter(Boolean);
+    if (sub === 'pause' || sub === 'resume') {
+      if (!human.is_admin) return ok(t(lang, 'admin_only'));
+      const target = (args[0] ?? '').toLowerCase().replace(/^@/, '');
+      let keys: string[] | 'all' = 'all';
+      if (target !== 'all') {
+        // "theo", "Théo" and "@theo" all work.
+        const plain = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+        const a = (await q<{ key: string; name: string }>('select key, name from agents'))
+          .find((x) => x.key === target || plain(x.name) === plain(target));
+        if (!a) return ok(t(lang, 'no_agent', { name: target || '?' }));
+        keys = [a.key];
+      }
+      const done = await setPaused(keys, sub === 'pause', human.key);
+      return ok(t(lang, sub === 'pause' ? 'paused_done' : 'resumed_done', { names: done.map((d) => d.name).join(', ') || '-' }));
+    }
+    if (human.is_admin) {
+      // Admin view: status and today's counters.
+      const all = await q<any>(
+        `select a.key, a.name, a.status, coalesce((a.rules->>'daily_message_budget')::int, 200) as budget,
+                (select count(*) from questions qq where qq.agent_key=a.key and qq.status='open') as open_q
+           from agents a order by a.name`);
+      const lines = [];
+      for (const r of all) {
+        const sent = await sentToday(r.key);
+        lines.push(`| ${r.name} | ${r.status === 'active' ? t(lang, 'st_active') : `⏸ ${t(lang, 'st_paused')}`} | ${sent} / ${r.budget} | ${r.open_q} |`);
+      }
+      return ok([`**${t(lang, 'agents_title')} (${all.length})**`, '',
+        `| ${t(lang, 'col_agent')} | ${t(lang, 'col_status')} | ${t(lang, 'col_today')} | ${t(lang, 'col_open')} |`, '|---|---|---|---|',
+        ...lines, '', '`/agents pause <name|all>` · `/agents resume <name|all>`'].join('\n'));
+    }
     const rows = await q<any>(
       `select a.name, a.title, a.rules->>'reports_to' as reports_to
          from agents a join access x on x.agent_key=a.key and x.human_key=$1

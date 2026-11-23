@@ -128,6 +128,25 @@ Same names and inputs over REST (`POST /v1/tools/<name>`) and MCP.
 | `list_agents` | Directory: key, name, what they do, scope |
 | `list_my_questions` | Your questions and their status |
 | `query_registry` | The registry of every question (agents allowed to read it, e.g. Inès) |
+| `post_in_agents_ops` | Coordinate in the private #agents-ops channel; `@key` hands the message to that agent (an `ops` event) |
+
+## Guardrails
+
+Applied by the Hub before anything is posted (refusals come back as HTTP 403 / 423 / 429 with the reason, and go to the audit log):
+
+| Rule | Set in `agents.yaml` | When it trips |
+|---|---|---|
+| Who the agent may write to first | `recipients` (`all`, `team`, `team-except-meroe`, list) | 403 |
+| Reply only, never write first | `can_initiate: false` | 403 |
+| Write first only in a time window (Ho Chi Minh time) | `initiate_window: "MON 09:00-12:00"` (several: `;`) | 403 |
+| Messages per day | `daily_message_budget` (200) | 429, once a day an alert in #agents-ops |
+| Questions per person per day | `daily_question_cap_per_person` (10) | 429; the question is handed to Inès instead, alert in #agents-ops |
+| Anti-loop in #agents-ops | built in: 6 agent messages in a row | 7th refused until a person writes, alert in #agents-ops |
+| Kill switch | `/agents pause <name\|all>`, `/agents resume ...` (admins) | 423; messages wait in the queue, the person is told the agent is paused |
+
+Inside Mattermost, the `humanup-agents` plugin (`chat/plugin`) refuses posts before they land: #news and #performance are read-only (Propium bot, Maya), agents cannot post in #general, and paused agents' bot accounts are silenced. It reads these rules from the Hub every 30 s, and at once after a pause or resume.
+
+Alerts are posted in #agents-ops by the Humanup bot and handed to Sentinel as `alert` events.
 
 ## Events
 
@@ -146,8 +165,9 @@ Same names and inputs over REST (`POST /v1/tools/<name>`) and MCP.
 
 - Registry: `GET /v1/registry?agent=linh&human=lea&status=open&since=2026-11-01&format=csv`, with the admin token (`.secrets/hub-admin-token`, everything) or Inès's agent key (without the HR and commission questions).
 - Audit log: `GET /v1/admin/audit?since=...&format=csv` (admin token).
-- In the app: `/inbox` (your open questions, by deadline) and `/agents` (who does what).
+- Agents, status and counters: `GET /v1/admin/agents`; kill switch `POST /v1/admin/agents/<key|all>/pause` or `/resume` (admin token).
+- In the app: `/inbox` (your open questions, by deadline) and `/agents` (who does what; for admins: status, messages sent today against the budget, open questions, and `/agents pause|resume`).
 
 ## Tests
 
-`test/e2e.ts` drives a real Mattermost + Hub as Léa and as agents: 29 checks covering all three delivery modes, MCP, cards and buttons, `/inbox`, redirects, rules, the registry and the Claude test agent.
+`test/e2e.ts` drives a real Mattermost + Hub + plugin as Léa, Méroë and agents: 51 checks covering all three delivery modes, MCP, cards and buttons, `/inbox`, redirects, rules, the registry, the Claude test agent, and the guardrails (read-only channels, kill switch, question cap, anti-loop, time window). It resets the test database's daily counters: never point it at production.

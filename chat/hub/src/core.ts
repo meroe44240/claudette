@@ -7,6 +7,7 @@ import { env } from './env.js';
 import { q, one } from './db.js';
 import { MM } from './mm.js';
 import { t, fmtDate } from './i18n.js';
+import { guardSend, questionCapExceeded } from './guard.js';
 
 export type Agent = {
   key: string; name: string; title: string; scope: string;
@@ -52,25 +53,13 @@ export function sign(...parts: string[]) {
   return createHmac('sha256', env.ACTION_SECRET).update(parts.join('|')).digest('hex').slice(0, 32);
 }
 
-// ── Recipients ───────────────────────────────────────────────────────────────
-
-/** May this agent write to this person on its own (not as a reply)? */
-export async function mayInitiate(agent: Agent, human: Human): Promise<boolean> {
-  const r = agent.rules.recipients ?? 'all';
-  if (Array.isArray(r)) return r.includes(human.key);
-  if (r === 'all') return true;
-  if (r === 'team') return true;
-  if (r === 'team-except-meroe') return !human.is_admin;
-  return false;
-}
-
 // ── Delivery queue ───────────────────────────────────────────────────────────
 
 export function humanRef(h: Human) {
   return { key: h.key, name: h.name, first_name: h.first_name, lang: h.lang, timezone: h.timezone };
 }
 
-export async function enqueue(agentKey: string, kind: 'message' | 'answer', humanKey: string | null, payload: Record<string, unknown>) {
+export async function enqueue(agentKey: string, kind: 'message' | 'answer' | 'alert' | 'ops', humanKey: string | null, payload: Record<string, unknown>) {
   const row = await one<{ id: string }>(
     'insert into events (agent_key, kind, human_key, payload) values ($1,$2,$3,$4) returning id',
     [agentKey, kind, humanKey, JSON.stringify(payload)],
@@ -112,9 +101,17 @@ async function ackByPost(agentKey: string, postId: string) {
 // ── Posting as an agent ──────────────────────────────────────────────────────
 
 export async function postAs(agent: Agent, channelId: string, message: string, opts: { rootId?: string; props?: any } = {}) {
-  return asAgent(agent).post('/posts', {
-    channel_id: channelId, message, root_id: opts.rootId ?? '', props: opts.props ?? {},
-  });
+  try {
+    return await asAgent(agent).post('/posts', {
+      channel_id: channelId, message, root_id: opts.rootId ?? '', props: opts.props ?? {},
+    });
+  } catch (e: any) {
+    // Refused by the channel rules plugin (read-only channel, paused agent...).
+    if (e?.status === 400 && /humanup-agents|rejected by plugin/i.test(e.message)) {
+      throw new ToolError(403, 'Blocked by the channel rules');
+    }
+    throw e;
+  }
 }
 
 /** The DM post an agent refers to, checked to belong to one of its conversations. */
@@ -134,6 +131,7 @@ export async function reply(agent: Agent, input: { text: string; reply_to_post_i
   if (!input.text?.trim()) throw new ToolError(400, 'text is required');
   if (input.reply_to_post_id) {
     const { post, humanKey } = await ownPost(agent, input.reply_to_post_id);
+    await guardSend(agent, { initiate: false, human: (await getHuman(humanKey))!, what: 'reply' });
     // Stay where the person wrote: in the thread if they wrote in one, otherwise in the conversation.
     const root = post.root_id || (await isQuestionRoot(post.id) ? post.id : '');
     const created = await postAs(agent, post.channel_id, input.text, { rootId: root || undefined });
@@ -146,10 +144,7 @@ export async function reply(agent: Agent, input: { text: string; reply_to_post_i
   if (!human) throw new ToolError(404, `Unknown person "${input.to}"`);
   const channel = await dmChannel(agent.key, human.key);
   if (!channel) throw new ToolError(403, `You have no conversation with ${human.key}`);
-  if (!(await mayInitiate(agent, human))) {
-    await audit('agent', agent.key, 'blocked.initiate', human.key);
-    throw new ToolError(403, `Your rules do not let you write to ${human.key} on your own`);
-  }
+  await guardSend(agent, { initiate: true, human, what: 'message' });
   const created = await postAs(agent, channel, input.text);
   await audit('agent', agent.key, 'message', human.key, { post_id: created.id });
   return { post_id: created.id, permalink: permalink(created.id) };
@@ -215,10 +210,7 @@ export async function askHuman(agent: Agent, input: {
   if (!human) throw new ToolError(404, `Unknown person "${input.to}"`);
   const channel = await dmChannel(agent.key, human.key);
   if (!channel) throw new ToolError(403, `You have no conversation with ${human.key}`);
-  if (!(await mayInitiate(agent, human))) {
-    await audit('agent', agent.key, 'blocked.question', human.key, { subject: input.subject });
-    throw new ToolError(403, `Your rules do not let you ask ${human.key}`);
-  }
+  await guardSend(agent, { initiate: true, human, what: 'question' });
   if (input.choices && (input.choices.length < 2 || input.choices.length > 4)) throw new ToolError(400, 'choices: 2 to 4 options');
   const cap = Number(agent.rules.daily_question_cap_per_person ?? 10);
   const today = await one<{ n: string }>(
@@ -226,8 +218,8 @@ export async function askHuman(agent: Agent, input: {
        and (created_at at time zone $3)::date = (now() at time zone $3)::date`,
     [agent.key, human.key, human.timezone]);
   if (Number(today!.n) >= cap) {
-    await audit('agent', agent.key, 'blocked.question_cap', human.key, { cap, subject: input.subject });
-    throw new ToolError(429, `Daily cap reached: ${cap} questions to ${human.key} today`);
+    await questionCapExceeded(agent, human, cap, { subject: input.subject, question: input.question });
+    throw new ToolError(429, `Daily cap reached: ${cap} questions to ${human.key} today. Not posted; Inès has been told.`);
   }
   const deadline = input.deadline ? new Date(input.deadline) : new Date(Date.now() + 24 * 3600_000);
   if (Number.isNaN(deadline.getTime())) throw new ToolError(400, 'deadline must be an ISO date');
@@ -287,6 +279,7 @@ export async function redirectToAgent(agent: Agent, input: { reply_to_post_id: s
   if (!target || target.hidden) throw new ToolError(404, `Unknown agent "${input.to_agent}"`);
   if (target.key === agent.key) throw new ToolError(400, 'That is you');
   const human = (await getHuman(humanKey))!;
+  await guardSend(agent, { initiate: false, human, what: 'redirect' });
   if (!(await dmChannel(target.key, human.key))) throw new ToolError(403, `${human.key} has no conversation with ${target.key}`);
   const id = newId('r');
   await q(`insert into redirects (id, from_agent, to_agent, human_key, original_post_id, original_text, reason) values ($1,$2,$3,$4,$5,$6,$7)`,
@@ -328,6 +321,11 @@ export async function forwardRedirect(redirectId: string, human: Human) {
 export async function onHumanPost(agentKey: string, human: Human, post: any) {
   const agent = await getAgent(agentKey);
   if (!agent) return;
+  if (agent.status !== 'active') {
+    // Kill switch: the message waits in the queue; tell the person.
+    await admin().post('/posts/ephemeral', { user_id: human.mm_user_id, post: { channel_id: post.channel_id,
+      message: t(human.lang, 'paused', { agent: agent.name }) } }).catch(() => {});
+  }
   if (post.root_id) {
     const qn = await one<Question>('select * from questions where root_post_id=$1', [post.root_id]);
     if (qn && qn.status === 'open') {

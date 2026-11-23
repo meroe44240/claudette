@@ -68,6 +68,10 @@ export async function syncConfig() {
       );
     }
   }
+  // System bots (alerts, announcements) for the Hub.
+  const sys = Object.fromEntries(['humanup', 'propium'].filter((k) => seedSecrets.bots?.[k])
+    .map((k) => [k, { user_id: seedSecrets.bots[k].user_id, token: seedSecrets.bots[k].token }]));
+  await q(`insert into kv (key, value) values ('system_bots', $1) on conflict (key) do update set value=$1`, [JSON.stringify(sys)]);
   writeFileSync(keysPath, JSON.stringify(newKeys, null, 2), { mode: 0o600 });
   return { humans: humans.length, agents: agents.length };
 }

@@ -42,6 +42,8 @@ export const env = {
   ACTION_SECRET: process.env.HUB_ACTION_SECRET ?? persistentSecret('hub-action-secret'),
   /** Admin token for the registry and admin endpoints (Méroë, Propium admin pages). */
   ADMIN_TOKEN: process.env.HUB_ADMIN_TOKEN ?? persistentSecret('hub-admin-token'),
+  /** Shared with the Mattermost plugin (policy and audit endpoints). */
+  PLUGIN_SECRET: process.env.HUB_PLUGIN_SECRET ?? persistentSecret('hub-plugin-secret'),
   CLAUDE_MODEL: process.env.CLAUDE_TEST_MODEL ?? 'claude-opus-5-5',
   LOG_LEVEL: process.env.LOG_LEVEL ?? 'info',
 };

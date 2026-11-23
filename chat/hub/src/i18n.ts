@@ -24,6 +24,10 @@ const L: Record<Lang, Record<string, string>> = {
     agents_title: 'Agents',
     col_does: 'What they do', col_reports: 'Reports to',
     unknown_command: 'Unknown command.',
+    paused: '{agent} is paused for now. Your message will reach them when they are back.',
+    admin_only: 'Only an admin can do that.',
+    paused_done: 'Paused: {names}.', resumed_done: 'Resumed: {names}.', no_agent: 'No agent called {name}.',
+    col_status: 'Status', col_today: 'Sent today', col_open: 'Open questions', st_active: 'active', st_paused: 'paused',
     obj_candidate: 'candidate', obj_mandate: 'mandate', obj_company: 'company', obj_client: 'client', obj_other: 'other',
   },
   fr: {
@@ -47,6 +51,10 @@ const L: Record<Lang, Record<string, string>> = {
     agents_title: 'Agents',
     col_does: 'Ce qu’il fait', col_reports: 'Rend compte à',
     unknown_command: 'Commande inconnue.',
+    paused: '{agent} est en pause pour l’instant. Ton message lui arrivera à son retour.',
+    admin_only: 'Réservé à un admin.',
+    paused_done: 'En pause : {names}.', resumed_done: 'Relancé : {names}.', no_agent: 'Aucun agent ne s’appelle {name}.',
+    col_status: 'Statut', col_today: 'Envoyés aujourd’hui', col_open: 'Questions ouvertes', st_active: 'actif', st_paused: 'en pause',
     obj_candidate: 'candidat', obj_mandate: 'mandat', obj_company: 'société', obj_client: 'client', obj_other: 'autre',
   },
 };
