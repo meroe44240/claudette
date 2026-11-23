@@ -10,6 +10,7 @@ Design: [docs/humanup-chat/ARCHITECTURE.md](../docs/humanup-chat/ARCHITECTURE.md
 | `humans.yaml` | The team: email, position, timezone, language agents use with each person |
 | `agents.yaml` | The agents: name, title, scope, reporting line and rules (rules enforced by the Agent Hub from phase 2) |
 | `avatars/` | Agent photos, `<key>.png` |
+| `docs/` | [CUTOVER.md](docs/CUTOVER.md) (day-J checklist) and [TEAM-GUIDE.md](docs/TEAM-GUIDE.md) (one page for the team). Server scripts: `infra/cutover.sh` (https, check, email, welcome, invite) and `infra/agent.sh` (connect an agent) |
 | `hub/` | Agent Hub: routes conversations between people and agents, rules, registry ([hub/README.md](hub/README.md)) |
 | `plugin/` | Mattermost plugin `humanup-agents` (Go): read-only channels, no agents in #general, paused agents silenced. Install or update: `./install-plugin.sh -f docker-compose.yml -f docker-compose.propium.yml` (builds with Docker) |
 
