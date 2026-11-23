@@ -4,10 +4,11 @@ import { env } from './env.js';
 import { q, one } from './db.js';
 import {
   admin, sign, humanByMmId, getQuestion, getAgent, getHuman, answerQuestion, questionProps,
-  forwardRedirect, permalink, ToolError, audit,
+  forwardRedirect, permalink, ToolError, audit, refreshCard,
 } from './core.js';
 import { t, fmtDate } from './i18n.js';
 import { setPaused, sentToday } from './guard.js';
+import { onApprovalAction } from './approvals.js';
 
 const COMMANDS = [
   { trigger: 'inbox', description: 'Your open questions from every agent, by deadline', hint: '' },
@@ -51,16 +52,21 @@ export async function handleAction(body: any) {
   if (ctx.kind === 'answer') {
     if (ctx.sig !== sign('answer', ctx.qid, String(ctx.i))) return { ephemeral_text: 'Invalid action.' };
     const qn = await getQuestion(ctx.qid);
-    if (!qn || qn.human_key !== human.key) return { ephemeral_text: t(lang, 'not_yours') };
+    // The person asked, or the person it was escalated to (on their behalf).
+    const onBehalf = !!qn && qn.escalated_to === human.key && qn.human_key !== human.key;
+    if (!qn || (qn.human_key !== human.key && !onBehalf)) return { ephemeral_text: t(lang, 'not_yours') };
     if (qn.status !== 'open') return { ephemeral_text: t(lang, 'already') };
     const choice = qn.choices?.[Number(ctx.i)];
     if (!choice) return { ephemeral_text: 'Invalid action.' };
-    const updated = await answerQuestion(qn, human, { choice, via: 'button' });
+    const updated = await answerQuestion(qn, human, { choice, via: onBehalf ? 'escalation' : 'button' });
     if (!updated) return { ephemeral_text: t(lang, 'already') };
     const agent = (await getAgent(qn.agent_key))!;
-    const post = body.post_id ? await admin().get(`/posts/${body.post_id}`).catch(() => null) : null;
-    return { update: { message: post?.message ?? '', props: questionProps(updated, agent, human) } };
+    await refreshCard(updated); // both cards when escalated
+    const asked = onBehalf ? (await getHuman(qn.human_key))! : undefined;
+    return { update: { message: '', props: questionProps(updated, agent, human, asked ? { asked } : {}) } };
   }
+
+  if (ctx.kind === 'approval') return onApprovalAction(body, human);
 
   if (ctx.kind === 'forward') {
     if (ctx.sig !== sign('forward', ctx.rid)) return { ephemeral_text: 'Invalid action.' };
@@ -89,15 +95,17 @@ export async function handleCommand(form: Record<string, string>) {
 
   if (cmd === 'inbox') {
     const rows = await q<any>(
-      `select q.id, q.subject, q.deadline, q.root_post_id, a.name as agent_name
+      `select q.id, q.subject, q.deadline, q.root_post_id, q.human_key, q.escalated_to, q.escalation_post_id, a.name as agent_name
          from questions q join agents a on a.key=q.agent_key
-        where q.human_key=$1 and q.status='open'
+        where (q.human_key=$1 or q.escalated_to=$1) and q.status='open'
         order by q.deadline asc nulls last, q.created_at asc`, [human.key]);
     if (!rows.length) return ok(t(lang, 'inbox_empty'));
     const lines = rows.map((r) => {
       const late = r.deadline && new Date(r.deadline).getTime() < Date.now();
       const due = r.deadline ? fmtDate(new Date(r.deadline), lang, human.timezone) : t(lang, 'no_deadline');
-      const subject = r.root_post_id ? `[${r.subject.replace(/[|\]]/g, ' ')}](${permalink(r.root_post_id)})` : r.subject;
+      // Escalated to me: link to my copy of the card.
+      const target = r.escalated_to === human.key && r.human_key !== human.key ? r.escalation_post_id : r.root_post_id;
+      const subject = target ? `[${r.subject.replace(/[|\]]/g, ' ')}](${permalink(target)})` : r.subject;
       return `| ${late ? '⚠️ ' : ''}${due} | ${r.agent_name} | ${subject} |`;
     });
     return ok([`**${t(lang, 'inbox_title', { n: rows.length })}**`, '',

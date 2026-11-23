@@ -21,7 +21,7 @@ async function main() {
   const mm = new MM(MM_URL, token);
   const secretsPath = join(SECRETS_DIR, 'seed-secrets.json');
   const secrets = existsSync(secretsPath) ? JSON.parse(readFileSync(secretsPath, 'utf8')) : { bots: {}, initial_passwords: {} };
-  const { humans, agents } = loadConfig(CONFIG_DIR);
+  const { humans, agents, domains } = loadConfig(CONFIG_DIR);
 
   const team = await mm.get('/teams/name/humanup');
   const priv = await mm.get('/teams/name/private');
@@ -75,8 +75,13 @@ async function main() {
     const expected = agents.filter((a) => dmHumansFor(a, humans).includes(h.key));
     const { categories, order } = await mm.get(`/users/${uid[h.key]}/teams/${team.id}/channels/categories`);
     const byId = Object.fromEntries(categories.map((c: any) => [c.id, c]));
-    const first = byId[order[0]], second = byId[order[1]];
-    check(first?.display_name === 'Team' && second?.display_name === 'Agents', `${h.key}: sidebar starts with Team, Agents`);
+    const wantOrder = h.admin && domains.length ? ['Team', 'Domains', 'Agents'] : ['Team', 'Agents'];
+    const got = order.slice(0, wantOrder.length).map((id: string) => byId[id]?.display_name);
+    check(got.join() === wantOrder.join(), `${h.key}: sidebar starts with ${wantOrder.join(', ')}`);
+    const first = byId[order[0]], second = byId[order[wantOrder.length - 1]];
+    if (h.admin && domains.length) {
+      check((byId[order[1]]?.channel_ids ?? []).length === domains.length, `${h.key}: Domains has ${domains.length} channels`);
+    }
     const teamSet = new Set(first?.channel_ids ?? []);
     const wantTeam = [general.id, news.id, perf.id, ...(h.admin ? [appr.id, ops.id] : [])];
     check(wantTeam.every((id) => teamSet.has(id)) && teamSet.size === wantTeam.length, `${h.key}: Team has ${wantTeam.length} channels`);
@@ -110,6 +115,15 @@ async function main() {
   const privM = await mm.get<any[]>(`/teams/${priv.id}/members?per_page=200`);
   const privSet = new Set(privM.map((m) => m.user_id));
   check(others.every((h) => !privSet.has(uid[h.key])), 'Private team: no team member except Méroë');
+
+  // Domain channels: private, Méroë + Humanup bot + the domain's agents only
+  for (const d of domains) {
+    const ch = await mm.find(`/teams/${team.id}/channels/name/d-${d.key}`);
+    if (!ch) { check(false, `#d-${d.key} exists`); continue; }
+    const m = await members(ch.id);
+    const want = new Set([uid[admin.key], uid.humanup, ...agents.filter((a) => a.domain === d.key).map((a) => uid[a.key])]);
+    check(ch.type === 'P' && m.size === want.size && [...want].every((id) => m.has(id)), `#d-${d.key}: private, Méroë + ${want.size - 2} agent(s)`);
+  }
 
   console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
   process.exit(failures ? 1 : 0);

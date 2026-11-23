@@ -5,6 +5,7 @@ import { env } from './env.js';
 import { q, one } from './db.js';
 import { MM } from './mm.js';
 import { type Agent, type Human, ToolError, audit, enqueue, admin, getAgent, bus } from './core.js';
+import { feed } from './feed.js';
 
 export const TEAM_TZ = process.env.TEAM_TZ ?? 'Asia/Ho_Chi_Minh';
 /** Audit actions that count as a message sent by an agent. */
@@ -32,11 +33,11 @@ export async function channelId(name: string): Promise<string | null> {
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: TEAM_TZ }).format(new Date());
 
 /** Posts in #agents-ops as the system bot and tells the supervision agent. onceKey: at most once per day. */
-export async function alertOps(text: string, onceKey?: string, detail?: Record<string, unknown>) {
+export async function alertOps(text: string, onceKey?: string, detail?: Record<string, unknown>): Promise<boolean> {
   if (onceKey) {
     const key = `alert:${today()}:${onceKey}`;
     const r = await q(`insert into kv (key, value) values ($1, 'true') on conflict do nothing returning key`, [key]);
-    if (!r.length) return;
+    if (!r.length) return false;
   }
   const bot = await systemBot('humanup');
   const ops = await channelId('agents-ops');
@@ -44,6 +45,7 @@ export async function alertOps(text: string, onceKey?: string, detail?: Record<s
   const sentinel = await getAgent('sentinel');
   if (sentinel && sentinel.status === 'active') await enqueue('sentinel', 'alert', null, { text, ...detail });
   await audit('hub', 'guard', 'alert', onceKey, { text });
+  return true;
 }
 
 // ── Counters ─────────────────────────────────────────────────────────────────
@@ -113,8 +115,9 @@ export async function guardSend(agent: Agent, opts: { initiate: boolean; human?:
   const sent = await sentToday(agent.key);
   if (sent >= budget) {
     await audit('agent', agent.key, 'blocked.budget', opts.human?.key, { what: opts.what, budget });
-    await alertOps(`${agent.name} reached its daily budget of ${budget} messages. Further messages are refused until tomorrow.`,
+    const first = await alertOps(`${agent.name} reached its daily budget of ${budget} messages. Further messages are refused until tomorrow.`,
       `budget:${agent.key}`, { reason: 'budget', agent: agent.key, budget });
+    if (first) void feed(agent.key, 'feed_budget', { agent: agent.name, budget });
     throw new ToolError(429, `Daily message budget reached (${budget})`);
   }
 }
@@ -129,23 +132,27 @@ export async function questionCapExceeded(agent: Agent, human: Human, cap: numbe
       text: `${agent.name} wanted to ask ${human.first_name} a ${cap + 1}th question today. Not posted.`,
     });
   }
-  await alertOps(`${agent.name} hit the cap of ${cap} questions to ${human.first_name} today. Inès has the extra questions.`,
+  const first = await alertOps(`${agent.name} hit the cap of ${cap} questions to ${human.first_name} today. Inès has the extra questions.`,
     `qcap:${agent.key}:${human.key}`, { reason: 'question_cap', agent: agent.key, human: human.key });
+  if (first) void feed(agent.key, 'feed_cap', { agent: agent.name, cap, person: human.first_name });
 }
 
-/** Anti-loop for #agents-ops: refuse a 7th agent message in a row with no person in between. */
-export async function guardLoop(agent: Agent, channel: string, rootId: string | null, botIds: Set<string>) {
+/**
+ * Anti-loop for #agents-ops: refuse a 7th agent message in a row with no person in between
+ * (in the thread when replying, otherwise in the whole channel). Hub alerts (system bots) neither count nor reset.
+ */
+export async function guardLoop(agent: Agent, channel: string, rootId: string | null, agentIds: Set<string>, systemIds: Set<string>) {
   const mm = admin();
-  let recent: any[];
+  let posts: any[];
   if (rootId) {
-    const thread = await mm.get(`/posts/${rootId}/thread`);
-    recent = Object.values<any>(thread.posts).sort((a, b) => b.create_at - a.create_at).slice(0, LOOP_LIMIT);
+    posts = Object.values<any>((await mm.get(`/posts/${rootId}/thread`)).posts);
   } else {
-    const r = await mm.get(`/channels/${channel}/posts?per_page=${LOOP_LIMIT}`);
-    recent = (r.order as string[]).map((id) => r.posts[id]);
+    const r = await mm.get(`/channels/${channel}/posts?per_page=60`);
+    posts = Object.values<any>(r.posts);
   }
-  const userPosts = recent.filter((p) => !p.type);
-  if (userPosts.length >= LOOP_LIMIT && userPosts.every((p) => botIds.has(p.user_id))) {
+  const recent = posts.filter((p) => !p.type && !systemIds.has(p.user_id))
+    .sort((a, b) => b.create_at - a.create_at).slice(0, LOOP_LIMIT);
+  if (recent.length >= LOOP_LIMIT && recent.every((p) => agentIds.has(p.user_id))) {
     await audit('agent', agent.key, 'blocked.loop', channel, { root_id: rootId });
     await alertOps(`Loop stopped: ${LOOP_LIMIT} agent messages in a row without anyone in #agents-ops${rootId ? ' (thread)' : ''}. `
       + `${agent.name}'s next message was refused. A person must step in.`, `loop:${rootId ?? channel}`, { reason: 'loop', agent: agent.key });
@@ -170,9 +177,11 @@ export async function setPaused(keys: string[] | 'all', paused: boolean, by: str
   await audit('human', by, paused ? 'agents.pause' : 'agents.resume', keys === 'all' ? 'all' : keys.join(','));
   await refreshPlugin();
   if (!paused) for (const r of rows) bus.emit('enqueued', r.key);
+  const byName = (await one<{ first_name: string }>('select first_name from humans where key=$1', [by]))?.first_name ?? by;
+  for (const r of rows) void feed(r.key, paused ? 'feed_paused' : 'feed_resumed', { agent: r.name, by: byName });
   if (rows.length) {
     const who = keys === 'all' ? 'All agents' : rows.map((r) => r.name).join(', ');
-    await alertOps(`${who} ${paused ? 'paused' : 'resumed'} by ${by}.`);
+    await alertOps(`${who} ${paused ? 'paused' : 'resumed'} by ${byName}.`);
   }
   return rows;
 }

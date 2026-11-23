@@ -19,10 +19,24 @@ defaults:
   daily_question_cap_per_person: 10
   daily_message_budget: 200
 
+# Domains: one private channel each (#d-<key>), Méroë + the domain's agents, invisible to the team.
+# The Hub posts an activity feed there (questions, answers, escalations, approvals, reports) and
+# the domain's agents coordinate there (post_in_domain).
+domains:
+  direction:  { name: Direction }
+  delivery:   { name: Delivery & ATS }
+  finance:    { name: Finance }
+  gtm-france: { name: GTM France }
+  us:         { name: US }
+  marketing:  { name: Marketing }
+  people:     { name: People }
+  product:    { name: Product }
+
 agents:
   ines:
     name: Inès
     title: "Coordinates the team and the agents, follows up on priorities"
+    domain: direction
     reports_to: meroe
     scope: Coordination across the team and the agents, priorities, follow-ups, sensitive emails
     approval_required: [sensitive_email]
@@ -46,17 +60,20 @@ agents:
   antoine:
     name: Antoine
     title: "Runs finance: cash, budgets, payments"
+    domain: finance
     reports_to: meroe
     scope: Finance, cash, budgets, payments
     approval_required: [transfer]
   awa:
     name: Awa
     title: "Sends invoices and chases unpaid ones"
+    domain: finance
     reports_to: antoine
     scope: Invoices, payment reminders, collections
   theo:
     name: Théo
     title: "Calculates commissions and bonuses"
+    domain: finance
     scope: Commissions and bonuses
     recipients: team
     initiate_window: "MON 09:00-12:00"
@@ -64,12 +81,14 @@ agents:
   clara:
     name: Clara
     title: "Handles HR: contracts, leave, onboarding"
+    domain: people
     scope: HR, contracts, leave, onboarding
     recipients: team
     registry: admin-only
   maya:
     name: Maya
     title: "Tracks team activity, posts the daily performance report"
+    domain: direction
     reports_to: ines
     scope: Activity and performance figures
     recipients: team-except-meroe
@@ -79,10 +98,12 @@ agents:
   bastien:
     name: Bastien
     title: "Oversees delivery of the mandates in progress"
+    domain: delivery
     scope: Delivery, mandates in progress, recruiting operations
   linh:
     name: Linh
     title: "Checks pipeline stages and coding in Propium"
+    domain: delivery
     reports_to: bastien
     escalation: meroe
     scope: Pipeline stages and coding of candidates and mandates in Propium
@@ -90,54 +111,65 @@ agents:
   khoa:
     name: Khoa
     title: "Cleans and completes records in Propium"
+    domain: delivery
     reports_to: linh
     scope: Candidate, company and contact records and data quality in Propium
     recipients: [lea, vicky, max, valentin]
   karim:
     name: Karim
     title: "Runs the Propium product: features and bugs"
+    domain: product
     scope: Propium product, features and bugs
   nathan:
     name: Nathan
     title: "Leads prospecting in France"
+    domain: gtm-france
     scope: Go-to-market France, prospecting strategy
   amara:
     name: Amara
     title: "Prospects new clients in France"
+    domain: gtm-france
     reports_to: nathan
     scope: Prospecting France
   tom:
     name: Tom
     title: "Prospects new clients in France"
+    domain: gtm-france
     reports_to: nathan
     scope: Prospecting France
   victor:
     name: Victor
     title: "Writes and runs outreach sequences"
+    domain: gtm-france
     reports_to: nathan
     scope: Outreach sequences
     approval_required: [sequence]
   yanis:
     name: Yanis
     title: "Maps which profiles companies hire (France, Europe)"
+    domain: gtm-france
     reports_to: nathan
     scope: Target profiles of companies (FR/EU)
   ethan:
     name: Ethan
     title: "Maps which profiles US companies hire, from their career pages"
+    domain: us
     scope: US career pages and target profiles
   leila:
     name: Leïla
     title: "Runs marketing and the brand"
+    domain: marketing
     scope: Marketing, brand, LinkedIn
   hugo:
     name: Hugo
     title: "Writes content: LinkedIn posts, articles"
+    domain: marketing
     reports_to: leila
     scope: Content, posts, articles
   sentinel:
     name: Sentinel
     title: "Watches the agents and flags problems"
+    domain: direction
     scope: Supervision of the agents in #agents-ops
     recipients: []
     dm: []

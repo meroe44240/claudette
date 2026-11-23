@@ -8,6 +8,7 @@ import { startListeners, stopListeners } from './listener.js';
 import { startDelivery } from './delivery.js';
 import { ensureSlashCommands } from './mm-integration.js';
 import { refreshPlugin } from './guard.js';
+import { startScheduler } from './scheduler.js';
 
 async function main() {
   await migrate();
@@ -18,6 +19,7 @@ async function main() {
   await app.listen({ host: '0.0.0.0', port: env.PORT });
   await startListeners();
   startDelivery();
+  startScheduler();
   await refreshPlugin(); // the plugin calls back /mm/policy, so after listen
   console.log(`[hub] listening on :${env.PORT}, Mattermost ${env.MM_URL}`);
 

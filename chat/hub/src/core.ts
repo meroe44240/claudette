@@ -8,6 +8,7 @@ import { q, one } from './db.js';
 import { MM } from './mm.js';
 import { t, fmtDate } from './i18n.js';
 import { guardSend, questionCapExceeded } from './guard.js';
+import { feed, quote } from './feed.js';
 
 export type Agent = {
   key: string; name: string; title: string; scope: string;
@@ -24,6 +25,8 @@ export type Question = {
   body: string; choices: string[] | null; deadline: Date | null; status: string;
   answer_choice: string | null; answer_text: string | null; answered_via: string | null; answered_at: Date | null;
   resolution: string | null; propium_action: string | null; resolved_at: Date | null; confidential: boolean; created_at: Date;
+  reminded_at: Date | null; escalated_at: Date | null; escalated_to: string | null; escalation_post_id: string | null;
+  answered_by: string | null;
 };
 
 export class ToolError extends Error {
@@ -59,7 +62,7 @@ export function humanRef(h: Human) {
   return { key: h.key, name: h.name, first_name: h.first_name, lang: h.lang, timezone: h.timezone };
 }
 
-export async function enqueue(agentKey: string, kind: 'message' | 'answer' | 'alert' | 'ops', humanKey: string | null, payload: Record<string, unknown>) {
+export async function enqueue(agentKey: string, kind: 'message' | 'answer' | 'alert' | 'ops' | 'approval' | 'task', humanKey: string | null, payload: Record<string, unknown>) {
   const row = await one<{ id: string }>(
     'insert into events (agent_key, kind, human_key, payload) values ($1,$2,$3,$4) returning id',
     [agentKey, kind, humanKey, JSON.stringify(payload)],
@@ -156,9 +159,18 @@ async function isQuestionRoot(postId: string) {
 
 // ── Questions ────────────────────────────────────────────────────────────────
 
-export function questionProps(qn: Question, agent: Agent, human: Human) {
+/**
+ * The question card as seen by `human` (their language and time zone).
+ * opts.asked: this is the escalation copy shown to someone else on behalf of the person asked.
+ * opts.escalatedTo: name shown on the original card once escalated.
+ */
+export function questionProps(qn: Question, agent: Agent, human: Human, opts: { asked?: Human; escalatedTo?: string } = {}) {
   const lang = human.lang;
-  const lines = [qn.body];
+  const lines: string[] = [];
+  if (opts.asked) {
+    lines.push(`⚠️ **${t(lang, 'escalated_copy', { person: opts.asked.first_name, agent: agent.name, date: fmtDate(qn.created_at, lang, human.timezone) })}**`);
+  }
+  lines.push(qn.body);
   if (qn.object_label) {
     const obj = qn.object_url ? `[${qn.object_label}](${qn.object_url})` : qn.object_label;
     lines.push(`**${t(lang, 'about')}:** ${qn.object_type ? `${t(lang, 'obj_' + qn.object_type)} · ` : ''}${obj}`);
@@ -167,6 +179,7 @@ export function questionProps(qn: Question, agent: Agent, human: Human) {
     const late = qn.status === 'open' && qn.deadline.getTime() < Date.now();
     lines.push(`_${t(lang, 'due', { date: fmtDate(qn.deadline, lang, human.timezone) })}${late ? ` · ${t(lang, 'overdue')}` : ''}_`);
   }
+  if (opts.escalatedTo && qn.status === 'open') lines.push(`_${t(lang, 'escalated_to', { person: opts.escalatedTo })}_`);
   let color = '#E0A526';
   let actions: any[] | undefined;
   if (qn.status === 'open') {
@@ -197,7 +210,11 @@ export function questionProps(qn: Question, agent: Agent, human: Human) {
 export async function refreshCard(qn: Question) {
   if (!qn.root_post_id) return;
   const [agent, human] = await Promise.all([getAgent(qn.agent_key), getHuman(qn.human_key)]);
-  await asAgent(agent!).put(`/posts/${qn.root_post_id}/patch`, { props: questionProps(qn, agent!, human!) });
+  const esc = qn.escalated_to ? await getHuman(qn.escalated_to) : null;
+  await asAgent(agent!).put(`/posts/${qn.root_post_id}/patch`, { props: questionProps(qn, agent!, human!, { escalatedTo: esc?.first_name }) });
+  if (esc && qn.escalation_post_id) {
+    await asAgent(agent!).put(`/posts/${qn.escalation_post_id}/patch`, { props: questionProps(qn, agent!, esc, { asked: human! }) });
+  }
 }
 
 export const getQuestion = (id: string) => one<Question>('select * from questions where id=$1', [id]);
@@ -237,23 +254,29 @@ export async function askHuman(agent: Agent, input: {
   const post = await postAs(agent, channel, '', { props: questionProps(qn, agent, human) });
   await q('update questions set root_post_id=$2 where id=$1', [id, post.id]);
   await audit('agent', agent.key, 'question.ask', human.key, { question_id: id, subject: input.subject });
+  void feed(agent.key, 'feed_question', { agent: agent.name, person: human.first_name, subject: input.subject,
+    about: input.object?.label ? ` · ${input.object.label}` : '', date: deadline });
   return { question_id: id, post_id: post.id, permalink: permalink(post.id), deadline: deadline.toISOString() };
 }
 
 /** A person answered (button or free text in the thread). */
-export async function answerQuestion(qn: Question, human: Human, answer: { choice?: string; text?: string; via: 'button' | 'thread'; post_id?: string }) {
+export async function answerQuestion(qn: Question, human: Human, answer: { choice?: string; text?: string; via: 'button' | 'thread' | 'escalation'; post_id?: string }) {
   const updated = await one<Question>(
-    `update questions set status='answered', answer_choice=$2, answer_text=$3, answered_via=$4, answered_at=now()
+    `update questions set status='answered', answer_choice=$2, answer_text=$3, answered_via=$4, answered_at=now(), answered_by=$5
      where id=$1 and status='open' returning *`,
-    [qn.id, answer.choice ?? null, answer.text ?? null, answer.via]);
+    [qn.id, answer.choice ?? null, answer.text ?? null, answer.via, human.key]);
   if (!updated) return null;
   await enqueue(qn.agent_key, 'answer', human.key, {
-    question_id: qn.id, from: humanRef(human), choice: answer.choice ?? null, text: answer.text ?? null,
+    question_id: qn.id, from: humanRef(human), on_behalf_of: human.key !== qn.human_key ? qn.human_key : undefined, choice: answer.choice ?? null, text: answer.text ?? null,
     post_id: answer.post_id ?? qn.root_post_id, thread_root_id: qn.root_post_id,
     question: { subject: qn.subject, body: qn.body, choices: qn.choices, object: qn.object_label ? {
       type: qn.object_type, id: qn.object_id, label: qn.object_label, url: qn.object_url } : null },
   });
   await audit('human', human.key, 'question.answer', qn.id, { choice: answer.choice, via: answer.via });
+  const asked = human.key !== qn.human_key ? (await getHuman(qn.human_key))?.first_name : null;
+  void feed(qn.agent_key, asked ? 'feed_answer_for' : 'feed_answer', {
+    person: human.first_name, agent: (await getAgent(qn.agent_key))?.name ?? qn.agent_key, asked,
+    answer: answer.choice ?? `"${quote(answer.text, 80)}"`, subject: qn.subject });
   return updated;
 }
 
@@ -268,6 +291,8 @@ export async function resolveQuestion(agent: Agent, input: { question_id: string
   await refreshCard(updated);
   await q(`update events set status='acked', acked_at=now() where agent_key=$1 and payload->>'question_id'=$2 and status<>'acked'`, [agent.key, qn.id]);
   await audit('agent', agent.key, 'question.resolve', qn.human_key, { question_id: qn.id, propium_action: input.propium_action });
+  void feed(agent.key, 'feed_resolved', { agent: agent.name, subject: qn.subject,
+    action: input.propium_action ? ` · Propium: ${quote(input.propium_action, 160)}` : '' });
   return { status: 'resolved' };
 }
 
@@ -294,6 +319,7 @@ export async function redirectToAgent(agent: Agent, input: { reply_to_post_id: s
   await q('update redirects set offer_post_id=$2 where id=$1', [id, offer.id]);
   await ackByPost(agent.key, post.id);
   await audit('agent', agent.key, 'redirect', human.key, { to_agent: target.key, redirect_id: id });
+  void feed(agent.key, 'feed_redirect', { agent: agent.name, person: human.first_name, target: target.name });
   return { redirect_id: id, post_id: offer.id };
 }
 

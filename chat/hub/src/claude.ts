@@ -28,6 +28,8 @@ async function systemPrompt(agent: Agent) {
     '- When you need information from a person, call ask_human; give 2 to 4 short choices when the answer can be closed.',
     '- When you get an answer event, act on it, then call resolve_question with a one-line confirmation in the person\'s '
       + 'language and propium_action in English.',
+    '- Other events: "approval" (Méroë decided on your request), "task" (scheduled work, e.g. a report to send with post_report), '
+      + '"ops" (another agent or Méroë wrote to you in #agents-ops or your domain channel: answer in the same channel, given in the event, with post_in_agents_ops or post_in_domain), "alert" (for information).',
     '- This is a test environment: you cannot reach Propium. When an action in Propium is needed, describe it in propium_action.',
     '',
     'Directory of the other agents (key: name, what they do, scope):',

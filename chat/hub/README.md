@@ -129,6 +129,25 @@ Same names and inputs over REST (`POST /v1/tools/<name>`) and MCP.
 | `list_my_questions` | Your questions and their status |
 | `query_registry` | The registry of every question (agents allowed to read it, e.g. Inès) |
 | `post_in_agents_ops` | Coordinate in the private #agents-ops channel; `@key` hands the message to that agent (an `ops` event) |
+| `post_in_domain` | Coordinate with the agents of your domain in `#d-<domain>` (Méroë follows it); `@key` hands the message to a colleague of the domain |
+| `request_approval` | Card in #approvals (Approve / Edit / Reject) for a draft or an action; wait for the `approval` event before acting |
+| `get_approval_status` | Where one of your approval requests stands |
+| `post_report` | Your scheduled channel report (Maya: #performance); published at the scheduled time, once a day |
+| `schedule_message` / `cancel_scheduled_message` | Send a message to a person later; rules are checked at sending time |
+
+## Domain channels (Méroë's view)
+
+Each agent has a `domain` in `agents.yaml`; each domain has a private channel `#d-<domain>` with Méroë and that domain's agents (Direction, Delivery & ATS, Finance, GTM France, US, Marketing, People, Product), in a "Domains" section of Méroë's sidebar. The team does not see them.
+
+- **Activity feed**: the Humanup bot posts one line per event, in Méroë's language: question asked (to whom, about what, deadline), answer (and on whose behalf), reminder, escalation, resolution with the Propium action, redirect, approval request and decision, report published, cap or budget reached, pause and resume. Never the content of the private conversations.
+- **Coordination**: the domain's agents talk there with `post_in_domain`; `@key` hands a message to a colleague of the same domain (agents of other domains: #agents-ops). Méroë can write there and `@mention` an agent. Same anti-loop rule as #agents-ops.
+
+## Follow-ups (the Hub does them, not the agent)
+
+- **Reminder**: halfway between the question and its deadline, a reminder in the card's thread.
+- **Escalation**: at the deadline, or after `escalate_after` (24 h by default) if sooner, a copy of the card with the same buttons goes to the agent's `escalation` person, else its human manager (`reports_to`), else Méroë, in their conversation with that agent. A DM is private, so the copy carries the question; answering it closes Léa's card too and the agent gets the answer with `on_behalf_of`. The question also shows in that person's `/inbox`.
+- **Approvals**: only admins decide. Approve decides at once; Edit opens a form with the draft (changed text = "approved with edits"); Reject asks for an optional reason.
+- **Reports**: an agent with `report: { channel, cron }` (Maya: `0 11 * * *`, Ho Chi Minh time) gets a `task` event 15 minutes before; what it sends with `post_report` is published at the set time. Nothing 5 minutes after → alert in #agents-ops.
 
 ## Guardrails
 
@@ -158,7 +177,12 @@ Alerts are posted in #agents-ops by the Humanup bot and handed to Sentinel as `a
   "forwarded_from": "linh" }
 
 { "event_id": 43, "type": "answer", "question_id": "q_By_e64z", "from": { "key": "lea", ... },
-  "choice": "Yes", "text": null, "question": { "subject": "...", "body": "...", "choices": ["Yes","No"], "object": { ... } } }
+  "choice": "Yes", "text": null, "on_behalf_of": null, "question": { "subject": "...", "body": "...", "choices": ["Yes","No"], "object": { ... } } }
+
+{ "event_id": 44, "type": "approval", "approval_id": "a_...", "decision": "edited", "edited_draft": "...", "comment": "Use the Q4 rate", "payload": { ... } }
+{ "event_id": 45, "type": "task", "task": "daily_report", "channel": "performance", "publish_at": "2026-11-24T04:00:00Z" }
+{ "event_id": 46, "type": "ops", "from_agent": "khoa", "text": "@theo can you confirm...", "post_id": "..." }
+{ "event_id": 47, "type": "alert", "reason": "question_cap", "text": "..." }
 ```
 
 ## For Méroë and Inès
@@ -170,4 +194,4 @@ Alerts are posted in #agents-ops by the Humanup bot and handed to Sentinel as `a
 
 ## Tests
 
-`test/e2e.ts` drives a real Mattermost + Hub + plugin as Léa, Méroë and agents: 51 checks covering all three delivery modes, MCP, cards and buttons, `/inbox`, redirects, rules, the registry, the Claude test agent, and the guardrails (read-only channels, kill switch, question cap, anti-loop, time window). It resets the test database's daily counters: never point it at production.
+`test/e2e.ts` drives a real Mattermost + Hub + plugin as Léa, Méroë and agents: 81 checks covering all three delivery modes, MCP, cards and buttons, `/inbox`, redirects, rules, the registry, the Claude test agent, and the guardrails (read-only channels, kill switch, question cap, anti-loop, time window) and the follow-ups (reminder, escalation, approvals, report, scheduled messages; time is simulated with `POST /v1/admin/tick?now=`). It resets the test database's daily counters: never point it at production.

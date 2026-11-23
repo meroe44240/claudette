@@ -11,6 +11,9 @@ import { one, q } from './db.js';
 import { type Agent, ToolError, audit } from './core.js';
 import { setPaused, sentToday } from './guard.js';
 import { buildPolicy } from './policy.js';
+import { onApprovalDialog } from './approvals.js';
+import { runScheduler } from './scheduler.js';
+import { humanByMmId } from './core.js';
 import { sha256 } from './sync.js';
 import { tools, runTool } from './tools.js';
 import { queryRegistry, toCsv } from './registry.js';
@@ -142,6 +145,14 @@ export async function buildServer() {
     return { [action === 'pause' ? 'paused' : 'resumed']: done.map((d) => d.key) };
   });
 
+  // Runs the scheduler now (reminders, escalations, reports, scheduled messages). ?now= to simulate a time (tests).
+  app.post<{ Querystring: { now?: string } }>('/v1/admin/tick', async (req, reply) => {
+    if (!isAdmin(req)) return reply.code(403).send({ error: 'Not allowed' });
+    const now = req.query.now ? new Date(req.query.now) : new Date();
+    if (Number.isNaN(now.getTime())) return reply.code(400).send({ error: 'Bad now' });
+    return runScheduler(now);
+  });
+
   // ── Called by the Mattermost plugin (internal network only; Caddy blocks /hub/mm/*) ──
   const isPlugin = (req: FastifyRequest) => {
     const a = Buffer.from(bearer(req));
@@ -164,6 +175,10 @@ export async function buildServer() {
 
   // ── Called by Mattermost ───────────────────────────────────────────────────
   app.post('/mm/actions', async (req) => handleAction(req.body));
+  app.post('/mm/dialog', async (req) => {
+    const body: any = req.body ?? {};
+    return onApprovalDialog(body, body.user_id ? await humanByMmId(body.user_id) : null);
+  });
   app.post('/mm/command', async (req, reply) => {
     const r = await handleCommand(req.body as Record<string, string>);
     return reply.code(r.status).send(r.body);

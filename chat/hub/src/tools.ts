@@ -7,7 +7,9 @@ import {
   asAgent, accessByChannel, getAgent, permalink,
 } from './core.js';
 import { queryRegistry } from './registry.js';
-import { postInOps } from './ops.js';
+import { postInOps, postInDomain } from './ops.js';
+import { requestApproval, approvalStatus } from './approvals.js';
+import { submitReport, scheduleMessage, cancelScheduled } from './scheduler.js';
 
 type Schema = Record<string, unknown>;
 export type Tool = {
@@ -128,6 +130,59 @@ export const tools: Tool[] = [
       reply_to_post_id: { type: 'string' },
     }, ['text']),
     handler: (agent, input) => postInOps(agent, input),
+  },
+  {
+    name: 'post_in_domain',
+    description: 'Coordinate with the other agents of your domain in your private domain channel (#d-<domain>), '
+      + 'which Méroë follows (the team does not see it). Mention a colleague with @key to hand them the message '
+      + '(an "ops" event). Use #agents-ops (post_in_agents_ops) for agents of other domains. Same anti-loop rule.',
+    input_schema: obj({
+      text: { type: 'string', minLength: 1, maxLength: 8000 },
+      reply_to_post_id: { type: 'string' },
+    }, ['text']),
+    handler: (agent, input) => postInDomain(agent, input),
+  },
+  {
+    name: 'request_approval',
+    description: 'Ask Méroë to approve something before you do it (sensitive email, outreach sequence, transfer...). '
+      + 'A card lands in #approvals with Approve / Edit / Reject. Do not act until you get the "approval" event: '
+      + 'decision is approved, edited (use edited_draft instead of your draft) or rejected (see comment).',
+    input_schema: obj({
+      kind: { type: 'string', enum: ['email', 'sequence', 'transfer', 'other'] },
+      title: { type: 'string', minLength: 1, maxLength: 200 },
+      summary: { type: 'string', maxLength: 2000 },
+      draft: { type: 'string', maxLength: 3000, description: 'The text to approve, editable by Méroë' },
+      payload: { type: 'object', description: 'Details you need back (amount, recipients...)' },
+      related: obj({ label: { type: 'string' }, url: { type: 'string' } }, ['label']),
+    }, ['kind', 'title']),
+    handler: (agent, input) => requestApproval(agent, input),
+  },
+  {
+    name: 'get_approval_status',
+    description: 'Status of one of your approval requests.',
+    input_schema: obj({ approval_id: { type: 'string' } }, ['approval_id']),
+    handler: (agent, input) => approvalStatus(agent, input),
+  },
+  {
+    name: 'post_report',
+    description: 'Hand over your scheduled channel report (Maya: the daily report in #performance). '
+      + 'It is published at the scheduled time, or at once if that time has passed. One per day.',
+    input_schema: obj({ text: { type: 'string', minLength: 1, maxLength: 16000 } }, ['text']),
+    handler: (agent, input) => submitReport(agent, input),
+  },
+  {
+    name: 'schedule_message',
+    description: 'Send a message to a person later (ISO time). Your rules are checked when it is sent.',
+    input_schema: obj({
+      to: { type: 'string' }, text: { type: 'string', minLength: 1, maxLength: 16000 }, send_at: { type: 'string' },
+    }, ['to', 'text', 'send_at']),
+    handler: (agent, input) => scheduleMessage(agent, input),
+  },
+  {
+    name: 'cancel_scheduled_message',
+    description: 'Cancel one of your scheduled messages that is not sent yet.',
+    input_schema: obj({ scheduled_id: { type: 'string' } }, ['scheduled_id']),
+    handler: (agent, input) => cancelScheduled(agent, input),
   },
   {
     name: 'list_agents',
