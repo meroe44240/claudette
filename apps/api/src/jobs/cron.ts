@@ -3,7 +3,7 @@
  * No external dependency required (no node-cron).
  *
  * Jobs:
- *  - Daily Slack report at 09:00 Europe/Paris (Mon-Fri)
+ *  - Webhook retries every 60s (failed deliveries: 1 min, 5 min, 30 min, 2 h, 12 h)
  *  - Calendar AI analysis every 30 minutes
  *  - Pipeline AI analysis every hour
  */
@@ -14,7 +14,6 @@ let cronStarted = false;
 const intervals: ReturnType<typeof setInterval>[] = [];
 
 // Track last execution to avoid double-runs
-let lastSlackReportDate = '';
 let lastBatchEnrichDate = '';
 let lastRecapDate = '';
 let lastStandupDate = '';
@@ -56,37 +55,6 @@ function isWeekday(dayOfWeek: number): boolean {
   return dayOfWeek >= 1 && dayOfWeek <= 5;
 }
 
-// ─── SLACK DAILY REPORT ─────────────────────────────
-
-async function checkSlackReport(): Promise<void> {
-  try {
-    const { hours, minutes, dayOfWeek, dateKey } = getParisTime();
-
-    // Only Mon-Fri
-    if (!isWeekday(dayOfWeek)) return;
-
-    // Already sent today?
-    if (lastSlackReportDate === dateKey) return;
-
-    // Get configured send time (default 09:00 Paris)
-    const { getSlackConfig } = await import('../modules/slack/slack.service.js');
-    const config = await getSlackConfig();
-    if (!config || !config.enabled) return;
-
-    const sendTime = config.sendTime || '09:00';
-    const [targetHour, targetMinute] = sendTime.split(':').map(Number);
-
-    // Check if we're within the target window (allow 1 minute tolerance)
-    if (hours === targetHour && minutes >= targetMinute && minutes <= targetMinute + 1) {
-      lastSlackReportDate = dateKey;
-      const { sendDailyReport } = await import('../modules/slack/slack.service.js');
-      const result = await sendDailyReport();
-      console.log(`[Cron] Slack daily report: ${result.message}`);
-    }
-  } catch (error) {
-    console.error('[Cron] Error in Slack report check:', error);
-  }
-}
 
 // ─── CALENDAR AI ANALYSIS ───────────────────────────
 
@@ -355,9 +323,16 @@ export function startCronJobs(): void {
   }, 6 * 60 * 60 * 1000);
   intervals.push(trashPurgeInterval);
 
-  // Check Slack report every 60 seconds
-  const slackInterval = setInterval(checkSlackReport, 60 * 1000);
-  intervals.push(slackInterval);
+  // Webhooks : reprise des envois en échec (1 min, 5 min, 30 min, 2 h, 12 h)
+  const webhookRetryInterval = setInterval(async () => {
+    try {
+      const { retryDueDeliveries } = await import('../modules/webhooks/webhook.service.js');
+      await retryDueDeliveries();
+    } catch (err) {
+      console.error('[Cron] Webhook retries:', (err as Error).message);
+    }
+  }, 60 * 1000);
+  intervals.push(webhookRetryInterval);
 
   // Calendar AI analysis every 30 minutes
   const calendarInterval = setInterval(runCalendarAiAnalysis, 30 * 60 * 1000);
@@ -424,7 +399,7 @@ export function startCronJobs(): void {
     .catch((err) => console.error('[Cron] Humanup Notes jobs failed to start:', err));
 
   console.log('[Cron] Scheduled jobs started:');
-  console.log('  - Slack daily report: checked every 60s (sends Mon-Fri at configured time, Europe/Paris)');
+  console.log('  - Webhook retries: every 60s');
   console.log('  - Calendar AI analysis: every 30 minutes');
   console.log('  - Pipeline AI analysis: every 60 minutes');
   console.log('  - Email auto-create: every 15 minutes (perso → candidat, pro → client)');

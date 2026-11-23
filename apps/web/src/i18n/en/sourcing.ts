@@ -317,7 +317,7 @@ export const sourcing: Record<string, string> = {
   'Date inconnue': 'Unknown date',
   'Rien à classer': 'Nothing to classify',
   'Classer': 'Classify',
-  'Validé et annoncé sur Slack': 'Confirmed and announced on Slack',
+  'Validé et annoncé dans #news': 'Confirmed and announced in #news',
   'Erreur lors de la validation': 'Error while confirming',
   'Événement introuvable': 'Event not found',
   'Voir les événements à classer': 'View events to classify',

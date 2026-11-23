@@ -171,7 +171,7 @@ function ClassifyForm({ id }: { id: string }) {
       }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['meetings-a-classer'] });
-      toast('success', res.annonce ? t('Validé et annoncé sur Slack') : t('Validé'));
+      toast('success', res.annonce ? t('Validé et annoncé dans #news') : t('Validé'));
       navigate('/rdv/classer');
     },
     onError: (e) => {

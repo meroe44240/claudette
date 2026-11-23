@@ -5,7 +5,7 @@
 
 import { createServer } from 'node:http';
 import { createHmac } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -450,6 +450,41 @@ async function main() {
   check(!!ev25c, 'Méroë\'s @khoa in #d-delivery reaches Khoa');
   const c25d = await tool('camille', 'post_in_domain', { text: 'hi' });
   check(c25d.status === 403, 'private agents have no domain channel', c25d.body);
+
+  // ── Phase 5: Propium → #news ───────────────────────────────────────────────
+  const propiumSecret = 'test-propium-secret';
+  writeFileSync(join(env.SECRETS_DIR, 'propium-webhook-secret'), propiumSecret);
+  const sendPropium = async (payload: object, sig?: string) => {
+    const raw = JSON.stringify(payload);
+    const res = await fetch(`${HUB}/v1/propium/events`, { method: 'POST', body: raw, headers: {
+      'Content-Type': 'application/json',
+      'X-Propium-Signature': sig ?? `sha256=${createHmac('sha256', propiumSecret).update(raw).digest('hex')}`,
+    } });
+    return { status: res.status, body: await res.json().catch(() => ({})) as any };
+  };
+  const stamp = Date.now();
+  const bad = await sendPropium({ id: `bad-${stamp}`, type: 'announcement.closed_won', details: {} }, 'sha256=deadbeef');
+  check(bad.status === 401, '#news: unsigned / badly signed Propium call refused', bad);
+  const m26 = await sendPropium({ id: `m-${stamp}`, type: 'announcement.client_meeting', by: { name: 'Valentin Murcia' },
+    details: { by: 'Valentin', contact: 'Sarah Lee', company: 'Acme', relationship: 'prospect', date: '2026-11-27T03:00:00Z',
+      location: 'Google Meet', url: 'https://ats.propium.co/clients/x' } });
+  const p26 = await sendPropium({ id: `p-${stamp}`, type: 'announcement.presentation',
+    details: { by: 'Léa', candidate: 'Anh Tran', company: 'Acme', contact: 'Sarah Lee', mandate: 'CFO Vietnam', date: '2026-11-27T08:00:00Z' } });
+  const w26 = await sendPropium({ id: `w-${stamp}`, type: 'announcement.closed_won',
+    details: { by: 'Vicky', candidate: 'Anh Tran', company: 'Acme', mandate: 'CFO Vietnam', fee: 18000, fee_percent: 20, start_date: '2027-01-05T00:00:00Z' } });
+  const news26 = await lea.mm.get(`/channels/${newsId}/posts?per_page=10`);
+  const newsText = (id: string) => news26.posts[id]?.message ?? '';
+  check(/📅 \*\*Valentin\*\* booked a meeting with \*\*Sarah Lee\*\* \(Acme, prospect\) · Fri 27 Nov, 10:00 · Google Meet · \[Propium\]/.test(newsText(m26.body.post_id)),
+    '#news: client meeting line (who, contact, company, prospect, date in Ho Chi Minh time, link)', newsText(m26.body.post_id));
+  check(/🤝 \*\*Léa\*\* presents \*\*Anh Tran\*\* to \*\*Acme\*\* \(Sarah Lee\) for CFO Vietnam · Fri 27 Nov, 15:00/.test(newsText(p26.body.post_id)),
+    '#news: presentation line', newsText(p26.body.post_id));
+  check(/🎉 Closed won: \*\*Anh Tran\*\* placed at \*\*Acme\*\* as CFO Vietnam · Vicky · €18,000 \(20%\) · starts 5 Jan 2027/.test(newsText(w26.body.post_id)),
+    '#news: closed won line', newsText(w26.body.post_id));
+  check(news26.posts[m26.body.post_id]?.user_id === seed.bots.propium.user_id, '#news: posted by the Propium bot');
+  const dup = await sendPropium({ id: `w-${stamp}`, type: 'announcement.closed_won', details: { candidate: 'Anh Tran' } });
+  check(dup.body.duplicate === true, '#news: the same event twice is posted once', dup.body);
+  const other = await sendPropium({ id: `s-${stamp}`, type: 'stage.changed', details: {} });
+  check(other.status === 200 && other.body.ignored === 'stage.changed', '#news: any other Propium event is ignored', other.body);
 
   srv.close();
   await pool.end();

@@ -8,7 +8,7 @@
  *  - A_CLASSER    : détecté dans l'agenda mais pas identifié → question posée à la personne,
  *                   rien n'est annoncé ni compté tant qu'elle n'a pas répondu.
  *
- * Règle métier : un RDV client ou une présentation ne compte (Slack, standup) que
+ * Règle métier : un RDV client ou une présentation ne compte (#news, standup) que
  * s'il a une date ET des interlocuteurs.
  */
 export type MeetingKind = 'RDV_CLIENT' | 'PRESENTATION' | 'INTERVIEW' | 'AUTRE' | 'A_CLASSER';

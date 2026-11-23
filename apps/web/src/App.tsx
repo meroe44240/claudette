@@ -82,6 +82,7 @@ const McpLogsPage = lazy(() => import('./pages/mcp-logs/index'));
 const AdminAnalyticsPage = lazy(() => import('./pages/admin/analytics'));
 const AgentsPage = lazy(() => import('./pages/admin/agents'));
 const JournalPage = lazy(() => import('./pages/admin/journal'));
+const ChatRegistryPage = lazy(() => import('./pages/admin/chat-registry'));
 const CorbeillePage = lazy(() => import('./pages/corbeille/index'));
 const NotesPage = lazy(() => import('./pages/notes/index'));
 const NoteCallPage = lazy(() => import('./pages/notes/[id]'));
@@ -181,6 +182,7 @@ export default function App() {
           <Route path="admin/analytics" element={<AdminAnalyticsPage />} />
           <Route path="admin/agents" element={<AgentsPage />} />
           <Route path="admin/journal" element={<JournalPage />} />
+          <Route path="admin/chat-registry" element={<ChatRegistryPage />} />
           <Route path="corbeille" element={<CorbeillePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

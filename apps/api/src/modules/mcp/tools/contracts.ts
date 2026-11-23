@@ -47,7 +47,7 @@ export function registerContractTools(server: McpServer) {
       'WORKFLOW: 1) call with preview=true and show the user what will be in the contract (client, signatory, fee, guarantee, ownership, payment, governing law, language, special conditions, missing fields, approval needed or not); ' +
       '2) once the user agrees, call again with the same values and preview=false to get the PDF. ' +
       'If the user asks to remove or change an article, explain that the articles are locked and only the values above (or a special conditions clause, with admin approval) can change. ' +
-      'If admin approval is needed, ask the user why and call again with exception_reason: the request goes to the admins on Slack; the contract can be generated once an admin approves exactly these values. ' +
+      'If admin approval is needed, ask the user why and call again with exception_reason: the request goes to the admins by email; the contract can be generated once an admin approves exactly these values. ' +
       'Nothing is sent to the client and the contract status does not change.',
     {
       mandate_id: z.string().optional().describe('Mandate UUID'),
@@ -186,7 +186,7 @@ export function registerContractTools(server: McpServer) {
   server.tool(
     'list_contract_approvals',
     'Admins only. Lists the pending requests for non-standard contract terms (fee below the floor, guarantee, ownership, payment terms, special conditions clause), with the mandate, who asked, why, and the exact values requested. ' +
-      "Use when an admin asks 'what contract requests are pending' or after a Slack contract approval notification.",
+      "Use when an admin asks 'what contract requests are pending' or after a contract approval email.",
     {},
     wrapTool('list_contract_approvals', async () => {
       const rows = await prisma.contractApproval.findMany({

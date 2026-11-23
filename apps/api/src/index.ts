@@ -40,7 +40,6 @@ import pipelineRouter from './modules/clients/pipeline.router.js';
 import adminDashboardRouter from './modules/dashboard/admin-dashboard.router.js';
 import reportRouter from './modules/reports/report.router.js';
 import statsRouter from './modules/stats/stats.router.js';
-import slackRouter from './modules/slack/slack.router.js';
 import mcpLogsRouter from './modules/mcp/mcp-logs.router.js';
 import mcpOAuthRouter from './modules/mcp/mcp.oauth.js';
 import mcpPlugin from './modules/mcp/mcp.plugin.js';
@@ -61,6 +60,7 @@ import auditRouter from './modules/audit/audit.router.js';
 import trashRouter from './modules/trash/trash.router.js';
 import { presentationRouter, ownershipRouter } from './modules/presentations/presentation.router.js';
 import webhookRouter from './modules/webhooks/webhook.router.js';
+import chatRegistryRouter from './modules/chat-registry/chat-registry.router.js';
 import confirmationRouter, { confirmationPublicRouter } from './modules/confirmation/confirmation.router.js';
 import notesRouter, { notesRecallRouter } from './modules/notes/notes.router.js';
 
@@ -190,7 +190,6 @@ async function buildApp() {
   await app.register(adminDashboardRouter, { prefix: '/api/v1/dashboard/admin' });
   await app.register(reportRouter, { prefix: '/api/v1/reports' });
   await app.register(statsRouter, { prefix: '/api/v1/stats' });
-  await app.register(slackRouter, { prefix: '/api/v1/slack' });
   await app.register(mcpLogsRouter, { prefix: '/api/v1/mcp-logs' });
   await app.register(recapRouter, { prefix: '/api/v1/recap' });
   await app.register(contractRouter, { prefix: '/api/v1/contracts' });
@@ -213,6 +212,7 @@ async function buildApp() {
   await app.register(presentationRouter, { prefix: '/api/v1/presentations' });
   await app.register(ownershipRouter, { prefix: '/api/v1/ownership' });
   await app.register(webhookRouter, { prefix: '/api/v1/webhooks' });
+  await app.register(chatRegistryRouter, { prefix: '/api/v1/admin/chat' });
   // Pages de réservation publiques (remplace Calendly) — aucune auth.
   await app.register(bookingPublicRouter, { prefix: '/api/v1/public/booking' });
   // Confirmation candidat (intérêt + consentement transfert CV)

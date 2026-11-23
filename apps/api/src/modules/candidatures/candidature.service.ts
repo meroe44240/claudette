@@ -2,11 +2,7 @@ import prisma from '../../lib/db.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../lib/errors.js';
 import type { CreateCandidatureInput, UpdateCandidatureInput } from './candidature.schema.js';
 import type { StageCandidature } from '@prisma/client';
-import {
-  notifyPresentation,
-  notifyCloseWon,
-  notifyNewCandidate,
-} from '../slack/slack.service.js';
+import { notifyPresentation, notifyCloseWon } from '../announcements/announcement.service.js';
 import { logActivity } from '../../lib/activity-logger.js';
 import { sendEmail, renderBrandedEmail } from '../../lib/mailer.js';
 
@@ -121,10 +117,10 @@ async function presentationDejaAnnoncee(candidatId: string, date: Date): Promise
 
 /**
  * Fetch full context for a candidature (candidat, mandat, entreprise, client, recruteur)
- * and fire the appropriate Slack notification based on the new stage.
+ * and send the matching announcement (Humanup Chat #news) for the new stage.
  * All calls are fire-and-forget so they never block mutations.
  */
-async function fireSlackStageNotification(
+async function fireStageAnnouncement(
   candidatureId: string,
   newStage: string,
   dateEntretienClient?: Date | null,
@@ -164,7 +160,7 @@ async function fireSlackStageNotification(
       mandatTitre: mandat.titrePoste,
       recruteurPrenom: mandat.assignedTo?.prenom || null,
       date,
-    });
+    }, { key: candidatureId, candidatureId, candidatId: candidature.candidatId, mandatId: mandat.id });
   } else if (newStage === 'PLACE') {
     await notifyCloseWon({
       candidatPrenom: candidat.prenom,
@@ -177,7 +173,7 @@ async function fireSlackStageNotification(
       sourcePlacement: candidature.sourcePlacement || null,
       sourceLead: mandat.sourceLead || null,
       recruteurPrenom: mandat.assignedTo?.prenom || null,
-    });
+    }, { key: candidatureId, candidatureId, candidatId: candidature.candidatId, mandatId: mandat.id });
   }
 }
 
@@ -274,35 +270,12 @@ export async function create(data: CreateCandidatureInput, createdById: string) 
     })
     .catch(() => {});
 
-  // Fire-and-forget: notif Slack "nouveau candidat au pipeline" (informe le sales du mandat)
-  (async () => {
-    try {
-      const [mandat, candidat, addedBy] = await Promise.all([
-        prisma.mandat.findUnique({ where: { id: data.mandatId }, select: { titrePoste: true, entreprise: { select: { nom: true } }, sales: { select: { prenom: true } } } }),
-        prisma.candidat.findUnique({ where: { id: data.candidatId }, select: { prenom: true, nom: true } }),
-        prisma.user.findUnique({ where: { id: createdById }, select: { prenom: true } }),
-      ]);
-      if (mandat && candidat) {
-        await notifyNewCandidate({
-          candidatNom: `${candidat.prenom || ''} ${candidat.nom}`.trim(),
-          mandatTitre: mandat.titrePoste,
-          entrepriseNom: mandat.entreprise?.nom ?? null,
-          salesPrenom: mandat.sales?.prenom ?? null,
-          byPrenom: addedBy?.prenom ?? null,
-          stageLabel: data.stage,
-        });
-      }
-    } catch (err) {
-      console.error('[Slack] new candidate notif failed:', err);
-    }
-  })();
-
   // If the candidature is created DIRECTLY at an advanced stage
-  // (ENTRETIEN_CLIENT / PLACE), fire the matching Slack notif —
+  // (ENTRETIEN_CLIENT / PLACE), send the matching announcement —
   // this happens e.g. when a recruiter drops a candidat straight into the
   // client-interview column of the kanban.
   if (['ENTRETIEN_CLIENT', 'PLACE'].includes(data.stage)) {
-    fireSlackStageNotification(candidature.id, data.stage, null).catch(() => {});
+    fireStageAnnouncement(candidature.id, data.stage, null).catch(() => {});
   }
 
   return candidature;
@@ -384,8 +357,8 @@ export async function update(
     : await prisma.candidature.update({ where: { id }, data: updateData });
 
   // Placement enregistré dans l'ATS (candidature → PLACE) → le mandat est GAGNÉ
-  // (archivé) dans la transaction ci-dessus ET on annonce le placement dans Slack.
-  // Ainsi, saisir dans l'ATS = fêter dans Slack (plus de close hors des chiffres).
+  // (archivé) dans la transaction ci-dessus ET on annonce le placement (#news de Humanup Chat).
+  // Ainsi, saisir dans l'ATS = l'annoncer à l'équipe (plus de close hors des chiffres).
   if (isPlacement) {
     (async () => {
       const [cand, mnd] = await Promise.all([
@@ -402,8 +375,8 @@ export async function update(
         dateDemarrage: data.dateDemarrage ? new Date(data.dateDemarrage) : null,
         sourcePlacement: data.sourcePlacement ?? null,
         recruteurPrenom: mnd?.assignedTo?.prenom ?? null,
-      });
-    })().catch((e) => console.warn('[Candidature] notif placement Slack échouée', (e as Error).message));
+      }, { key: id, candidatureId: id, candidatId: existing.candidatId, mandatId: existing.mandatId });
+    })().catch((e) => console.warn('[Candidature] annonce placement échouée', (e as Error).message));
   }
 
   // If stage changed, create StageHistory entry
@@ -500,9 +473,9 @@ export async function update(
       });
     }
 
-    // Fire-and-forget Slack notification for key stage changes
+    // Fire-and-forget announcement (#news) for key stage changes
     const dateEntretien = data.dateEntretienClient ? new Date(data.dateEntretienClient) : null;
-    fireSlackStageNotification(id, data.stage, dateEntretien).catch(() => {});
+    fireStageAnnouncement(id, data.stage, dateEntretien).catch(() => {});
 
     // Fire-and-forget email notifications (candidat refuse + client) si demande
     fireStageNotificationEmails(id, data.stage as StageCandidature, {
@@ -593,8 +566,8 @@ export async function bulkUpdateStage(
       },
     });
 
-    // Fire-and-forget Slack notification for key stage changes
-    fireSlackStageNotification(id, stage, null).catch(() => {});
+    // Fire-and-forget announcement (#news) for key stage changes
+    fireStageAnnouncement(id, stage, null).catch(() => {});
 
     results.push(updated);
   }
