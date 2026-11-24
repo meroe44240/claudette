@@ -6,6 +6,7 @@ import * as mandatService from '../../mandats/mandat.service.js';
 import * as candidatureService from '../../candidatures/candidature.service.js';
 import * as settingsService from '../../settings/settings.service.js';
 import { STAGE_LABEL_EN, STAGES_DOC, stageEn } from '../labels.js';
+import { processSteps, setCandidateProcessStep } from '../../forecast/forecast.service.js';
 
 const MOTIFS_DOC = 'SALAIRE (salary), PROFIL_PAS_ALIGNE (profile not aligned), CANDIDAT_DECLINE (candidate declined), CLIENT_REFUSE (client rejected), TIMING, POSTE_POURVU (position filled), AUTRE (other)';
 
@@ -201,13 +202,30 @@ export function registerMandateTools(server: McpServer) {
 
   server.tool(
     'get_mandate_pipeline',
-    "Gets the full pipeline of a mandate: candidates grouped by stage (keys are stage codes, see stage_labels for the English names). Use when the recruiter asks to see the pipeline of mandate X.",
+    "Gets the full pipeline of a mandate: candidates grouped by stage (keys are stage codes, see stage_labels for the English names), the client interview process (interview_process) and, for Client interview and Process, each candidate's step in it (client_process_step: step k of n), next interview date and waiting status. Use when the recruiter asks to see the pipeline of mandate X.",
     {
       mandate_id: z.string().describe('Mandate UUID'),
     },
     wrapTool('get_mandate_pipeline', async (args) => {
       const kanban = await mandatService.getKanban(args.mandate_id as string);
-      return { stage_labels: STAGE_LABEL_EN, ...kanban };
+      const m = await prisma.mandat.findUnique({ where: { id: args.mandate_id as string }, select: { processEntretien: true, nbPostes: true } });
+      const steps = processSteps(m?.processEntretien);
+      // Étape du process client (k/n) en plus du stage global, sur Client interview et Process
+      const withStep = Object.fromEntries(Object.entries(kanban).map(([stage, list]) => [stage, (list as any[]).map((c) => ({
+        ...c,
+        client_process_step: (stage === 'ENTRETIEN_CLIENT' || stage === 'PROCESS') && steps.length
+          ? { step: Math.min(Math.max(c.processEtape ?? 1, 1), steps.length), of: steps.length, label: steps[Math.min(Math.max(c.processEtape ?? 1, 1), steps.length) - 1].label }
+          : null,
+        next_interview_at: c.dateProchainEntretien ?? null,
+        waiting_since: c.retourAttenteDepuis ?? null,
+      }))]));
+      return {
+        stage_labels: STAGE_LABEL_EN,
+        interview_process: steps.map((s, i) => ({ step: i + 1, label: s.label })),
+        interview_process_missing: steps.length === 0,
+        openings: m?.nbPostes ?? 1,
+        ...withStep,
+      };
     }),
   );
 
@@ -251,6 +269,9 @@ export function registerMandateTools(server: McpServer) {
       date_demarrage: z.string().optional().describe('REQUIRED for PLACE (Won): candidate start date (YYYY-MM-DD or ISO 8601).'),
       source_placement: z.string().optional().describe('REQUIRED for PLACE (Won): source of the placed profile, one of: LinkedIn Recruiter, Indeed, Cooptation, Approche directe, Database interne, CVTech, LinkedIn (organique), Autre.'),
       source_lead: z.string().optional().describe('REQUIRED for PLACE (Won): source of the lead/mandate, one of: Cold call, Cooptation, LinkedIn, Inbound, Email outbound, Salon, Partenariat, Autre. Writes sourceLead on the mandate.'),
+      process_step: z.number().int().min(1).optional().describe('Optional for ENTRETIEN_CLIENT / PROCESS: step k in the mandate interview process (see get_mandate_pipeline.interview_process).'),
+      next_interview_at: z.string().optional().describe('Optional: date and time of the next interview (ISO 8601).'),
+      waiting_since: z.string().optional().describe('Optional: waiting for feedback since this date (YYYY-MM-DD).'),
     },
     wrapTool('move_candidate_stage', async (args, user) => {
       // ── Gates de saisie obligatoire (equivalent des modales de l'UI) ──
@@ -318,6 +339,15 @@ export function registerMandateTools(server: McpServer) {
 
       await candidatureService.update(args.candidature_id as string, updates as any, user.userId);
 
+      let processStepError: string | undefined;
+      if (args.process_step !== undefined || args.next_interview_at !== undefined || args.waiting_since !== undefined) {
+        await setCandidateProcessStep(args.candidature_id as string, {
+          ...(args.process_step !== undefined && { step: args.process_step as number }),
+          ...(args.next_interview_at !== undefined && { nextInterviewAt: args.next_interview_at as string }),
+          ...(args.waiting_since !== undefined && { waitingSince: args.waiting_since as string }),
+        }).catch((e) => { processStepError = (e as Error).message; });
+      }
+
       const feeMsg =
         args.new_stage === 'PLACE'
           ? ` (mandate fee: €${args.fee_montant_facture}, status FACTURE)`
@@ -327,6 +357,7 @@ export function registerMandateTools(server: McpServer) {
         stage: args.new_stage,
         stage_label: stageEn(args.new_stage as string),
         message: `Candidate moved to ${stageEn(args.new_stage as string)}${feeMsg}`,
+        ...(processStepError && { process_step_error: `Stage moved, but the client process step was not saved: ${processStepError}` }),
       };
     }),
   );

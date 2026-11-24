@@ -82,6 +82,8 @@ const McpLogsPage = lazy(() => import('./pages/mcp-logs/index'));
 const AdminAnalyticsPage = lazy(() => import('./pages/admin/analytics'));
 const AgentsPage = lazy(() => import('./pages/admin/agents'));
 const JournalPage = lazy(() => import('./pages/admin/journal'));
+const ForecastPage = lazy(() => import('./pages/admin/forecast'));
+const ForecastSettingsPage = lazy(() => import('./pages/admin/forecast-settings'));
 const ChatRegistryPage = lazy(() => import('./pages/admin/chat-registry'));
 const CorbeillePage = lazy(() => import('./pages/corbeille/index'));
 const NotesPage = lazy(() => import('./pages/notes/index'));
@@ -182,6 +184,8 @@ export default function App() {
           <Route path="admin/analytics" element={<AdminAnalyticsPage />} />
           <Route path="admin/agents" element={<AgentsPage />} />
           <Route path="admin/journal" element={<JournalPage />} />
+          <Route path="admin/forecast" element={<ForecastPage />} />
+          <Route path="admin/forecast/reglages" element={<ForecastSettingsPage />} />
           <Route path="admin/chat-registry" element={<ChatRegistryPage />} />
           <Route path="corbeille" element={<CorbeillePage />} />
         </Route>

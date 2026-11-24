@@ -373,7 +373,7 @@ export default function DashboardPage() {
       {spaData?.objectif && (
         <div className="rise" style={{ marginTop: 16, background: '#fff', border: '1px solid rgba(34,23,122,.08)', borderRadius: 16, padding: '20px 24px', boxShadow: '0 1px 2px rgba(34,23,122,.04)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
-            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9A96AE' }}>{t('Objectif financier')}</span>
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#9A96AE' }}>{t('CA attribué')}</span>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: '#22177A', background: '#F2F3D8', borderRadius: 999, padding: '3px 11px' }}>{spaData.objectif.periode}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: spaData.objectif.agence ? '1fr 1fr' : '1fr', gap: 26, marginTop: 12 }}>

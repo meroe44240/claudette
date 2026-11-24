@@ -52,7 +52,7 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
   });
 
   // ─── Helper: extract and verify user from auth header ───
-  async function authenticateMcpRequest(request: any): Promise<{ userId: string; userEmail: string; userRole: Role; estAgent: boolean } | null> {
+  async function authenticateMcpRequest(request: any): Promise<{ userId: string; userEmail: string; userRole: Role; estAgent: boolean; accesFinance: boolean } | null> {
     const authHeader = request.headers.authorization as string | undefined;
     const headerKey = request.headers['x-api-key'] as string | undefined;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : headerKey?.trim();
@@ -60,15 +60,15 @@ export default async function mcpPlugin(fastify: FastifyInstance) {
     try {
       const payload = await verifyAccessToken(token);
       // Un compte suspendu ou archivé perd l'accès tout de suite, même avec un jeton encore valide.
-      const u = await prisma.user.findUnique({ where: { id: payload.sub }, select: { status: true, estAgent: true } });
+      const u = await prisma.user.findUnique({ where: { id: payload.sub }, select: { status: true, estAgent: true, accesFinance: true } });
       if (!u || u.status !== 'ACTIVE') return null;
-      return { userId: payload.sub, userEmail: payload.email, userRole: payload.role as Role, estAgent: u.estAgent };
+      return { userId: payload.sub, userEmail: payload.email, userRole: payload.role as Role, estAgent: u.estAgent, accesFinance: u.accesFinance };
     } catch {
       // Pas un jeton OAuth : clé d'agent ou clé API de l'utilisateur, pour les clients qui ne
       // savent pas faire le parcours OAuth (Grok, scripts).
       const u = await findUserByApiKey(token);
       if (!u || u.status !== 'ACTIVE') return null;
-      return { userId: u.id, userEmail: u.email, userRole: u.role, estAgent: u.estAgent };
+      return { userId: u.id, userEmail: u.email, userRole: u.role, estAgent: u.estAgent, accesFinance: u.accesFinance };
     }
   }
 

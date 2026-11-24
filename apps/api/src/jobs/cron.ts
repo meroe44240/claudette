@@ -311,6 +311,22 @@ async function checkDataQualityWeekly(): Promise<void> {
   }
 }
 
+// ─── PHOTO DU FORECAST (HEBDO, lundi ~6h Paris) ─────
+let lastForecastSnapshotDate = '';
+async function checkForecastSnapshot(): Promise<void> {
+  try {
+    const { hours, minutes, dayOfWeek, dateKey } = getParisTime();
+    if (dayOfWeek !== 1 || lastForecastSnapshotDate === dateKey) return;
+    if (hours !== 6 || minutes > 10) return;
+    lastForecastSnapshotDate = dateKey;
+    const { takeWeeklySnapshot } = await import('../modules/forecast/forecast.service.js');
+    const snap = await takeWeeklySnapshot();
+    console.log(`[Cron] Forecast snapshot saved: ${snap.nbPostes} positions, weighted EUR ${snap.pondereEur}`);
+  } catch (err) {
+    console.error('[Cron] Forecast snapshot failed:', (err as Error).message);
+  }
+}
+
 export function startCronJobs(): void {
   if (cronStarted) {
     console.log('[Cron] Already started, skipping...');
@@ -405,6 +421,10 @@ export function startCronJobs(): void {
   // Recap bi-hebdo check every 60 seconds (runs Mon/Fri 08:00 ICT only)
   const standupInterval = setInterval(checkStandupReport, 60 * 1000);
   intervals.push(standupInterval);
+
+  // Photo hebdomadaire du forecast, lundi matin
+  const forecastSnapshotInterval = setInterval(checkForecastSnapshot, 60 * 1000);
+  intervals.push(forecastSnapshotInterval);
 
   // Contrôle qualité des données, lundi matin
   const dataQualityInterval = setInterval(checkDataQualityWeekly, 60 * 1000);

@@ -13,6 +13,7 @@ import DeleteConfirmModal from '../../components/ui/DeleteConfirmModal';
 import { toast } from '../../components/ui/Toast';
 import { useStageChange } from '../../components/mandats/useStageChange';
 import TrameEditor from '../../components/mandats/TrameEditor';
+import ProcessForecastPanel from '../../components/mandats/ProcessForecastPanel';
 
 // ─── BRAND TOKENS ───────────────────────────────────
 const NAVY = '#22177A';
@@ -347,7 +348,7 @@ export default function MandatDetailPage() {
   // Delete
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   // Rail
-  const [railTab, setRailTab] = useState<'brief' | 'notes' | 'int' | 'cli' | 'trame'>('brief');
+  const [railTab, setRailTab] = useState<'brief' | 'notes' | 'int' | 'cli' | 'trame' | 'process'>('brief');
   const [notesDraft, setNotesDraft] = useState('');
   const [refreshTick, setRefreshTick] = useState(0);
   // Team (local demo state)
@@ -778,7 +779,7 @@ export default function MandatDetailPage() {
   ];
 
   const railTabsDef: [typeof railTab, string][] = [
-    ['brief', t('Le brief')], ['trame', t('Trame')], ['notes', t('Notes')], ['int', t('Activité interne')], ['cli', t('Activité client')],
+    ['brief', t('Le brief')], ['process', t('Process')], ['trame', t('Trame')], ['notes', t('Notes')], ['int', t('Activité interne')], ['cli', t('Activité client')],
   ];
 
   const signedBtnStyle: React.CSSProperties = {
@@ -1080,6 +1081,12 @@ export default function MandatDetailPage() {
           )}
 
           {/* Trame de qualification */}
+          {railTab === 'process' && id && (
+            <div className="rise">
+              <ProcessForecastPanel mandatId={id} />
+            </div>
+          )}
+
           {railTab === 'trame' && id && (
             <div className="rise" style={{ padding: '16px 18px' }}>
               <TrameEditor mandatId={id} />

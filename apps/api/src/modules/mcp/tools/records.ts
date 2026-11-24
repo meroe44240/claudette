@@ -193,13 +193,18 @@ export function registerRecordTools(server: McpServer) {
   server.tool(
     'update_mandate',
     'Updates a mandate like the edit form of the web app: title, status (OUVERT, EN_COURS, GAGNE, PERDU, ANNULE, CLOTURE), priority, salary range (the estimated fee is recalculated), fee %, description, job description (ficheDePoste), team (assignedToId, recruteurId, salesId, sourceurId)… ' +
-      'Won (GAGNE) needs a placed candidate first. Example: {"id":"…","data":{"priorite":"HAUTE","salaireMax":90000}} → {"id":"…","changes":{"priorite":{"old":"NORMALE","new":"HAUTE"},"salaireMax":{"old":80000,"new":90000},"feeMontantEstime":{"old":16000,"new":18000}}}',
+      'Won (GAGNE) needs a placed candidate first. Closing without a placement (PERDU, ANNULE, CLOTURE) needs raisonPerte (why the deal was lost): it is recorded in the lost deals with the fee of each open position. ' +
+      'Forecast fields: nbPostes (openings), feeType (POURCENTAGE_PACKAGE, POURCENTAGE_FIXE, MONTANT_FIXE), feeMontantFixe, devise (EUR, USD, GBP…), sourceDeal (PARAFORM or null), paraformNbVersements, splitSalesPct (sales share, recruiter gets the rest), paymentTerms. Example: {"id":"…","data":{"priorite":"HAUTE","salaireMax":90000}} → {"id":"…","changes":{"priorite":{"old":"NORMALE","new":"HAUTE"},"salaireMax":{"old":80000,"new":90000},"feeMontantEstime":{"old":16000,"new":18000}}}',
     { id: z.string().uuid(), data: z.record(z.string(), z.any()).describe('Fields: ' + Object.keys(updateMandatSchema.shape).join(', ')) },
     wrapTool('update_mandate', async (a) => guarded(async () => {
       const parsed = updateMandatSchema.strict().safeParse(a.data);
       if (!parsed.success) throw new RecordError(`Invalid data: ${parsed.error.issues.map((i) => `${i.path.join('.') || 'data'}: ${i.message}`).join('; ')}`);
       const before: any = await prisma.mandat.findUnique({ where: { id: a.id as string } });
       if (!before) throw new RecordError(`No mandate with id ${a.id}.`);
+      const st = parsed.data.statut;
+      if (st && ['PERDU', 'ANNULE', 'CLOTURE'].includes(st) && st !== before.statut && !parsed.data.raisonPerte?.trim()) {
+        throw new RecordError('Closing a mandate without a placement needs raisonPerte: ask the user why the deal was lost, then call again with data.raisonPerte.');
+      }
       const after: any = await mandatService.update(a.id as string, parsed.data);
       const changes: Record<string, { old: unknown; new: unknown }> = {};
       for (const k of Object.keys(before)) {

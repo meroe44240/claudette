@@ -33,6 +33,7 @@ import { registerPortalTools } from './tools/portal.js';
 import { registerMergeTools } from './tools/merge.js';
 import { registerContractTools } from './tools/contracts.js';
 import { registerTargetProfileTools } from './tools/target-profiles.js';
+import { registerForecastTools } from './tools/forecast.js';
 
 export type ToolHandler = (args: Record<string, unknown>) => Promise<{ content: Array<{ type: 'text'; text: string }> }>;
 
@@ -67,7 +68,7 @@ export function wrapTool(toolName: string, handler: (args: Record<string, unknow
       }
     }
 
-    const access = checkToolAccess(toolName, user.userRole, user.estAgent);
+    const access = checkToolAccess(toolName, user.userRole, user.estAgent, user.accesFinance);
     const externe = EXTERNAL_TOOLS.has(toolName);
     if (!access.allowed) {
       await logMcpAction({ userId: user.userId, toolName, level: access.level, input: args, success: false, error: access.reason, externe });
@@ -165,6 +166,7 @@ export function registerAllTools(rawServer: McpServer) {
   registerMergeTools(server);
   registerContractTools(server);
   registerTargetProfileTools(server);
+  registerForecastTools(server);
   registerTrashAuditTools(server);
   registerRecordTools(server);
   registerOwnershipPresentationTools(server);
