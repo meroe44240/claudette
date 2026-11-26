@@ -1011,11 +1011,18 @@ export function meetCodeOf(item: any): string | null {
   if (conf?.conferenceSolution?.key?.type === 'hangoutsMeet' && typeof conf.conferenceId === 'string') {
     return conf.conferenceId;
   }
-  const link: string = item?.hangoutLink
-    || (conf?.entryPoints || []).find((e: any) => e?.entryPointType === 'video')?.uri
-    || '';
-  const m = link.match(/meet\.google\.com\/([a-z]{3}-[a-z]{4}-[a-z]{3})/i);
-  return m ? m[1].toLowerCase() : null;
+  // Lien Meet de la visio, sinon collé dans le lieu ou la description (Calendly, invitations transférées).
+  const sources: string[] = [
+    item?.hangoutLink,
+    (conf?.entryPoints || []).find((e: any) => e?.entryPointType === 'video')?.uri,
+    item?.location,
+    item?.description,
+  ].filter((x): x is string => typeof x === 'string' && x.length > 0);
+  for (const text of sources) {
+    const m = text.match(/meet\.google\.com\/([a-z]{3}-[a-z]{4}-[a-z]{3})/i);
+    if (m) return m[1].toLowerCase();
+  }
+  return null;
 }
 
 /**
@@ -1281,15 +1288,17 @@ async function processClassifiedEvent(
   recruiterName: string,
   opts: ProcessOptions = {},
 ): Promise<boolean> {
-  // In-memory lock: skip if already being processed right now
+  // Événement déjà suivi : mise à jour (annulation, nouvel horaire, lien Meet), jamais bloquée
+  // par le verrou anti-doublon (sinon une annulation arrivée juste après serait perdue).
+  if (await updateTrackedEvent(classified)) return false;
+  if (classified.cancelled) return false;
+
+  // Verrou en mémoire : évite deux créations quand le webhook et la synchro voient l'événement en même temps.
   const lockKey = `${classified.googleEventId}:${userId}`;
   if (processingEvents.has(lockKey)) return false;
   processingEvents.add(lockKey);
 
   try {
-    // Événement déjà suivi : on le met à jour (annulation, nouvel horaire, lien Meet).
-    if (await updateTrackedEvent(classified)) return false;
-    if (classified.cancelled) return false;
 
     // Sans invité externe : seul un RDV noté sans invitation, avec le nom complet
     // d'un candidat en cours dans le titre, est retenu. Les réunions internes sont ignorées.

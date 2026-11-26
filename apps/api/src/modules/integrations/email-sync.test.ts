@@ -28,6 +28,10 @@ describe('meetCodeOf', () => {
   it('retombe sur le lien hangoutLink', () => {
     expect(meetCodeOf({ hangoutLink: 'https://meet.google.com/xyz-abcd-efg' })).toBe('xyz-abcd-efg');
   });
+  it('trouve un lien Meet collé dans le lieu ou la description', () => {
+    expect(meetCodeOf({ location: 'https://meet.google.com/kla-mnop-qrs' })).toBe('kla-mnop-qrs');
+    expect(meetCodeOf({ description: 'Rejoindre : https://meet.google.com/aaa-bbbb-ccc ...' })).toBe('aaa-bbbb-ccc');
+  });
   it('ignore les visios qui ne sont pas Google Meet', () => {
     expect(meetCodeOf({ conferenceData: { conferenceSolution: { key: { type: 'addOn' } }, entryPoints: [{ entryPointType: 'video', uri: 'https://zoom.us/j/1' }] } })).toBeNull();
   });
