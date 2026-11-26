@@ -42,7 +42,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI ?? 'http://localhost:3001/api/v1/integrations/gmail/callback';
 
-const GOOGLE_SCOPES = [
+const BASE_GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.modify',
@@ -51,9 +51,15 @@ const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/drive.readonly',
   'https://www.googleapis.com/auth/documents.readonly',
-  // Présence aux visios Google Meet (RDV effectué / no-show).
-  'https://www.googleapis.com/auth/meetings.space.readonly',
-].join(' ');
+];
+export const MEET_SCOPE = 'https://www.googleapis.com/auth/meetings.space.readonly';
+
+/**
+ * Présence aux visios Google Meet : demandée seulement quand GOOGLE_MEET_SCOPE=1, une fois
+ * l'API Google Meet activée dans le projet Google Cloud (sinon la reconnexion échouerait).
+ */
+export const meetScopeEnabled = () => process.env.GOOGLE_MEET_SCOPE === '1';
+const googleScopes = () => [...BASE_GOOGLE_SCOPES, ...(meetScopeEnabled() ? [MEET_SCOPE] : [])].join(' ');
 
 // ─── HELPERS ────────────────────────────────────────
 
@@ -100,7 +106,7 @@ export function getOAuthUrl(userId: string): string {
     client_id: GOOGLE_CLIENT_ID,
     redirect_uri: GOOGLE_REDIRECT_URI,
     response_type: 'code',
-    scope: GOOGLE_SCOPES,
+    scope: googleScopes(),
     access_type: 'offline',
     prompt: 'consent',
     state: userId, // Pass userId in state for callback

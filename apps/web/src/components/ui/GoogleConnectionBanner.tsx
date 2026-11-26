@@ -4,7 +4,7 @@ import { api } from '../../lib/api-client';
 import { t } from '../../lib/i18n';
 
 interface Status {
-  google?: { broken: boolean; meetAccess: boolean };
+  google?: { broken: boolean; meetAccess: boolean | null };
   gmail?: { connected: boolean };
   calendar?: { connected: boolean };
 }

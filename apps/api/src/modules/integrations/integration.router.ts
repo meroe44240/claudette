@@ -89,7 +89,8 @@ export default async function integrationRouter(fastify: FastifyInstance) {
         google: {
           broken: !!googleError,
           brokenSince: googleError?.at ?? null,
-          meetAccess: scopes.includes('meetings.space.readonly'),
+          // null : lecture de la présence Meet pas encore activée côté serveur (pas de bandeau).
+          meetAccess: gmailService.meetScopeEnabled() ? scopes.includes('meetings.space.readonly') : null,
         },
         gmail: { connected: !!gmail?.enabled, email: (gmail?.config as any)?.email || null },
         calendar: { connected: !!calendar?.enabled },
