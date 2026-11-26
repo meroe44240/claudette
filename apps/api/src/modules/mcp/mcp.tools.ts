@@ -22,6 +22,7 @@ import { registerMandateTools } from './tools/mandates.js';
 import { registerTaskTools } from './tools/tasks.js';
 import { registerEmailTools } from './tools/email.js';
 import { registerStatsTools } from './tools/stats.js';
+import { registerMeetingStatsTools } from './tools/meeting-stats.js';
 import { registerAiTools } from './tools/ai.js';
 import { registerNoteTools } from './tools/notes.js';
 import { registerBlockedTools } from './tools/blocked.js';
@@ -156,6 +157,7 @@ export function registerAllTools(rawServer: McpServer) {
   registerTaskTools(server);
   registerEmailTools(server);
   registerStatsTools(server);
+  registerMeetingStatsTools(server);
   registerAiTools(server);
   registerNoteTools(server);
   registerEnrichTools(server);

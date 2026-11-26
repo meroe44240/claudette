@@ -52,6 +52,27 @@ export default async function statsRouter(fastify: FastifyInstance) {
     },
   });
 
+  // GET /rdv - RDV pris / effectués / no-show + CV soumis, par personne
+  fastify.get('/rdv', {
+    schema: {
+      description: 'RDV pris, RDV effectués et CV soumis au client, par personne et par période',
+      tags: ['Stats'],
+      querystring: {
+        type: 'object',
+        properties: {
+          period: { type: 'string', enum: ['week', 'month', 'quarter'] },
+          userId: { type: 'string', format: 'uuid' },
+        },
+      },
+    },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { period, userId } = request.query as { period?: 'week' | 'month' | 'quarter'; userId?: string };
+      const { getRdvStats } = await import('./rdv-stats.service.js');
+      return { data: await getRdvStats(request.userId, period || 'month', userId) };
+    },
+  });
+
   // GET /leaderboard - Team leaderboard
   fastify.get('/leaderboard', {
     schema: {

@@ -42,7 +42,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI ?? 'http://localhost:3001/api/v1/integrations/gmail/callback';
 
-const GOOGLE_SCOPES = [
+const BASE_GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.modify',
@@ -51,7 +51,15 @@ const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/drive.readonly',
   'https://www.googleapis.com/auth/documents.readonly',
-].join(' ');
+];
+export const MEET_SCOPE = 'https://www.googleapis.com/auth/meetings.space.readonly';
+
+/**
+ * Présence aux visios Google Meet : demandée seulement quand GOOGLE_MEET_SCOPE=1, une fois
+ * l'API Google Meet activée dans le projet Google Cloud (sinon la reconnexion échouerait).
+ */
+export const meetScopeEnabled = () => process.env.GOOGLE_MEET_SCOPE === '1';
+const googleScopes = () => [...BASE_GOOGLE_SCOPES, ...(meetScopeEnabled() ? [MEET_SCOPE] : [])].join(' ');
 
 // ─── HELPERS ────────────────────────────────────────
 
@@ -98,7 +106,7 @@ export function getOAuthUrl(userId: string): string {
     client_id: GOOGLE_CLIENT_ID,
     redirect_uri: GOOGLE_REDIRECT_URI,
     response_type: 'code',
-    scope: GOOGLE_SCOPES,
+    scope: googleScopes(),
     access_type: 'offline',
     prompt: 'consent',
     state: userId, // Pass userId in state for callback
@@ -150,6 +158,22 @@ export async function handleOAuthCallback(userId: string, code: string) {
     console.warn('[Gmail OAuth] Could not fetch user email:', e);
   }
 
+  // Rattrapage : à chaque (re)connexion, les synchros repartent 30 jours en arrière
+  // (emails reçus et envoyés, agenda). Les doublons sont écartés à l'import.
+  const rattrapage = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const previous = await prisma.integrationConfig.findMany({
+    where: { userId, provider: { in: ['gmail', 'calendar'] } },
+    select: { provider: true, config: true },
+  });
+  const prevConf = (provider: string) => {
+    const c = { ...(((previous.find((p) => p.provider === provider)?.config) as Record<string, any>) || {}) };
+    delete c.authError;
+    return c;
+  };
+  const scopes = typeof tokens.scope === 'string' ? tokens.scope : null;
+  const gmailConfig = { ...prevConf('gmail'), email: userEmail, emailSyncCursor: rattrapage, scopes };
+  const calendarConfig = { ...prevConf('calendar'), email: userEmail, calendarSyncAt: null, calendarRattrapage: true, scopes };
+
   const config = await prisma.integrationConfig.upsert({
     where: { userId_provider: { userId, provider: 'gmail' } },
     update: {
@@ -157,7 +181,7 @@ export async function handleOAuthCallback(userId: string, code: string) {
       refreshToken: tokens.refresh_token || undefined,
       tokenExpiry,
       enabled: true,
-      config: { email: userEmail },
+      config: gmailConfig,
     },
     create: {
       userId,
@@ -166,7 +190,7 @@ export async function handleOAuthCallback(userId: string, code: string) {
       refreshToken: tokens.refresh_token,
       tokenExpiry,
       enabled: true,
-      config: { email: userEmail },
+      config: gmailConfig,
     },
   });
 
@@ -178,7 +202,7 @@ export async function handleOAuthCallback(userId: string, code: string) {
       refreshToken: tokens.refresh_token || undefined,
       tokenExpiry,
       enabled: true,
-      config: { email: userEmail },
+      config: calendarConfig,
     },
     create: {
       userId,
@@ -187,60 +211,14 @@ export async function handleOAuthCallback(userId: string, code: string) {
       refreshToken: tokens.refresh_token,
       tokenExpiry,
       enabled: true,
-      config: { email: userEmail },
+      config: calendarConfig,
     },
   });
 
+  const { clearGoogleAuthError } = await import('./google-auth.service.js');
+  await clearGoogleAuthError(userId);
+
   return { success: true, configId: config.id };
-}
-
-/**
- * Refresh an expired access token using the refresh token.
- */
-async function refreshAccessToken(userId: string): Promise<string> {
-  const config = await prisma.integrationConfig.findUnique({
-    where: { userId_provider: { userId, provider: 'gmail' } },
-  });
-
-  if (!config || !config.refreshToken) {
-    throw new AppError(400, 'Intégration Gmail non configurée ou token de rafraîchissement manquant');
-  }
-
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
-      refresh_token: config.refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  });
-
-  const tokens = await response.json() as any;
-
-  if (tokens.error) {
-    console.error('[Gmail] Token refresh error:', tokens);
-    throw new AppError(400, 'Erreur lors du rafraîchissement du token Gmail. Veuillez reconnecter votre compte.');
-  }
-
-  console.log(`[Gmail] Token refreshed for user ${userId}`);
-
-  const newAccessToken = tokens.access_token as string;
-  const tokenExpiry = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
-
-  // Update both gmail and calendar configs
-  await prisma.integrationConfig.update({
-    where: { userId_provider: { userId, provider: 'gmail' } },
-    data: { accessToken: newAccessToken, tokenExpiry },
-  });
-
-  await prisma.integrationConfig.updateMany({
-    where: { userId, provider: 'calendar' },
-    data: { accessToken: newAccessToken, tokenExpiry },
-  });
-
-  return newAccessToken;
 }
 
 /**
@@ -255,16 +233,9 @@ export async function getValidAccessToken(userId: string): Promise<string> {
     throw new AppError(400, 'Intégration Gmail non configurée ou désactivée');
   }
 
-  if (!config.accessToken) {
-    throw new AppError(400, 'Token Gmail manquant. Veuillez reconnecter votre compte.');
-  }
-
-  // Check if token is expired or will expire in the next 5 minutes
-  if (config.tokenExpiry && config.tokenExpiry.getTime() < Date.now() + 5 * 60 * 1000) {
-    return refreshAccessToken(userId);
-  }
-
-  return config.accessToken;
+  // Jeton partagé Gmail/Calendar : refresh + alerte si la connexion est cassée.
+  const { requireGoogleAccessToken } = await import('./google-auth.service.js');
+  return requireGoogleAccessToken(userId);
 }
 
 // ─── WEBHOOK PROCESSING ────────────────────────────

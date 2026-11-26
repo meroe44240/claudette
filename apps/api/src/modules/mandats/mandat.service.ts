@@ -533,9 +533,15 @@ export async function getTimeline(id: string): Promise<TimelineItem[]> {
     candidatures.map((c) => [c.id, c.candidat]),
   );
 
-  // 3. Activities attached directly to the mandat
+  // 3. Activities attached directly to the mandat, plus client emails the Gmail
+  //    sync tagged to it (metadata.mandatId, client with a single open mandat).
   const mandatActivites = await prisma.activite.findMany({
-    where: { entiteType: 'MANDAT', entiteId: id },
+    where: {
+      OR: [
+        { entiteType: 'MANDAT', entiteId: id },
+        { entiteType: 'CLIENT', metadata: { path: ['mandatId'], equals: id } },
+      ],
+    },
     select: {
       id: true,
       type: true,

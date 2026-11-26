@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Calendar, Handshake, UserRound, CircleOff, ExternalLink, Search } from 'lucide-react';
+import { Calendar, Handshake, UserRound, CircleOff, ExternalLink, Search, CalendarCheck } from 'lucide-react';
 import { api, ApiError } from '../../lib/api-client';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import PageHeader from '../../components/ui/PageHeader';
@@ -114,6 +114,68 @@ function PendingList() {
             </div>
           </Card>
         </Link>
+      ))}
+    </div>
+  );
+}
+
+type RaisonConfirmer = 'not_organizer' | 'no_meet' | 'no_record' | 'no_access' | null;
+const RAISONS: Record<string, string> = {
+  not_organizer: t('Visio créée par le client'),
+  no_meet: t('Pas de lien Google Meet'),
+  no_record: t('Personne ne s’est connecté'),
+  no_access: t('Accès Google Meet à autoriser'),
+};
+
+// RDV terminés dont la présence n'a pas pu être lue dans Google Meet : un clic suffit.
+function ToConfirmList() {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ['meetings-a-confirmer'],
+    queryFn: () => api.get<{ data: Array<Meeting & { raison: RaisonConfirmer }> }>('/meetings/a-confirmer'),
+  });
+  const mutation = useMutation({
+    mutationFn: ({ id, statut }: { id: string; statut: 'EFFECTUE' | 'NO_SHOW' | 'ANNULE' }) =>
+      api.post(`/meetings/${id}/statut`, { statut }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meetings-a-confirmer'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics-rdv'] });
+    },
+    onError: () => toast('error', t('Erreur lors de la validation')),
+  });
+  const meetings = data?.data ?? [];
+  if (isLoading) return <Skeleton className="h-24 w-full" />;
+  if (meetings.length === 0) return <p className="text-sm text-neutral-500">{t('Aucun RDV à confirmer.')}</p>;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-neutral-500">{t('Ces RDV sont terminés mais la présence n’a pas pu être lue dans Google Meet.')}</p>
+      {meetings.map((m) => (
+        <Card key={m.id}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-neutral-900">{m.titre}</p>
+              <p className="mt-0.5 text-xs text-neutral-500">
+                {formatDate(m.startTime)}
+                {m.attendees.length > 0 && ` · ${m.attendees.map((a) => a.name || a.email).join(', ')}`}
+                {m.raison && RAISONS[m.raison] && ` · ${RAISONS[m.raison]}`}
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              {(['EFFECTUE', 'NO_SHOW', 'ANNULE'] as const).map((statut) => (
+                <Button
+                  key={statut}
+                  size="sm"
+                  variant={statut === 'EFFECTUE' ? 'primary' : 'secondary'}
+                  disabled={mutation.isPending}
+                  onClick={() => mutation.mutate({ id: m.id, statut })}
+                >
+                  {statut === 'EFFECTUE' ? t('Effectué') : statut === 'NO_SHOW' ? t('No-show') : t('Annulé')}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </Card>
       ))}
     </div>
   );
@@ -335,7 +397,18 @@ export default function RdvClasserPage() {
   return (
     <div className="space-y-6">
       <PageHeader title={id ? t('RDV client ou présentation ?') : t('RDV à classer')} />
-      {id ? <ClassifyForm key={id} id={id} /> : <div className="mx-auto max-w-2xl"><PendingList /></div>}
+      {id ? <ClassifyForm key={id} id={id} /> : (
+        <div className="mx-auto max-w-2xl space-y-8">
+          <PendingList />
+          <section className="space-y-3">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-neutral-900">
+              <CalendarCheck size={18} className="text-[#22177A]" />
+              {t('RDV à confirmer')}
+            </h2>
+            <ToConfirmList />
+          </section>
+        </div>
+      )}
     </div>
   );
 }
