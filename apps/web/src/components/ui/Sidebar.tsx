@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar, Wrench, Megaphone, CalendarClock, Plug, Linkedin, UserSearch, Video, Crosshair, Bot, ScrollText, Trash2, MessagesSquare } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Briefcase, FileText, Settings, ChevronDown, ChevronsLeft, BarChart3, Activity, Radar, Wrench, Megaphone, CalendarClock, Plug, Linkedin, UserSearch, Video, Crosshair, Bot, ScrollText, Trash2, MessagesSquare, TrendingUp } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth-store';
 import { t } from '../../lib/i18n';
 
@@ -58,6 +58,7 @@ const integrationsItem: NavItem = { to: '/settings/integrations', icon: Plug, la
 const paramItem: NavItem = { to: '/settings', icon: Settings, label: t('Paramètres') };
 const trashItem: NavItem = { to: '/corbeille', icon: Trash2, label: t('Corbeille') };
 const agentsItem: NavItem = { to: '/admin/agents', icon: Bot, label: t('Agents') };
+const forecastItem: NavItem = { to: '/admin/forecast', icon: TrendingUp, label: t('Pipe partagé') };
 const journalItem: NavItem = { to: '/admin/journal', icon: ScrollText, label: t('Journal') };
 const registryItem: NavItem = { to: '/admin/chat-registry', icon: MessagesSquare, label: t('Registre des agents') };
 
@@ -252,6 +253,7 @@ export default function Sidebar({ collapsed = false, onToggleCollapse, isOpen = 
         <NavItemLink item={trashItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
         {user?.role === 'ADMIN' && (
           <>
+            <NavItemLink item={forecastItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
             <NavItemLink item={agentsItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
             <NavItemLink item={journalItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />
             <NavItemLink item={registryItem} collapsed={mobile ? false : collapsed} onNavigate={mobile ? onClose : undefined} />

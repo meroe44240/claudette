@@ -49,6 +49,17 @@ export const updateMandatSchema = z.object({
   pitchPoints: z.any().optional(),
   typeContrat: z.string().nullable().optional(),
   etapeCycle: z.string().max(60).nullable().optional(),
+  // ── Forecast ──
+  nbPostes: z.number().int().min(1).max(50).optional(),
+  feeType: z.enum(['POURCENTAGE_PACKAGE', 'POURCENTAGE_FIXE', 'MONTANT_FIXE']).optional(),
+  feeMontantFixe: z.number().int().nonnegative().nullable().optional(),
+  devise: z.string().regex(/^[A-Za-z]{3}$/).transform((s) => s.toUpperCase()).optional(),
+  sourceDeal: z.string().max(30).nullable().optional(),
+  paraformNbVersements: z.number().int().min(1).max(24).optional(),
+  splitSalesPct: z.number().int().min(0).max(100).optional(),
+  paymentTerms: z.string().max(50).nullable().optional(),
+  // Raison de la perte quand le mandat est fermé sans placement (non persistée sur le mandat : va dans deals_perdus)
+  raisonPerte: z.string().max(2000).optional(),
 });
 
 export const updateFeeSchema = z.object({

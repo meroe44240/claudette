@@ -38,6 +38,7 @@ import emailRouter from './modules/email/email.router.js';
 import documentRouter from './modules/documents/document.router.js';
 import pipelineRouter from './modules/clients/pipeline.router.js';
 import adminDashboardRouter from './modules/dashboard/admin-dashboard.router.js';
+import forecastRouter from './modules/forecast/forecast.router.js';
 import reportRouter from './modules/reports/report.router.js';
 import statsRouter from './modules/stats/stats.router.js';
 import mcpLogsRouter from './modules/mcp/mcp-logs.router.js';
@@ -188,6 +189,7 @@ async function buildApp() {
   await app.register(documentRouter, { prefix: '/api/v1/documents' });
   await app.register(pipelineRouter, { prefix: '/api/v1/clients-pipeline' });
   await app.register(adminDashboardRouter, { prefix: '/api/v1/dashboard/admin' });
+  await app.register(forecastRouter, { prefix: '/api/v1/forecast' });
   await app.register(reportRouter, { prefix: '/api/v1/reports' });
   await app.register(statsRouter, { prefix: '/api/v1/stats' });
   await app.register(mcpLogsRouter, { prefix: '/api/v1/mcp-logs' });

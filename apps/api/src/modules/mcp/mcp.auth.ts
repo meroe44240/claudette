@@ -8,6 +8,8 @@ export interface McpUserContext {
   userRole: Role;
   /** Compte agent IA : accès total aux données métier, sans confirmation. */
   estAgent?: boolean;
+  /** Agent financier : accès en lecture aux outils forecast / trésorerie. */
+  accesFinance?: boolean;
 }
 
 const mcpUserStore = new AsyncLocalStorage<McpUserContext>();

@@ -330,6 +330,13 @@ export async function update(
   if ((data as any).presentationNoShow !== undefined) updateData.presentationNoShow = (data as any).presentationNoShow;
   if (data.dateDemarrage !== undefined) updateData.dateDemarrage = new Date(data.dateDemarrage);
   if (data.sourcePlacement !== undefined) updateData.sourcePlacement = data.sourcePlacement;
+  if ((data as any).packageFixe !== undefined) updateData.packageFixe = (data as any).packageFixe;
+  if ((data as any).packageVariable !== undefined) updateData.packageVariable = (data as any).packageVariable;
+
+  // Forecast : photo des postes du mandat avant un passage en Lost (pour enregistrer le deal perdu)
+  const goingLost = data.stage === 'REFUSE' && existing.stage !== 'REFUSE';
+  const forecast = goingLost ? await import('../forecast/forecast.service.js') : null;
+  const dealsBefore = forecast ? await forecast.snapshotBeforeLoss(existing.mandatId) : [];
 
   // When closing won (PLACE), write the definitive fee + invoice status +
   // mandat lead source on the mandat in the same transaction as the
@@ -349,8 +356,11 @@ export async function update(
         if (data.sourceLead !== undefined) {
           mandatUpdate.sourceLead = data.sourceLead;
         }
-        // Close won → le mandat est GAGNÉ (donc archivé : exclu des vues actives OUVERT/EN_COURS)
-        mandatUpdate.statut = 'GAGNE';
+        // Close won → le mandat est GAGNÉ (donc archivé : exclu des vues actives OUVERT/EN_COURS),
+        // sauf s'il reste des postes ouverts (mandat à plusieurs postes).
+        const mandatPostes = await tx.mandat.findUnique({ where: { id: existing.mandatId }, select: { nbPostes: true } });
+        const placedCount = await tx.candidature.count({ where: { mandatId: existing.mandatId, stage: 'PLACE' } });
+        if (placedCount >= (mandatPostes?.nbPostes ?? 1)) mandatUpdate.statut = 'GAGNE';
         await tx.mandat.update({ where: { id: existing.mandatId }, data: mandatUpdate });
         return updated;
       })
@@ -377,6 +387,12 @@ export async function update(
         recruteurPrenom: mnd?.assignedTo?.prenom ?? null,
       }, { key: id, candidatureId: id, candidatId: existing.candidatId, mandatId: existing.mandatId });
     })().catch((e) => console.warn('[Candidature] annonce placement échouée', (e as Error).message));
+  }
+
+  if (forecast) {
+    await forecast
+      .recordCandidatureLoss(dealsBefore, id, data.motifRefus ?? existing.motifRefus, data.motifRefusDetail ?? existing.motifRefusDetail, changedById)
+      .catch((e) => console.warn('[Forecast] lost deal recording failed', (e as Error).message));
   }
 
   // If stage changed, create StageHistory entry

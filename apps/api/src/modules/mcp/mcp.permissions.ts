@@ -163,6 +163,13 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   delete_company:                { level: 'confirm', roles: ['ADMIN'] },
   delete_lead:                   { level: 'confirm', roles: ['ADMIN', 'MANAGER'] },
 
+  // ═══ FORECAST (process d'entretien : ouvert à l'équipe) ═══
+  set_mandate_interview_process: { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  set_candidate_process_step:    { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  // ═══ FINANCE (admin ; agents financiers en lecture seule, voir FINANCE_TOOLS) ═══
+  get_forecast:                  { level: 'free',    roles: ['ADMIN'] },
+  override_deal:                 { level: 'confirm', roles: ['ADMIN'] },
+
   // ═══ BLOCKED ═══
   export_database:               { level: 'blocked', roles: [] },
   modify_settings:               { level: 'blocked', roles: [] },
@@ -172,10 +179,31 @@ export function getToolPermission(toolName: string): ToolPermission {
   return TOOL_PERMISSIONS[toolName] || { level: 'blocked', roles: [] };
 }
 
-export function checkToolAccess(toolName: string, userRole: Role, estAgent = false): { allowed: boolean; level: PermissionLevel; reason?: string } {
+/**
+ * Outils financiers : réservés à l'admin. Les agents n'y ont accès que s'ils sont agents financiers
+ * (users.acces_finance), et seulement en lecture. Exception à la règle « les agents ont accès à tout ».
+ */
+export const FINANCE_TOOLS: Record<string, 'read' | 'write'> = {
+  get_forecast: 'read',
+  override_deal: 'write',
+};
+
+export function checkToolAccess(toolName: string, userRole: Role, estAgent = false, accesFinance = false): { allowed: boolean; level: PermissionLevel; reason?: string } {
   const perm = getToolPermission(toolName);
   if (perm.level === 'blocked') {
     return { allowed: false, level: 'blocked', reason: 'This action is not allowed over MCP for security reasons.' };
+  }
+  const finance = FINANCE_TOOLS[toolName];
+  if (finance) {
+    if (userRole === 'ADMIN' && !estAgent) return { allowed: true, level: perm.level };
+    if (estAgent && accesFinance && finance === 'read') return { allowed: true, level: 'free' };
+    return {
+      allowed: false,
+      level: perm.level,
+      reason: estAgent
+        ? (accesFinance ? 'Finance agents have read-only access: this tool changes data. Ask an admin.' : 'This finance tool is only available to finance agents. Ask an admin to enable finance access on this agent.')
+        : 'This finance tool is only available to admins.',
+    };
   }
   // Les agents ont accès à tout ce qui n'est pas bloqué : tout est tracé et réversible.
   if (estAgent) return { allowed: true, level: 'free' };

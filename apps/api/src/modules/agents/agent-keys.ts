@@ -11,7 +11,7 @@ export function hashKey(key: string) {
   return createHash('sha256').update(key.trim()).digest('hex');
 }
 
-const userSelect = { id: true, email: true, role: true, status: true, estAgent: true, prenom: true, nom: true, limiteParMinute: true } as const;
+const userSelect = { id: true, email: true, role: true, status: true, estAgent: true, accesFinance: true, prenom: true, nom: true, limiteParMinute: true } as const;
 
 /** Retrouve l'utilisateur d'une clé : clé d'agent (empreinte) ou ancienne clé API en clair. */
 export async function findUserByApiKey(token: string) {

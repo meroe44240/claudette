@@ -243,7 +243,13 @@ export async function update(id: string, data: UpdateMandatInput) {
   const salaireMax = data.salaireMax !== undefined ? data.salaireMax : existing.salaireMax;
   const feePourcentage = data.feePourcentage !== undefined ? data.feePourcentage : Number(existing.feePourcentage);
 
-  const updateData: any = { ...data };
+  const { raisonPerte, ...rest } = data as typeof data & { raisonPerte?: string };
+  const updateData: any = { ...rest };
+
+  // Forecast : photo des postes ouverts avant une fermeture sans placement (deals perdus)
+  const closingWithoutPlacement = !!data.statut && ['PERDU', 'ANNULE', 'CLOTURE'].includes(data.statut) && data.statut !== existing.statut;
+  const forecast = closingWithoutPlacement ? await import('../forecast/forecast.service.js') : null;
+  const dealsBefore = forecast ? await forecast.snapshotBeforeLoss(id) : [];
 
   // Poser la date de clôture au passage vers un statut fermé (rattachement du
   // CA au trimestre). On n'écrase pas une date déjà posée.
@@ -264,6 +270,11 @@ export async function update(id: string, data: UpdateMandatInput) {
     where: { id },
     data: updateData,
   });
+
+  if (forecast && data.statut) {
+    await forecast.recordMandatClosure(id, dealsBefore, data.statut, raisonPerte).catch((e) =>
+      console.warn('[Forecast] lost deal recording failed', (e as Error).message));
+  }
 
   // Recalculate client typeClient if mandat statut changed (si client)
   if (data.statut !== undefined && existing.clientId) {

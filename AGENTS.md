@@ -44,7 +44,7 @@ How AI agents work in Propium (HumanUp's ATS) through its MCP server. This file 
 
 Each event gives its type, the record (type, id, label), who did it (`null` for automations), when, and details. Webhooks receive the same JSON, signed with `X-Propium-Signature: sha256=<HMAC-SHA256 of the raw body>`.
 
-## Tools (128)
+## Tools (132)
 
 ### Start here
 
@@ -116,11 +116,12 @@ Each event gives its type, the record (type, id, label), who did it (`null` for 
 | `list_candidate_debriefs` | Lists the interview debriefs stored on a candidate record (Interviews tab), with the proposed update and its status (propose = to review, applique = applied, erreur = error). | **candidate_id** |
 | `match_candidate_to_profiles` | For an S-Tier, A-tier or A-Player candidate, lists the target profiles that fit, with the reasons (Engineering: shared technos, seniority, location/remote; Sales: client type, buyer, cycle, motion). | **candidate_id** |
 | `merge_candidates` | Merges two duplicate candidate records (open to all recruiters). | **primary_id**, **duplicate_id**, confirm |
-| `move_candidate_stage` | Moves a candidate to another stage in a mandate pipeline. | **candidature_id**, **new_stage**, motif_refus, motif_refus_detail, date_entretien_client, interlocuteur_client, brief_client, fee_montant_facture, date_demarrage, source_placement, source_lead |
+| `move_candidate_stage` | Moves a candidate to another stage in a mandate pipeline. | **candidature_id**, **new_stage**, motif_refus, motif_refus_detail, date_entretien_client, interlocuteur_client, brief_client, fee_montant_facture, date_demarrage, source_placement, source_lead, process_step, next_interview_at, waiting_since |
 | `remove_candidate_from_mandate` | Removes a candidate from a mandate pipeline by moving them to Lost (REFUSE). | **candidature_id**, reason |
 | `request_candidate_confirmation` | Emails the candidate to confirm their interest and consent to send their CV to the client (same as the "Ask for confirmation" button). | **candidat_id** |
 | `search_candidates` | Searches candidates in the ATS by name, email, job title, company, tags, city or availability. | query, city, source, tags, disponibilite, limit, offset |
 | `search_talents_kalent` | Searches profiles in the Kalent database (200M+ profiles) with the team's shared API key. | job_title, location, location_radius_km, skills, companies, excluded_companies, seniority, industries, languages, raw_filters |
+| `set_candidate_process_step` | Sets where a candidate is in the client interview process of the mandate (step k of n), the next interview date and the waiting status ("waiting for feedback since"). | **candidature_id**, step, next_interview_at, waiting_since |
 | `suggest_candidates_for_mandate` | Looks in the talent pool for candidates who could fit a mandate. | **mandate_id**, title_keywords, city, limit |
 | `update_candidate` | Updates a candidate details. | **candidate_id**, nom, prenom, email, linkedinUrl, salaire, disponibilite, posteActuel, entrepriseActuelle, telephone, localisation, tags |
 | `update_candidate_dossier` | Updates the client dossier of a candidate (visible to the client on the portal). | **candidate_id**, synthese, infos, adequation, sections, photo_url, show_contact, protect |
@@ -137,13 +138,14 @@ Each event gives its type, the record (type, id, label), who did it (`null` for 
 | `duplicate_mandate` | Duplicates a mandate (same company, contact, salary, fee, description) as a new open mandate titled "<title> (copie)", without its candidates. | **id** |
 | `generate_contract` | Generates the HumanUp recruitment services agreement (success-fee contract) as a PDF and returns a download link. | mandate_id, mandate_name, company_id, company_name, preview, language, fee_percent, payment_terms, country, guarantee_months, ownership_months, signatory_name, signatory_email, address, registration, job_title, special_conditions, exception_reason, discount_reason |
 | `get_mandate` | Gets the full mandate record with pipeline, stats, client and fees. | mandate_id, mandate_name |
-| `get_mandate_pipeline` | Gets the full pipeline of a mandate: candidates grouped by stage (keys are stage codes, see stage_labels for the English names). | **mandate_id** |
+| `get_mandate_pipeline` | Gets the full pipeline of a mandate: candidates grouped by stage (keys are stage codes, see stage_labels for the English names), the client interview process (interview_process) and, for Client interview and Process, each candidate's step in it (client_process_step: step k of n), next interview… | **mandate_id** |
 | `list_contract_approvals` | Admins only. | (none) |
 | `list_job_offers` | Lists job board offers (published and drafts). | (none) |
 | `move_lead_stage` | Moves a lead forward in the follow-up pipeline (nouveau -> contacte -> r1..r7 -> rdv). | **lead_id**, **stage** |
 | `publish_job_offer` | Publishes or unpublishes a job board offer. | **offer_id**, **published** |
 | `review_contract_approval` | Admins only. | **approval_id**, **decision**, note |
 | `search_mandates` | Searches mandates by title, company, client or status. | query, status, limit |
+| `set_mandate_interview_process` | Sets the client interview process of a mandate: the ordered list of interview steps at the client (free labels). | **mandate_id**, **steps** |
 | `update_mandate` | Updates a mandate like the edit form of the web app: title, status (OUVERT, EN_COURS, GAGNE, PERDU, ANNULE, CLOTURE), priority, salary range (the estimated fee is recalculated), fee %, description, job description (ficheDePoste), team (assignedToId, recruteurId, salesId, sourceurId)… Won (GAGNE)… | **id**, **data** |
 
 ### Companies and target profiles
@@ -250,6 +252,8 @@ Each event gives its type, the record (type, id, label), who did it (`null` for 
 |---|---|---|
 | `export_database` | Export the database. Blocked over MCP. | reason |
 | `get_analytics` | Everything on the Analytics page for one team member (default: you) over a period: calls, meetings, candidates, mandates, won revenue and presentation rate with trend vs previous period, meetings by type, pipeline funnel by stage, revenue billed per month; plus the team leaderboard (placements,… | period, user_id, user_email, user_name |
+| `get_forecast` | Weighted pipeline ("shared pipe"): one line per open position (a mandate with 3 openings gives 3 lines), with the lead candidate, step, probability (computed, or forced by a person: proba_overridden), fee in EUR, weighted fee, expected placements, planned billing month and cash schedule. | person, source, billing_from, billing_to, lost_since |
 | `list_meetings_to_confirm` | Finished meetings whose attendance could not be read from Google Meet (client-created Meet link, no Meet link, nobody joined, or Meet access not yet granted). | user_id, user_email, user_name |
 | `modify_settings` | Change system settings. Blocked over MCP. | reason |
+| `override_deal` | Forces the probability, the fee (EUR) or the planned billing month of the position led by a candidature (lead_candidature_id in get_forecast). | **candidature_id**, proba, fee_eur, billing_month |
 | `set_meeting_status` | Record whether a meeting took place: HELD, NO_SHOW or CANCELLED. | **meeting_id**, **status** |

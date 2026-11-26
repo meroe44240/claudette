@@ -33,6 +33,9 @@ export const updateCandidatureSchema = z.object({
   messageToClient: z.string().max(2000).optional(),
   // Espace candidat : message au candidat (français, traduit en anglais), attaché au changement d'étape
   candidateMessage: z.string().max(2000).optional(),
+  // ── Forecast ──
+  packageFixe: z.number().int().nonnegative().nullable().optional(),
+  packageVariable: z.number().int().nonnegative().nullable().optional(),
 });
 
 export type CreateCandidatureInput = z.infer<typeof createCandidatureSchema>;
