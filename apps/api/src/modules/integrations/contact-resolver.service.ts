@@ -101,6 +101,25 @@ export function nameFromAddress(a: { name: string | null; email: string }): { pr
   return { prenom: null, nom: capitalize(parts[0] || a.email.split('@')[0]) };
 }
 
+/**
+ * Nom retenu : celui affiché dans l'email s'il est complet (prénom + nom), sinon celui
+ * lu par l'IA, sinon celui déduit de l'adresse. Jamais « Elie Elie » : un prénom seul
+ * reste un prénom seul.
+ */
+export function pickName(person: { name: string | null; email: string }, t?: { prenom?: string; nom?: string } | null): { prenom: string | null; nom: string } {
+  const guess = nameFromAddress(person);
+  const displayFull = !!guess.prenom && guess.nom !== guess.prenom && !!(person.name || '').trim();
+  let prenom: string | null;
+  let nom: string;
+  if (displayFull) ({ prenom, nom } = guess);
+  else {
+    prenom = (t?.prenom || '').trim() || guess.prenom;
+    nom = (t?.nom || '').trim() || guess.nom;
+  }
+  if (prenom && prenom.toLowerCase() === nom.toLowerCase()) prenom = null;
+  return { prenom, nom };
+}
+
 export function deriveCompanyName(domain: string): string {
   const n = domain.replace(/^www\./, '').split('.')[0];
   return n ? n.charAt(0).toUpperCase() + n.slice(1) : domain;
@@ -192,9 +211,7 @@ Réponds uniquement en JSON : {"type":"CANDIDAT|CLIENT|IGNORE","prenom":"","nom"
 const libelleOrigine = (ctx: Context) => (ctx.origine === 'email' ? `l'email : "${ctx.objet}"` : `le rendez-vous : "${ctx.objet}"`);
 
 async function createCandidat(userId: string, person: Person, ctx: Context, t: Triage | null, stats: ResolverStats): Promise<Resolution> {
-  const guess = nameFromAddress(person);
-  const nom = (t?.nom || '').trim() || guess.nom;
-  const prenom = (t?.prenom || '').trim() || guess.prenom;
+  const { prenom, nom } = pickName(person, t);
   const c = await prisma.candidat.create({
     data: {
       nom,
@@ -215,9 +232,7 @@ async function createCandidat(userId: string, person: Person, ctx: Context, t: T
 }
 
 async function createClient(userId: string, person: Person, ctx: Context, t: Triage | null, entreprise: { id: string; nom: string }, stats: ResolverStats): Promise<Resolution> {
-  const guess = nameFromAddress(person);
-  const nom = (t?.nom || '').trim() || guess.nom;
-  const prenom = (t?.prenom || '').trim() || guess.prenom;
+  const { prenom, nom } = pickName(person, t);
   const c = await prisma.client.create({
     data: {
       nom,
@@ -238,10 +253,10 @@ async function createClient(userId: string, person: Person, ctx: Context, t: Tri
 }
 
 async function createLead(userId: string, person: Person, ctx: Context, t: Triage | null, entreprise: { id: string; nom: string } | null, stats: ResolverStats): Promise<Resolution> {
-  const guess = nameFromAddress(person);
   const company = entreprise?.nom || (t?.entreprise || '').trim() || (isPersonalEmail(person.email) ? '' : deriveCompanyName(domainOf(person.email)));
   if (!company) return null; // personne côté entreprise sans entreprise identifiable : on ne devine pas
-  const contact = [(t?.prenom || '').trim() || guess.prenom, (t?.nom || '').trim() || guess.nom].filter(Boolean).join(' ');
+  const picked = pickName(person, t);
+  const contact = [picked.prenom, picked.nom].filter(Boolean).join(' ');
   const lead = await prisma.lead.create({
     data: {
       company,

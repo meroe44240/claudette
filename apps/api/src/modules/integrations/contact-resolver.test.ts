@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const findMany = vi.fn();
 vi.mock('../../lib/db.js', () => ({ default: { mandat: { findMany: (...a: unknown[]) => findMany(...a) } } }));
 
-const { entrepriseSousContrat, nameFromAddress, AiBudget, AiBudgetExhausted } = await import('./contact-resolver.service.js');
+const { entrepriseSousContrat, nameFromAddress, pickName, AiBudget, AiBudgetExhausted } = await import('./contact-resolver.service.js');
 
 describe('entrepriseSousContrat (client si contrat, sinon Lead)', () => {
   beforeEach(() => findMany.mockReset());
@@ -43,5 +43,19 @@ describe('AiBudget', () => {
     const b = new AiBudget(1, true);
     b.take();
     expect(() => b.take()).toThrow(AiBudgetExhausted);
+  });
+});
+
+describe('pickName', () => {
+  it("le nom affiché complet l'emporte sur l'IA", () => {
+    expect(pickName({ name: 'Josiah Oberholtzer', email: 'josiah.oberholtzer@gmail.com' }, { prenom: 'Joséphine', nom: 'Oberholtzer' }))
+      .toEqual({ prenom: 'Josiah', nom: 'Oberholtzer' });
+  });
+  it('un prénom seul ne donne pas « Elie Elie »', () => {
+    expect(pickName({ name: null, email: 'elie@audion.fm' }, null)).toEqual({ prenom: null, nom: 'Elie' });
+    expect(pickName({ name: 'Diane', email: 'diane@ahead.com' }, { prenom: 'Diane', nom: '' })).toEqual({ prenom: null, nom: 'Diane' });
+  });
+  it("sans nom affiché, l'IA complète", () => {
+    expect(pickName({ name: null, email: 'jdoe@acme.com' }, { prenom: 'John', nom: 'Doe' })).toEqual({ prenom: 'John', nom: 'Doe' });
   });
 });
