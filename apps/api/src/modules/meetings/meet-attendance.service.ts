@@ -24,7 +24,9 @@ const MIN_PRESENCE_MS = 5 * 60 * 1000;
 const WAIT_AFTER_END_MS = 10 * 60 * 1000;
 const NO_RECORD_GRACE_MS = 2 * 3600 * 1000;
 const LOOKBACK_MS = 30 * 86400 * 1000;
-const MAX_PER_RUN = 60;
+// Appels Allo : requêtes en base, peu coûteuses. Les appels à l'API Meet restent limités
+// aux RDV dont la personne a donné l'accès.
+const MAX_PER_RUN = 400;
 const INTERNAL_DOMAINS = ['humanup.io'];
 
 type Meta = Record<string, any>;
@@ -270,7 +272,7 @@ export async function runMeetAttendanceCheck(): Promise<void> {
     },
     select: { id: true, userId: true, metadata: true, entiteType: true, entiteId: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
-    take: 600,
+    take: 1000,
   });
 
   const now = Date.now();
