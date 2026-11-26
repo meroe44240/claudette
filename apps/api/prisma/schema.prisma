@@ -120,6 +120,7 @@ model Entreprise {
   resumeProfilsDate  DateTime?         @map("resume_profils_date") @db.Timestamptz()
   // Forecast : délai de paiement par défaut (jours) ; le paymentTerms du mandat reste prioritaire
   delaiPaiementJours Int               @default(30) @map("delai_paiement_jours")
+  entiteFacturation  EntiteFacturation? @map("entite_facturation") // vide = déduite (Europe et Paraform → Londres, sinon Courtside)
   createdById        String?           @db.Uuid
   createdBy          User?             @relation("EntrepriseCreatedBy", fields: [createdById], references: [id])
   // Propriétaire actuel (humain ou agent), tenu à jour par claim_owner / release_owner (table ownerships)
@@ -130,6 +131,7 @@ model Entreprise {
 
   clients           Client[]
   mandats           Mandat[]
+  factures          Facture[]
   profilsRecherches ProfilRecherche[]
   presentations     Presentation[]
 
@@ -365,6 +367,7 @@ model Mandat {
   profilsRecherches   ProfilRecherche[]
 
   dealsPerdus DealPerdu[]
+  factures    Facture[]
 
   @@map("mandats")
 }
@@ -629,6 +632,7 @@ model Candidature {
   overrideAt              DateTime?   @map("override_at") @db.Timestamptz()
   overrideById            String?     @map("override_by_id") @db.Uuid
   dealsPerdus             DealPerdu[]
+  factures                Facture[]
 
   stageHistory        StageHistory[]
   pipelineSuggestions AiPipelineSuggestion[] @relation("PipelineSuggestionCandidature")
@@ -1649,6 +1653,7 @@ model ForecastSettings {
   probaOffre            Decimal  @default(85) @map("proba_offre") @db.Decimal(5, 2)
   bonusAutresCandidats  Decimal  @default(10) @map("bonus_autres_candidats") @db.Decimal(5, 2) // % de la proba de chaque autre candidat côté client
   objectifFactureAnnuel Int?     @map("objectif_facture_annuel")
+  objectifScenarioEur   Int?     @map("objectif_scenario_eur") // scénario « Objectif » de la projection de trésorerie
   updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   @@map("forecast_settings")
@@ -1669,4 +1674,113 @@ model ForecastSnapshot {
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   @@map("forecast_snapshots")
+}
+
+// ─── Trésorerie (forecast lot b) ─────────────────────
+// Propium SUIT les factures, il ne les émet pas : le numéro est saisi ou importé, jamais généré.
+
+enum EntiteFacturation {
+  COURTSIDE_CAPITAL_HK
+  HUMANUP_LONDON
+  HUMANUP_VIET
+}
+
+enum StatutFacture {
+  A_FACTURER
+  EMISE
+  PAYEE_PARTIEL
+  PAYEE
+  ANNULEE
+}
+
+model Facture {
+  id                    String            @id @default(uuid()) @db.Uuid
+  numero                String?           @unique @db.VarChar(50) // ex. INV-021, saisi
+  libelle               String?           @db.VarChar(255)
+  entrepriseId          String?           @map("entreprise_id") @db.Uuid
+  entreprise            Entreprise?       @relation(fields: [entrepriseId], references: [id], onDelete: SetNull)
+  mandatId              String?           @map("mandat_id") @db.Uuid
+  mandat                Mandat?           @relation(fields: [mandatId], references: [id], onDelete: SetNull)
+  candidatureId         String?           @map("candidature_id") @db.Uuid
+  candidature           Candidature?      @relation(fields: [candidatureId], references: [id], onDelete: SetNull)
+  entite                EntiteFacturation
+  statut                StatutFacture     @default(A_FACTURER)
+  montant               Decimal           @db.Decimal(12, 2) // dans la devise de la facture
+  devise                String            @default("EUR") @db.VarChar(3)
+  tauxVersEur           Decimal?          @map("taux_vers_eur") @db.Decimal(12, 6) // taux du jour d'émission
+  montantEur            Int               @map("montant_eur")
+  montantPayeEur        Int               @default(0) @map("montant_paye_eur")
+  moisFacturationPrevu  DateTime?         @map("mois_facturation_prevu") @db.Date // pour « à facturer »
+  dateEmission          DateTime?         @map("date_emission") @db.Date
+  dateEcheance          DateTime?         @map("date_echeance") @db.Date
+  datePaiement          DateTime?         @map("date_paiement") @db.Date
+  moisEncaissementPrevu DateTime?         @map("mois_encaissement_prevu") @db.Date // forcé à la main
+  aRisque               Boolean           @default(false) @map("a_risque")
+  notes                 String?           @db.Text
+  createdById           String?           @map("created_by_id") @db.Uuid
+  createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt             DateTime          @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([statut])
+  @@index([dateEmission])
+  @@index([entrepriseId])
+  @@map("factures")
+}
+
+// Revenus récurrents (ex. mission d'Alexandre Garnier, intérim) : comptés en facturé et en encaissé chaque mois actif
+model RevenuRecurrent {
+  id                String             @id @default(uuid()) @db.Uuid
+  libelle           String             @db.VarChar(255)
+  montantMensuelEur Int                @map("montant_mensuel_eur")
+  dateDebut         DateTime           @map("date_debut") @db.Date
+  dateFin           DateTime?          @map("date_fin") @db.Date // dernier mois inclus
+  entite            EntiteFacturation?
+  notes             String?            @db.Text
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("revenus_recurrents")
+}
+
+// Comptes de trésorerie, solde en € saisi à la main et daté
+model CompteTresorerie {
+  id        String             @id @default(uuid()) @db.Uuid
+  nom       String             @db.VarChar(100)
+  entite    EntiteFacturation?
+  soldeEur  Int                @map("solde_eur")
+  dateSolde DateTime           @map("date_solde") @db.Date
+  actif     Boolean            @default(true)
+  notes     String?            @db.Text
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("comptes_tresorerie")
+}
+
+// Charges pro mensuelles (contractors, outils, bureau…)
+model ChargeMensuelle {
+  id         String    @id @default(uuid()) @db.Uuid
+  libelle    String    @db.VarChar(255)
+  categorie  String?   @db.VarChar(50)
+  montantEur Int       @map("montant_eur")
+  dateDebut  DateTime  @map("date_debut") @db.Date
+  dateFin    DateTime? @map("date_fin") @db.Date // dernier mois inclus
+  notes      String?   @db.Text
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("charges_mensuelles")
+}
+
+// Prélèvements dirigeant prévus : admin seul, jamais exposés en détail aux agents
+model PrelevementDirigeant {
+  id         String   @id @default(uuid()) @db.Uuid
+  libelle    String   @db.VarChar(255)
+  montantEur Int      @map("montant_eur")
+  mois       DateTime @db.Date
+  notes      String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("prelevements_dirigeant")
 }

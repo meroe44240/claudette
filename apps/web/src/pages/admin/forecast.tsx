@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import { t, LOCALE } from '../../lib/i18n';
+import ForecastTabs from './forecast-tabs';
 
 interface Person { id: string; nom: string }
 interface Deal {
@@ -206,7 +207,7 @@ export default function ForecastPage() {
       <PageHeader
         title={t('Pipe partagé')}
         subtitle={data ? t('Au {date}. Fee réparti entre sales et recruteur selon le split de chaque mandat.', { date: new Date(data.generated_at).toLocaleDateString(LOCALE) }) : undefined}
-        actions={<Link to="/admin/forecast/reglages" className="rounded-lg border border-neutral-200 px-3 py-1.5 text-[13px] text-neutral-700 hover:bg-neutral-50">{t('Réglages')}</Link>}
+        actions={<ForecastTabs />}
       />
 
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-[13px] text-red-700">{(error as Error).message}</div>}
