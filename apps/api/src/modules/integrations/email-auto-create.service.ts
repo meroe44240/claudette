@@ -274,8 +274,8 @@ async function fetchMessages(token: string, ids: string[]): Promise<GmailMessage
 /** Envoi de profil sans pièce jointe : l'IA confirme et donne le nom du candidat. */
 async function detectSubmission(ctx: RunContext, msg: GmailMessage): Promise<string[]> {
   ctx.budget.take();
-  const { callClaude } = await import('../../services/claudeAI.js');
-  const res = await callClaude({
+  const { callTriageAi } = await import('./contact-resolver.service.js');
+  const res = await callTriageAi({
     feature: 'email_triage',
     userId: ctx.userId,
     maxTokens: 200,

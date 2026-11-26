@@ -134,6 +134,21 @@ export async function entrepriseSousContrat(entrepriseId: string): Promise<boole
 
 // ─── IA ─────────────────────────────────────────────
 
+/**
+ * Appel IA de la synchro : Claude (Anthropic) en priorité, le Gemini gratuit du serveur
+ * étant limité à 20 requêtes par jour. Une erreur IA met le passage en pause
+ * (AiBudgetExhausted) : rien n'est perdu, le passage suivant reprend au même endroit.
+ */
+export async function callTriageAi(options: Parameters<typeof import('../../services/claudeAI.js').callClaude>[0]) {
+  const { callClaude } = await import('../../services/claudeAI.js');
+  try {
+    return await callClaude({ ...options, preferAnthropic: true });
+  } catch (err) {
+    console.warn('[Contacts] IA indisponible, passage mis en pause :', err instanceof Error ? err.message.slice(0, 160) : err);
+    throw new AiBudgetExhausted();
+  }
+}
+
 interface Triage {
   type: 'CANDIDAT' | 'CLIENT' | 'IGNORE';
   prenom?: string;
@@ -145,9 +160,8 @@ interface Triage {
 
 async function triage(userId: string, person: Person, ctx: Context, entrepriseConnue: string | null, budget: AiBudget): Promise<Triage | null> {
   budget.take();
-  const { callClaude } = await import('../../services/claudeAI.js');
   const place = { from: 'expéditeur', to: 'destinataire', cc: 'en copie', guest: 'invité à un rendez-vous' }[person.role];
-  const res = await callClaude({
+  const res = await callTriageAi({
     feature: 'email_triage',
     userId,
     maxTokens: 300,
