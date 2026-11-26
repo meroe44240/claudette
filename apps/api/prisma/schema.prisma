@@ -351,6 +351,10 @@ model Mandat {
   portalAccesses      PortalAccess[]         @relation("PortalAccessMandat")
   profilsRecherches   ProfilRecherche[]
 
+  // Index créés par les migrations binôme (filtres « mes mandats »).
+  @@index([sourceurId])
+  @@index([salesId])
+  @@index([recruteurId])
   @@map("mandats")
 }
 
