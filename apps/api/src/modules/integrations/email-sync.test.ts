@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('../../lib/db.js', () => ({ default: {} }));
 
 const { parseAddressList } = await import('./email-auto-create.service.js');
-const { meetCodeOf } = await import('./calendar.service.js');
+const { meetCodeOf, phonesOf } = await import('./calendar.service.js');
 const { periodBounds } = await import('../stats/rdv-stats.service.js');
 
 describe('parseAddressList', () => {
@@ -48,5 +48,18 @@ describe('periodBounds (heure de Paris)', () => {
     expect(periodBounds('month', now).start.toISOString()).toBe('2026-10-31T23:00:00.000Z');
     expect(periodBounds('quarter', now).start.toISOString()).toBe('2026-09-30T22:00:00.000Z');
     expect(periodBounds('quarter', now).end.toISOString()).toBe('2026-12-31T23:00:00.000Z');
+  });
+});
+
+describe('phonesOf', () => {
+  it('lit le numéro du formulaire de réservation et celui mis en lieu', () => {
+    expect(phonesOf({ description: 'Phone Number: +33 6 31 45 38 07' + String.fromCharCode(10) + 'Position: Head of AM' })).toEqual(['631453807']);
+    expect(phonesOf({ location: '06.12.34.56.78' })).toEqual(['612345678']);
+  });
+  it("écarte les numéros d'accès téléphonique de la visio", () => {
+    expect(phonesOf({
+      conferenceData: { entryPoints: [{ entryPointType: 'phone', uri: 'tel:+33-1-87-40-41-42' }] },
+      description: 'Rejoindre par téléphone : +33 1 87 40 41 42 PIN : 123 456 789#',
+    })).toEqual([]);
   });
 });

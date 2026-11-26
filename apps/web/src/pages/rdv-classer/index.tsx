@@ -149,7 +149,7 @@ function ToConfirmList() {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-neutral-500">{t('Ces RDV sont terminés mais la présence n’a pas pu être lue dans Google Meet.')}</p>
+      <p className="text-sm text-neutral-500">{t('Ces RDV sont terminés sans visio Google Meet lisible ni appel Allo avec le contact.')}</p>
       {meetings.map((m) => (
         <Card key={m.id}>
           <div className="flex flex-wrap items-center justify-between gap-3">
