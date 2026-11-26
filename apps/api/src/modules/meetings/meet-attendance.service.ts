@@ -1,7 +1,9 @@
 /**
- * RDV effectué ou no-show, lu dans Google Meet (toutes les 15 minutes).
+ * RDV effectué ou no-show, lu dans les appels Allo et Google Meet (toutes les 15 minutes).
  *
  * Pour chaque RDV terminé (statut PREVU) :
+ *  - appel Allo de 5 min ou plus avec le contact, de 20 min avant à 30 min après → EFFECTUE
+ *    (RDV téléphonique, ou visio passée en appel) ;
  *  - visio Google Meet créée par la personne : on lit la liste des connectés.
  *      au moins un externe connecté 5 min ou plus → EFFECTUE
  *      la visio a eu lieu sans externe              → NO_SHOW
@@ -29,8 +31,12 @@ type Meta = Record<string, any>;
 
 interface MeetCheck {
   at: string;
-  reason: 'present' | 'absent' | 'no_record' | 'no_meet' | 'not_organizer' | 'no_access';
+  reason: 'present' | 'absent' | 'no_record' | 'no_meet' | 'not_organizer' | 'no_access' | 'allo_call';
   participants?: Array<{ name: string; minutes: number; external: boolean }>;
+  /** Appel Allo qui a confirmé le RDV. */
+  call?: { minutes: number; at: string };
+  /** Les appels Allo ont déjà été cherchés (RDV à confirmer). */
+  alloChecked?: boolean;
 }
 
 const normalise = (s: string) =>
@@ -97,14 +103,14 @@ function presenceMs(p: any, end: Date): number {
   return Number.isNaN(s) ? 0 : Math.max(0, e - s);
 }
 
-async function setStatut(id: string, meta: Meta, statut: RdvStatut, check: MeetCheck): Promise<void> {
+async function setStatut(id: string, meta: Meta, statut: RdvStatut, check: MeetCheck, source: 'MEET' | 'ALLO' = 'MEET'): Promise<void> {
   await prisma.activite.update({
     where: { id },
     data: {
       metadata: {
         ...meta,
         rdvStatut: statut,
-        rdvStatutSource: 'MEET',
+        rdvStatutSource: source,
         rdvStatutAt: new Date().toISOString(),
         meetCheck: check as any,
       },
@@ -120,6 +126,56 @@ async function hasMeetAccess(userId: string): Promise<boolean> {
   return configs.some((c) => String(((c.config as Meta) || {}).scopes || '').includes(MEET_SCOPE));
 }
 
+// ─── Appels Allo ─────────────────────────────────────
+
+const PLACEHOLDER_ID = '00000000-0000-0000-0000-000000000000';
+const digits = (s: unknown) => String(s ?? '').replace(/\D/g, '').slice(-9);
+
+/**
+ * RDV tenu par téléphone : un appel Allo d'au moins 5 minutes avec le contact du RDV
+ * (sa fiche ou son numéro), entre 20 min avant le début et 30 min après la fin.
+ */
+export async function alloCallFor(
+  a: { userId: string | null; entiteType: string | null; entiteId: string | null; metadata: unknown },
+  start: Date,
+  end: Date,
+): Promise<{ minutes: number; at: string } | null> {
+  const meta = (a.metadata as Meta) || {};
+  const candidatIds = new Set<string>();
+  const clientIds = new Set<string>();
+  if (a.entiteId && a.entiteId !== PLACEHOLDER_ID) (a.entiteType === 'CLIENT' ? clientIds : candidatIds).add(a.entiteId);
+  for (const att of Array.isArray(meta.attendees) ? meta.attendees : []) {
+    if (!att?.entityId) continue;
+    if (att.role === 'candidat') candidatIds.add(att.entityId);
+    if (att.role === 'client') clientIds.add(att.entityId);
+  }
+  const ids = [...candidatIds, ...clientIds];
+  if (!ids.length) return null;
+
+  const [cands, clis] = await Promise.all([
+    candidatIds.size ? prisma.candidat.findMany({ where: { id: { in: [...candidatIds] } }, select: { telephone: true } }) : [],
+    clientIds.size ? prisma.client.findMany({ where: { id: { in: [...clientIds] } }, select: { telephone: true } }) : [],
+  ]);
+  const phones = new Set([...cands, ...clis].map((c) => digits(c.telephone)).filter((p) => p.length === 9));
+
+  const calls = await prisma.activite.findMany({
+    where: {
+      type: 'APPEL',
+      createdAt: { gte: new Date(start.getTime() - 20 * 60000), lte: new Date(end.getTime() + 30 * 60000) },
+      OR: [{ entiteId: { in: ids } }, ...(a.userId ? [{ userId: a.userId }] : [])],
+    },
+    select: { entiteId: true, metadata: true, createdAt: true },
+  });
+  for (const c of calls) {
+    const m = (c.metadata as Meta) || {};
+    const sameContact = (c.entiteId && ids.includes(c.entiteId))
+      || [m.from, m.to, m.unidentifiedPhone, m.phone].some((p) => phones.has(digits(p)));
+    const seconds = Number(m.duration ?? 0);
+    if (sameContact && seconds * 1000 >= MIN_PRESENCE_MS) return { minutes: Math.round(seconds / 60), at: c.createdAt.toISOString() };
+  }
+  return null;
+}
+
 /** Vérifie un RDV terminé. Retourne false s'il faut réessayer plus tard. */
 async function checkMeeting(
   a: { id: string; userId: string | null; metadata: unknown; entiteType: string | null; entiteId: string | null; createdAt: Date },
@@ -131,13 +187,19 @@ async function checkMeeting(
   const end = meetingEnd(a)!;
   const start = meta.startTime ? new Date(meta.startTime) : new Date(end.getTime() - 3600 * 1000);
   const now = new Date();
+  const late = now.getTime() - end.getTime() >= NO_RECORD_GRACE_MS; // appels Allo et présence Meet arrivés
 
-  if (!meta.meetCode) {
-    await setStatut(a.id, meta, 'A_CONFIRMER', { at: now.toISOString(), reason: 'no_meet' });
+  // 1. Appel Allo avec le contact à l'heure du RDV : effectué (RDV téléphonique ou passé en appel).
+  const call = await alloCallFor(a, start, end);
+  if (call) {
+    await setStatut(a.id, meta, 'EFFECTUE', { at: now.toISOString(), reason: 'allo_call', call }, 'ALLO');
     return true;
   }
-  if (meta.organizerSelf === false) {
-    await setStatut(a.id, meta, 'A_CONFIRMER', { at: now.toISOString(), reason: 'not_organizer' });
+
+  // 2. Pas de visio Meet lisible : à confirmer, une fois les appels Allo arrivés.
+  if (!meta.meetCode || meta.organizerSelf === false) {
+    if (!late) return false;
+    await setStatut(a.id, meta, 'A_CONFIRMER', { at: now.toISOString(), reason: meta.meetCode ? 'not_organizer' : 'no_meet', alloChecked: true });
     return true;
   }
   // Accès Meet pas encore autorisé : le RDV reste en attente, il sera lu après la reconnexion.
@@ -147,15 +209,15 @@ async function checkMeeting(
   if (status === 401 || status === 403) {
     // Accès refusé par Google (API Meet non activée…) : la personne peut trancher à la main,
     // et on réessaie de lire la présence toutes les 6 h.
-    await setStatut(a.id, meta, 'A_CONFIRMER', { at: now.toISOString(), reason: 'no_access' });
+    await setStatut(a.id, meta, 'A_CONFIRMER', { at: now.toISOString(), reason: 'no_access', alloChecked: late });
     return true;
   }
   if (status !== 200) return false;
 
   const records: any[] = data.conferenceRecords || [];
   if (!records.length) {
-    if (now.getTime() - end.getTime() < NO_RECORD_GRACE_MS) return false;
-    await setStatut(a.id, meta, 'A_CONFIRMER', { at: now.toISOString(), reason: 'no_record' });
+    if (!late) return false;
+    await setStatut(a.id, meta, 'A_CONFIRMER', { at: now.toISOString(), reason: 'no_record', alloChecked: true });
     return true;
   }
 
@@ -172,6 +234,8 @@ async function checkMeeting(
     }
   }
   const present = seen.some((p) => p.external && p.minutes * 60000 >= MIN_PRESENCE_MS);
+  // Visio vide : on attend les appels Allo avant de conclure au no-show.
+  if (!present && !late) return false;
   await setStatut(a.id, meta, present ? 'EFFECTUE' : 'NO_SHOW', {
     at: now.toISOString(),
     reason: present ? 'present' : 'absent',
@@ -189,19 +253,25 @@ export async function runMeetAttendanceCheck(): Promise<void> {
       createdAt: { gte: new Date(since.getTime() - 60 * 86400 * 1000) },
       OR: [
         { metadata: { path: ['rdvStatut'], equals: 'PREVU' } },
-        { metadata: { path: ['meetCheck', 'reason'], equals: 'no_access' } },
+        { metadata: { path: ['rdvStatut'], equals: 'A_CONFIRMER' } },
       ],
     },
     select: { id: true, userId: true, metadata: true, entiteType: true, entiteId: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
-    take: 500,
+    take: 600,
   });
 
   const now = Date.now();
   const due = candidates.filter((a) => {
     if (!RDV_KINDS.includes(meetingKindOf(a))) return false;
     const end = meetingEnd(a);
-    return !!end && end.getTime() < now - WAIT_AFTER_END_MS && end.getTime() > since.getTime();
+    if (!end || end.getTime() >= now - WAIT_AFTER_END_MS || end.getTime() <= since.getTime()) return false;
+    const meta = (a.metadata as Meta) || {};
+    if (meta.rdvStatut !== 'A_CONFIRMER') return true;
+    // À confirmer : relu une fois pour les appels Allo, puis toutes les 6 h si l'accès Meet était refusé.
+    if (!meta.meetCheck?.alloChecked) return true;
+    const last = meta.meetCheck?.at ? new Date(meta.meetCheck.at).getTime() : 0;
+    return meta.meetCheck?.reason === 'no_access' && now - last >= 6 * 3600 * 1000;
   });
   if (!due.length) return;
 
@@ -212,17 +282,11 @@ export async function runMeetAttendanceCheck(): Promise<void> {
 
   for (const a of due.slice(0, MAX_PER_RUN)) {
     if (!a.userId) continue;
-    const meta = (a.metadata as Meta) || {};
     let auth = tokens.get(a.userId);
     if (!auth) {
       const access = await hasMeetAccess(a.userId);
       auth = { access, token: access ? await getGoogleAccessToken(a.userId) : null };
       tokens.set(a.userId, auth);
-    }
-    // Accès refusé récemment : on ne réessaie qu'au bout de 6 h.
-    if (meta.rdvStatut === 'A_CONFIRMER') {
-      const last = meta.meetCheck?.at ? new Date(meta.meetCheck.at).getTime() : 0;
-      if (!auth.access || Date.now() - last < 6 * 3600 * 1000) continue;
     }
     try {
       if (await checkMeeting(a, auth.token, auth.access, internals)) done++;

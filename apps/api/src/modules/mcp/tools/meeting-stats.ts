@@ -60,7 +60,7 @@ export function registerMeetingStatsTools(server: McpServer) {
   // ─── get_meeting_cv_stats ─────────────────────────────
   server.tool(
     'get_meeting_cv_stats',
-    "Meetings booked, meetings held (read from Google Meet attendance or confirmed by hand), no-shows, cancelled, to confirm, upcoming, and CVs sent to clients, per team member and team total. A meeting counts as booked on the day it was created in Google Calendar, and as held on the day it took place. Meeting types: client meetings, presentations (candidate shown to a client), candidate interviews. Admins and agent accounts see the whole team; others see themselves.",
+    "Meetings booked, meetings held (an Allo call of 5+ minutes with the contact around the meeting time, Google Meet attendance, or confirmed by hand), no-shows, cancelled, to confirm, upcoming, and CVs sent to clients, per team member and team total. A meeting counts as booked on the day it was created in Google Calendar, and as held on the day it took place. Meeting types: client meetings, presentations (candidate shown to a client), candidate interviews. Admins and agent accounts see the whole team; others see themselves.",
     {
       period: PERIOD,
       from: z.string().optional().describe('Start date YYYY-MM-DD (inclusive, Paris time). Use with to.'),
@@ -165,7 +165,7 @@ export function registerMeetingStatsTools(server: McpServer) {
   // ─── list_meetings_to_confirm ─────────────────────────
   server.tool(
     'list_meetings_to_confirm',
-    'Finished meetings whose attendance could not be read from Google Meet (client-created Meet link, no Meet link, nobody joined, or Meet access not yet granted). Each one needs a held / no-show / cancelled answer (use set_meeting_status). Default: your own; admins and agents can pass a team member.',
+    'Finished meetings with no Allo call with the contact and no readable Google Meet attendance (client-created Meet link, no Meet link, nobody joined, or Meet access not yet granted). Each one needs a held / no-show / cancelled answer (use set_meeting_status). Default: your own; admins and agents can pass a team member.',
     { ...USER_ARGS },
     wrapTool('list_meetings_to_confirm', async (args, user) => {
       const target = await resolveUser(args);

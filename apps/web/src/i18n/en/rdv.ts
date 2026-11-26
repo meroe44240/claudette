@@ -24,7 +24,7 @@ export const rdv: Record<string, string> = {
   'Confirmer mes RDV': 'Confirm my meetings',
   // Page RDV à classer / à confirmer
   'RDV à confirmer': 'Meetings to confirm',
-  'Ces RDV sont terminés mais la présence n’a pas pu être lue dans Google Meet.': 'These meetings are over but attendance could not be read from Google Meet.',
+  'Ces RDV sont terminés sans visio Google Meet lisible ni appel Allo avec le contact.': 'These meetings are over with no readable Google Meet attendance and no Allo call with the contact.',
   'Effectué': 'Held',
   'Annulé': 'Cancelled',
   'Visio créée par le client': 'Meet link created by the client',
