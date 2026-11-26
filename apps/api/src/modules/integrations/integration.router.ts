@@ -80,7 +80,18 @@ export default async function integrationRouter(fastify: FastifyInstance) {
       // Check Pappers status (server-side API key, not per-user)
       const pappersStatus = await pappersService.checkStatus();
 
+      const { getGoogleAuthError } = await import('./google-auth.service.js');
+      const googleError = await getGoogleAuthError(request.userId);
+      const scopes = String((gmail?.config as any)?.scopes || (calendar?.config as any)?.scopes || '');
+
       return {
+        // Connexion Google cassée (bandeau « reconnecter ») et accès Meet manquant.
+        google: {
+          broken: !!googleError,
+          brokenSince: googleError?.at ?? null,
+          // null : lecture de la présence Meet pas encore activée côté serveur (pas de bandeau).
+          meetAccess: gmailService.meetScopeEnabled() ? scopes.includes('meetings.space.readonly') : null,
+        },
         gmail: { connected: !!gmail?.enabled, email: (gmail?.config as any)?.email || null },
         calendar: { connected: !!calendar?.enabled },
         allo: { connected: !!allo?.enabled, apiKeyConfigured: !!allo?.accessToken },

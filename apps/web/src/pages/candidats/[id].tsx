@@ -436,7 +436,7 @@ export default function CandidatDetailPage() {
                   <button onClick={() => cvInputRef.current?.click()} style={ghostBtn}><Upload size={13} />{c.cvUrl ? t('Remplacer') : t('Importer')}</button>
                 </div>
               </div>
-              <input ref={cvInputRef} type="file" accept=".pdf" hidden onChange={e => { const f = e.target.files?.[0]; if (f) cvUpload(f); }} />
+              <input ref={cvInputRef} type="file" accept=".pdf,.docx" hidden onChange={e => { const f = e.target.files?.[0]; if (f) cvUpload(f); }} />
               {c.cvUrl
                 ? <iframe title={t('CV de {nom}', { nom: fullName })} src={c.cvUrl} style={{ width: '100%', height: '78vh', border: '1px solid rgba(34,23,122,.09)', borderRadius: 12, marginTop: 14, background: '#F7F7F0' }} />
                 : <div onClick={() => cvInputRef.current?.click()} className="drop" style={{ marginTop: 14, border: '1.5px dashed rgba(34,23,122,.26)', borderRadius: 14, background: '#FCFCF5', padding: 28, textAlign: 'center', cursor: 'pointer' }}>

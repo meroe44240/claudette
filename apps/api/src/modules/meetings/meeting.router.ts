@@ -11,12 +11,34 @@ const classerSchema = z.object({
   candidatureId: z.string().uuid().optional(),
 });
 
+const statutSchema = z.object({ statut: z.enum(['EFFECTUE', 'NO_SHOW', 'ANNULE']) });
+
 export default async function meetingRouter(fastify: FastifyInstance) {
   // GET /a-classer - Meetings d'agenda en attente de classement (utilisateur courant)
   fastify.get('/a-classer', {
     schema: { description: "Meetings d'agenda à classer (RDV client / présentation)", tags: ['Meetings'] },
     preHandler: [authenticate],
     handler: async (request) => ({ data: await meetingService.listAClasser(request.userId) }),
+  });
+
+  // GET /a-confirmer - RDV terminés à confirmer (effectué / no-show)
+  fastify.get('/a-confirmer', {
+    schema: { description: 'RDV terminés à confirmer (effectué ou no-show)', tags: ['Meetings'] },
+    preHandler: [authenticate],
+    handler: async (request) => ({ data: await meetingService.listAConfirmer(request.userId) }),
+  });
+
+  // POST /:id/statut - Effectué / no-show / annulé, en un clic
+  fastify.post('/:id/statut', {
+    schema: { description: "Statut d'un RDV : effectué, no-show ou annulé", tags: ['Meetings'] },
+    preHandler: [authenticate],
+    handler: async (request) => {
+      const { id } = request.params as { id: string };
+      const { statut } = statutSchema.parse(request.body);
+      const { setRdvStatutManuel } = await import('./meet-attendance.service.js');
+      await setRdvStatutManuel(id, request.userId, statut);
+      return { ok: true };
+    },
   });
 
   // GET /candidatures?q= - Recherche de candidatures actives par nom de candidat

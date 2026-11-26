@@ -715,7 +715,7 @@ export function registerStatsTools(server: McpServer) {
   // ─── get_team_daily_report (admin only) ───────────────
   server.tool(
     'get_team_daily_report',
-    "[ADMIN] Daily activity report per person (standup): business overview (active and dormant mandates, candidates in process, open offers, presentations this week, placements and revenue this month), yesterday's events (offers and presentations with candidate, mandate, recruiter, contact), and activity per person (calls, meetings, pushes, presentations, screenings, new items). Window = previous working day (Europe/Paris; on Monday, Friday).",
+    "[ADMIN] Daily activity report per person (standup): business overview (active and dormant mandates, candidates in process, open offers, presentations this week, placements and revenue this month), yesterday's events (offers and presentations with candidate, mandate, recruiter, contact), and activity per person (calls, pushes, presentations, screenings, new items, and metrics.meetings: meetings booked, held (Google Meet attendance), no-shows, to confirm, cancelled, CVs sent to clients). Window = previous working day (Europe/Paris; on Monday, Friday).",
     {
       date: z.string().optional().describe('Report day YYYY-MM-DD. Default: previous working day.'),
     },

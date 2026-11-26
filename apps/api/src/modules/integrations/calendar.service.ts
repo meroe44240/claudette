@@ -41,11 +41,6 @@ interface CalendlyParsedData {
   inviteeEmail?: string;
 }
 
-// ─── GOOGLE CALENDAR CONFIG ─────────────────────────
-
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
-
 // ─── CALENDLY PARSER ────────────────────────────────
 
 /**
@@ -292,59 +287,8 @@ async function enrichClientFromCalendly(
  * Reuses the gmail integration config since they share Google OAuth.
  */
 export async function getValidAccessToken(userId: string): Promise<string> {
-  // Calendar shares tokens with Gmail (same Google OAuth)
-  // Try calendar-specific config first, then fall back to gmail
-  let config = await prisma.integrationConfig.findUnique({
-    where: { userId_provider: { userId, provider: 'calendar' } },
-  });
-
-  if (!config || !config.accessToken) {
-    config = await prisma.integrationConfig.findUnique({
-      where: { userId_provider: { userId, provider: 'gmail' } },
-    });
-  }
-
-  if (!config || !config.enabled) {
-    throw new AppError(400, 'Intégration Google Calendar non configurée ou désactivée');
-  }
-
-  if (!config.accessToken) {
-    throw new AppError(400, 'Token Google Calendar manquant. Veuillez reconnecter votre compte.');
-  }
-
-  // Refresh expired token via Google
-  if (config.tokenExpiry && config.tokenExpiry.getTime() < Date.now() + 5 * 60 * 1000) {
-    if (!config.refreshToken) {
-      throw new AppError(400, 'Token expiré et pas de refresh token. Veuillez reconnecter votre compte Google.');
-    }
-
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
-        refresh_token: config.refreshToken,
-        grant_type: 'refresh_token',
-      }),
-    });
-
-    const tokens = await response.json() as any;
-    if (tokens.error) {
-      throw new AppError(400, 'Erreur lors du rafraîchissement du token Calendar. Veuillez reconnecter.');
-    }
-
-    const newExpiry = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
-    await prisma.integrationConfig.update({
-      where: { id: config.id },
-      data: { accessToken: tokens.access_token, tokenExpiry: newExpiry },
-    });
-
-    console.log(`[Calendar] Token refreshed for user ${userId}`);
-    return tokens.access_token as string;
-  }
-
-  return config.accessToken;
+  const { requireGoogleAccessToken } = await import('./google-auth.service.js');
+  return requireGoogleAccessToken(userId);
 }
 
 /**
@@ -451,13 +395,8 @@ export async function processCalendarWebhook(payload: CalendarWebhookPayload) {
     if (config) userId = config.userId;
   }
 
-  if (!userId) {
-    const config = await prisma.integrationConfig.findFirst({
-      where: { provider: 'calendar', enabled: true },
-    });
-    if (config) userId = config.userId;
-  }
-
+  // Canal inconnu : on n'attribue pas l'événement au hasard à un autre utilisateur,
+  // la synchro des 15 minutes le rattrapera chez son vrai propriétaire.
   if (!userId) {
     return { processed: false, reason: 'No matching Calendar integration found' };
   }
@@ -476,6 +415,20 @@ export async function processCalendarWebhook(payload: CalendarWebhookPayload) {
     if (calResponse.ok) {
       const calData = await calResponse.json() as any;
       const items = calData.items || [];
+
+      // Invités inconnus → fiches (même lecture IA que la synchro), avant le classement.
+      try {
+        const { AiBudget, aiIsAvailable } = await import('./contact-resolver.service.js');
+        const owner = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+        const budget = await new AiBudget(10, aiIsAvailable()).load(userId);
+        try {
+          await resolveEventAttendees(userId, items, (owner?.email || '').toLowerCase(), budget);
+        } finally {
+          await budget.save(userId);
+        }
+      } catch (err) {
+        console.warn('[Calendar Webhook] invités non traités :', err instanceof Error ? err.message : err);
+      }
 
       for (const item of items) {
         const description = item.description || '';
@@ -607,6 +560,10 @@ export async function createEvent(userId: string, data: CalendarEventData, sendN
         createdViaApi,
         googleEventId: calResult.id,
         ...(data.kind ? { calendarEventType: data.kind } : {}),
+        rdvStatut: 'PREVU',
+        meetCode: calResponse.ok ? meetCodeOf(calResult) : null,
+        organizerSelf: true,
+        googleCreated: typeof calResult?.created === 'string' ? calResult.created : new Date().toISOString(),
       },
     },
   });
@@ -742,6 +699,20 @@ export async function getUpcomingEvents(userId: string) {
     if (calResponse.ok) {
       const calData = await calResponse.json() as any;
       const items = calData.items || [];
+
+      // Invités inconnus → fiches (même lecture IA que la synchro), avant le classement.
+      try {
+        const { AiBudget, aiIsAvailable } = await import('./contact-resolver.service.js');
+        const owner = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+        const budget = await new AiBudget(10, aiIsAvailable()).load(userId);
+        try {
+          await resolveEventAttendees(userId, items, (owner?.email || '').toLowerCase(), budget);
+        } finally {
+          await budget.save(userId);
+        }
+      } catch (err) {
+        console.warn('[Calendar Webhook] invités non traités :', err instanceof Error ? err.message : err);
+      }
 
       for (const item of items) {
         const calendlyData = parseCalendlyDescription(item.description);
@@ -1023,6 +994,35 @@ interface ClassifiedEvent {
   attendees: AttendeeDetail[];
   internalCount: number;
   externalCount: number;
+  /** Date de création de l'événement dans Google (= date à laquelle le RDV a été pris). */
+  googleCreated: string | null;
+  /** Code de la visio Google Meet (abc-defg-hij), pour lire la présence. */
+  meetCode: string | null;
+  /** L'utilisateur est l'organisateur (seul l'organisateur peut lire la présence Meet). */
+  organizerSelf: boolean;
+  cancelled: boolean;
+  /** Aucun invité à part soi : RDV noté dans l'agenda sans invitation. */
+  noGuests: boolean;
+}
+
+/** Code Meet d'un événement : conferenceData (hangoutsMeet) ou lien meet.google.com. */
+export function meetCodeOf(item: any): string | null {
+  const conf = item?.conferenceData;
+  if (conf?.conferenceSolution?.key?.type === 'hangoutsMeet' && typeof conf.conferenceId === 'string') {
+    return conf.conferenceId;
+  }
+  // Lien Meet de la visio, sinon collé dans le lieu ou la description (Calendly, invitations transférées).
+  const sources: string[] = [
+    item?.hangoutLink,
+    (conf?.entryPoints || []).find((e: any) => e?.entryPointType === 'video')?.uri,
+    item?.location,
+    item?.description,
+  ].filter((x): x is string => typeof x === 'string' && x.length > 0);
+  for (const text of sources) {
+    const m = text.match(/meet\.google\.com\/([a-z]{3}-[a-z]{4}-[a-z]{3})/i);
+    if (m) return m[1].toLowerCase();
+  }
+  return null;
 }
 
 /**
@@ -1045,6 +1045,7 @@ async function classifyCalendarEvent(
 
   const analysis = await analyzeAttendees(attendeeEmails);
 
+  const guests = (item.attendees || []).filter((a: any) => a?.email && !a.self && !String(a.email).includes('calendar.google.com'));
   return {
     googleEventId: item.id,
     summary: item.summary || '(Sans titre)',
@@ -1054,6 +1055,11 @@ async function classifyCalendarEvent(
     attendees: analysis.details,
     internalCount: analysis.details.filter((d) => d.role === 'internal').length,
     externalCount: analysis.details.filter((d) => d.role !== 'internal').length,
+    googleCreated: typeof item.created === 'string' ? item.created : null,
+    meetCode: meetCodeOf(item),
+    organizerSelf: !!item.organizer?.self || (!!recruiterEmail && item.organizer?.email === recruiterEmail),
+    cancelled: item.status === 'cancelled',
+    noGuests: guests.length === 0,
   };
 }
 
@@ -1271,21 +1277,38 @@ const processingEvents = new Set<string>();
  * Process a single classified event: create Activite if not already tracked.
  * Returns true if a new Activite was created.
  */
+interface ProcessOptions {
+  /** Rattrapage : pas d'annonce #news pour des RDV déjà passés ou anciens. */
+  quiet?: boolean;
+}
+
 async function processClassifiedEvent(
   classified: ClassifiedEvent,
   userId: string,
   recruiterName: string,
+  opts: ProcessOptions = {},
 ): Promise<boolean> {
-  // Skip internal events
-  if (classified.externalCount === 0) return false;
+  // Événement déjà suivi : mise à jour (annulation, nouvel horaire, lien Meet), jamais bloquée
+  // par le verrou anti-doublon (sinon une annulation arrivée juste après serait perdue).
+  if (await updateTrackedEvent(classified)) return false;
+  if (classified.cancelled) return false;
 
-  // In-memory lock: skip if already being processed right now
+  // Verrou en mémoire : évite deux créations quand le webhook et la synchro voient l'événement en même temps.
   const lockKey = `${classified.googleEventId}:${userId}`;
   if (processingEvents.has(lockKey)) return false;
   processingEvents.add(lockKey);
 
   try {
-    return await _processClassifiedEventInner(classified, userId, recruiterName);
+
+    // Sans invité externe : seul un RDV noté sans invitation, avec le nom complet
+    // d'un candidat en cours dans le titre, est retenu. Les réunions internes sont ignorées.
+    if (classified.externalCount === 0) {
+      if (!classified.noGuests) return false;
+      const candidat = await candidatFromTitleStrict(classified.summary);
+      if (!candidat) return false;
+      return await createMeetingActivity(classified, userId, 'INTERVIEW', 'CANDIDAT', candidat.id, false);
+    }
+    return await _processClassifiedEventInner(classified, userId, recruiterName, opts);
   } finally {
     // Release lock after a short delay to catch rapid duplicate webhooks
     setTimeout(() => processingEvents.delete(lockKey), 5000);
@@ -1306,16 +1329,8 @@ async function _processClassifiedEventInner(
   classified: ClassifiedEvent,
   userId: string,
   recruiterName: string,
+  opts: ProcessOptions = {},
 ): Promise<boolean> {
-  // Check if already processed by googleEventId
-  const existing = await prisma.activite.findFirst({
-    where: {
-      source: 'CALENDAR',
-      metadata: { path: ['googleEventId'], equals: classified.googleEventId },
-    },
-  });
-  if (existing) return false;
-
   // RDV pris via la page de réservation : déjà enregistré et compté côté booking.
   const booking = await prisma.booking.findFirst({
     where: { googleEventId: classified.googleEventId },
@@ -1365,9 +1380,14 @@ async function _processClassifiedEventInner(
   }
 
   // Annonces #news : uniquement pour ce qui est identifié (champ metadata historique : annonceSlack).
+  // Pas d'annonce au rattrapage ni pour un RDV passé depuis plus de 12 h.
+  const debut = classified.startTime ? new Date(classified.startTime).getTime() : Date.now();
+  const annoncable = !opts.quiet && debut > Date.now() - 12 * 3600 * 1000;
   let annonceSlack = false;
   try {
-    if (kind === 'PRESENTATION' && candidat && clientAtt) {
+    if (!annoncable) {
+      // rattrapage : rien n'est annoncé
+    } else if (kind === 'PRESENTATION' && candidat && clientAtt) {
       annonceSlack = await annoncerPresentationAgenda(classified, candidat, clientAtt, recruiterName);
     } else if (kind === 'RDV_CLIENT' && clientAtt) {
       const client = clientAtt.entityId
@@ -1390,23 +1410,45 @@ async function _processClassifiedEventInner(
     console.error('[CalendarWatcher] announcement error:', err);
   }
 
-  const prefixes: Record<MeetingKind, string> = {
-    INTERVIEW: '🎯 Interview',
-    PRESENTATION: '🤝 Présentation',
-    RDV_CLIENT: '📅 RDV client',
-    A_CLASSER: '❓ À classer',
-    AUTRE: 'Meeting',
-  };
+  // A_CLASSER : l'événement attend sur /rdv/classer (plus de message privé Slack).
+  return createMeetingActivity(classified, userId, kind, entiteType, entiteId, annonceSlack);
+}
 
-  const activite = await prisma.activite.create({
+const MEETING_PREFIXES: Record<MeetingKind, string> = {
+  INTERVIEW: '🎯 Interview',
+  PRESENTATION: '🤝 Présentation',
+  RDV_CLIENT: '📅 RDV client',
+  A_CLASSER: '❓ À classer',
+  AUTRE: 'Meeting',
+};
+
+/**
+ * Crée le meeting dans l'ATS. La date de création est celle de l'événement dans
+ * Google : un RDV rattrapé après coup compte le jour où il a été pris.
+ */
+async function createMeetingActivity(
+  classified: ClassifiedEvent,
+  userId: string,
+  kind: MeetingKind,
+  entiteType: 'CANDIDAT' | 'CLIENT',
+  entiteId: string,
+  annonceSlack: boolean,
+): Promise<boolean> {
+  const created = classified.googleCreated ? new Date(classified.googleCreated) : null;
+  const createdAt = created && !Number.isNaN(created.getTime()) && created.getTime() < Date.now() ? created : new Date();
+
+  await prisma.activite.create({
     data: {
       type: 'MEETING',
       entiteType,
       entiteId,
       userId,
-      titre: `${prefixes[kind]} — ${classified.summary}`,
-      contenu: `Événement détecté automatiquement.\nParticipants : ${classified.attendees.map((a) => a.email).join(', ')}`,
+      titre: `${MEETING_PREFIXES[kind]} — ${classified.summary}`,
+      contenu: classified.noGuests
+        ? 'Événement détecté automatiquement (sans invité).'
+        : `Événement détecté automatiquement.\nParticipants : ${classified.attendees.map((a) => a.email).join(', ')}`,
       source: 'CALENDAR',
+      createdAt,
       metadata: {
         googleEventId: classified.googleEventId,
         calendarEventType: kind,
@@ -1422,11 +1464,13 @@ async function _processClassifiedEventInner(
         })),
         autoClassified: true,
         annonceSlack,
+        rdvStatut: 'PREVU',
+        meetCode: classified.meetCode,
+        organizerSelf: classified.organizerSelf,
+        googleCreated: classified.googleCreated,
       },
     },
   });
-
-  // A_CLASSER : l'événement attend sur /rdv/classer (plus de message privé Slack).
 
   console.log(
     `[CalendarWatcher] Created ${kind} activity for event "${classified.summary}" (user ${userId})`,
@@ -1435,107 +1479,272 @@ async function _processClassifiedEventInner(
 }
 
 /**
- * Calendar Watcher — runs every 15 minutes during business hours.
- *
- * For each recruiter with Calendar connected:
- *  1. Fetch events created/modified in the last 16 minutes (overlap for safety)
- *  2. Classify each event
- *  3. Create Activite typed INTERVIEW / PRESENTATION / RDV_CLIENT / A_CLASSER
- *  4. A_CLASSER events wait on /rdv/classer
+ * Met à jour un meeting déjà suivi : annulation, déplacement, lien Meet.
+ * Retourne true si l'événement était déjà suivi (rien à créer).
  */
-export async function runCalendarWatcher(): Promise<void> {
-  // Only run Mon-Fri 8h-19h Paris
-  const now = new Date();
-  const parisStr = now.toLocaleString('en-GB', {
-    timeZone: 'Europe/Paris',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-  const [hours] = parisStr.split(':').map(Number);
-
-  const dayFormatter = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Europe/Paris',
-    weekday: 'short',
-  });
-  const dayStr = dayFormatter.format(now);
-  const dayMap: Record<string, number> = {
-    Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0,
-  };
-  const dayOfWeek = dayMap[dayStr] ?? now.getDay();
-
-  if (dayOfWeek < 1 || dayOfWeek > 5) return; // Weekend
-  if (hours < 8 || hours >= 19) return;         // Outside business hours
-
-  // Find all users with calendar (or gmail) integration enabled
-  const calendarConfigs = await prisma.integrationConfig.findMany({
+async function updateTrackedEvent(classified: ClassifiedEvent): Promise<boolean> {
+  const existing = await prisma.activite.findFirst({
     where: {
-      provider: { in: ['calendar', 'gmail'] },
-      enabled: true,
+      source: 'CALENDAR',
+      metadata: { path: ['googleEventId'], equals: classified.googleEventId },
     },
-    select: { userId: true, provider: true },
+    select: { id: true, metadata: true },
   });
+  if (!existing) return false;
 
-  // Deduplicate by userId (prefer calendar config over gmail)
-  const userIds = new Map<string, string>();
-  for (const cfg of calendarConfigs) {
-    if (!userIds.has(cfg.userId) || cfg.provider === 'calendar') {
-      userIds.set(cfg.userId, cfg.provider);
+  const meta = { ...((existing.metadata as Record<string, any>) || {}) };
+  const before = JSON.stringify(meta);
+  const statut = meta.rdvStatut as string | undefined;
+  const finPrevue = (c: ClassifiedEvent) => new Date(c.endTime || c.startTime).getTime();
+
+  if (classified.cancelled) {
+    if (statut !== 'EFFECTUE') {
+      meta.rdvStatut = 'ANNULE';
+      meta.rdvStatutSource = 'AGENDA';
+      meta.rdvStatutAt = new Date().toISOString();
+    }
+  } else {
+    if (classified.startTime && classified.startTime !== meta.startTime) {
+      meta.startTime = classified.startTime;
+      meta.endTime = classified.endTime;
+      // Déplacé vers le futur : il redevient prévu (sauf s'il a déjà eu lieu).
+      if (statut !== 'EFFECTUE' && finPrevue(classified) > Date.now()) {
+        meta.rdvStatut = 'PREVU';
+        delete meta.meetCheck;
+      }
+    }
+    if (meta.rdvStatut === 'ANNULE' && finPrevue(classified) > Date.now()) {
+      meta.rdvStatut = 'PREVU'; // annulation levée
+    }
+    if (classified.meetCode && classified.meetCode !== meta.meetCode) meta.meetCode = classified.meetCode;
+    if (meta.organizerSelf === undefined) meta.organizerSelf = classified.organizerSelf;
+    if (!meta.googleCreated && classified.googleCreated) meta.googleCreated = classified.googleCreated;
+    if (!meta.rdvStatut) meta.rdvStatut = 'PREVU';
+    if (classified.summary && classified.summary !== meta.summary) meta.summary = classified.summary;
+  }
+
+  if (JSON.stringify(meta) !== before) {
+    await prisma.activite.update({ where: { id: existing.id }, data: { metadata: meta } });
+  }
+  return true;
+}
+
+/**
+ * RDV sans invité : retenu seulement si le titre contient le prénom ET le nom
+ * d'un candidat qui a une candidature en cours (évite « Point Théo » interne).
+ */
+async function candidatFromTitleStrict(summary: string): Promise<{ id: string } | null> {
+  const words = (summary || '')
+    .replace(/[^\p{L}\s'-]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 2 && /^\p{Lu}/u.test(w));
+  if (words.length < 2) return null;
+  const found = await prisma.candidat.findMany({
+    where: {
+      prenom: { in: words, mode: 'insensitive' },
+      nom: { in: words, mode: 'insensitive' },
+      candidatures: { some: { stage: { notIn: ['REFUSE', 'PLACE'] } } },
+    },
+    select: { id: true },
+    take: 2,
+  });
+  // Un seul candidat possible, sinon on ne devine pas.
+  return found.length === 1 ? { id: found[0].id } : null;
+}
+
+/**
+ * Invités inconnus d'événements pas encore suivis : l'IA lit le rendez-vous (titre,
+ * description) et crée candidat, client (entreprise sous contrat) ou Lead, comme pour
+ * les emails. Un invité déjà Lead reçoit une note « RDV ». Chaque événement n'est lu
+ * qu'une fois (à sa première détection).
+ * Lève AiBudgetExhausted quand le budget IA du passage est épuisé.
+ */
+export async function resolveEventAttendees(
+  userId: string,
+  items: any[],
+  selfEmail: string,
+  budget: import('./contact-resolver.service.js').AiBudget,
+  opts: { onlyUntracked: boolean } = { onlyUntracked: true },
+): Promise<{ candidats: number; clients: number; entreprises: number; leads: number }> {
+  const resolver = await import('./contact-resolver.service.js');
+  const { isRobotAddress } = await import('./email-auto-create.service.js');
+  const stats = { candidats: 0, clients: 0, entreprises: 0, leads: 0 };
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (!item || item.status === 'cancelled' || !(item.attendees || []).length) continue;
+    if (opts.onlyUntracked) {
+      const tracked = await prisma.activite.findFirst({
+        where: { source: 'CALENDAR', metadata: { path: ['googleEventId'], equals: item.id } },
+        select: { id: true },
+      });
+      if (tracked) continue;
+    }
+    const start = item.start?.dateTime || item.start?.date || '';
+    const ctx = {
+      origine: 'agenda' as const,
+      sens: (item.organizer?.self ? 'SORTANT' : 'ENTRANT') as 'ENTRANT' | 'SORTANT',
+      objet: item.summary || '(Sans titre)',
+      texte: [`Date : ${start}`, item.description || ''].join('\n'),
+      expediteur: item.organizer?.email,
+    };
+    for (const att of item.attendees || []) {
+      const email = String(att?.email || '').toLowerCase().trim();
+      if (!email || att.self || email === selfEmail || email.includes('calendar.google.com')) continue;
+      if (INTERNAL_DOMAINS.includes(email.split('@')[1] || '') || isRobotAddress(email)) continue;
+      if (seen.has(email)) continue;
+      seen.add(email);
+      if (await matchEmail(email)) continue;
+      let lead = await resolver.findLeadByEmail(email);
+      if (!lead) {
+        const r = await resolver.resolveUnknownContact(userId, { name: att.displayName || null, email, role: 'guest' }, ctx, budget, stats);
+        if (r?.type === 'LEAD') lead = { id: r.id };
+      }
+      if (lead) {
+        const quand = start ? new Date(start).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'short' }) : '';
+        await resolver.logOnLead(lead.id, userId, 'note', `RDV agenda : ${ctx.objet}${quand ? ` (${quand})` : ''}`, new Date());
+      }
+    }
+  }
+  return stats;
+}
+
+/** Un événement Google → meeting dans l'ATS (création ou mise à jour). Retourne true s'il est créé. */
+export async function processCalendarItem(
+  item: any,
+  userId: string,
+  userEmail: string,
+  recruiterName: string,
+  opts: ProcessOptions = {},
+): Promise<boolean> {
+  const classified = await classifyCalendarEvent(item, userEmail);
+  return processClassifiedEvent(classified, userId, recruiterName, opts);
+}
+
+const CALENDAR_FULL_SYNC_DAYS_BACK = 30;
+const CALENDAR_DAYS_BACK = 7;
+const CALENDAR_DAYS_AHEAD = 60;
+/** Au-delà, Google refuse updatedMin trop ancien : on relit toute la fenêtre. */
+const CALENDAR_MAX_INCREMENTAL_MS = 20 * 24 * 3600 * 1000;
+
+async function fetchCalendarItems(accessToken: string, params: URLSearchParams): Promise<any[]> {
+  const items: any[] = [];
+  let pageToken: string | undefined;
+  do {
+    const q = new URLSearchParams(params);
+    if (pageToken) q.set('pageToken', pageToken);
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${q}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as any;
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
+    }
+    const data = (await res.json()) as any;
+    items.push(...(data.items || []));
+    pageToken = data.nextPageToken;
+  } while (pageToken && items.length < 2500);
+  return items;
+}
+
+/**
+ * Synchro agenda d'un utilisateur. Lit tout ce qui a changé depuis le dernier
+ * passage (créé, déplacé, annulé), sur 7 jours en arrière et 60 jours en avant.
+ * Premier passage ou reconnexion : relit 30 jours en arrière, sans annonce.
+ */
+export async function syncCalendarForUser(userId: string): Promise<number> {
+  const config = await prisma.integrationConfig.findFirst({
+    where: { userId, provider: { in: ['calendar', 'gmail'] }, enabled: true },
+    orderBy: { provider: 'asc' }, // 'calendar' avant 'gmail'
+  });
+  if (!config) return 0;
+
+  const { getGoogleAccessToken } = await import('./google-auth.service.js');
+  const accessToken = await getGoogleAccessToken(userId);
+  if (!accessToken) return 0;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, nom: true, prenom: true },
+  });
+  if (!user) return 0;
+  const recruiterName = [user.prenom, user.nom].filter(Boolean).join(' ');
+
+  const conf = (config.config as Record<string, any>) || {};
+  const runStartedAt = new Date();
+  const lastSync = conf.calendarSyncAt ? new Date(conf.calendarSyncAt) : null;
+  const incremental = !!lastSync && !conf.calendarRattrapage
+    && runStartedAt.getTime() - lastSync.getTime() < CALENDAR_MAX_INCREMENTAL_MS;
+
+  const daysBack = incremental ? CALENDAR_DAYS_BACK : CALENDAR_FULL_SYNC_DAYS_BACK;
+  const params = new URLSearchParams({
+    timeMin: new Date(Date.now() - daysBack * 86400000).toISOString(),
+    timeMax: new Date(Date.now() + CALENDAR_DAYS_AHEAD * 86400000).toISOString(),
+    singleEvents: 'true',
+    showDeleted: 'true',
+    maxResults: '250',
+  });
+  if (incremental) params.set('updatedMin', new Date(lastSync!.getTime() - 2 * 60_000).toISOString());
+
+  const items = await fetchCalendarItems(accessToken, params);
+
+  // Invités inconnus → fiches (IA). Budget épuisé : on s'arrête là sans avancer le
+  // curseur, le passage suivant reprend la même fenêtre (les événements suivis sont sautés).
+  const { AiBudget, AiBudgetExhausted, aiIsAvailable } = await import('./contact-resolver.service.js');
+  let budgetEpuise = false;
+  const budget = await new AiBudget(40, aiIsAvailable()).load(userId);
+  try {
+    await resolveEventAttendees(userId, items, (user.email || '').toLowerCase(), budget);
+  } catch (err) {
+    if (!(err instanceof AiBudgetExhausted)) throw err;
+    budgetEpuise = true;
+  } finally {
+    await budget.save(userId);
+  }
+  if (budgetEpuise) {
+    console.log(`[CalendarWatcher] budget IA atteint pour ${userId}, reprise au prochain passage`);
+    return 0;
+  }
+
+  let created = 0;
+  for (const item of items) {
+    try {
+      if (await processCalendarItem(item, userId, user.email, recruiterName, { quiet: !incremental })) created++;
+    } catch (err) {
+      console.error(`[CalendarWatcher] event ${item?.id} (user ${userId}):`, err);
     }
   }
 
-  if (userIds.size === 0) return;
+  const fresh = await prisma.integrationConfig.findUnique({ where: { id: config.id }, select: { config: true } });
+  await prisma.integrationConfig.update({
+    where: { id: config.id },
+    data: {
+      config: {
+        ...((fresh?.config as Record<string, any>) || {}),
+        calendarSyncAt: runStartedAt.toISOString(),
+        calendarRattrapage: false,
+      },
+    },
+  });
+  return created;
+}
+
+/**
+ * Calendar Watcher : toutes les 15 minutes, 7 jours sur 7, pour chaque personne
+ * connectée à Google. Rien n'est perdu entre deux passages (lecture de tout ce qui a
+ * changé depuis le précédent), les annulations et déplacements sont répercutés.
+ */
+export async function runCalendarWatcher(): Promise<void> {
+  const configs = await prisma.integrationConfig.findMany({
+    where: { provider: { in: ['calendar', 'gmail'] }, enabled: true },
+    select: { userId: true },
+  });
+  const userIds = Array.from(new Set(configs.map((c) => c.userId)));
 
   let totalCreated = 0;
-
-  for (const [userId] of userIds) {
+  for (const userId of userIds) {
     try {
-      const accessToken = await getValidAccessToken(userId);
-
-      // Get the recruiter's email for classification
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { email: true, nom: true, prenom: true },
-      });
-      if (!user) continue;
-
-      const recruiterName = [user.prenom, user.nom].filter(Boolean).join(' ');
-
-      // Fetch events modified in the last 16 minutes (1 min overlap with 15 min interval)
-      const updatedMin = new Date(Date.now() - 16 * 60 * 1000).toISOString();
-      // Look at events in the next 30 days (upcoming interviews/presentations)
-      const timeMin = new Date().toISOString();
-      const timeMax = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-      const calResponse = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
-          `updatedMin=${encodeURIComponent(updatedMin)}` +
-          `&timeMin=${encodeURIComponent(timeMin)}` +
-          `&timeMax=${encodeURIComponent(timeMax)}` +
-          `&maxResults=50` +
-          `&singleEvents=true` +
-          `&orderBy=startTime`,
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      );
-
-      if (!calResponse.ok) {
-        const err = await calResponse.json() as any;
-        console.error(
-          `[CalendarWatcher] API error for user ${userId}: ${err.error?.message || calResponse.status}`,
-        );
-        continue;
-      }
-
-      const calData = await calResponse.json() as any;
-      const items = (calData.items || []).filter(
-        (item: any) => item.status !== 'cancelled' && (item.attendees || []).length > 0,
-      );
-
-      for (const item of items) {
-        const classified = await classifyCalendarEvent(item, user.email);
-        const created = await processClassifiedEvent(classified, userId, recruiterName);
-        if (created) totalCreated++;
-      }
+      totalCreated += await syncCalendarForUser(userId);
     } catch (err) {
       console.error(`[CalendarWatcher] Error processing user ${userId}:`, err);
     }

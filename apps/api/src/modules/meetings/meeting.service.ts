@@ -69,6 +69,37 @@ export async function listAClasser(userId: string) {
   return rows.map(serialiserMeeting);
 }
 
+/**
+ * RDV terminés dont on ne sait pas s'ils ont eu lieu (pas de visio Meet lisible) :
+ * la personne répond « effectué » ou « no-show » en un clic.
+ */
+export async function listAConfirmer(userId: string) {
+  const { RDV_KINDS, meetingEnd } = await import('./meeting-kind.js');
+  const rows = await prisma.activite.findMany({
+    where: {
+      userId,
+      type: 'MEETING',
+      OR: [
+        { metadata: { path: ['rdvStatut'], equals: 'A_CONFIRMER' } },
+        { metadata: { path: ['rdvStatut'], equals: 'PREVU' } },
+      ],
+      createdAt: { gte: new Date(Date.now() - 120 * 86400000) },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 300,
+  });
+  const since = Date.now() - 45 * 86400000;
+  // Un RDV « prévu » terminé depuis plus de 2 h sans présence lue est aussi à confirmer.
+  const pendingBefore = Date.now() - 2 * 3600 * 1000;
+  return rows
+    .filter((a) => RDV_KINDS.includes(meetingKindOf(a)))
+    .filter((a) => (meetingEnd(a)?.getTime() ?? 0) > since)
+    .filter((a) => (a.metadata as any)?.rdvStatut === 'A_CONFIRMER' || (meetingEnd(a)?.getTime() ?? Infinity) < pendingBefore)
+    .sort((a, b) => (meetingEnd(b)?.getTime() ?? 0) - (meetingEnd(a)?.getTime() ?? 0))
+    .slice(0, 50)
+    .map((a) => ({ ...serialiserMeeting(a), raison: (a.metadata as any)?.meetCheck?.reason ?? null }));
+}
+
 /** Détail d'un meeting à classer + candidatures probables (invités candidats, mandats des contacts clients). */
 export async function getPourClassement(id: string, userId: string) {
   const activite = await chargerMeeting(id, userId);

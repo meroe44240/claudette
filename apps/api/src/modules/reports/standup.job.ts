@@ -19,7 +19,7 @@ const chk = (v: number, t: number) => (v >= t ? ' ✓' : '');
 
 function salesLines(m: any): string[] {
   return [
-    `Calls ${m.calls.value}/${m.calls.target} (5-day avg: ${m.calls.avg_5d})   ·   Meetings ${m.rdv_nouveaux.value}/${m.rdv_nouveaux.target}${chk(m.rdv_nouveaux.value, m.rdv_nouveaux.target)}   ·   Push ${m.push.value}/${m.push.target}${chk(m.push.value, m.push.target)}`,
+    `Calls ${m.calls.value}/${m.calls.target} (5-day avg: ${m.calls.avg_5d})   ·   Push ${m.push.value}/${m.push.target}${chk(m.push.value, m.push.target)}`,
     `Presentations ${m.presentations.value}/${m.presentations.target}${chk(m.presentations.value, m.presentations.target)} · ${m.presentations.days_left} days left`,
   ];
 }
@@ -81,7 +81,7 @@ function heroStrip(rows: any[]): string {
   const calls = sumS((r) => r.metrics.calls?.value);
   const conn = sumS((r) => r.metrics.calls_connectes?.value);
   const push = sumS((r) => r.metrics.push?.value);
-  const rdv = sumS((r) => r.metrics.rdv_nouveaux?.value);
+  const rdv = rows.reduce((a, r) => a + (r.metrics.meetings?.booked || 0), 0);
   const prez = sumS((r) => r.metrics.presentations?.value);
   const piece = (n: number, w1: string, w2: string) => `<span style="color:#22177A;font-weight:bold">${n}</span> ${n > 1 ? w2 : w1}`;
   const parts = [
@@ -120,18 +120,26 @@ function teamActivityHtml(rows: any[]): string {
   const calls = sumS((r) => r.metrics.calls?.value), tCalls = sumS((r) => r.metrics.calls?.target);
   const conn = sumS((r) => r.metrics.calls_connectes?.value);
   const push = sumS((r) => r.metrics.push?.value), tPush = sumS((r) => r.metrics.push?.target);
-  const rdv = sumS((r) => r.metrics.rdv_nouveaux?.value), tRdv = sumS((r) => r.metrics.rdv_nouveaux?.target);
+  const rdv = sum((r) => r.metrics.meetings?.booked);
   const prez = sumS((r) => r.metrics.presentations?.value), tPrez = sumS((r) => r.metrics.presentations?.target);
   const mvt = sum((r) => r.mouvements_pipeline);
+  const held = sum((r) => r.metrics.meetings?.held);
+  const noShow = sum((r) => r.metrics.meetings?.no_show);
+  const toConfirm = sum((r) => r.metrics.meetings?.to_confirm);
+  const cvs = sum((r) => r.metrics.meetings?.cvs_sent_to_clients);
   const pct = (v: number, t: number) => (t > 0 ? Math.round((v / t) * 100) : 0);
   return sectionLabel('Yesterday in numbers') + gridOpen + `<tr>
     ${kpiTile(String(calls), '/ ' + tCalls, 'Calls made', 'navy', pct(calls, tCalls))}
     ${kpiTile(String(conn), '', 'Calls connected', 'green')}
     ${kpiTile(String(push), '/ ' + tPush, 'Pushes sent', 'violet', pct(push, tPush))}
   </tr><tr>
-    ${kpiTile(String(rdv), '/ ' + tRdv, 'Meetings booked', 'lime', pct(rdv, tRdv))}
+    ${kpiTile(String(rdv), '', 'Meetings booked', 'lime')}
     ${kpiTile(String(prez), '/ ' + tPrez + ' week', 'Presentations held', 'blue', pct(prez, tPrez))}
     ${kpiTile(String(mvt), '', 'Pipeline moves', 'navy')}
+  </tr><tr>
+    ${kpiTile(String(held), noShow ? `${noShow} no-show` : '', 'Meetings held', 'green')}
+    ${kpiTile(String(toConfirm), '', 'Meetings to confirm', 'lime')}
+    ${kpiTile(String(cvs), '', 'CVs sent to clients', 'violet')}
   </tr></table>`;
 }
 
@@ -165,7 +173,7 @@ function eventsHtml(events: any[], esc: (s: unknown) => string): string {
   return header + rows;
 }
 
-function textReport(rep: any): string {
+export function textReport(rep: any): string {
   const o = rep.overview || {};
   const out = [`Standup · ${enDate(rep.date)}`, ''];
   // Vue business à l'instant t
@@ -189,6 +197,8 @@ function textReport(rep: any): string {
     out.push(`${DOT[r.status]} ${r.name.toUpperCase()} · ${roleLabel(r.role)}`);
     for (const l of lines) out.push(`   ${l}`);
     const dorm = r.mandats_dormants ? ` · dormant: ${r.mandats_dormants}` : '';
+    const rv = r.metrics?.meetings;
+    if (rv) out.push(`   Meetings booked ${rv.booked}   ·   Held ${rv.held}   ·   No-show ${rv.no_show}   ·   To confirm ${rv.to_confirm}   ·   CVs sent to clients ${rv.cvs_sent_to_clients}`);
     out.push(`   Pipeline moves: ${r.mouvements_pipeline}   ·   Active jobs: ${r.mandats_actifs}${dorm}`);
     // détail présentations de la semaine
     const pl = r.metrics?.presentations?.list || [];
@@ -241,7 +251,6 @@ function personCard(r: any, esc: (s: unknown) => string): string {
     { n: m.calls?.value ?? 0, t: m.calls?.target ?? null, l: 'Calls' },
     { n: m.calls_connectes?.value ?? 0, t: null, l: 'Connected' },
     { n: m.push?.value ?? 0, t: m.push?.target ?? null, l: 'Pushes' },
-    { n: m.rdv_nouveaux?.value ?? 0, t: m.rdv_nouveaux?.target ?? null, l: 'Meetings' },
     { n: m.presentations?.value ?? 0, t: m.presentations?.target ?? null, l: 'Pres. week' },
   ]);
   // En double casquette, le groupe recrutement ne répète pas calls/connectés (déjà dans le groupe sales).
@@ -260,9 +269,19 @@ function personCard(r: any, esc: (s: unknown) => string): string {
         { n: r.mouvements_pipeline, t: null, l: 'Moves' },
       ]);
 
-  const statsHtml = dual
+  const rv = m.meetings;
+  const rdvCells = rv
+    ? statGroup(cellsFrom([
+        { n: rv.booked ?? 0, t: null, l: 'Booked' },
+        { n: rv.held ?? 0, t: null, l: 'Held' },
+        { n: rv.no_show ?? 0, t: null, l: 'No-show' },
+        { n: rv.to_confirm ?? 0, t: null, l: 'To confirm' },
+        { n: rv.cvs_sent_to_clients ?? 0, t: null, l: 'CVs sent' },
+      ]), 'Meetings and CVs')
+    : '';
+  const statsHtml = (dual
     ? statGroup(salesCells, 'Sales') + statGroup(recCells, 'Recruitment')
-    : statGroup(isSales ? salesCells : recCells);
+    : statGroup(isSales ? salesCells : recCells)) + rdvCells;
 
   const dorm = r.mandats_dormants ? ` · ${r.mandats_dormants} dormant` : '';
   const mandatsLbl = `${r.mandats_actifs} active job${r.mandats_actifs > 1 ? 's' : ''}${dorm}`;
@@ -304,7 +323,7 @@ function personCard(r: any, esc: (s: unknown) => string): string {
   </div>`;
 }
 
-function htmlReport(rep: any): string {
+export function htmlReport(rep: any): string {
   const esc = (s: unknown) => String(s ?? '').replace(/[&<>]/g, (c) => (({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as any)[c]));
   const blocks = rep.rows.map((r: any) => personCard(r, esc)).join('');
   const nPeople = rep.rows.length;

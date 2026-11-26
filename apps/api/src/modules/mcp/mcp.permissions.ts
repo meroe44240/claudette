@@ -39,6 +39,10 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   get_team_brief:                { level: 'free', roles: ['ADMIN'] },
   get_recruiter_stats:           { level: 'free', roles: ['ADMIN'] },
   get_team_daily_report:         { level: 'free', roles: ['ADMIN'] },
+  get_analytics:                 { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  get_meeting_cv_stats:          { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  list_meetings_to_confirm:      { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
+  set_meeting_status:            { level: 'free', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },
 
   // ═══ CONFIRM — ecriture ═══
   send_email:                    { level: 'confirm', roles: ['ADMIN', 'MANAGER', 'RECRUTEUR'] },

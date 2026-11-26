@@ -1,5 +1,4 @@
 import prisma from '../../lib/db.js';
-import { compteCommeRdvClient, dateComptage, CLASSEMENT_LOOKBACK_MS } from '../meetings/meeting-kind.js';
 
 /**
  * get_team_daily_report — rapport d'activité quotidien par personne (support standup).
@@ -67,29 +66,6 @@ async function callsConnectes(uid: string, s: Date, e: Date): Promise<number> {
     select: { metadata: true },
   });
   return rows.filter((r) => Number((r.metadata as any)?.duration ?? 0) > 30).length;
-}
-
-// RDV client pris = bookings + meetings typés RDV client (datés, avec interlocuteurs),
-// dédupliqués par googleEventId. Un meeting classé après coup compte le jour de sa validation.
-async function rdvNouveaux(uid: string, s: Date, e: Date): Promise<number> {
-  const [bookings, meetings] = await Promise.all([
-    prisma.booking.findMany({ where: { userId: uid, createdAt: { gte: s, lt: e } }, select: { googleEventId: true } }),
-    prisma.activite.findMany({
-      where: { userId: uid, type: 'MEETING', entiteType: { in: ['CLIENT', 'ENTREPRISE'] }, createdAt: { gte: new Date(s.getTime() - CLASSEMENT_LOOKBACK_MS), lt: e } },
-      select: { entiteType: true, entiteId: true, createdAt: true, metadata: true },
-    }),
-  ]);
-  const seen = new Set<string>();
-  let n = 0;
-  for (const b of bookings) { const k = b.googleEventId || `bk-${n}`; if (!seen.has(k)) { seen.add(k); n++; } }
-  for (const mt of meetings) {
-    const d = dateComptage(mt);
-    if (!compteCommeRdvClient(mt) || !d || d < s || d >= e) continue;
-    const gid = (mt.metadata as any)?.googleEventId || (mt.metadata as any)?.google_event_id;
-    const k = gid || `mt-${n}-${Math.random()}`;
-    if (!seen.has(k)) { seen.add(k); n++; }
-  }
-  return n;
 }
 
 // push = transition → ENVOYE_CLIENT, 1 fois par candidature.
@@ -294,6 +270,10 @@ export async function getTeamDailyReport(reportDateOverride?: string) {
     orderBy: { nom: 'asc' },
   })) as any[];
 
+  // RDV pris / effectués / no-show + CV soumis, pour tout le monde (jour J).
+  const { rdvCounters } = await import('../stats/rdv-stats.service.js');
+  const rdvDay = await rdvCounters(users.map((u) => u.id), dayStart, dayEnd);
+
   const rows = [];
   for (const u of users) {
     // Double casquette : un LES_DEUX cumule les métriques sales ET recruteur.
@@ -325,13 +305,12 @@ export async function getTeamDailyReport(reportDateOverride?: string) {
     if (isSales) gather('calls', calls, metrics.calls.target);
 
     if (isSales) {
-      const [rdv, push] = await Promise.all([rdvNouveaux(u.id, dayStart, dayEnd), pushCount(u.id, dayStart, dayEnd)]);
+      const push = await pushCount(u.id, dayStart, dayEnd);
       const presList = await presentations(u.id, weekStart, weekEnd);
-      const [rdvAvg, pushAvg] = await Promise.all([avg5d(rdvNouveaux, u.id, biz5), avg5d(pushCount, u.id, biz5)]);
-      metrics.rdv_nouveaux = { value: rdv, target: tS.rdv_nouveaux ?? 1, avg_5d: rdvAvg };
+      const pushAvg = await avg5d(pushCount, u.id, biz5);
+      // RDV : un seul chiffre pour tout le monde, metrics.meetings (pris, effectués, no-show, CV).
       metrics.push = { value: push, target: tS.push ?? 1, avg_5d: pushAvg };
       metrics.presentations = { value: presList.length, target: tS.presentations ?? 3, window: 'week', days_left: daysLeft, list: presList };
-      gather('rdv_nouveaux', rdv, metrics.rdv_nouveaux.target);
       gather('push', push, metrics.push.target);
       gather('presentations', presList.length, metrics.presentations.target);
     }
@@ -347,6 +326,17 @@ export async function getTeamDailyReport(reportDateOverride?: string) {
       gather('screenings', scr, metrics.screenings.target);
       gather('nouvelles_personnes', np, metrics.nouvelles_personnes.target);
     }
+
+    const rd = rdvDay.get(u.id);
+    // Clés en anglais : ce rapport est aussi renvoyé tel quel par le MCP.
+    metrics.meetings = {
+      booked: rd?.pris ?? 0,
+      held: rd?.effectues ?? 0,
+      no_show: rd?.noShow ?? 0,
+      to_confirm: rd?.aConfirmer ?? 0,
+      cancelled: rd?.annules ?? 0,
+      cvs_sent_to_clients: rd?.cvSoumis ?? 0,
+    };
 
     // Statut §6
     const callsCrit = isSales && metrics.calls.target != null && (metrics.calls.value < 0.25 * metrics.calls.target);

@@ -1,33 +1,61 @@
 /**
- * Email Auto-Create Service
+ * Synchro Gmail → ATS (toutes les 15 minutes).
  *
- * Parses incoming Gmail emails and automatically creates:
- *  - Email perso (@gmail.com, etc.) → Candidat
- *  - Email pro  (@company.com)      → Entreprise + Client
- *  - Email @humanup.io              → SKIP (internal)
- *  - Email already in DB            → SKIP creation, log activity only
+ * Règles (validées 2026-11-26) :
+ *  1. Emails reçus ET envoyés : chaque email est enregistré sur la fiche de chaque
+ *     interlocuteur connu (expéditeur, destinataires, copies).
+ *  2. Tous les participants comptent, une entrée par personne et par email.
+ *  3. Tous les dossiers Gmail sauf spam, corbeille, promotions, réseaux sociaux, forums.
+ *  4. Robot = lien de désinscription, envoi en masse ou adresse no-reply : ignoré.
+ *     Une adresse générique (contact@, hello@…) n'est plus écartée pour ce seul motif.
+ *  5. Interlocuteur inconnu : l'IA lit l'email et décide candidat / entreprise / à ignorer.
+ *  6. Côté entreprise : client si l'entreprise est sous contrat, sinon Lead
+ *     (voir contact-resolver.service.ts).
+ *  7. Texte complet gardé (10 000 caractères max) + pièces jointes ; un CV envoyé par
+ *     un candidat qui n'en a pas encore est ajouté à sa fiche.
+ *  8. Contact avec un seul mandat en cours : l'email est rattaché à ce mandat.
  *
- * Cron: every 15 minutes.
+ * Les envois de profil sans pièce jointe (lien portail, profil dans le texte) sont
+ * repérés par l'IA et passent par la détection des CV envoyés (push-detect).
+ *
+ * Reprise : un curseur (config.emailSyncCursor) avance email par email, du plus
+ * ancien au plus récent. Une (re)connexion le remet 30 jours en arrière.
  */
 
 import prisma from '../../lib/db.js';
-import { isPersonalEmail } from './allo.service.js';
 import { matchEmail } from './gmail.service.js';
+import {
+  AiBudget, AiBudgetExhausted, aiIsAvailable, domainOf, findLeadByEmail, logOnLead,
+  resolveUnknownContact, type Resolution, type ResolverStats,
+} from './contact-resolver.service.js';
 
 // ─── TYPES ──────────────────────────────────────────
 
-interface ParsedSender {
+interface Address {
   name: string | null;
   email: string;
-  firstName: string;
-  lastName: string;
 }
 
-interface SignatureInfo {
-  phone?: string;
-  title?: string;
-  company?: string;
-  website?: string;
+interface Attachment {
+  filename: string;
+  mimeType: string;
+  attachmentId?: string;
+}
+
+interface GmailMessage {
+  id: string;
+  threadId: string;
+  rfcMessageId: string | null;
+  internalDate: number;
+  labelIds: string[];
+  from: Address;
+  to: Address[];
+  cc: Address[];
+  subject: string;
+  snippet: string;
+  body: string;
+  headers: Record<string, string>;
+  attachments: Attachment[];
 }
 
 interface EmailAutoCreateStats {
@@ -39,575 +67,491 @@ interface EmailAutoCreateStats {
   skipped: number;
 }
 
-// ─── CONSTANTS ──────────────────────────────────────
+type Participant = Address & { role: 'from' | 'to' | 'cc' };
+
+interface Match {
+  type: 'CANDIDAT' | 'CLIENT';
+  id: string;
+  created?: boolean;
+}
+
+interface RunContext {
+  userId: string;
+  token: string;
+  selfEmails: Set<string>;
+  budget: AiBudget;
+  stats: EmailAutoCreateStats & ResolverStats;
+}
+
+// ─── CONSTANTES ─────────────────────────────────────
 
 const INTERNAL_DOMAINS = ['humanup.io'];
+const MAX_MESSAGES_PER_RUN = 150;
+const MAX_AI_PER_RUN = 40;
+const MAX_BODY = 10_000;
+const DEFAULT_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
-
-/** Prefixes that indicate automated / no-reply senders */
-const AUTOMATED_PREFIXES = [
-  'no-reply', 'noreply', 'no_reply', 'donotreply', 'do-not-reply',
-  'notifications', 'notification', 'notify', 'alert', 'alerts',
-  'newsletter', 'news', 'marketing', 'promo', 'info', 'contact',
-  'support', 'help', 'admin', 'system', 'mailer-daemon', 'postmaster',
-  'billing', 'invoice', 'receipt', 'order', 'shipping',
-  'calendar-notification', 'drive-shares-dm-noreply',
-  'updates', 'feedback', 'team', 'hello', 'bonjour',
+/** Adresses de robots (règle 4) : pas de vraie personne derrière. */
+const ROBOT_PREFIXES = [
+  'no-reply', 'noreply', 'no_reply', 'donotreply', 'do-not-reply', 'do_not_reply',
+  'mailer-daemon', 'postmaster', 'bounce', 'bounces',
+  'notification', 'notifications', 'notify', 'alert', 'alerts',
+  'newsletter', 'news', 'marketing', 'promo', 'promotions',
+  'billing', 'invoice', 'invoices', 'receipt', 'receipts', 'facturation', 'factures',
+  'order', 'orders', 'shipping', 'calendar-notification', 'drive-shares-dm-noreply',
 ];
 
-/** Domains that are services, not real people */
-const AUTOMATED_DOMAINS = new Set([
+/** Domaines de services (outils, réseaux sociaux, emailing) : jamais des contacts. */
+const AUTOMATED_DOMAINS = [
   'github.com', 'gitlab.com', 'bitbucket.org',
   'slack.com', 'notion.so', 'linear.app', 'figma.com',
   'vercel.com', 'netlify.com', 'heroku.com', 'railway.app',
   'stripe.com', 'paypal.com', 'wise.com',
   'google.com', 'accounts.google.com', 'googlegroups.com',
-  'linkedin.com', 'twitter.com', 'facebook.com', 'instagram.com',
-  'monday.com', 'asana.com', 'trello.com', 'jira.atlassian.com',
+  'linkedin.com', 'twitter.com', 'x.com', 'facebook.com', 'facebookmail.com', 'instagram.com',
+  'monday.com', 'asana.com', 'trello.com', 'atlassian.com', 'atlassian.net',
   'zoom.us', 'calendly.com',
-  'mailchimp.com', 'sendinblue.com', 'hubspot.com', 'intercom.io',
-  'sentry.io', 'datadog.com', 'pagerduty.com',
-  'amazonses.com', 'sendgrid.net', 'mailgun.org',
-  'docusign.net', 'e.]]]]', 'noreply.github.com',
-  'withallo.com', 'crisp.chat',
-]);
+  'mailchimp.com', 'mcsv.net', 'sendinblue.com', 'brevo.com', 'hubspot.com', 'hubspotemail.net', 'intercom.io', 'intercom-mail.com',
+  'sentry.io', 'datadoghq.com', 'pagerduty.com',
+  'amazonses.com', 'sendgrid.net', 'mailgun.org', 'mandrillapp.com',
+  'docusign.net', 'yousign.com', 'withallo.com', 'crisp.chat',
+  'welcometothejungle.com', 'indeed.com', 'hellowork.com', 'apec.fr', 'francetravail.fr',
+];
 
-// ─── TOKEN MANAGEMENT ───────────────────────────────
+const CV_FILE = /\.(pdf|docx?|odt)$/i;
+const NON_CV = /\b(facture|invoice|devis|contrat|contract|proforma|bon de commande|rib|kbis|attestation|bulletin|paie|honoraires?|avoir|acompte|relev[ée])\b/i;
+const SUBMISSION_HINT = /\b(profil|profile|candidat|candidate|cv|r[ée]sum[ée]|shortlist|pr[ée]sente?r?|propos(?:e|er|ition)|portail|portal)\b|ats\.propium\.co/i;
 
-async function getValidAccessToken(userId: string): Promise<string | null> {
-  let config = await prisma.integrationConfig.findUnique({
-    where: { userId_provider: { userId, provider: 'gmail' } },
-  });
+// ─── PARSING ────────────────────────────────────────
 
-  if (!config || !config.enabled || !config.accessToken) return null;
-
-  // Refresh expired token
-  if (config.tokenExpiry && config.tokenExpiry.getTime() < Date.now() + 5 * 60 * 1000) {
-    if (!config.refreshToken || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) return null;
-
-    try {
-      const response = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: GOOGLE_CLIENT_ID,
-          client_secret: GOOGLE_CLIENT_SECRET,
-          refresh_token: config.refreshToken,
-          grant_type: 'refresh_token',
-        }),
-      });
-
-      const tokens = (await response.json()) as any;
-      if (tokens.error) return null;
-
-      const newExpiry = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
-      await prisma.integrationConfig.update({
-        where: { id: config.id },
-        data: { accessToken: tokens.access_token, tokenExpiry: newExpiry },
-      });
-
-      // Also update calendar config
-      await prisma.integrationConfig.updateMany({
-        where: { userId, provider: 'calendar' },
-        data: { accessToken: tokens.access_token, tokenExpiry: newExpiry },
-      });
-
-      return tokens.access_token as string;
-    } catch {
-      return null;
-    }
+/** "Jean Dupont <jean@x.fr>, \"Martin, Paul\" <paul@y.fr>" → adresses. */
+export function parseAddressList(header: string | undefined): Address[] {
+  if (!header) return [];
+  const out: Address[] = [];
+  const re = /(?:"([^"]*)"|([^,<"]*?))\s*<([^>]+)>|([^\s,<>"]+@[^\s,<>"]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(header)) !== null) {
+    const email = (m[3] || m[4] || '').trim().toLowerCase();
+    if (!email.includes('@')) continue;
+    const name = (m[1] ?? m[2] ?? '').trim().replace(/^'+|'+$/g, '') || null;
+    out.push({ name: name && name.toLowerCase() !== email ? name : null, email });
   }
-
-  return config.accessToken;
+  return out;
 }
 
-// ─── PARSING HELPERS ────────────────────────────────
-
-/**
- * Parse the "From" header: "Olivier Brachet <olivier@bitek.fr>" → { name, email }
- */
-function parseFromHeader(fromString: string): { name: string | null; email: string } {
-  // "Name <email>"
-  const match = fromString.match(/^"?(.+?)"?\s*<(.+?)>$/);
-  if (match) {
-    return { name: match[1].trim(), email: match[2].trim().toLowerCase() };
-  }
-  // "<email>"
-  const emailMatch = fromString.match(/<(.+?)>/);
-  if (emailMatch) {
-    return { name: null, email: emailMatch[1].trim().toLowerCase() };
-  }
-  // Just an email
-  return { name: null, email: fromString.trim().toLowerCase() };
+function decodeBase64Url(data: string): string {
+  return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
 }
 
-/**
- * Extract first name and last name from the From header or email address.
- */
-function extractName(from: { name: string | null; email: string }): { firstName: string; lastName: string } {
-  if (from.name && from.name !== from.email) {
-    const parts = from.name.split(' ').filter(Boolean);
-    if (parts.length >= 2) {
-      return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
-    }
-    return { firstName: parts[0] || '', lastName: '' };
-  }
-
-  // Fallback: parse from email local part
-  const localPart = from.email.split('@')[0];
-  const parts = localPart.split(/[._-]/).filter(Boolean);
-  if (parts.length >= 2) {
-    return {
-      firstName: capitalize(parts[0]),
-      lastName: parts.slice(1).map(capitalize).join(' '),
-    };
-  }
-
-  return { firstName: capitalize(localPart), lastName: '' };
+function htmlToText(html: string): string {
+  return html
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|tr|h\d)>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n+/g, '\n\n')
+    .trim();
 }
 
-function capitalize(s: string): string {
-  if (!s) return s;
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+function walkParts(part: any, acc: { plain: string[]; html: string[]; attachments: Attachment[] }) {
+  if (!part) return;
+  if (part.filename && part.filename.trim()) {
+    acc.attachments.push({ filename: part.filename.trim(), mimeType: part.mimeType || '', attachmentId: part.body?.attachmentId });
+  } else if (part.body?.data) {
+    if (part.mimeType === 'text/plain') acc.plain.push(decodeBase64Url(part.body.data));
+    else if (part.mimeType === 'text/html') acc.html.push(decodeBase64Url(part.body.data));
+  }
+  for (const p of part.parts || []) walkParts(p, acc);
 }
 
-/**
- * Check if an email sender is automated (no-reply, newsletter, service).
- */
-function isAutomatedEmail(senderEmail: string, headers?: Record<string, string>): boolean {
-  const localPart = senderEmail.split('@')[0].toLowerCase();
-  const domain = senderEmail.split('@')[1]?.toLowerCase() || '';
+/** Retire l'historique cité (« Le … a écrit : », lignes « > ») pour garder le message lui-même. */
+function stripQuoted(text: string): string {
+  const cut = text.search(/\n(?:Le .{5,120}a écrit\s*:|On .{5,120}wrote\s*:|-{2,}\s*Original Message|De\s*:.*\n.*Envoy[ée])/i);
+  const kept = cut > 0 ? text.slice(0, cut) : text;
+  return kept
+    .split('\n')
+    .filter((l) => !/^\s*>/.test(l))
+    .join('\n')
+    .trim();
+}
 
-  if (AUTOMATED_PREFIXES.some((p) => localPart.startsWith(p))) return true;
-  if (AUTOMATED_DOMAINS.has(domain)) return true;
+function parseMessage(d: any): GmailMessage {
+  const headers: Record<string, string> = {};
+  for (const h of d.payload?.headers || []) headers[String(h.name).toLowerCase()] = h.value;
+  const acc = { plain: [] as string[], html: [] as string[], attachments: [] as Attachment[] };
+  walkParts(d.payload, acc);
+  const raw = acc.plain.length ? acc.plain.join('\n') : htmlToText(acc.html.join('\n'));
+  const body = stripQuoted(raw).slice(0, MAX_BODY);
+  return {
+    id: d.id,
+    threadId: d.threadId,
+    rfcMessageId: headers['message-id'] || null,
+    internalDate: Number(d.internalDate || Date.now()),
+    labelIds: d.labelIds || [],
+    from: parseAddressList(headers['from'])[0] || { name: null, email: '' },
+    to: parseAddressList(headers['to']),
+    cc: parseAddressList(headers['cc']),
+    subject: headers['subject'] || '(sans objet)',
+    snippet: d.snippet || '',
+    body,
+    headers,
+    attachments: acc.attachments,
+  };
+}
 
-  // Check email headers
-  if (headers) {
-    if (headers['precedence'] === 'bulk' || headers['precedence'] === 'list') return true;
-    if (headers['list-unsubscribe']) return true;
-  }
+const isInternal = (email: string) => INTERNAL_DOMAINS.includes(domainOf(email));
 
+export function isRobotAddress(email: string): boolean {
+  const local = email.split('@')[0].toLowerCase();
+  const domain = domainOf(email);
+  if (ROBOT_PREFIXES.some((p) => local === p || local.startsWith(`${p}-`) || local.startsWith(`${p}.`) || local.startsWith(`${p}_`) || local.startsWith(`${p}+`))) return true;
+  if (/^(no-?reply|do-?not-?reply|mailer-daemon)/.test(local)) return true;
+  return AUTOMATED_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`));
+}
+
+/** En-têtes d'emailing : un email avec désinscription ou envoi en masse est un robot. */
+function hasBulkHeaders(headers: Record<string, string>): boolean {
+  if (headers['list-unsubscribe'] || headers['list-id']) return true;
+  const prec = (headers['precedence'] || '').toLowerCase();
+  if (prec === 'bulk' || prec === 'list' || prec === 'junk') return true;
+  const auto = (headers['auto-submitted'] || '').toLowerCase();
+  if (auto && auto !== 'no') return true;
   return false;
-}
-
-/**
- * Best-effort extraction of info from an email signature (last ~30 lines).
- */
-function extractSignatureInfo(snippet: string): SignatureInfo | null {
-  if (!snippet) return null;
-  const text = snippet;
-  const info: SignatureInfo = {};
-
-  // Phone patterns (France + international)
-  const phonePatterns = [
-    /(?:\+33|0033|0)\s*[1-9](?:[\s.\-]*\d{2}){4}/,
-    /\+\d{1,3}[\s.\-]?\d{1,4}[\s.\-]?\d{1,4}[\s.\-]?\d{1,4}/,
-    /(?:Tel|Tél|Phone|Mobile|Mob)\s*[:.]\s*([+\d\s.()\-]{8,20})/i,
-  ];
-  for (const pattern of phonePatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      info.phone = (match[1] || match[0]).replace(/[^\d+]/g, '').trim();
-      break;
-    }
-  }
-
-  // Job title patterns
-  const titlePatterns = [
-    /(?:CEO|CTO|CFO|COO|CRO|CPO|VP|Head of|Director|Directeur|Directrice|Manager|DRH|Fondateur|Fondatrice|Co-Founder|Founder|Partner|Associé)[^\n,|]{0,40}/i,
-    /(?:Account Executive|Business Developer|Sales Manager|Chargé d'affaires|Ingénieur Commercial|Key Account Manager|Talent Acquisition|Recruteur|Recruteuse)[^\n,|]{0,30}/i,
-  ];
-  for (const pattern of titlePatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      info.title = match[0].trim();
-      break;
-    }
-  }
-
-  // Website
-  const websiteMatch = text.match(/(?:www\.|https?:\/\/)([a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/);
-  if (websiteMatch) {
-    info.website = websiteMatch[0].startsWith('http') ? websiteMatch[0] : `https://${websiteMatch[0]}`;
-  }
-
-  return Object.keys(info).length > 0 ? info : null;
-}
-
-/**
- * Derive a company name from a domain. e.g. "bitek.fr" → "Bitek"
- */
-function deriveCompanyName(domain: string): string {
-  const name = domain.split('.')[0];
-  return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
 // ─── GMAIL API ──────────────────────────────────────
 
-interface GmailMessage {
-  id: string;
-  threadId: string;
-  from: string;        // raw From header
-  subject: string;
-  date: string;
-  snippet: string;
-  headers: Record<string, string>;
+async function gmailGet(token: string, path: string): Promise<any> {
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Gmail ${res.status} ${path}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
 }
 
-/**
- * Fetch recent incoming emails since a given timestamp.
- */
-async function fetchRecentIncomingEmails(
-  accessToken: string,
-  sinceTimestamp: Date,
-  maxResults = 50,
-): Promise<GmailMessage[]> {
-  const epochSeconds = Math.floor(sinceTimestamp.getTime() / 1000);
-  const query = `is:inbox -from:me after:${epochSeconds}`;
+/** Identifiants des emails depuis le curseur, tous dossiers utiles (règle 3). */
+async function listMessageIds(token: string, since: Date): Promise<string[]> {
+  const after = Math.floor(since.getTime() / 1000);
+  const q = `after:${after} -in:spam -in:trash -in:chats -category:promotions -category:social -category:forums`;
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  do {
+    const params = new URLSearchParams({ q, maxResults: '200' });
+    if (pageToken) params.set('pageToken', pageToken);
+    const data = await gmailGet(token, `/messages?${params}`);
+    for (const m of data.messages || []) ids.push(m.id);
+    pageToken = data.nextPageToken;
+  } while (pageToken && ids.length < 2000);
+  return ids;
+}
 
-  const listRes = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
-  const listData = (await listRes.json()) as any;
-
-  if (!listData.messages || listData.messages.length === 0) {
-    return [];
-  }
-
-  // Fetch metadata for each message in parallel (batches of 10)
-  const messages: GmailMessage[] = [];
-  const messageIds: string[] = listData.messages.map((m: any) => m.id);
-
-  // Process in batches of 10 to avoid rate limits
-  for (let i = 0; i < messageIds.length; i += 10) {
-    const batch = messageIds.slice(i, i + 10);
-    const fetches = batch.map(async (msgId: string) => {
+async function fetchMessages(token: string, ids: string[]): Promise<GmailMessage[]> {
+  const out: GmailMessage[] = [];
+  for (let i = 0; i < ids.length; i += 10) {
+    const batch = ids.slice(i, i + 10);
+    const results = await Promise.all(batch.map(async (id) => {
       try {
-        const msgRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=Precedence&metadataHeaders=List-Unsubscribe`,
-          { headers: { Authorization: `Bearer ${accessToken}` } },
-        );
-        const msgData = (await msgRes.json()) as any;
-
-        const rawHeaders: Record<string, string> = {};
-        for (const h of (msgData.payload?.headers || [])) {
-          rawHeaders[h.name.toLowerCase()] = h.value;
-        }
-
-        messages.push({
-          id: msgId,
-          threadId: msgData.threadId || msgId,
-          from: rawHeaders['from'] || '',
-          subject: rawHeaders['subject'] || '(Sans objet)',
-          date: rawHeaders['date'] || new Date().toISOString(),
-          snippet: msgData.snippet || '',
-          headers: {
-            precedence: rawHeaders['precedence'] || '',
-            'list-unsubscribe': rawHeaders['list-unsubscribe'] || '',
-          },
-        });
-      } catch (e) {
-        console.warn(`[EmailAutoCreate] Could not fetch message ${msgId}:`, e);
+        return parseMessage(await gmailGet(token, `/messages/${id}?format=full`));
+      } catch (err) {
+        console.warn(`[EmailSync] lecture ${id} impossible:`, err instanceof Error ? err.message : err);
+        return null;
       }
-    });
-
-    await Promise.all(fetches);
+    }));
+    for (const r of results) if (r) out.push(r);
   }
-
-  return messages;
+  return out;
 }
 
-// ─── AUTO-CREATE LOGIC ──────────────────────────────
+// ─── IA : envoi de profil sans pièce jointe ─────────
 
-/**
- * Process a single email: skip internal/automated, match or auto-create.
- */
-async function processEmail(
-  email: GmailMessage,
-  userId: string,
-  knownMessageIds: Set<string>,
-): Promise<'candidats' | 'clients' | 'entreprises' | 'leads' | 'activities' | 'skipped'> {
-  // Already processed?
-  if (knownMessageIds.has(email.id)) return 'skipped';
+/** Envoi de profil sans pièce jointe : l'IA confirme et donne le nom du candidat. */
+async function detectSubmission(ctx: RunContext, msg: GmailMessage): Promise<string[]> {
+  ctx.budget.take();
+  const { callTriageAi } = await import('./contact-resolver.service.js');
+  const res = await callTriageAi({
+    feature: 'email_triage',
+    userId: ctx.userId,
+    maxTokens: 200,
+    systemPrompt: `Un recruteur a envoyé cet email à un client. Dis s'il lui présente un ou plusieurs candidats (profil décrit, lien vers un profil ou un portail, CV en lien). Une simple relance, une prise de rendez-vous ou une discussion commerciale ne compte pas.
+Réponds uniquement en JSON : {"presente_candidat": true|false, "candidats": ["Prénom Nom"]}.`,
+    userPrompt: JSON.stringify({ objet: msg.subject, texte: msg.body.slice(0, 3000) || msg.snippet }),
+  });
+  const c = res.content;
+  if (!c?.presente_candidat || !Array.isArray(c.candidats)) return [];
+  return c.candidats.filter((n: unknown) => typeof n === 'string' && n.trim().split(/\s+/).length >= 2);
+}
 
-  const from = parseFromHeader(email.from);
-  if (!from.email) return 'skipped';
+// ─── RATTACHEMENT ───────────────────────────────────
 
-  const senderEmail = from.email.toLowerCase().trim();
-  const domain = senderEmail.split('@')[1] || '';
-
-  // Skip internal emails
-  if (INTERNAL_DOMAINS.includes(domain)) return 'skipped';
-
-  // ── Calendly : la réservation arrive par email → créer le candidat ──
-  // (avant le skip "automatisé" car calendly.com est dans AUTOMATED_DOMAINS)
-  if (domain === 'calendly.com' || /calendly/i.test(from.email)) {
-    const subj = email.subject || '';
-    // "New Event: Jean Dupont - 30 min", "Nouvel événement : Jean Dupont", "Invitation acceptée : …"
-    let invitee = (subj.match(/(?:new event|nouvel? [ée]v[ée]nement|invitation(?: accept[ée]e?)?|rendez-vous)\s*:?\s*([^-–|:]+)/i)?.[1] || '').trim();
-    if (!/[A-Za-zÀ-ÿ]{2,}\s+[A-Za-zÀ-ÿ]{2,}/.test(invitee)) {
-      invitee = subj.match(/([A-ZÀ-Ÿ][a-zà-ÿ'-]+ [A-ZÀ-Ÿ][a-zà-ÿ'-]+)/)?.[1] || '';
-    }
-    const parts = invitee.split(/\s+/).filter((w) => w.replace(/[^\p{L}]/gu, '').length >= 2);
-    if (parts.length < 2) return 'skipped'; // pas de vrai nom exploitable
-    const prenom = parts[0];
-    const nom = parts.slice(1).join(' ');
-    const emailInBody = (email.snippet || '').match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0];
-    const inviteeEmail = emailInBody && !/calendly\.com/i.test(emailInBody) ? emailInBody.toLowerCase() : undefined;
-    if (inviteeEmail) {
-      const already = await prisma.candidat.findFirst({ where: { email: { equals: inviteeEmail, mode: 'insensitive' } }, select: { id: true } });
-      if (already) return 'skipped';
-    }
-    const candidat = await prisma.candidat.create({
-      data: { nom, prenom, email: inviteeEmail, source: 'Calendly', notes: `Créé depuis une réservation Calendly : "${subj}"`, createdById: userId },
+/** Règle 8 : un seul mandat en cours pour ce contact → l'email y est rattaché. */
+async function mandatOf(match: Match): Promise<{ mandatId: string; candidatureId?: string } | null> {
+  if (match.type === 'CANDIDAT') {
+    const cands = await prisma.candidature.findMany({
+      where: { candidatId: match.id, stage: { notIn: ['REFUSE', 'PLACE'] as any }, mandat: { statut: { in: ['OUVERT', 'EN_COURS'] } } },
+      select: { id: true, mandatId: true },
+      take: 2,
     });
-    await prisma.activite.create({
-      data: { type: 'MEETING', entiteType: 'CANDIDAT', entiteId: candidat.id, userId, titre: `RDV Calendly : ${subj}`, contenu: email.snippet || '', source: 'GMAIL', metadata: { gmailMessageId: email.id, autoCreated: true, autoCreatedType: 'CANDIDAT', calendly: true } },
-    });
-    console.log(`[EmailAutoCreate] CANDIDAT créé via Calendly: ${prenom} ${nom}`);
-    return 'candidats';
+    return cands.length === 1 ? { mandatId: cands[0].mandatId, candidatureId: cands[0].id } : null;
   }
+  const client = await prisma.client.findUnique({ where: { id: match.id }, select: { entrepriseId: true } });
+  if (!client?.entrepriseId) return null;
+  const mandats = await prisma.mandat.findMany({
+    where: { entrepriseId: client.entrepriseId, statut: { in: ['OUVERT', 'EN_COURS'] } },
+    select: { id: true },
+    take: 2,
+  });
+  return mandats.length === 1 ? { mandatId: mandats[0].id } : null;
+}
 
-  // Skip automated emails
-  if (isAutomatedEmail(senderEmail, email.headers)) return 'skipped';
+// ─── TRAITEMENT D'UN EMAIL ──────────────────────────
 
-  // ── Contact already in ATS? ──
-  const existingMatch = await matchEmail(senderEmail);
+async function alreadyLogged(msg: GmailMessage, userId: string): Promise<Set<string>> {
+  const or: any[] = [{ userId, metadata: { path: ['gmailMessageId'], equals: msg.id } }];
+  if (msg.rfcMessageId) or.push({ metadata: { path: ['rfcMessageId'], equals: msg.rfcMessageId } });
+  const rows = await prisma.activite.findMany({
+    where: { type: 'EMAIL', source: 'GMAIL', OR: or },
+    select: { entiteId: true },
+  });
+  return new Set(rows.map((r) => r.entiteId).filter((x): x is string => !!x));
+}
 
-  if (existingMatch) {
-    // Known contact → log the email activity on their profile
-    await prisma.activite.create({
-      data: {
-        type: 'EMAIL',
-        direction: 'ENTRANT',
-        entiteType: existingMatch.type,
-        entiteId: existingMatch.id,
-        userId,
-        titre: `Email reçu : ${email.subject}`,
-        contenu: email.snippet || `Email de ${from.name || senderEmail}`,
-        source: 'GMAIL',
-        metadata: {
-          gmailMessageId: email.id,
-          from: email.from,
-          subject: email.subject,
-          autoCreated: false,
-        },
-      },
-    });
-    return 'activities';
-  }
-
-  // ── DURCISSEMENT : ne créer un nouveau profil QUE si l'email porte un vrai
-  //    nom (prénom + nom dans le display name du "From"). Sinon on n'invente
-  //    PAS de profil fantôme à partir du préfixe de l'email (ex. "themix222"),
-  //    qui polluait le vivier avec le bruit de la boîte de réception. ──
-  const displayName = (from.name || '').trim();
-  const nameTokens = displayName
-    .split(/\s+/)
-    .filter((w) => w.replace(/[^\p{L}]/gu, '').length >= 2); // au moins 2 lettres
-  if (nameTokens.length < 2) {
-    console.log(`[EmailAutoCreate] Ignoré (pas de vrai nom): <${senderEmail}> — "${displayName}"`);
-    return 'skipped';
-  }
-
-  // ── New contact — extract info ──
-  const { firstName, lastName } = extractName(from);
-  const signatureInfo = extractSignatureInfo(email.snippet);
-
-  if (isPersonalEmail(senderEmail)) {
-    // ── EMAIL PERSO → CANDIDAT ──
-    const candidat = await prisma.candidat.create({
-      data: {
-        nom: lastName || firstName || senderEmail.split('@')[0],
-        prenom: lastName ? firstName : undefined,
-        email: senderEmail,
-        telephone: signatureInfo?.phone || undefined,
-        posteActuel: signatureInfo?.title || undefined,
-        entrepriseActuelle: signatureInfo?.company || undefined,
-        source: 'Email auto',
-        notes: `Créé automatiquement depuis l'email : "${email.subject}"`,
-        createdById: userId,
-      },
-    });
-
-    // Log activity on the new candidat
-    await prisma.activite.create({
-      data: {
-        type: 'EMAIL',
-        direction: 'ENTRANT',
-        entiteType: 'CANDIDAT',
-        entiteId: candidat.id,
-        userId,
-        titre: `Email reçu : ${email.subject}`,
-        contenu: email.snippet || `Email de ${from.name || senderEmail}`,
-        source: 'GMAIL',
-        metadata: {
-          gmailMessageId: email.id,
-          from: email.from,
-          subject: email.subject,
-          autoCreated: true,
-          autoCreatedType: 'CANDIDAT',
-        },
-      },
-    });
-
-    console.log(`[EmailAutoCreate] CANDIDAT créé: ${firstName} ${lastName} <${senderEmail}>`);
-    return 'candidats';
-
-  } else {
-    // ── EMAIL PRO INCONNU → LEAD (prospection inbound) ──
-    // Les CLIENTS ne sont créés QUE manuellement (via conversion lead → client).
-    // Un pro inconnu qui nous écrit = un lead à qualifier (il peut nous prospecter).
-    const companyName = signatureInfo?.company || deriveCompanyName(domain);
-    const contactName = `${firstName} ${lastName}`.trim() || senderEmail.split('@')[0];
-
-    // Déjà client → ne rien créer
-    const existingClient = await prisma.client.findFirst({ where: { email: { equals: senderEmail, mode: 'insensitive' } }, select: { id: true } });
-    if (existingClient) return 'skipped';
-
-    // Déjà lead → logger l'échange et sortir
-    const existingLead = await prisma.lead.findFirst({ where: { email: { equals: senderEmail, mode: 'insensitive' } }, select: { id: true } });
-    if (existingLead) {
-      await prisma.leadInteraction.create({ data: { leadId: existingLead.id, type: 'email', text: `Email reçu : ${email.subject}\n${email.snippet || ''}`.trim(), createdById: userId } });
-      await prisma.lead.update({ where: { id: existingLead.id }, data: { lastContactAt: new Date() } });
-      return 'skipped';
+/** Règle 7 : CV joint (PDF ou Word) par un candidat sans CV sur sa fiche. */
+async function attachCvIfMissing(ctx: RunContext, candidatId: string, msg: GmailMessage): Promise<boolean> {
+  const pdf = msg.attachments.find((a) => /\.pdf$/i.test(a.filename) && !NON_CV.test(a.filename));
+  const word = pdf ? undefined : msg.attachments.find((a) => /\.docx$/i.test(a.filename) && !NON_CV.test(a.filename) && a.attachmentId);
+  if (!pdf && !word) return false;
+  const candidat = await prisma.candidat.findUnique({ where: { id: candidatId }, select: { cvUrl: true } });
+  if (!candidat || candidat.cvUrl) return false;
+  const nom = (pdf || word)!.filename;
+  try {
+    const cv = await import('../candidats/cv-upload.service.js');
+    if (pdf) {
+      const file = await cv.readCvSource(ctx.userId, { gmailMessageId: msg.id, attachmentName: pdf.filename });
+      await cv.attachCv(candidatId, ctx.userId, file);
+    } else {
+      const att = await gmailGet(ctx.token, `/messages/${msg.id}/attachments/${word!.attachmentId}`);
+      const buffer = Buffer.from(String(att.data || '').replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+      const { wordCvToPdf } = await import('../candidats/cv-word.service.js');
+      const converted = await wordCvToPdf(candidatId, buffer, word!.filename);
+      await cv.attachCv(candidatId, ctx.userId, { ...converted, origin: 'gmail' });
     }
-
-    const lead = await prisma.lead.create({
-      data: {
-        company: companyName,
-        contact: contactName,
-        email: senderEmail,
-        phone: signatureInfo?.phone || null,
-        role: signatureInfo?.title || null,
-        source: 'Email entrant',
-        src: 'cold',
-        stage: 'nouveau',
-        ownerId: userId,
-        lastContactAt: new Date(),
-      },
-    });
-    await prisma.leadInteraction.create({ data: { leadId: lead.id, type: 'email', text: `Email reçu : ${email.subject}\n${email.snippet || ''}`.trim(), createdById: userId } });
-
-    console.log(`[EmailAutoCreate] LEAD créé (inbound): ${contactName} <${senderEmail}> @ ${companyName}`);
-    return 'leads';
+    console.log(`[EmailSync] CV ajouté à la fiche ${candidatId} (${nom})`);
+    return true;
+  } catch (err) {
+    console.warn(`[EmailSync] CV non ajouté (${nom}):`, err instanceof Error ? err.message : err);
+    return false;
   }
 }
 
-// ─── MAIN SYNC FUNCTION ─────────────────────────────
+async function processMessage(ctx: RunContext, msg: GmailMessage): Promise<void> {
+  const fromSelf = ctx.selfEmails.has(msg.from.email);
+  const direction: 'ENTRANT' | 'SORTANT' = msg.labelIds.includes('SENT') || fromSelf ? 'SORTANT' : 'ENTRANT';
 
-/**
- * Process incoming emails for a single user.
- * Called by the cron job every 15 minutes.
- */
+  // Règle 4 : robot → rien.
+  if (direction === 'ENTRANT' && (!msg.from.email || isRobotAddress(msg.from.email) || hasBulkHeaders(msg.headers))) {
+    ctx.stats.skipped++;
+    return;
+  }
+
+  // Règle 2 : tous les participants externes.
+  const raw: Participant[] = direction === 'ENTRANT'
+    ? [{ ...msg.from, role: 'from' }, ...msg.to.map((a) => ({ ...a, role: 'to' as const })), ...msg.cc.map((a) => ({ ...a, role: 'cc' as const }))]
+    : [...msg.to.map((a) => ({ ...a, role: 'to' as const })), ...msg.cc.map((a) => ({ ...a, role: 'cc' as const }))];
+  const seen = new Set<string>();
+  const people = raw.filter((p) => {
+    if (!p.email || seen.has(p.email)) return false;
+    seen.add(p.email);
+    return !ctx.selfEmails.has(p.email) && !isInternal(p.email) && !isRobotAddress(p.email);
+  });
+  if (!people.length) {
+    ctx.stats.skipped++;
+    return;
+  }
+
+  const logged = await alreadyLogged(msg, ctx.userId);
+  const contacts: Array<{ person: Participant; match: Match }> = [];
+
+  for (const person of people) {
+    const found = await matchEmail(person.email);
+    let match: Match | null = found ? { type: found.type, id: found.id } : null;
+    if (!match) {
+      let lead = await findLeadByEmail(person.email);
+      // Personne en copie d'un email reçu : on ne crée pas de fiche, on ne l'enregistre que si elle est connue.
+      if (!lead && !(direction === 'ENTRANT' && person.role === 'cc')) {
+        const r: Resolution = await resolveUnknownContact(ctx.userId, person, {
+          origine: 'email',
+          sens: direction,
+          objet: msg.subject,
+          texte: msg.body || msg.snippet,
+          piecesJointes: msg.attachments.map((a) => a.filename),
+          expediteur: msg.from.email,
+        }, ctx.budget, ctx.stats);
+        if (r?.type === 'LEAD') lead = { id: r.id };
+        else if (r) match = { type: r.type, id: r.id, created: true };
+      }
+      if (lead) {
+        const text = `${direction === 'ENTRANT' ? 'Email reçu' : 'Email envoyé'} : ${msg.subject}\n${msg.snippet}`.trim();
+        await logOnLead(lead.id, ctx.userId, 'email', text, new Date(msg.internalDate));
+        continue;
+      }
+    }
+    if (match) contacts.push({ person, match });
+  }
+
+  for (const { person, match } of contacts) {
+    if (logged.has(match.id)) continue;
+    const mandat = await mandatOf(match);
+    await prisma.activite.create({
+      data: {
+        type: 'EMAIL',
+        direction,
+        entiteType: match.type,
+        entiteId: match.id,
+        userId: ctx.userId,
+        titre: `${direction === 'ENTRANT' ? 'Email reçu' : 'Email envoyé'} : ${msg.subject}`,
+        contenu: msg.body || msg.snippet,
+        source: 'GMAIL',
+        createdAt: new Date(msg.internalDate),
+        metadata: {
+          gmailMessageId: msg.id,
+          rfcMessageId: msg.rfcMessageId,
+          threadId: msg.threadId,
+          from: msg.headers['from'] || msg.from.email,
+          to: msg.to.map((a) => a.email),
+          cc: msg.cc.map((a) => a.email),
+          subject: msg.subject,
+          attachments: msg.attachments.map((a) => a.filename),
+          participantRole: person.role,
+          autoCreated: !!match.created,
+          ...(match.created ? { autoCreatedType: match.type } : {}),
+          ...(mandat ? { mandatId: mandat.mandatId, candidatureId: mandat.candidatureId ?? null } : {}),
+        },
+      },
+    });
+    ctx.stats.activities++;
+
+    if (match.type === 'CANDIDAT' && direction === 'ENTRANT' && person.role === 'from') {
+      await attachCvIfMissing(ctx, match.id, msg);
+    }
+  }
+
+  // Envoi d'un profil au client sans pièce jointe (les envois avec CV joint passent par push-detect).
+  if (direction === 'SORTANT' && ctx.budget.available && !msg.attachments.some((a) => CV_FILE.test(a.filename))) {
+    const toClient = contacts.some((c) => c.match.type === 'CLIENT' && c.person.role !== 'cc');
+    if (toClient && SUBMISSION_HINT.test(`${msg.subject}\n${msg.body}`)) {
+      const names = await detectSubmission(ctx, msg);
+      if (names.length) {
+        const push = await import('./push-detect.service.js');
+        for (const name of names) {
+          await push.recordSubmissionWithoutAttachment(ctx.userId, {
+            id: msg.id,
+            to: msg.to.map((a) => a.email),
+            toRaw: (msg.headers['to'] || '').split(',').map((s) => s.trim()).filter(Boolean),
+            subject: msg.subject,
+            date: new Date(msg.internalDate),
+            snippet: msg.snippet,
+          }, name);
+        }
+      }
+    }
+  }
+}
+
+// ─── ENTRÉES ────────────────────────────────────────
+
+/** Synchro d'un utilisateur : avance le curseur email par email. */
 export async function processIncomingEmailsForUser(userId: string): Promise<EmailAutoCreateStats> {
   const stats: EmailAutoCreateStats = { candidats: 0, clients: 0, entreprises: 0, leads: 0, activities: 0, skipped: 0 };
 
-  const accessToken = await getValidAccessToken(userId);
-  if (!accessToken) return stats;
-
-  // Get last check timestamp from config
   const config = await prisma.integrationConfig.findUnique({
     where: { userId_provider: { userId, provider: 'gmail' } },
   });
   if (!config || !config.enabled) return stats;
 
-  const configData = (config.config as Record<string, any>) || {};
-  const lastCheck = configData.lastEmailAutoCreateCheck
-    ? new Date(configData.lastEmailAutoCreateCheck)
-    : new Date(Date.now() - 24 * 60 * 60 * 1000); // Default: last 24h on first run
+  const { getGoogleAccessToken } = await import('./google-auth.service.js');
+  const token = await getGoogleAccessToken(userId);
+  if (!token) return stats;
 
-  // Fetch recent incoming emails
-  const emails = await fetchRecentIncomingEmails(accessToken, lastCheck);
+  const conf = (config.config as Record<string, any>) || {};
+  const cursor = conf.emailSyncCursor
+    ? new Date(conf.emailSyncCursor)
+    : new Date(Date.now() - DEFAULT_LOOKBACK_MS);
 
-  if (emails.length === 0) {
-    // Update timestamp even if no emails
-    await prisma.integrationConfig.update({
-      where: { id: config.id },
-      data: {
-        config: { ...configData, lastEmailAutoCreateCheck: new Date().toISOString() },
-      },
-    });
-    return stats;
-  }
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  const selfEmails = new Set([conf.email, user?.email].filter(Boolean).map((e: string) => e.toLowerCase()));
 
-  // Get already processed gmail message IDs to avoid duplicates
-  const existingActivities = await prisma.activite.findMany({
-    where: {
-      source: 'GMAIL',
-      userId,
-      metadata: { path: ['gmailMessageId'], not: 'null' as any },
-    },
-    select: { metadata: true },
-  });
+  const ctx: RunContext = {
+    userId,
+    token,
+    selfEmails,
+    budget: await new AiBudget(MAX_AI_PER_RUN, aiIsAvailable()).load(userId),
+    stats: Object.assign(stats, { candidats: 0, clients: 0, entreprises: 0, leads: 0 }),
+  };
 
-  const knownMessageIds = new Set<string>();
-  for (const a of existingActivities) {
-    const meta = a.metadata as Record<string, any>;
-    if (meta?.gmailMessageId) knownMessageIds.add(meta.gmailMessageId);
-  }
+  // Gmail filtre à la seconde près et renvoie du plus récent au plus ancien :
+  // on lit tout depuis le curseur puis on traite dans l'ordre chronologique.
+  // La liste arrive du plus récent au plus ancien : on ne lit en détail que les plus anciens.
+  const ids = (await listMessageIds(token, new Date(cursor.getTime() - 60_000))).reverse();
+  const batch = ids.slice(0, MAX_MESSAGES_PER_RUN + 30);
+  const messages = (await fetchMessages(token, batch))
+    .filter((m) => m.internalDate > cursor.getTime())
+    .sort((a, b) => a.internalDate - b.internalDate);
 
-  // Process each email
-  for (const email of emails) {
+  let newCursor = cursor.getTime();
+  let processed = 0;
+  for (const msg of messages) {
+    if (processed >= MAX_MESSAGES_PER_RUN) break;
     try {
-      const result = await processEmail(email, userId, knownMessageIds);
-      stats[result]++;
-      // Add to known set to prevent double-processing within same batch
-      knownMessageIds.add(email.id);
+      await processMessage(ctx, msg);
     } catch (err) {
-      console.error(`[EmailAutoCreate] Error processing email ${email.id}:`, err);
+      if (err instanceof AiBudgetExhausted) break; // reprise au prochain passage, sur ce même email
+      console.error(`[EmailSync] email ${msg.id} non traité:`, err);
       stats.skipped++;
     }
+    newCursor = msg.internalDate;
+    processed++;
   }
+  // Tout est lu : le curseur rattrape le présent (marge de 2 min pour les emails en cours d'arrivée).
+  if (processed === messages.length && batch.length === ids.length) newCursor = Math.max(newCursor, Date.now() - 2 * 60_000);
 
-  // Update last check timestamp
+  await ctx.budget.save(userId);
+  const fresh = await prisma.integrationConfig.findUnique({ where: { id: config.id }, select: { config: true } });
   await prisma.integrationConfig.update({
     where: { id: config.id },
-    data: {
-      config: { ...configData, lastEmailAutoCreateCheck: new Date().toISOString() },
-    },
+    data: { config: { ...((fresh?.config as Record<string, any>) || {}), emailSyncCursor: new Date(newCursor).toISOString() } },
   });
 
   return stats;
 }
 
-/**
- * Process incoming emails for ALL users with Gmail integration.
- * Called by the cron job.
- */
+/** Synchro de tous les utilisateurs connectés à Gmail (cron). */
 export async function processAllIncomingEmails(): Promise<EmailAutoCreateStats> {
-  const totalStats: EmailAutoCreateStats = { candidats: 0, clients: 0, entreprises: 0, leads: 0, activities: 0, skipped: 0 };
-
-  const gmailConfigs = await prisma.integrationConfig.findMany({
+  const total: EmailAutoCreateStats = { candidats: 0, clients: 0, entreprises: 0, leads: 0, activities: 0, skipped: 0 };
+  const configs = await prisma.integrationConfig.findMany({
     where: { provider: 'gmail', enabled: true },
     select: { userId: true },
   });
-
-  if (gmailConfigs.length === 0) return totalStats;
-
-  for (const { userId } of gmailConfigs) {
+  for (const { userId } of configs) {
     try {
-      const userStats = await processIncomingEmailsForUser(userId);
-      totalStats.candidats += userStats.candidats;
-      totalStats.clients += userStats.clients;
-      totalStats.entreprises += userStats.entreprises;
-      totalStats.leads += userStats.leads;
-      totalStats.activities += userStats.activities;
-      totalStats.skipped += userStats.skipped;
+      const s = await processIncomingEmailsForUser(userId);
+      (Object.keys(total) as Array<keyof EmailAutoCreateStats>).forEach((k) => { total[k] += s[k]; });
     } catch (err) {
-      console.error(`[EmailAutoCreate] Error for user ${userId}:`, err);
+      console.error(`[EmailSync] utilisateur ${userId}:`, err);
     }
   }
-
-  if (totalStats.candidats + totalStats.clients + totalStats.entreprises + totalStats.activities > 0) {
+  if (total.activities + total.candidats + total.clients > 0) {
     console.log(
-      `[EmailAutoCreate] Done: ${totalStats.candidats} candidats, ${totalStats.clients} clients, ` +
-      `${totalStats.entreprises} entreprises, ${totalStats.activities} activités, ${totalStats.skipped} skippés`,
+      `[EmailSync] ${total.activities} emails enregistrés, ${total.candidats} candidats, ${total.clients} clients, ` +
+      `${total.entreprises} entreprises créés, ${total.leads} leads, ${total.skipped} ignorés`,
     );
   }
-
-  return totalStats;
+  return total;
 }
+

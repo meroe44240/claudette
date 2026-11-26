@@ -37,30 +37,12 @@ function parseContactName(raw: string, email: string): { prenom: string | null; 
   return { prenom: null, nom: local || email };
 }
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
 const STAGE_ORDER = ['SOURCING', 'CONTACTE', 'ENTRETIEN_1', 'ENVOYE_CLIENT', 'ENTRETIEN_CLIENT', 'PROCESS', 'OFFRE', 'PLACE'];
 
-// ─── Token (même logique que email-auto-create) ─────
+// ─── Token (service Google partagé) ─────────────────
 async function getValidAccessToken(userId: string): Promise<string | null> {
-  const config = await prisma.integrationConfig.findUnique({ where: { userId_provider: { userId, provider: 'gmail' } } });
-  if (!config || !config.enabled || !config.accessToken) return null;
-  if (config.tokenExpiry && config.tokenExpiry.getTime() < Date.now() + 5 * 60 * 1000) {
-    if (!config.refreshToken || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) return null;
-    try {
-      const res = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET, refresh_token: config.refreshToken, grant_type: 'refresh_token' }),
-      });
-      const tokens = (await res.json()) as any;
-      if (tokens.error) return null;
-      const newExpiry = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
-      await prisma.integrationConfig.update({ where: { id: config.id }, data: { accessToken: tokens.access_token, tokenExpiry: newExpiry } });
-      return tokens.access_token as string;
-    } catch { return null; }
-  }
-  return config.accessToken;
+  const { getGoogleAccessToken } = await import('./google-auth.service.js');
+  return getGoogleAccessToken(userId);
 }
 
 // ─── Parsing d'un message Gmail (format=full) ───────
@@ -387,6 +369,62 @@ async function createDoubtTask(
     },
   });
   console.log(`[PushDetect] DOUBT task: ${titre}`);
+}
+
+// ─── Envoi de profil sans pièce jointe ──────────────
+/**
+ * Profil présenté au client sans CV joint (lien portail, profil dans le texte),
+ * repéré par la synchro Gmail. Même suite que pour un CV joint : candidature
+ * passée en « Envoi client » si le mandat est sûr, sinon trace ou tâche.
+ */
+export async function recordSubmissionWithoutAttachment(
+  userId: string,
+  msg: Omit<SentMessage, 'attachments'>,
+  candidateName: string,
+): Promise<'auto' | 'push' | 'doubt' | 'skip'> {
+  const full: SentMessage = { ...msg, attachments: [] };
+  const seen = await prisma.activite.findFirst({
+    where: { userId, metadata: { path: ['pushGmailMessageId'], equals: `${msg.id}:${candidateName.toLowerCase()}` } as any },
+    select: { id: true },
+  });
+  if (seen) return 'skip';
+
+  const recips = msg.to
+    .map((email, i) => ({ email, raw: msg.toRaw[i] || email }))
+    .filter((r) => r.email && !r.email.endsWith('@humanup.io'));
+  if (!recips.length) return 'skip';
+  const resolved = await resolveTarget(recips, userId);
+  if (!resolved) return 'skip';
+  const { target } = resolved;
+
+  const cands = await findCandidats(candidateName, target.entrepriseId);
+  // Clé d'idempotence par (email, candidat) : un email peut présenter plusieurs profils.
+  const keyed: SentMessage = { ...full, id: `${msg.id}:${candidateName.toLowerCase()}` };
+  if (cands.length !== 1) {
+    const why = cands.length === 0 ? `candidat « ${candidateName} » introuvable` : `${cands.length} candidats « ${candidateName} »`;
+    await createDoubtTask(userId, keyed, `Profil envoyé à ${target.nom} sans CV joint — ${why}`, candidateName, target.clientId);
+    return 'doubt';
+  }
+  const candidat = cands[0];
+  const existingCandidature = await prisma.candidature.findFirst({
+    where: { candidatId: candidat.id, mandat: { entrepriseId: target.entrepriseId } },
+    select: { id: true, stage: true, mandatId: true },
+  });
+  let mandatId: string | null = existingCandidature?.mandatId ?? null;
+  if (!mandatId) {
+    const open = await prisma.mandat.findMany({
+      where: { entrepriseId: target.entrepriseId, statut: { in: ['OUVERT', 'EN_COURS'] } },
+      select: { id: true },
+    });
+    if (open.length === 1) mandatId = open[0].id;
+  }
+  if (!mandatId) {
+    await logOpportunisticPush(userId, candidat.id, keyed, target);
+    return 'push';
+  }
+  await ensurePushed(userId, candidat.id, mandatId, existingCandidature, keyed, target);
+  console.log(`[PushDetect] profil sans PJ : ${candidat.prenom ?? ''} ${candidat.nom} → ${target.nom}`);
+  return 'auto';
 }
 
 // ─── Entrée par user + globale ──────────────────────
