@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const calls = vi.fn();
 vi.mock('../../lib/db.js', () => ({
   default: {
-    candidat: { findMany: async () => [{ telephone: '+33 6 12 34 56 78' }] },
+    candidat: { findMany: async (q: any) => (q.where.email ? [] : [{ telephone: '+33 6 12 34 56 78' }]) },
     client: { findMany: async () => [] },
     activite: { findMany: (...a: unknown[]) => calls(...a) },
   },
@@ -42,6 +42,12 @@ describe('alloCallFor (RDV confirmé par un appel Allo)', () => {
     const where = calls.mock.calls[0][0].where;
     expect(where.createdAt.gte.toISOString()).toBe('2026-11-25T13:40:00.000Z');
     expect(where.createdAt.lte.toISOString()).toBe('2026-11-25T15:00:00.000Z');
+  });
+
+  it('RDV sans fiche mais avec le numéro du formulaire : appel vers ce numéro = effectué', async () => {
+    calls.mockResolvedValue([{ entiteId: null, metadata: { duration: 420, to: '+33631453807' }, createdAt: start }]);
+    const r = await alloCallFor({ userId: 'u1', entiteType: 'CANDIDAT', entiteId: '00000000-0000-0000-0000-000000000000', metadata: { phones: ['631453807'], attendees: [] } }, start, end);
+    expect(r).not.toBeNull();
   });
 
   it('RDV sans contact identifié : rien à chercher', async () => {

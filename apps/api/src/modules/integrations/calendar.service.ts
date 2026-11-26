@@ -1003,6 +1003,33 @@ interface ClassifiedEvent {
   cancelled: boolean;
   /** Aucun invité à part soi : RDV noté dans l'agenda sans invitation. */
   noGuests: boolean;
+  /** Numéros de téléphone lus dans l'événement (formulaire de réservation, lieu), 9 derniers chiffres. */
+  phones: string[];
+}
+
+/**
+ * Numéros de téléphone d'un événement : champ « Phone Number » d'un formulaire de
+ * réservation, numéro mis en lieu pour un appel, numéro dans la description. Les numéros
+ * d'accès téléphonique de la visio (Google Meet) sont écartés.
+ */
+export function phonesOf(item: any): string[] {
+  const tail = (s: string) => s.replace(/\D/g, '').slice(-9);
+  const dialIn = new Set(
+    ((item?.conferenceData?.entryPoints || []) as any[])
+      .filter((e) => e?.entryPointType === 'phone')
+      .map((e) => tail(String(e.uri || e.label || ''))),
+  );
+  const text = [item?.location, item?.description].filter((x) => typeof x === 'string').join('\n')
+    // Les blocs « Rejoindre par téléphone » des invitations Meet ne sont pas le numéro du contact.
+    .replace(/(rejoindre par t[ée]l[ée]phone|join by phone|more phone numbers|autres num[ée]ros)[\s\S]{0,400}/gi, ' ');
+  const out = new Set<string>();
+  for (const m of text.matchAll(/(?:\+|00)?\d[\d\s.\-()]{7,18}\d/g)) {
+    const digits = m[0].replace(/\D/g, '');
+    if (digits.length < 9 || digits.length > 15) continue;
+    const t = digits.slice(-9);
+    if (!dialIn.has(t) && !/^0+$/.test(t)) out.add(t);
+  }
+  return [...out].slice(0, 5);
 }
 
 /** Code Meet d'un événement : conferenceData (hangoutsMeet) ou lien meet.google.com. */
@@ -1060,6 +1087,7 @@ async function classifyCalendarEvent(
     organizerSelf: !!item.organizer?.self || (!!recruiterEmail && item.organizer?.email === recruiterEmail),
     cancelled: item.status === 'cancelled',
     noGuests: guests.length === 0,
+    phones: phonesOf(item),
   };
 }
 
@@ -1468,6 +1496,7 @@ async function createMeetingActivity(
         meetCode: classified.meetCode,
         organizerSelf: classified.organizerSelf,
         googleCreated: classified.googleCreated,
+        phones: classified.phones,
       },
     },
   });
@@ -1519,6 +1548,7 @@ async function updateTrackedEvent(classified: ClassifiedEvent): Promise<boolean>
     if (classified.meetCode && classified.meetCode !== meta.meetCode) meta.meetCode = classified.meetCode;
     if (meta.organizerSelf === undefined) meta.organizerSelf = classified.organizerSelf;
     if (!meta.googleCreated && classified.googleCreated) meta.googleCreated = classified.googleCreated;
+    if (classified.phones.length && JSON.stringify(classified.phones) !== JSON.stringify(meta.phones ?? [])) meta.phones = classified.phones;
     if (!meta.rdvStatut) meta.rdvStatut = 'PREVU';
     if (classified.summary && classified.summary !== meta.summary) meta.summary = classified.summary;
   }
@@ -1622,6 +1652,7 @@ export async function processCalendarItem(
 }
 
 const CALENDAR_FULL_SYNC_DAYS_BACK = 30;
+const CALENDAR_SYNC_VERSION = 2;
 const CALENDAR_DAYS_BACK = 7;
 const CALENDAR_DAYS_AHEAD = 60;
 /** Au-delà, Google refuse updatedMin trop ancien : on relit toute la fenêtre. */
@@ -1673,7 +1704,8 @@ export async function syncCalendarForUser(userId: string): Promise<number> {
   const conf = (config.config as Record<string, any>) || {};
   const runStartedAt = new Date();
   const lastSync = conf.calendarSyncAt ? new Date(conf.calendarSyncAt) : null;
-  const incremental = !!lastSync && !conf.calendarRattrapage
+  // Version 2 : les numéros de téléphone des RDV sont lus ; une relecture complète les ajoute aux RDV existants.
+  const incremental = !!lastSync && !conf.calendarRattrapage && conf.calendarSyncVersion === CALENDAR_SYNC_VERSION
     && runStartedAt.getTime() - lastSync.getTime() < CALENDAR_MAX_INCREMENTAL_MS;
 
   const daysBack = incremental ? CALENDAR_DAYS_BACK : CALENDAR_FULL_SYNC_DAYS_BACK;
@@ -1723,6 +1755,7 @@ export async function syncCalendarForUser(userId: string): Promise<number> {
         ...((fresh?.config as Record<string, any>) || {}),
         calendarSyncAt: runStartedAt.toISOString(),
         calendarRattrapage: false,
+        calendarSyncVersion: CALENDAR_SYNC_VERSION,
       },
     },
   });

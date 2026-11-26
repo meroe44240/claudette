@@ -144,25 +144,37 @@ export async function alloCallFor(
   const candidatIds = new Set<string>();
   const clientIds = new Set<string>();
   if (a.entiteId && a.entiteId !== PLACEHOLDER_ID) (a.entiteType === 'CLIENT' ? clientIds : candidatIds).add(a.entiteId);
+  const externalEmails: string[] = [];
   for (const att of Array.isArray(meta.attendees) ? meta.attendees : []) {
+    if (att?.role !== 'internal' && att?.email && !INTERNAL_DOMAINS.includes(String(att.email).split('@')[1])) externalEmails.push(String(att.email).toLowerCase());
     if (!att?.entityId) continue;
     if (att.role === 'candidat') candidatIds.add(att.entityId);
     if (att.role === 'client') clientIds.add(att.entityId);
   }
+  // Invités devenus candidats ou clients depuis le RDV (fiche créée après coup).
+  if (externalEmails.length) {
+    const [c, k] = await Promise.all([
+      prisma.candidat.findMany({ where: { email: { in: externalEmails, mode: 'insensitive' } }, select: { id: true } }),
+      prisma.client.findMany({ where: { email: { in: externalEmails, mode: 'insensitive' } }, select: { id: true } }),
+    ]);
+    c.forEach((x) => candidatIds.add(x.id));
+    k.forEach((x) => clientIds.add(x.id));
+  }
   const ids = [...candidatIds, ...clientIds];
-  if (!ids.length) return null;
+  const eventPhones: string[] = Array.isArray(meta.phones) ? meta.phones : [];
+  if (!ids.length && !eventPhones.length) return null;
 
   const [cands, clis] = await Promise.all([
     candidatIds.size ? prisma.candidat.findMany({ where: { id: { in: [...candidatIds] } }, select: { telephone: true } }) : [],
     clientIds.size ? prisma.client.findMany({ where: { id: { in: [...clientIds] } }, select: { telephone: true } }) : [],
   ]);
-  const phones = new Set([...cands, ...clis].map((c) => digits(c.telephone)).filter((p) => p.length === 9));
+  const phones = new Set([...[...cands, ...clis].map((c) => digits(c.telephone)), ...eventPhones.map(digits)].filter((p) => p.length === 9));
 
   const calls = await prisma.activite.findMany({
     where: {
       type: 'APPEL',
       createdAt: { gte: new Date(start.getTime() - 20 * 60000), lte: new Date(end.getTime() + 30 * 60000) },
-      OR: [{ entiteId: { in: ids } }, ...(a.userId ? [{ userId: a.userId }] : [])],
+      OR: [...(ids.length ? [{ entiteId: { in: ids } }] : []), ...(a.userId ? [{ userId: a.userId }] : [])],
     },
     select: { entiteId: true, metadata: true, createdAt: true },
   });
