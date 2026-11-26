@@ -38,9 +38,9 @@ function settingsInput(s: Awaited<ReturnType<typeof getSettings>>): ForecastSett
   };
 }
 
-export async function updateSettings(data: Partial<ForecastSettingsInput & { objectifFactureAnnuel: number | null }>) {
+export async function updateSettings(data: Partial<ForecastSettingsInput & { objectifFactureAnnuel: number | null; objectifScenarioEur: number | null }>) {
   for (const [k, v] of Object.entries(data)) {
-    if (k === 'objectifFactureAnnuel') continue;
+    if (k === 'objectifFactureAnnuel' || k === 'objectifScenarioEur') continue;
     if (typeof v !== 'number' || v < 0 || v > 100) throw new ValidationError(`${k} must be a percentage between 0 and 100`);
   }
   await getSettings();
@@ -381,7 +381,9 @@ export async function takeWeeklySnapshot(today = new Date()) {
   const { deals } = await computeDeals(today);
   const t = totals(deals);
   const day = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const cash = await import('./cash.service.js').then((m) => m.snapshotCashFigures(today, deals)).catch(() => null);
   const data = {
+    ...(cash ?? {}),
     feeTotalEur: t.fee_eur,
     pondereEur: t.weighted_eur,
     placementsAttendus: t.expected_placements,

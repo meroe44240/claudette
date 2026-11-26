@@ -35,6 +35,7 @@ import { registerMergeTools } from './tools/merge.js';
 import { registerContractTools } from './tools/contracts.js';
 import { registerTargetProfileTools } from './tools/target-profiles.js';
 import { registerForecastTools } from './tools/forecast.js';
+import { registerCashTools } from './tools/cash.js';
 
 export type ToolHandler = (args: Record<string, unknown>) => Promise<{ content: Array<{ type: 'text'; text: string }> }>;
 
@@ -169,6 +170,7 @@ export function registerAllTools(rawServer: McpServer) {
   registerContractTools(server);
   registerTargetProfileTools(server);
   registerForecastTools(server);
+  registerCashTools(server);
   registerTrashAuditTools(server);
   registerRecordTools(server);
   registerOwnershipPresentationTools(server);

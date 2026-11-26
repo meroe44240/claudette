@@ -169,6 +169,14 @@ export const TOOL_PERMISSIONS: Record<string, ToolPermission> = {
   // ═══ FINANCE (admin ; agents financiers en lecture seule, voir FINANCE_TOOLS) ═══
   get_forecast:                  { level: 'free',    roles: ['ADMIN'] },
   override_deal:                 { level: 'confirm', roles: ['ADMIN'] },
+  get_cashflow_projection:       { level: 'free',    roles: ['ADMIN'] },
+  get_receivables:               { level: 'free',    roles: ['ADMIN'] },
+  list_invoices:                 { level: 'free',    roles: ['ADMIN'] },
+  upsert_invoice:                { level: 'confirm', roles: ['ADMIN'] },
+  delete_invoice:                { level: 'confirm', roles: ['ADMIN'] },
+  list_finance_items:            { level: 'free',    roles: ['ADMIN'] },
+  upsert_finance_item:           { level: 'confirm', roles: ['ADMIN'] },
+  delete_finance_item:           { level: 'confirm', roles: ['ADMIN'] },
 
   // ═══ BLOCKED ═══
   export_database:               { level: 'blocked', roles: [] },
@@ -186,6 +194,14 @@ export function getToolPermission(toolName: string): ToolPermission {
 export const FINANCE_TOOLS: Record<string, 'read' | 'write'> = {
   get_forecast: 'read',
   override_deal: 'write',
+  get_cashflow_projection: 'read',
+  get_receivables: 'read',
+  list_invoices: 'read',
+  upsert_invoice: 'write',
+  delete_invoice: 'write',
+  list_finance_items: 'read',
+  upsert_finance_item: 'write',
+  delete_finance_item: 'write',
 };
 
 export function checkToolAccess(toolName: string, userRole: Role, estAgent = false, accesFinance = false): { allowed: boolean; level: PermissionLevel; reason?: string } {

@@ -3,10 +3,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api-client';
 import PageHeader from '../../components/ui/PageHeader';
 import { t, LOCALE } from '../../lib/i18n';
+import ForecastTabs from './forecast-tabs';
 
 interface Settings {
   probaEnvoyeClient: string; probaPremiereEtape: string; probaDerniereEtape: string; probaSansProcess: string;
-  probaOffre: string; bonusAutresCandidats: string; objectifFactureAnnuel: number | null;
+  probaOffre: string; bonusAutresCandidats: string; objectifFactureAnnuel: number | null; objectifScenarioEur: number | null;
 }
 interface FxRate { id: string; devise: string; tauxVersEur: string; dateEffet: string }
 
@@ -38,8 +39,8 @@ export default function ForecastSettingsPage() {
   const s = data.settings;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-6 text-[13px]">
-      <PageHeader title={t('Réglages du forecast')} breadcrumbs={[{ label: t('Pipe partagé'), href: '/admin/forecast' }, { label: t('Réglages') }]} />
+    <div className="mx-auto max-w-4xl px-6 py-6 text-[13px]">
+      <PageHeader title={t('Réglages du forecast')} actions={<ForecastTabs />} />
 
       <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
         <div className="mb-3 font-semibold text-neutral-800">{t('Barème des probas')}</div>
@@ -68,6 +69,17 @@ export default function ForecastSettingsPage() {
         <label className="flex items-center gap-2">
           <input type="number" min={0} step={1000} defaultValue={s.objectifFactureAnnuel ?? ''}
             onBlur={(e) => save.mutate({ objectifFactureAnnuel: e.target.value ? Number(e.target.value) : null })}
+            className={`${input} w-40 text-right`} />
+          <span className="text-neutral-500">€</span>
+        </label>
+      </section>
+
+      <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
+        <div className="mb-1 font-semibold text-neutral-800">{t('Objectif de trésorerie (scénario « Objectif »)')}</div>
+        <div className="mb-3 text-[12px] text-neutral-500">{t('Montant de trésorerie visé en fin de mois cible, comparé au scénario normal.')}</div>
+        <label className="flex items-center gap-2">
+          <input type="number" min={0} step={1000} defaultValue={s.objectifScenarioEur ?? ''}
+            onBlur={(e) => save.mutate({ objectifScenarioEur: e.target.value ? Number(e.target.value) : null })}
             className={`${input} w-40 text-right`} />
           <span className="text-neutral-500">€</span>
         </label>

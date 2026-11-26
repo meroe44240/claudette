@@ -84,6 +84,8 @@ const AgentsPage = lazy(() => import('./pages/admin/agents'));
 const JournalPage = lazy(() => import('./pages/admin/journal'));
 const ForecastPage = lazy(() => import('./pages/admin/forecast'));
 const ForecastSettingsPage = lazy(() => import('./pages/admin/forecast-settings'));
+const ForecastCashPage = lazy(() => import('./pages/admin/forecast-cash'));
+const ForecastInvoicesPage = lazy(() => import('./pages/admin/forecast-invoices'));
 const ChatRegistryPage = lazy(() => import('./pages/admin/chat-registry'));
 const CorbeillePage = lazy(() => import('./pages/corbeille/index'));
 const NotesPage = lazy(() => import('./pages/notes/index'));
@@ -186,6 +188,8 @@ export default function App() {
           <Route path="admin/journal" element={<JournalPage />} />
           <Route path="admin/forecast" element={<ForecastPage />} />
           <Route path="admin/forecast/reglages" element={<ForecastSettingsPage />} />
+          <Route path="admin/forecast/tresorerie" element={<ForecastCashPage />} />
+          <Route path="admin/forecast/factures" element={<ForecastInvoicesPage />} />
           <Route path="admin/chat-registry" element={<ChatRegistryPage />} />
           <Route path="corbeille" element={<CorbeillePage />} />
         </Route>

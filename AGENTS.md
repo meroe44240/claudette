@@ -44,7 +44,7 @@ How AI agents work in Propium (HumanUp's ATS) through its MCP server. This file 
 
 Each event gives its type, the record (type, id, label), who did it (`null` for automations), when, and details. Webhooks receive the same JSON, signed with `X-Propium-Signature: sha256=<HMAC-SHA256 of the raw body>`.
 
-## Tools (132)
+## Tools (140)
 
 ### Start here
 
@@ -250,10 +250,18 @@ Each event gives its type, the record (type, id, label), who did it (`null` for 
 
 | Tool | Use it to | Parameters (bold = required) |
 |---|---|---|
+| `delete_finance_item` | Deletes a cash projection input. | **kind**, **id** |
+| `delete_invoice` | Deletes a tracked invoice. | **invoice_id** |
 | `export_database` | Export the database. Blocked over MCP. | reason |
 | `get_analytics` | Everything on the Analytics page for one team member (default: you) over a period: calls, meetings, candidates, mandates, won revenue and presentation rate with trend vs previous period, meetings by type, pipeline funnel by stage, revenue billed per month; plus the team leaderboard (placements,… | period, user_id, user_email, user_name |
+| `get_cashflow_projection` | Cash and billed projection for a target month (end of that month). | target_month, delay_invoices, force_deals, objective_eur |
 | `get_forecast` | Weighted pipeline ("shared pipe"): one line per open position (a mandate with 3 openings gives 3 lines), with the lead candidate, step, probability (computed, or forced by a person: proba_overridden), fee in EUR, weighted fee, expected placements, planned billing month and cash schedule. | person, source, billing_from, billing_to, lost_since |
+| `get_receivables` | Receivables: issued invoices not fully paid, overdue first, with days late and the remaining amount, totals (open, overdue) and, per client, the real average payment delay (issue to payment, on paid invoices). | company_id, overdue_only |
+| `list_finance_items` | Lists the cash projection inputs of one kind: recurring_revenue (monthly amount, start and last month), cash_account (balance in EUR and its date), expense (monthly business expenses), owner_draw (admins only). | **kind** |
+| `list_invoices` | Invoices tracked in Propium (Propium does not issue them: the number comes from the accounting tool). | status, company_id, mandate_id, from, to |
 | `list_meetings_to_confirm` | Finished meetings whose attendance could not be read from Google Meet (client-created Meet link, no Meet link, nobody joined, or Meet access not yet granted). | user_id, user_email, user_name |
 | `modify_settings` | Change system settings. Blocked over MCP. | reason |
 | `override_deal` | Forces the probability, the fee (EUR) or the planned billing month of the position led by a candidature (lead_candidature_id in get_forecast). | **candidature_id**, proba, fee_eur, billing_month |
 | `set_meeting_status` | Record whether a meeting took place: HELD, NO_SHOW or CANCELLED. | **meeting_id**, **status** |
+| `upsert_finance_item` | Creates or updates a cash projection input (pass id to update). | **kind**, id, label, name, category, entity, active, monthly_eur, amount_eur, balance_eur, start_month, end_month, month, balance_date, notes |
+| `upsert_invoice` | Creates or updates a tracked invoice (pass invoice_id to update; only the fields given change). | invoice_id, from_candidature_id, number, label, company_id, mandate_id, candidature_id, entity, status, amount, currency, amount_eur, paid_eur, planned_billing_month, issued_at, due_at, paid_at, planned_cash_month, at_risk, notes |

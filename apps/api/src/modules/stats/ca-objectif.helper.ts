@@ -1,4 +1,5 @@
 import prisma from '../../lib/db.js';
+import { billedCa } from '../forecast/cash.service.js';
 
 // ── Objectif financier (CA) — trimestriel ────────────────────────────────
 // Le CA est compté DÈS QU'UN MANDAT PASSE EN « GAGNÉ » (décision produit) :
@@ -120,16 +121,18 @@ export interface ObjectifBlock {
   agence: ObjectifGauge | null;
 }
 
-/** Bloc « objectif financier » pour le trimestre en cours.
+/** Bloc « CA attribué » pour le trimestre en cours, en FACTURÉ (décision 2026-11-24) : factures émises
+ *  ou payées du trimestre, rattachées au sales du mandat (voir caOwnerWhere).
+ *  Bloc « objectif financier » pour le trimestre en cours.
  *  perso = pour tout le monde ; agence = admins uniquement. */
 export async function getObjectifFinancier(userId: string): Promise<ObjectifBlock> {
   const quarter = currentQuarter();
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
   const isAdmin = user?.role === 'ADMIN';
   const [caPerso, ciblePerso, caAgence, cibleAgence] = await Promise.all([
-    wonCa(quarter, userId),
+    billedCa(quarter, caOwnerWhere(userId)),
     userQuarterlyCaObjective(userId),
-    isAdmin ? wonCa(quarter) : Promise.resolve(0),
+    isAdmin ? billedCa(quarter) : Promise.resolve(0),
     isAdmin ? agencyQuarterlyCaObjective() : Promise.resolve(null),
   ]);
   return {
