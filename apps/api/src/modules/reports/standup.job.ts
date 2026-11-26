@@ -173,7 +173,7 @@ function eventsHtml(events: any[], esc: (s: unknown) => string): string {
   return header + rows;
 }
 
-function textReport(rep: any): string {
+export function textReport(rep: any): string {
   const o = rep.overview || {};
   const out = [`Standup · ${enDate(rep.date)}`, ''];
   // Vue business à l'instant t
@@ -323,7 +323,7 @@ function personCard(r: any, esc: (s: unknown) => string): string {
   </div>`;
 }
 
-function htmlReport(rep: any): string {
+export function htmlReport(rep: any): string {
   const esc = (s: unknown) => String(s ?? '').replace(/[&<>]/g, (c) => (({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as any)[c]));
   const blocks = rep.rows.map((r: any) => personCard(r, esc)).join('');
   const nPeople = rep.rows.length;

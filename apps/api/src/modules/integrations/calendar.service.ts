@@ -1600,6 +1600,18 @@ export async function resolveEventAttendees(
   return stats;
 }
 
+/** Un événement Google → meeting dans l'ATS (création ou mise à jour). Retourne true s'il est créé. */
+export async function processCalendarItem(
+  item: any,
+  userId: string,
+  userEmail: string,
+  recruiterName: string,
+  opts: ProcessOptions = {},
+): Promise<boolean> {
+  const classified = await classifyCalendarEvent(item, userEmail);
+  return processClassifiedEvent(classified, userId, recruiterName, opts);
+}
+
 const CALENDAR_FULL_SYNC_DAYS_BACK = 30;
 const CALENDAR_DAYS_BACK = 7;
 const CALENDAR_DAYS_AHEAD = 60;
@@ -1688,8 +1700,7 @@ export async function syncCalendarForUser(userId: string): Promise<number> {
   let created = 0;
   for (const item of items) {
     try {
-      const classified = await classifyCalendarEvent(item, user.email);
-      if (await processClassifiedEvent(classified, userId, recruiterName, { quiet: !incremental })) created++;
+      if (await processCalendarItem(item, userId, user.email, recruiterName, { quiet: !incremental })) created++;
     } catch (err) {
       console.error(`[CalendarWatcher] event ${item?.id} (user ${userId}):`, err);
     }
