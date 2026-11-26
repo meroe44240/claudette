@@ -90,7 +90,7 @@ export function registerMeetingStatsTools(server: McpServer) {
         ? [{ id: target.id, prenom: null, nom: target.name }]
         : team
           ? await prisma.user.findMany({
-              where: { status: 'ACTIVE', excludeFromTeamStats: false, estAgent: false } as any,
+              where: { status: 'ACTIVE', excludeFromTeamStats: false, estAgent: false, NOT: { nom: 'Testeur' } } as any,
               select: { id: true, prenom: true, nom: true },
               orderBy: { prenom: 'asc' },
             })

@@ -166,7 +166,7 @@ export async function getRdvStats(requesterId: string, period: RdvPeriod, target
 
   const team = isAdmin
     ? await prisma.user.findMany({
-        where: { status: 'ACTIVE', excludeFromTeamStats: false, estAgent: false } as any,
+        where: { status: 'ACTIVE', excludeFromTeamStats: false, estAgent: false, NOT: { nom: 'Testeur' } } as any,
         select: { id: true, prenom: true, nom: true, fonction: true },
         orderBy: { prenom: 'asc' },
       })
