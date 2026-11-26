@@ -1,18 +1,11 @@
 /**
- * Calendar Auto-Create Service
- *
- * Analyzes calendar events and DIRECTLY creates contacts:
- *  - Email @humanup.io → SKIP (internal)
- *  - Email already in DB → SKIP
- *  - Email perso (@gmail.com, etc.) → Candidat
- *  - Email pro (@entreprise.com) → Entreprise + Client
- *
- * No AI, no suggestions, no manual validation.
+ * Lecture des invités d'agenda à la demande (route /calendar-ai) : mêmes règles que la
+ * synchro agenda (IA : candidat, client si entreprise sous contrat, sinon Lead).
+ * Contient aussi l'ancienne gestion des suggestions, gardée pour compatibilité.
  */
 
 import prisma from '../../lib/db.js';
 import { AppError, NotFoundError } from '../../lib/errors.js';
-import { isPersonalEmail } from '../integrations/allo.service.js';
 
 // ─── TYPES ──────────────────────────────────────────
 
@@ -28,74 +21,14 @@ interface CalendarEvent {
   location?: string;
 }
 
-interface AutoCreateStats {
-  candidats: number;
-  clients: number;
-  entreprises: number;
-  skipped: number;
-  analyzed: number;
-}
-
 // ─── CONSTANTS ──────────────────────────────────────
 
-const INTERNAL_DOMAINS = ['humanup.io'];
-
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
 
 // ─── TOKEN HELPER ───────────────────────────────────
 
 async function getValidAccessToken(userId: string): Promise<string> {
-  let config = await prisma.integrationConfig.findUnique({
-    where: { userId_provider: { userId, provider: 'calendar' } },
-  });
-
-  if (!config || !config.accessToken) {
-    config = await prisma.integrationConfig.findUnique({
-      where: { userId_provider: { userId, provider: 'gmail' } },
-    });
-  }
-
-  if (!config || !config.enabled) {
-    throw new AppError(400, 'Intégration Google Calendar non configurée ou désactivée');
-  }
-
-  if (!config.accessToken) {
-    throw new AppError(400, 'Token Google Calendar manquant. Veuillez reconnecter votre compte.');
-  }
-
-  // Refresh expired token
-  if (config.tokenExpiry && config.tokenExpiry.getTime() < Date.now() + 5 * 60 * 1000) {
-    if (!config.refreshToken) {
-      throw new AppError(400, 'Token expiré et pas de refresh token. Veuillez reconnecter votre compte Google.');
-    }
-
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
-        refresh_token: config.refreshToken,
-        grant_type: 'refresh_token',
-      }),
-    });
-
-    const tokens = (await response.json()) as any;
-    if (tokens.error) {
-      throw new AppError(400, 'Erreur lors du rafraîchissement du token Calendar. Veuillez reconnecter.');
-    }
-
-    const newExpiry = new Date(Date.now() + (tokens.expires_in || 3600) * 1000);
-    await prisma.integrationConfig.update({
-      where: { id: config.id },
-      data: { accessToken: tokens.access_token, tokenExpiry: newExpiry },
-    });
-
-    return tokens.access_token as string;
-  }
-
-  return config.accessToken;
+  const { requireGoogleAccessToken } = await import('../integrations/google-auth.service.js');
+  return requireGoogleAccessToken(userId);
 }
 
 // ─── FETCH CALENDAR EVENTS ─────────────────────────
@@ -121,219 +54,41 @@ async function fetchRecentCalendarEvents(userId: string): Promise<CalendarEvent[
   return (calData.items || []) as CalendarEvent[];
 }
 
-// ─── KNOWN CONTACTS ─────────────────────────────────
-
-async function getKnownEmails(): Promise<Set<string>> {
-  const emails = new Set<string>();
-
-  const candidats = await prisma.candidat.findMany({
-    where: { email: { not: null } },
-    select: { email: true },
-  });
-  for (const c of candidats) {
-    if (c.email) emails.add(c.email.toLowerCase());
-  }
-
-  const clients = await prisma.client.findMany({
-    where: { email: { not: null } },
-    select: { email: true },
-  });
-  for (const c of clients) {
-    if (c.email) emails.add(c.email.toLowerCase());
-  }
-
-  return emails;
-}
-
 // ─── HELPERS ────────────────────────────────────────
-
-function capitalize(s: string): string {
-  if (!s) return s;
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-}
-
-function extractName(displayName: string | undefined, email: string): { firstName: string; lastName: string } {
-  if (displayName && displayName !== email) {
-    const parts = displayName.split(' ').filter(Boolean);
-    if (parts.length >= 2) {
-      return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
-    }
-    return { firstName: parts[0] || '', lastName: '' };
-  }
-
-  // Fallback: parse from email
-  const localPart = email.split('@')[0];
-  const parts = localPart.split(/[._-]/).filter(Boolean);
-  if (parts.length >= 2) {
-    return {
-      firstName: capitalize(parts[0]),
-      lastName: parts.slice(1).map(capitalize).join(' '),
-    };
-  }
-
-  return { firstName: capitalize(localPart), lastName: '' };
-}
 
 function deriveCompanyName(domain: string): string {
   const name = domain.split('.')[0];
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-// ─── MAIN: DIRECT AUTO-CREATE ───────────────────────
+// ─── MAIN : lecture des invités (même règles que la synchro) ─────
 
 /**
- * Analyze calendar events and DIRECTLY create contacts.
- * No suggestions, no manual validation.
- *
- * Logic: email perso → Candidat, email pro → Entreprise + Client.
+ * Relit les événements des 14 derniers et 14 prochains jours : chaque invité inconnu
+ * est lu par l'IA (candidat, client si entreprise sous contrat, sinon Lead).
+ * Appelé à la demande ; la synchro agenda le fait déjà à chaque nouvel événement.
  */
 export async function analyzeCalendarEvents(userId: string) {
-  const stats: AutoCreateStats = { candidats: 0, clients: 0, entreprises: 0, skipped: 0, analyzed: 0 };
-
-  // 1. Fetch recent calendar events
   const events = await fetchRecentCalendarEvents(userId);
-  stats.analyzed = events.length;
-
   if (events.length === 0) {
-    return { ...stats, message: 'Aucun événement calendrier trouvé.' };
+    return { candidats: 0, clients: 0, entreprises: 0, leads: 0, analyzed: 0, message: 'Aucun événement calendrier trouvé.' };
   }
-
-  // 2. Get known contacts
-  const knownEmails = await getKnownEmails();
-
-  // 3. Track already processed emails within this batch (dedupe by email across events)
-  const processedInBatch = new Set<string>();
-
-  for (const event of events) {
-    const attendees = event.attendees || [];
-    const eventTitle = event.summary || '(Sans titre)';
-    const eventDate = event.start?.dateTime || event.start?.date || '';
-
-    for (const attendee of attendees) {
-      if (!attendee.email) continue;
-
-      const email = attendee.email.toLowerCase().trim();
-      const domain = email.split('@')[1] || '';
-
-      // Skip Google Calendar resource rooms
-      if (email.includes('calendar.google.com') || email.includes('resource.calendar.google.com')) continue;
-
-      // Skip internal
-      if (INTERNAL_DOMAINS.includes(domain)) continue;
-
-      // Skip already known in ATS
-      if (knownEmails.has(email)) continue;
-
-      // Skip already processed in this batch (same person in multiple events)
-      if (processedInBatch.has(email)) continue;
-      processedInBatch.add(email);
-
-      // ── AUTO-CREATE ──
-      const { firstName, lastName } = extractName(attendee.displayName, email);
-
-      if (isPersonalEmail(email)) {
-        // ── PERSO → CANDIDAT ──
-        const candidat = await prisma.candidat.create({
-          data: {
-            nom: lastName || firstName || email.split('@')[0],
-            prenom: lastName ? firstName : undefined,
-            email,
-            source: `Calendar - ${eventTitle}`,
-            notes: `Créé automatiquement depuis l'événement : "${eventTitle}" (${eventDate.split('T')[0] || ''})`,
-            createdById: userId,
-          },
-        });
-
-        // Log activity
-        await prisma.activite.create({
-          data: {
-            type: 'NOTE',
-            entiteType: 'CANDIDAT',
-            entiteId: candidat.id,
-            userId,
-            titre: `Candidat créé auto (Calendar)`,
-            contenu: `Détecté dans "${eventTitle}". Email perso → candidat.`,
-            source: 'CALENDAR',
-            metadata: { calendarEventId: event.id, eventTitle, eventDate, autoCreated: true },
-          },
-        });
-
-        knownEmails.add(email);
-        stats.candidats++;
-        console.log(`[CalendarAutoCreate] CANDIDAT: ${firstName} ${lastName} <${email}>`);
-
-      } else {
-        // ── PRO → ENTREPRISE + CLIENT ──
-
-        // Find or create entreprise by domain
-        let entreprise = await prisma.entreprise.findFirst({
-          where: {
-            OR: [
-              { siteWeb: { contains: domain, mode: 'insensitive' } },
-              { nom: { equals: deriveCompanyName(domain), mode: 'insensitive' } },
-            ],
-          },
-        });
-
-        if (!entreprise) {
-          entreprise = await prisma.entreprise.create({
-            data: {
-              nom: deriveCompanyName(domain),
-              siteWeb: `https://www.${domain}`,
-              createdById: userId,
-            },
-          });
-          stats.entreprises++;
-          console.log(`[CalendarAutoCreate] ENTREPRISE: ${entreprise.nom} (${domain})`);
-        }
-
-        // Create client
-        const client = await prisma.client.create({
-          data: {
-            nom: lastName || firstName || email.split('@')[0],
-            prenom: lastName ? firstName : undefined,
-            email,
-            entrepriseId: entreprise.id,
-            notes: `Créé automatiquement depuis l'événement : "${eventTitle}" (${eventDate.split('T')[0] || ''})`,
-            createdById: userId,
-          },
-        });
-
-        // Log activity
-        await prisma.activite.create({
-          data: {
-            type: 'NOTE',
-            entiteType: 'CLIENT',
-            entiteId: client.id,
-            userId,
-            titre: `Client créé auto (Calendar)`,
-            contenu: `Détecté dans "${eventTitle}". Email pro @${domain} → client.`,
-            source: 'CALENDAR',
-            metadata: {
-              calendarEventId: event.id, eventTitle, eventDate,
-              autoCreated: true, entrepriseId: entreprise.id,
-            },
-          },
-        });
-
-        knownEmails.add(email);
-        stats.clients++;
-        console.log(`[CalendarAutoCreate] CLIENT: ${firstName} ${lastName} <${email}> @ ${entreprise.nom}`);
-      }
-    }
+  const { resolveEventAttendees } = await import('../integrations/calendar.service.js');
+  const { AiBudget, AiBudgetExhausted, aiIsAvailable } = await import('../integrations/contact-resolver.service.js');
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  const budget = await new AiBudget(60, aiIsAvailable()).load(userId);
+  let stats = { candidats: 0, clients: 0, entreprises: 0, leads: 0 };
+  try {
+    stats = await resolveEventAttendees(userId, events, (user?.email || '').toLowerCase(), budget, { onlyUntracked: false });
+  } catch (err) {
+    if (!(err instanceof AiBudgetExhausted)) throw err;
+  } finally {
+    await budget.save(userId);
   }
-
-  const total = stats.candidats + stats.clients;
-  if (total > 0) {
-    console.log(
-      `[CalendarAutoCreate] Done: ${stats.candidats} candidats, ${stats.clients} clients, ` +
-      `${stats.entreprises} entreprises from ${stats.analyzed} events`,
-    );
-  }
-
   return {
     ...stats,
-    message: `${stats.candidats} candidats, ${stats.clients} clients, ${stats.entreprises} entreprises créés depuis ${stats.analyzed} événements.`,
+    analyzed: events.length,
+    message: `${stats.candidats} candidats, ${stats.clients} clients, ${stats.leads} leads créés depuis ${events.length} événements.`,
   };
 }
 

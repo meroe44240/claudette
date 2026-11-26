@@ -8,6 +8,7 @@ import EntityPreview from '../ui/EntityPreview';
 import Avatar from '../ui/Avatar';
 import Dropdown from '../ui/Dropdown';
 import OfflineBanner from '../ui/OfflineBanner';
+import GoogleConnectionBanner from '../ui/GoogleConnectionBanner';
 import OnboardingWizard from '../onboarding/OnboardingWizard';
 import { ToastContainer } from '../ui/Toast';
 import { useAuthStore } from '../../stores/auth-store';
@@ -112,6 +113,7 @@ export default function MainLayout() {
         </header>
 
         <OfflineBanner />
+        <GoogleConnectionBanner />
         {/^\/mandats\/[^/]+$/.test(location.pathname) && !location.pathname.endsWith('/new') ? (
           // Fiche mandat (full-bleed) — gère sa propre mise en page bord à bord avec rail
           <main className="relative z-[1] flex-1 overflow-hidden">

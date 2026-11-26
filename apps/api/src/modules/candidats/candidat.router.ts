@@ -153,20 +153,33 @@ export default async function candidatRouter(fastify: FastifyInstance) {
       const data = await request.file();
       if (!data) throw new Error('Aucun fichier envoyé');
 
-      const allowedMimes = ['application/pdf'];
-      if (!allowedMimes.includes(data.mimetype)) {
-        return reply.status(400).send({ error: 'Seuls les fichiers PDF sont acceptés' });
+      const { isDocx, wordCvToPdf } = await import('./cv-word.service.js');
+      const word = isDocx(data.filename, data.mimetype);
+      if (data.mimetype !== 'application/pdf' && !word) {
+        return reply.status(400).send({ error: 'Seuls les CV en PDF ou en Word (.docx) sont acceptés' });
       }
 
       const chunks: Buffer[] = [];
       for await (const chunk of data.file) chunks.push(chunk);
-      const fileBuffer = Buffer.concat(chunks);
+      let fileBuffer: Buffer = Buffer.concat(chunks);
+      let fileName = data.filename;
 
       if (fileBuffer.length > 10 * 1024 * 1024) {
         return reply.status(400).send({ error: 'Fichier trop volumineux (max 10 Mo)' });
       }
 
-      const doc = await documentService.upload('candidat', id, fileBuffer, data.filename, data.mimetype);
+      // Word : le .docx est gardé dans les documents, le CV de la fiche est sa version PDF.
+      if (word) {
+        try {
+          const converted = await wordCvToPdf(id, fileBuffer, data.filename);
+          fileBuffer = converted.buffer;
+          fileName = converted.filename;
+        } catch (err) {
+          return reply.status(400).send({ error: err instanceof Error ? err.message : 'CV Word illisible' });
+        }
+      }
+
+      const doc = await documentService.upload('candidat', id, fileBuffer, fileName, 'application/pdf');
       await prisma.candidat.update({
         where: { id },
         data: { cvUrl: doc.url },

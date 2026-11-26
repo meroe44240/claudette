@@ -72,3 +72,39 @@ export function dateComptage(a: MeetingLike): Date | null {
 
 /** Marge de lecture pour retrouver les meetings classés plusieurs jours après leur détection. */
 export const CLASSEMENT_LOOKBACK_MS = 21 * 86400000;
+
+// ─── Statut d'un RDV (pris → effectué / no-show / annulé) ─────────────────
+//
+// Stocké dans metadata.rdvStatut, mis à jour par la synchro agenda (annulation),
+// la lecture de présence Google Meet, ou la personne en un clic.
+
+export type RdvStatut = 'PREVU' | 'EFFECTUE' | 'NO_SHOW' | 'ANNULE' | 'A_CONFIRMER';
+
+export const RDV_STATUTS: RdvStatut[] = ['PREVU', 'EFFECTUE', 'NO_SHOW', 'ANNULE', 'A_CONFIRMER'];
+
+/** Natures de RDV comptées comme « RDV » (pas les réunions internes ni les « à classer »). */
+export const RDV_KINDS: MeetingKind[] = ['RDV_CLIENT', 'PRESENTATION', 'INTERVIEW'];
+
+export function rdvStatutOf(a: MeetingLike): RdvStatut | null {
+  const raw = (a.metadata as any)?.rdvStatut;
+  return RDV_STATUTS.includes(raw) ? raw : null;
+}
+
+/** Fin prévue du RDV (endTime, sinon début + 1 h). */
+export function meetingEnd(a: MeetingLike): Date | null {
+  const meta = (a.metadata as any) ?? {};
+  const end = meta.endTime ? new Date(meta.endTime) : null;
+  if (end && !Number.isNaN(end.getTime())) return end;
+  const start = meetingDate(a);
+  return start ? new Date(start.getTime() + 3600 * 1000) : null;
+}
+
+/** Date à laquelle le RDV a été pris : création de l'événement Google, sinon dans l'ATS. */
+export function datePrise(a: MeetingLike): Date | null {
+  const gc = (a.metadata as any)?.googleCreated;
+  if (gc) {
+    const d = new Date(gc);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return a.createdAt ?? null;
+}

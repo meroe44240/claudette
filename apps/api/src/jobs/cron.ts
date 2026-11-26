@@ -4,7 +4,7 @@
  *
  * Jobs:
  *  - Webhook retries every 60s (failed deliveries: 1 min, 5 min, 30 min, 2 h, 12 h)
- *  - Calendar AI analysis every 30 minutes
+ *  - Calendar AI analysis: replaced by attendee reading in the Calendar watcher
  *  - Pipeline AI analysis every hour
  */
 
@@ -89,7 +89,18 @@ async function runCalendarAiAnalysis(): Promise<void> {
 
 // ─── EMAIL AUTO-CREATE ─────────────────────────────
 
+let emailAutoCreateRunning = false;
 async function runEmailAutoCreate(): Promise<void> {
+  if (emailAutoCreateRunning) return;
+  emailAutoCreateRunning = true;
+  try {
+    await runEmailAutoCreateInner();
+  } finally {
+    emailAutoCreateRunning = false;
+  }
+}
+
+async function runEmailAutoCreateInner(): Promise<void> {
   try {
     const { processAllIncomingEmails } = await import(
       '../modules/integrations/email-auto-create.service.js'
@@ -197,7 +208,11 @@ async function runDriveTranscriptScan(): Promise<void> {
 
 // ─── CALENDAR WATCHER ─────────────────────────────
 
+// Un passage long (rattrapage de 30 jours) ne doit pas chevaucher le suivant.
+let calendarWatcherRunning = false;
 async function runCalendarWatcherJob(): Promise<void> {
+  if (calendarWatcherRunning) return;
+  calendarWatcherRunning = true;
   try {
     const { runCalendarWatcher } = await import(
       '../modules/integrations/calendar.service.js'
@@ -205,6 +220,24 @@ async function runCalendarWatcherJob(): Promise<void> {
     await runCalendarWatcher();
   } catch (error) {
     console.error('[Cron] Error in Calendar Watcher:', error);
+  } finally {
+    calendarWatcherRunning = false;
+  }
+}
+
+// ─── PRÉSENCE GOOGLE MEET (RDV effectué / no-show) ──
+
+let meetAttendanceRunning = false;
+async function runMeetAttendanceJob(): Promise<void> {
+  if (meetAttendanceRunning) return;
+  meetAttendanceRunning = true;
+  try {
+    const { runMeetAttendanceCheck } = await import('../modules/meetings/meet-attendance.service.js');
+    await runMeetAttendanceCheck();
+  } catch (error) {
+    console.error('[Cron] Error in Meet attendance:', error);
+  } finally {
+    meetAttendanceRunning = false;
   }
 }
 
@@ -350,9 +383,9 @@ export function startCronJobs(): void {
   }, 60 * 1000);
   intervals.push(webhookRetryInterval);
 
-  // Calendar AI analysis every 30 minutes
-  const calendarInterval = setInterval(runCalendarAiAnalysis, 30 * 60 * 1000);
-  intervals.push(calendarInterval);
+  // Calendar AI analysis : remplacée par la lecture IA des invités dans le Calendar watcher
+  // (chaque événement n'est lu qu'une fois). runCalendarAiAnalysis reste pour mémoire.
+  void runCalendarAiAnalysis;
 
   // Pipeline AI analysis every hour
   const pipelineInterval = setInterval(runPipelineAiAnalysis, 60 * 60 * 1000);
@@ -370,9 +403,13 @@ export function startCronJobs(): void {
   const alloSyncInterval = setInterval(runAlloSync, 10 * 60 * 1000);
   intervals.push(alloSyncInterval);
 
-  // Calendar watcher every 15 minutes (business hours check is inside the function)
+  // Calendar watcher every 15 minutes, 7 days a week (reads everything changed since last run)
   const calendarWatcherInterval = setInterval(runCalendarWatcherJob, 15 * 60 * 1000);
   intervals.push(calendarWatcherInterval);
+
+  // Google Meet attendance every 15 minutes (RDV effectué / no-show)
+  const meetAttendanceInterval = setInterval(runMeetAttendanceJob, 15 * 60 * 1000);
+  intervals.push(meetAttendanceInterval);
 
   // Register Google Calendar push notifications (instant webhook on event changes)
   // Run at startup + renew every 6 hours
@@ -420,7 +457,7 @@ export function startCronJobs(): void {
 
   console.log('[Cron] Scheduled jobs started:');
   console.log('  - Webhook retries: every 60s');
-  console.log('  - Calendar AI analysis: every 30 minutes');
+  console.log('  - Calendar watcher + attendee reading (AI): every 15 minutes');
   console.log('  - Pipeline AI analysis: every 60 minutes');
   console.log('  - Email auto-create: every 15 minutes (perso → candidat, pro → client)');
   console.log('  - Drive transcript scan: every 15 minutes (new transcripts/CR)');

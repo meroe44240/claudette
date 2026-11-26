@@ -32,6 +32,7 @@ const FEATURE_MODEL_MAP: Record<string, ModelTier> = {
   notes_reply: 'smart', // Humanup Notes : lecture des réponses par email
   notes_live: 'fast',       // Humanup Notes : cochage en direct
   notes_final: 'smart',     // Humanup Notes : notes après le call
+  email_triage: 'fast',     // Synchro Gmail : candidat / client / à ignorer, envoi de profil
 };
 
 // Cost per million tokens (USD)

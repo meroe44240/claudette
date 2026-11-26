@@ -7,6 +7,7 @@ import {
 import { api } from '../../lib/api-client';
 import { useAuthStore } from '../../stores/auth-store';
 import { t, isEn, LOCALE } from '../../lib/i18n';
+import { RdvCvSection } from './rdv-cv-section';
 
 // ─── BRAND TOKENS ───────────────────────────────────
 const NAVY = '#22177A';
@@ -335,6 +336,9 @@ export default function AnalyticsPage() {
           ))}
         </div>
       </div>
+
+      {/* RDV PRIS / EFFECTUÉS + CV SOUMIS */}
+      <RdvCvSection period={period} scope={scope} isAdminView={isAdmin} periodLabel={v.periodLabel} meId={user?.id} />
 
       {/* RENDEZ-VOUS PAR TYPE */}
       <div className="ana-rise" style={{ marginTop: 22, animationDelay: '.2s' }}>
